@@ -178,3 +178,23 @@ def test_settings_are_checked_together_before_anything_starts() -> None:
     )
     assert result.returncode == 2, result.stderr
     assert "synth is a key, not a section" in result.stderr
+
+
+@pytest.mark.usefixtures("env")
+def test_start_nvda_dir(tmp_path: Path) -> None:
+    watch = run_asc("start", "--target", "w", "--nvda-dir", str(tmp_path))
+    assert watch.returncode == 2
+    assert "--nvda-dir nvda_dir: expected only for an NVDA that asc launches" in watch.stderr
+    missing = tmp_path / "none"
+    desktop = run_asc("start", "--mode", "desktop", "--target", "own", "--nvda-dir", str(missing))
+    assert desktop.returncode == 3
+    assert f"NVDA not found. Looked in: the portable NVDA ({missing})" in desktop.stderr
+    assert "hint: check --nvda-dir or nvda_dir" in desktop.stderr
+    broken = tmp_path / "broken"
+    (broken / "userConfig").mkdir(parents=True)
+    (broken / "nvda.exe").write_bytes(b"")
+    (broken / "userConfig" / "nvda.ini").write_text("[speech]\nnot a line\n", encoding="utf-8")
+    unreadable = run_asc("start", "--mode", "desktop", "--target", "own", "--nvda-dir", str(broken))
+    assert unreadable.returncode == 2
+    assert "cannot read your NVDA config:" in unreadable.stderr
+    assert "nvda.ini line 2" in unreadable.stderr

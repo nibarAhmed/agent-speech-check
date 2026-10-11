@@ -251,13 +251,19 @@ class Daemon:
         port = ipc_server.sockets[0].getsockname()[1]
         log.info("relay on %s, IPC on %d", self.relay.port, port)
         try:
-            self._start_nvda()
+            # Off the loop: copying the user's config (add-ons too) can take a while.
+            await asyncio.to_thread(self._start_nvda)
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
                 keepalive = group.create_task(self.relay.keepalive())
                 if self.target.launches_sandbox:
+                    nvda_dir = self.target.nvda_dir
                     self.sandbox = SandboxSession(
-                        self.folder, self.target.share, self._relay_info(), self.target.settings
+                        self.folder,
+                        self.target.share,
+                        self._relay_info(),
+                        self.target.settings,
+                        Path(nvda_dir) if nvda_dir else None,
                     )
                     group.create_task(self.sandbox.run(self.stopping))
                 await self.stopping.wait()

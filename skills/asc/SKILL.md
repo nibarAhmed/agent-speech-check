@@ -23,6 +23,10 @@ this file.
   NVDA to make it work.
 - Never run an NVDA binary or installer on the host yourself: a second NVDA
   restarts the user's screen reader.
+- The user's installed NVDA is used only as it runs: `watch` or `shared`.
+- If the user names their own portable NVDA, pass `--nvda-dir DIR` to
+  `asc start` (sandbox, or desktop). It runs with a copy of their settings and
+  add-ons; `asc` never writes their copy.
 
 ## Workflow
 

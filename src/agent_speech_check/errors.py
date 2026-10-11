@@ -153,6 +153,14 @@ class BadSetting(UsageError):
         super().__init__(f"--nvda-setting {_show(setting)}: {reason}")
 
 
+class UserConfigUnreadable(UsageError):
+    def __init__(self, where: str, line: int) -> None:
+        super().__init__(
+            f"cannot read your NVDA config: {where} line {line}",
+            hint="fix that line, or point --nvda-dir at an NVDA with a fresh config",
+        )
+
+
 class TargetsFileError(UsageError):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"{path}: {reason}")
@@ -214,6 +222,14 @@ class NvdaNotFound(NotConnected):
     def __init__(self, looked: Sequence[str], hint: str = "pass --nvda-dir") -> None:
         where = "; ".join(looked) if looked else "nowhere"
         super().__init__(f"NVDA not found. Looked in: {where}", hint=hint)
+
+
+class NvdaTooOld(NotConnected):
+    def __init__(self, folder: str, version: str) -> None:
+        super().__init__(
+            f"the NVDA in {folder} is version {version}; asc needs 2025.1 or later",
+            hint="Remote Access is built into NVDA 2025.1 and later; asc get-nvda",
+        )
 
 
 class PortableFailed(NotConnected):

@@ -1,4 +1,4 @@
-"""`nvda.ini` for an NVDA that `asc` launches. Never for the user's own NVDA.
+"""`nvda.ini` for an NVDA that `asc` launches. Never written into the user's own config.
 
 It makes NVDA start unattended and quiet, and connect out to the relay as the
 follower (see `docs/protocol.md`):
@@ -10,22 +10,40 @@ follower (see `docs/protocol.md`):
 
 `--nvda-setting section.key=value` adds anything else (verbosity, punctuation).
 Keys `asc` writes itself are refused, so a setting can never break the above.
-The ini is built as data and rendered; user text is never pasted in raw.
+The ini is built as data and rendered; `--nvda-setting` text is never pasted in raw.
+
+A portable NVDA's own config (`userConfig`) is copied into the private config
+folder first, add-ons and all, so it speaks with the user's settings. Its
+`nvda.ini` is read, the settings above are put on top, and its whole `[remote]`
+section is dropped. `profileTriggers.ini` is left out, because a profile that
+switches on for an app could change the synth or keyboard layout.
 """
 
 from __future__ import annotations
 
+import copy
 import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_speech_check.errors import BadSetting
+from agent_speech_check.errors import BadSetting, UserConfigUnreadable
 
-type Section = dict[str, "str | Section"]
+
+@dataclass(frozen=True)
+class Raw:
+    """A value from the user's own `nvda.ini`, written back exactly as it was."""
+
+    text: str
+
+
+type Section = dict[str, "str | Raw | Section"]
 
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 _FORBIDDEN = ("\r", "\n", "\0")
+_HEADER = re.compile(r"(\[+)([^\[\]]+)(\]+)\s*(?:#.*)?")
+USER_CONFIG = "userConfig"
+_NOT_COPIED = frozenset({"nvda.ini", "profileTriggers.ini"})
 
 
 @dataclass(frozen=True)
@@ -121,7 +139,9 @@ def _quote(value: str) -> str:
 
 def _render(section: Section, depth: int, lines: list[str]) -> None:
     for name, value in section.items():
-        if not isinstance(value, dict):
+        if isinstance(value, Raw):
+            lines.append(f"{name} = {value.text}")
+        elif isinstance(value, str):
             quoted = value if name.startswith('"') else _quote(value)
             lines.append(f"{name} = {quoted}")
     for name, value in section.items():
@@ -130,8 +150,80 @@ def _render(section: Section, depth: int, lines: list[str]) -> None:
             _render(value, depth + 1, lines)
 
 
-def _merged(relay: Relay, settings: tuple[Setting, ...]) -> Section:
-    config = base_config(relay)
+# ---------------------------------------------------------------- the user's own config
+
+
+def _split_key(line: str) -> tuple[str, str] | None:
+    """`key = value` at the first `=` outside quotes, or None."""
+    quote = None
+    for i, char in enumerate(line):
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in "\"'":
+            quote = char
+        elif char == "=":
+            key = line[:i].strip()
+            return (key, line[i + 1 :].strip()) if key else None
+    return None
+
+
+def parse_ini(text: str, where: str) -> Section:
+    """Read configobj ini as NVDA writes it, keeping every value's raw text."""
+    root: Section = {}
+    stack = [root]
+    for number, raw_line in enumerate(text.splitlines(), 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        header = _HEADER.fullmatch(line)
+        if header:
+            depth = len(header[1])
+            if depth != len(header[3]) or depth > len(stack):
+                raise UserConfigUnreadable(where, number)
+            del stack[depth:]
+            child: Section = {}
+            stack[-1][header[2].strip()] = child
+            stack.append(child)
+            continue
+        pair = _split_key(line)
+        if pair is None or pair[1].startswith(("'''", '"""')):
+            raise UserConfigUnreadable(where, number)
+        stack[-1][pair[0]] = Raw(pair[1])
+    return root
+
+
+def source_config(nvda_folder: Path) -> Path:
+    """Where a portable NVDA keeps its own config."""
+    return nvda_folder / USER_CONFIG
+
+
+def user_ini(source: Path) -> Section | None:
+    """The `nvda.ini` in a config folder, parsed; None if there is none."""
+    path = source / "nvda.ini"
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        return None
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise UserConfigUnreadable(str(path), data[: error.start].count(b"\n") + 1) from None
+    return parse_ini(text, str(path))
+
+
+def _overlay(base: Section, top: Section) -> None:
+    for name, value in top.items():
+        current = base.get(name)
+        if isinstance(value, dict) and isinstance(current, dict):
+            _overlay(current, value)
+        else:
+            base[name] = value
+
+
+def _merged(relay: Relay, settings: tuple[Setting, ...], user: Section | None = None) -> Section:
+    config = {k: copy.deepcopy(v) for k, v in (user or {}).items() if k.lower() != "remote"}
+    _overlay(config, base_config(relay))
     for setting in settings:
         section = config
         *sections, key = setting.path
@@ -140,24 +232,39 @@ def _merged(relay: Relay, settings: tuple[Setting, ...]) -> Section:
             if not isinstance(child, dict):
                 raise BadSetting(".".join(setting.path), f"{name} is a key, not a section")
             section = child
+        if isinstance(section.get(key), dict):
+            raise BadSetting(".".join(setting.path), f"{key} is a section, not a key")
         section[key] = setting.value
     return config
 
 
-def check(settings: tuple[Setting, ...]) -> None:
-    """Refuse settings that clash with each other, before anything starts."""
-    _merged(_ANY_RELAY, settings)
+def check(settings: tuple[Setting, ...], user: Section | None = None) -> None:
+    """Refuse settings that clash with each other or with the user's own
+    config, before anything starts."""
+    _merged(_ANY_RELAY, settings, user)
 
 
-def render(relay: Relay, settings: tuple[Setting, ...] = ()) -> str:
+def render(relay: Relay, settings: tuple[Setting, ...] = (), user: Section | None = None) -> str:
     lines: list[str] = []
-    _render(_merged(relay, settings), 1, lines)
+    _render(_merged(relay, settings, user), 1, lines)
     return "\n".join(lines) + "\n"
 
 
-def write(config_dir: Path, relay: Relay, settings: tuple[Setting, ...]) -> None:
-    """Make `config_dir` a fresh NVDA config folder holding only `nvda.ini`."""
+def write(
+    config_dir: Path, relay: Relay, settings: tuple[Setting, ...], source: Path | None = None
+) -> None:
+    """Make `config_dir` a fresh NVDA config folder: a copy of `source` (if it
+    exists) with `asc`'s `nvda.ini`. `source` itself is only read."""
+    user = user_ini(source) if source is not None else None
     if config_dir.exists():
         shutil.rmtree(config_dir)
-    config_dir.mkdir(parents=True)
-    (config_dir / "nvda.ini").write_text(render(relay, settings), encoding="utf-8")
+    if source is not None and source.is_dir():
+
+        def skip(directory: str, names: list[str]) -> set[str]:
+            # Only at the top: an add-on may ship files with these names.
+            return {n for n in names if n in _NOT_COPIED} if Path(directory) == source else set()
+
+        shutil.copytree(source, config_dir, ignore=skip)
+    else:
+        config_dir.mkdir(parents=True)
+    (config_dir / "nvda.ini").write_text(render(relay, settings, user), encoding="utf-8")

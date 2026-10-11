@@ -37,11 +37,11 @@ mode = "watch"      # watch, desktop, sandbox or shared
 port = 6837         # relay port; watch 6837, sandbox 16837, desktop a free one
 keys = false        # may send keys; never true in watch mode
 launch = true       # desktop: false if NVDA is started elsewhere and connects itself
-nvda_dir = 'C:\nvda' # desktop: a portable NVDA (default: the one asc get-nvda made)
+nvda_dir = 'C:\nvda' # desktop or sandbox: your portable NVDA (default: asc get-nvda's)
 share = ['C:\src\app'] # sandbox: folders mapped read-only to C:\share\<name>
 ```
 
-Unknown keys are errors. A target that isn't listed gets the defaults for
+Unknown keys are errors. `nvda_dir` must be a full path (exit 2 otherwise). A target that isn't listed gets the defaults for
 `--mode` (watch if left out).
 
 Each target has a folder `%LOCALAPPDATA%\agent-speech-check\<target>\` with the
@@ -51,31 +51,46 @@ certificate.
 
 ## Commands
 
-### `asc start [--mode watch|desktop|sandbox|shared] [--nvda-setting S] [--i-understand]`
+### `asc start [--mode watch|desktop|sandbox|shared] [--nvda-setting S] [--nvda-dir DIR] [--i-understand]`
 
 Starts the daemon for the target and prints its status. Exits 4 if it is
 already running, and 3 with the last daemon log lines if it fails to start.
 
-**Watch mode** is your own NVDA. `asc` listens and never sends keys. Connect
-once in NVDA: Tools, Remote Access, Connect; choose to allow this computer to
-be controlled, enter the host and key `asc start` printed, and trust the
-certificate when NVDA asks. `asc` never writes your NVDA config.
+**Watch mode** is your own NVDA, installed or portable, as it runs now. `asc`
+listens and never sends keys. Connect once in NVDA: Tools, Remote Access,
+Connect; choose to allow this computer to be controlled, enter the host and key
+`asc start` printed, and trust the certificate when NVDA asks. `asc` never
+writes your NVDA config. To press keys in your running NVDA, use shared mode.
+`asc` never launches your installed NVDA: a second NVDA restarts the running one.
 
-**Desktop mode** launches a portable NVDA (made by `asc get-nvda`, or the
-target's `nvda_dir`) with its own config folder and `nvda.ini`. That NVDA starts
-unattended, uses the silent synth, mutes its own sounds, uses the desktop
-keyboard layout, and connects to the relay by itself. It runs in a Windows job,
-so it dies with the daemon even after a crash. `asc stop` ends it.
+**Desktop mode** launches a portable NVDA (made by `asc get-nvda`, or your own:
+the target's `nvda_dir` or `--nvda-dir`) with its own config folder and
+`nvda.ini`. That NVDA starts unattended, uses the silent synth, mutes its own
+sounds, uses the desktop keyboard layout, and connects to the relay by itself.
+It runs in a Windows job, so it dies with the daemon even after a crash.
+`asc stop` ends it.
+- **Your own portable NVDA** (`--nvda-dir DIR`, or `nvda_dir` in
+  `targets.toml`) keeps your settings and add-ons: its `userConfig` folder is
+  copied into the private config folder, and `asc` writes its own settings on
+  top. Your `userConfig` is only read. `asc` replaces your `[remote]` section,
+  the synth, sound volume, keyboard layout, mode sounds and the welcome and
+  update prompts. It leaves out `profileTriggers.ini`, so no profile switches
+  on by itself. `--nvda-dir` is not kept; it holds for this start only.
+- It needs NVDA 2025.1 or later (Remote Access is built in from then on).
+  An older NVDA exits 3. An `nvda.ini` that `asc` can't read exits 2 and names
+  the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
-- Exits 3 with the hint `asc get-nvda` if there is no portable NVDA.
+- Exits 3 if there is no portable NVDA, with the hint `asc get-nvda`, or to
+  check `--nvda-dir` / `nvda_dir` when you named the folder.
 - `--nvda-setting section.key=value` (repeatable) adds an `nvda.ini` setting,
   for example `--nvda-setting speech.symbolLevel=300`. Names are letters,
   digits and `_`, with dots for nested sections. Settings `asc` writes itself
   (`remote`, the synth, sound volume, keyboard layout, the mode sounds) are
   refused with exit 2, and so is a setting for an NVDA `asc` doesn't launch.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
-  connects to the relay itself.
+  connects to the relay itself. `nvda_dir` and `--nvda-dir` are then refused
+  with exit 2, as in watch and shared mode.
 
 **Sandbox mode** runs NVDA inside Windows Sandbox, so its keys never reach your
 desktop and your own NVDA keeps running undisturbed.
@@ -85,6 +100,10 @@ desktop and your own NVDA keeps running undisturbed.
 - `asc start` downloads the NVDA installer if needed (only a file download),
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
   NVDA is connected. That takes about a minute. `asc stop` ends the sandbox.
+- With `--nvda-dir DIR` (or `nvda_dir`), the sandbox runs your own portable
+  NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
+  started with a copy of your config, as in desktop mode. Nothing is
+  downloaded. Your NVDA on the host may keep running.
 - The sandbox window is kept minimised: a visible sandbox window would take
   focus and catch keys you type. NVDA needs the window's session, so the window
   can't be closed altogether.
@@ -186,8 +205,9 @@ h  heading
 
 `(no match)` when nothing matches. It needs no running `asc`.
 - The reference is `documentation\<lang>\keyCommands.html` (default `en`,
-  falling back to `en`) of the NVDA the target uses. For a desktop target that
-  is its portable NVDA. Otherwise it is your own NVDA: the running `nvda.exe`,
+  falling back to `en`) of the NVDA the target uses. For a desktop target, or a
+  sandbox target with `nvda_dir`, that is its portable NVDA. Otherwise it is
+  your own NVDA: the running `nvda.exe`,
   then the NVDA uninstall registry entry, then Program Files. `--nvda-dir`
   overrides this. If none is found it exits 3 and says where it looked.
 - Rows for braille displays are left out unless `--braille` is given.

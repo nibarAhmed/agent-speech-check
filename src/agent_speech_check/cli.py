@@ -218,6 +218,9 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
         help="an nvda.ini setting for the NVDA asc launches (repeatable)",
     )
     parser.add_argument(
+        "--nvda-dir", metavar="DIR", help="desktop or sandbox: launch this portable NVDA"
+    )
+    parser.add_argument(
         "--i-understand",
         action="store_true",
         help="shared mode: yes, send keys into my own session",
@@ -357,7 +360,7 @@ def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) ->
 
 
 def cmd_start(args: argparse.Namespace) -> int:
-    target = _target(args)
+    target = _target(args).with_nvda_dir(args.nvda_dir)
     settings = tuple(Setting.parse(text) for text in args.nvda_setting)
     if settings and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
@@ -429,7 +432,7 @@ def _nvda_dirs(args: argparse.Namespace) -> list[tuple[str, Path]]:
     if args.nvda_dir:
         return [("--nvda-dir", Path(args.nvda_dir))]
     target = _target(args)
-    if target.launches_portable:
+    if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
         return [("the portable NVDA", nvda.folder_for(target.nvda_dir))]
     return keyref.candidates()
 

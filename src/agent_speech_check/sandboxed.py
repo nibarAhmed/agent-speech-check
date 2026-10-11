@@ -1,7 +1,7 @@
 """One target's Windows Sandbox, from start to stop, for the daemon.
 
-The sandbox gets three mapped folders (the start script, the NVDA installer,
-and a writable config folder holding `nvda.ini`) plus the target's `share`
+The sandbox gets three mapped folders (the start script, the NVDA installer or
+your own portable NVDA, and a writable config folder) plus the target's `share`
 folders. Its NVDA connects out to the relay on the host's Default Switch
 address. The window is kept minimised for the whole session.
 """
@@ -24,12 +24,18 @@ MINIMIZE_EVERY_S = 0.5
 
 class SandboxSession:
     def __init__(
-        self, folder: Path, shares: tuple[str, ...], relay: Relay, settings: tuple[Setting, ...]
+        self,
+        folder: Path,
+        shares: tuple[str, ...],
+        relay: Relay,
+        settings: tuple[Setting, ...],
+        nvda_dir: Path | None = None,
     ) -> None:
         self.folder = folder / "sandbox"
         self.shares = shares
         self.relay = relay
         self.settings = settings
+        self.nvda_dir = nvda_dir
         self.state = "starting"
         self.failure: str | None = None
         self.sandbox_id: str | None = None
@@ -40,14 +46,17 @@ class SandboxSession:
             shutil.rmtree(self.folder)
         in_dir, config_dir = self.folder / "in", self.folder / "config"
         in_dir.mkdir(parents=True)
-        installer = nvda.installer_path(nvda.VERSION)
-        script = sandbox.nvda_script(installer.name)
+        if self.nvda_dir is None:
+            installer = nvda.installer_path(nvda.VERSION)
+            script = sandbox.nvda_script(installer.name)
+            mapped, source = installer.parent, None
+        else:
+            script = sandbox.nvda_script(None)
+            mapped, source = self.nvda_dir, nvda_config.source_config(self.nvda_dir)
         (in_dir / sandbox.SCRIPT).write_text(script, encoding="utf-8")
         (in_dir / sandbox.LAUNCH_SCRIPT).write_text(sandbox.LAUNCH_PS1, encoding="utf-8")
-        nvda_config.write(config_dir, self.relay, self.settings)
-        folders = sandbox.session_folders(
-            str(in_dir), str(installer.parent), str(config_dir), self.shares
-        )
+        nvda_config.write(config_dir, self.relay, self.settings, source)
+        folders = sandbox.session_folders(str(in_dir), str(mapped), str(config_dir), self.shares)
         return sandbox.config_xml(folders, networking=True)
 
     def _start(self) -> None:

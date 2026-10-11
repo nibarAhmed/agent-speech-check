@@ -99,3 +99,41 @@ def test_share_list(tmp_path: Path) -> None:
     assert Target.from_json(target.to_json()) == target
     with pytest.raises(UsageError, match="share: expected a list of strings"):
         resolve(write(tmp_path, "[targets.s]\nmode = 'sandbox'\nshare = [1]\n"), "s", None)
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "mode = 'watch'",
+        "mode = 'shared'",
+        "mode = 'desktop'\nlaunch = false",
+        "mode = 'sandbox'\nlaunch = false",
+    ],
+)
+def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
+    path = write(tmp_path, f"[targets.app]\n{table}\nnvda_dir = 'C:/nvda'\n")
+    with pytest.raises(UsageError, match="only for an NVDA that asc launches") as exc:
+        resolve(path, "app", None)
+    assert exc.value.exit_code == 2
+
+
+def test_nvda_dir_for_sandbox(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.app]\nmode = 'sandbox'\nnvda_dir = 'C:/nvda'\n")
+    assert resolve(path, "app", None).nvda_dir == "C:/nvda"
+
+
+def test_with_nvda_dir() -> None:
+    target = defaults("x", "desktop")
+    assert target.with_nvda_dir(None) is target
+    assert Path(target.with_nvda_dir("C:/n").nvda_dir or "") == Path("C:/n")
+    # The daemon runs in another folder, so a relative path is made absolute.
+    assert target.with_nvda_dir("nvda").nvda_dir == str(Path.cwd() / "nvda")
+    with pytest.raises(UsageError, match="only for an NVDA that asc launches"):
+        defaults("x", "watch").with_nvda_dir("C:/n")
+
+
+def test_relative_nvda_dir_in_file_is_refused(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.app]\nmode = 'desktop'\nnvda_dir = 'nvda'\n")
+    with pytest.raises(UsageError, match="a full path") as exc:
+        resolve(path, "app", None)
+    assert exc.value.exit_code == 2

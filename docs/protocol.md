@@ -246,6 +246,21 @@ Observed on Windows 11 Pro 26200 with the `wsb` CLI:
   forward (`AttachThreadInput`, then `SetForegroundWindow`). With that, NVDA
   announced the window and the page.
 
+## Your own NVDA (checked 2026-10-11)
+
+- An installed NVDA's `nvda.exe` (`C:\Program Files\NVDA`) carries
+  `uiAccess="True"` in its manifest and is byte-identical to
+  `nvda_uiAccess.exe`; `nvda_noUIAccess.exe` sits next to it. A uiAccess exe
+  normally has to be started through ShellExecute, not `CreateProcess`, so it
+  wouldn't be `asc`'s child or sit in its kill-on-close job (not tried). And it
+  can't run next to the user's NVDA anyway. So `asc` uses an installed NVDA only
+  as it runs, through watch or shared mode.
+- `nvda.exe`'s version resource holds the NVDA version (`FileVersion`
+  `2026.2.0.57664`). `asc` reads it to refuse an NVDA older than 2025.1, which
+  has no Remote Access.
+- A portable NVDA keeps its config in `<portable>\userConfig`. `asc` copies it
+  and rewrites `nvda.ini` on top; see `nvda_config.py`.
+
 ## Open questions (not answered by the spike)
 
 - The exact shape of a server `error` message (not seen on the wire).
