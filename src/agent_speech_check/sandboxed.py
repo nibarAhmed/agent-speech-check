@@ -39,7 +39,6 @@ class SandboxSession:
         self.window = sandbox.SandboxWindow(target.sandbox_window)
         self.name = target.name
         self._icon: winapi.TrayIcon | None = None
-        self._keeping = False
 
     def _prepare(self) -> str:
         """Write the mapped folders and return the sandbox configuration."""
@@ -86,8 +85,7 @@ class SandboxSession:
         """Start the sandbox. Its window is kept in place until `stop`."""
         # Off the loop: adding the icon waits on its thread for up to 5 s.
         self._icon = await asyncio.to_thread(self._tray_icon)
-        self.window.__enter__()
-        self._keeping = True
+        self.window.start()
         try:
             await asyncio.to_thread(self._start)
         except AscError as error:
@@ -99,9 +97,7 @@ class SandboxSession:
         self.state = "running"
 
     def _stop_keeping(self) -> None:
-        if self._keeping:
-            self.window.__exit__()
-            self._keeping = False
+        self.window.stop()
         if self._icon is not None:
             self._icon.stop()
             self._icon = None

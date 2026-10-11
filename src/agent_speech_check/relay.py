@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 
 HOST = "127.0.0.1"
 JOIN_TIMEOUT_S = 10.0
-# A peer that is gone (its sandbox stopped) never answers the TLS close.
+# A peer that is gone (killed, or its sandbox stopped) never answers the TLS close.
 CLOSE_TIMEOUT_S = 1.0
 KEEPALIVE_S = 120.0
 CERT_DAYS = 3650

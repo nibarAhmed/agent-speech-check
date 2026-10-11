@@ -32,12 +32,17 @@ APP = """<!doctype html><html><head><title>asc app</title></head><body>
 """
 
 
-def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _with_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A state folder under `tmp_path` that already has the NVDA installer."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    root = tmp_path / "agent-speech-check"
     installer = nvda.installer_path(nvda.VERSION)
     installer.parent.mkdir(parents=True)
     shutil.copy(os.environ["ASC_E2E_INSTALLER"], installer)
+    return tmp_path / "agent-speech-check"
+
+
+def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = _with_installer(tmp_path, monkeypatch)
     app = tmp_path / "app"
     app.mkdir()
     (app / "app.html").write_text(APP, encoding="utf-8")
@@ -81,11 +86,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 def test_sandbox_goes_when_its_daemon_is_killed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    root = tmp_path / "agent-speech-check"
-    installer = nvda.installer_path(nvda.VERSION)
-    installer.parent.mkdir(parents=True)
-    shutil.copy(os.environ["ASC_E2E_INSTALLER"], installer)
+    root = _with_installer(tmp_path, monkeypatch)
     (root / "targets.toml").write_text("[targets.k]\nmode = 'sandbox'\n", encoding="utf-8")
 
     started = run_asc("start", "--target", "k", "--window", "taskbar", timeout=420)

@@ -298,11 +298,10 @@ def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
     tray._icon = tray._tray_icon()
     assert tray._icon is not None
     assert tray.window.window == "tray"
-    tray.window.__enter__()
-    tray._keeping = True
+    tray.window.start()
     asyncio.run(tray.stop())  # no sandbox started; the icon and the thread still go
     assert tray._icon is None
-    assert not tray._keeping
+    assert not tray.window._thread.is_alive()
     for window in ("taskbar", "show"):
         other = SandboxSession(tmp_path, replace(defaults("x", "sandbox"), window=window), relay)
         assert other._tray_icon() is None

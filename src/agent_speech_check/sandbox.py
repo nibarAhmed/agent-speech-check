@@ -323,9 +323,10 @@ def _has_session(sandbox_id: str) -> bool:
 
 class SandboxWindow:
     """Keeps the sandbox window where the target wants it: "tray" (hidden, the
-    tray icon toggles it), "taskbar" (minimised) or "show". Use it as a context
-    manager around the sandbox's whole life: `keep` then runs on its own thread
-    every KEEP_WINDOW_EVERY_S. `toggle` may run on the tray icon's thread."""
+    tray icon toggles it), "taskbar" (minimised) or "show". `start` it before
+    the sandbox and `stop` it after (or use it as a context manager): `keep`
+    runs on its own thread every KEEP_WINDOW_EVERY_S in between. `toggle` may
+    run on the tray icon's thread."""
 
     def __init__(self, window: str) -> None:
         self.window = window
@@ -338,13 +339,21 @@ class SandboxWindow:
         self._done = threading.Event()
         self._thread = threading.Thread(target=self._keep_loop, name="sandbox-window", daemon=True)
 
-    def __enter__(self) -> SandboxWindow:
+    def start(self) -> None:
         self._thread.start()
+
+    def stop(self) -> None:
+        """Stop keeping. Safe to call more than once, or before `start`."""
+        self._done.set()
+        if self._thread.is_alive():
+            self._thread.join(5)
+
+    def __enter__(self) -> SandboxWindow:
+        self.start()
         return self
 
     def __exit__(self, *_: object) -> None:
-        self._done.set()
-        self._thread.join(5)
+        self.stop()
 
     def _keep_loop(self) -> None:
         while not self._done.wait(KEEP_WINDOW_EVERY_S):
@@ -392,8 +401,8 @@ class SandboxWindow:
         Sandbox pane", 2026-10-11). Give focus back to the window that had it,
         but only while an out-of-sight sandbox client window has it, or nothing
         has it just after a window was put away."""
-        if not self._return_to:
-            return
+        if not self._return_to or not (acted or self._client_pids):
+            return  # nothing of the sandbox's has been put away yet
         current = winapi.foreground()
         if current == 0:
             stuck = acted
@@ -405,29 +414,31 @@ class SandboxWindow:
             winapi.focus(self._return_to)
 
 
+def _wait_session(sandbox_id: str) -> None:
+    deadline = time.monotonic() + SESSION_TIMEOUT_S
+    while not _has_session(sandbox_id):
+        if time.monotonic() > deadline:
+            raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
+        time.sleep(POLL_S)
+
+
 def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:
     """Start a sandbox with a logged-in user, guarded so it goes with this
-    process (`guard_err` takes the guard's errors). Call it inside `with window:`."""
+    process (`guard_err` takes the guard's errors). Call it while `window` keeps."""
     if not wait_gone(60):
         raise SandboxFailed("start", "the previous sandbox is still shutting down")
     sandbox_id = parse_start(wsb("start", "--config", config, what="start"))
     try:
+        window.remember_focus()
+        subprocess.Popen(["wsb", "connect", "--id", sandbox_id])  # noqa: S603, S607
         start_guard(os.getpid(), sandbox_id, guard_err)
-    except OSError:
-        # No guard, and the caller never learns this id: stop it here.
+        _wait_session(sandbox_id)
+    except BaseException:
+        # The caller never learns this id, and this process lives on, so its
+        # guard won't stop the sandbox: stop it here.
         with contextlib.suppress(SandboxFailed):
             stop(sandbox_id)
         raise
-    window.remember_focus()
-    subprocess.Popen(["wsb", "connect", "--id", sandbox_id])  # noqa: S603, S607
-    deadline = time.monotonic() + SESSION_TIMEOUT_S
-    while not _has_session(sandbox_id):
-        if time.monotonic() > deadline:
-            # This process lives on, so its guard won't: stop it here.
-            with contextlib.suppress(SandboxFailed):
-                stop(sandbox_id)
-            raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
-        time.sleep(POLL_S)
     return sandbox_id
 
 

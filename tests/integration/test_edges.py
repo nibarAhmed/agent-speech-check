@@ -15,7 +15,7 @@ import pytest
 from tests import fake_nvda as f
 from tests.integration.conftest import Env, free_port, run_asc
 
-from agent_speech_check import firewall, winapi
+from agent_speech_check import firewall, state, winapi
 from agent_speech_check.targets import SANDBOX_PORT, Target
 
 
@@ -251,9 +251,8 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
     """A sandbox's NVDA vanishes without closing when its sandbox stops. The
     daemon must still exit at once, not when the TLS close times out."""
     assert run_asc("start", "--target", "w").returncode == 0
-    folder = env.folder("w")
-    pid = json.loads((folder / "state.json").read_text(encoding="utf-8"))["pid"]
-    channel = json.loads((folder / "relay.json").read_text(encoding="utf-8"))["channel"]
+    pid = state.read(env.folder("w"), "w").pid
+    channel = env.channel("w")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE

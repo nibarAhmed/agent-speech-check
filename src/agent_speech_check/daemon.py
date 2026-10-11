@@ -263,11 +263,12 @@ class Daemon:
                 keepalive.cancel()
         finally:
             await self.keyboard.release_all()
+            # Before NVDA goes, so it can still answer the close.
+            self.relay.disconnect()
             if self.nvda is not None:
                 self.nvda.stop()
             if self.sandbox is not None:
                 await self.sandbox.stop()
-            self.relay.disconnect()
             relay_server.close()
             ipc_server.close()
             state.remove(self.folder)
