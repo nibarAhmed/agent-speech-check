@@ -193,7 +193,7 @@ If a user hosts the relay in their own NVDA:
 
 - Windows Sandbox on this build has **no Edge** and **no `notepad.exe`**.
   `mshta.exe` exists, and NVDA reads an `.html` file opened in it in browse mode.
-- **Silence the sandbox** by running `net stop audiosrv /y` at logon. NVDA logs
+- **Silence the sandbox** by running `net stop audiosrv /y` at logon. Confirmed by the user: nothing was audible on the host in run 3. NVDA logs
   audio warnings but works, and still sends `wave` messages. Pressing the Volume
   Mute key from a script did not silence it.
 - The `.wsb` `LogonCommand` worked with mapped folders: read-only for inputs,
