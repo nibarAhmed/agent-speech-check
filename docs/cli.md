@@ -1,8 +1,7 @@
 # `asc` command reference
 
-Status: M4 (watch, desktop, sandbox and shared mode). Later work is listed in
-the plan (`docs/planning/agent-speech-check-plan.md`). This file is
-updated with every command change.
+Covers watch, desktop, sandbox and shared mode. This file is updated with every
+command change.
 
 Results go to stdout and errors to stderr. An error prints `error: <message>`
 and, when there is one, `hint: <what to do>`.

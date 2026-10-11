@@ -10,8 +10,8 @@ keys, get NVDA's speech back as text, and check it. It works with any Windows ap
 nothing is installed inside NVDA.
 
 **Status: all four modes work (tested against NVDA 2026.2).** See
-`docs/cli.md` for the commands and `docs/planning/agent-speech-check-plan.md`
-for the plan.
+`docs/cli.md` for the commands and `docs/protocol.md` for how `asc` talks to
+NVDA.
 
 ## Modes
 
