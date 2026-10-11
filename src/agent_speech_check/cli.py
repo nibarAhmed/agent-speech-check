@@ -207,6 +207,11 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
         metavar="SECTION.KEY=VALUE",
         help="an nvda.ini setting for the NVDA asc launches (repeatable)",
     )
+    parser.add_argument(
+        "--i-understand",
+        action="store_true",
+        help="shared mode: yes, send keys into my own session",
+    )
 
 
 def _speech_args(parser: argparse.ArgumentParser) -> None:
@@ -312,6 +317,8 @@ def _show_status(status: dict[str, Any]) -> None:
         print(_connect_line(status))
     print(f"browse/focus: {status['nvda_mode']}")
     print(f"speech: {status['lines']} lines kept, latest {status['latest']}, mark {status['mark']}")
+    if status.get("panic_key"):
+        print(f"panic key: {status['panic_key']} stops asc and releases keys")
     if status.get("sandbox"):
         print(f"sandbox: {status['sandbox']}")
     if status["last_error"]:
@@ -344,7 +351,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     settings = tuple(Setting.parse(text) for text in args.nvda_setting)
     if settings and not (target.mode in ("desktop", "sandbox") and target.launch):
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
-    target = target.with_settings(settings)
+    target = target.with_settings(settings).with_consent(args.i_understand)
     status = session.start(target, target_dir(target.name))
     print(f"started: {target.name}")
     _show_status(status)

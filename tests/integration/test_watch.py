@@ -127,7 +127,8 @@ def test_daemon_that_cannot_bind_reports_its_log(env: Env) -> None:
 
 
 @pytest.mark.usefixtures("env")
-def test_unbuilt_mode() -> None:
+def test_shared_mode_needs_consent() -> None:
     result = run_asc("start", "--mode", "shared", "--target", "s")
-    assert result.returncode == 2
-    assert "shared mode is not built yet" in result.stderr
+    assert result.returncode == 4
+    assert "sends keys into your own Windows session" in result.stderr
+    assert "--i-understand" in result.stderr

@@ -153,14 +153,6 @@ class BadSetting(UsageError):
         super().__init__(f"--nvda-setting {_show(setting)}: {reason}")
 
 
-class ModeNotBuilt(UsageError):
-    def __init__(self, mode: str) -> None:
-        super().__init__(
-            f"{mode} mode is not built yet",
-            hint="use --mode watch, or a desktop target with launch = false",
-        )
-
-
 class TargetsFileError(UsageError):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"{path}: {reason}")
@@ -237,14 +229,6 @@ class LaunchFailed(UsageError):
         super().__init__(f"cannot start {_show(command)}: {reason}")
 
 
-class LaunchRefused(Refused):
-    def __init__(self, mode: str) -> None:
-        super().__init__(
-            f"asc launch is not available in {mode} mode yet",
-            hint="start the app yourself, then asc wait for its title",
-        )
-
-
 class SandboxFailed(NotConnected):
     def __init__(self, what: str, detail: str) -> None:
         super().__init__(f"wsb {what} failed: {detail or 'no detail'}")
@@ -285,6 +269,22 @@ class SandboxBusy(Refused):
         super().__init__(
             "a Windows Sandbox is already running, and Windows allows only one",
             hint="close it, or asc stop the target that started it",
+        )
+
+
+class SharedNeedsConsent(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "shared mode sends keys into your own Windows session through your own NVDA",
+            hint="if that is what you want, add --i-understand; a panic hotkey stops asc",
+        )
+
+
+class PanicKeyTaken(Refused):
+    def __init__(self, key: str) -> None:
+        super().__init__(
+            f"cannot register the panic hotkey {key}: another program owns it",
+            hint="shared mode never runs without its panic hotkey; close that program",
         )
 
 

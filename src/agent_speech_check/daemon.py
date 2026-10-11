@@ -26,9 +26,10 @@ from agent_speech_check import firewall, ipc, nvda, nvda_config, relay, state, w
 from agent_speech_check.errors import (
     AlreadyRunning,
     LaunchFailed,
-    LaunchRefused,
     NoMatch,
     NvdaNotConnected,
+    PanicKeyTaken,
+    SharedNeedsConsent,
 )
 from agent_speech_check.keyboard import Keyboard
 from agent_speech_check.paths import state_root, target_dir
@@ -40,6 +41,10 @@ from agent_speech_check.targets import Target
 log = logging.getLogger(__name__)
 
 LOG_FILE = "daemon.log"
+# Shared mode's panic hotkey: releases held keys and stops asc.
+PANIC_KEY = "Control+Shift+Alt+F12"
+PANIC_MODIFIERS = winapi.MOD_CONTROL | winapi.MOD_SHIFT | winapi.MOD_ALT
+PANIC_VK = 0x7B
 STOP_DELAY_S = 0.05
 
 
@@ -77,6 +82,7 @@ class Daemon:
         self.stopping = asyncio.Event()
         self.nvda: nvda.Running | None = None
         self.sandbox: SandboxSession | None = None
+        self.panic: winapi.GlobalHotkey | None = None
 
     async def handle(self, request: ipc.Request) -> dict[str, Any]:
         handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
@@ -126,6 +132,7 @@ class Daemon:
             "last_error": self.relay.last_error,
             "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
+            "panic_key": None if self.panic is None else PANIC_KEY,
         }
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
@@ -160,8 +167,6 @@ class Daemon:
         return {"lines": [e.line() for e in typed.entries]}
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
-        if self.target.mode == "shared":
-            raise LaunchRefused(self.target.mode)
         if not self.relay.connected:
             raise NvdaNotConnected(self.target.name)
         start = self.speech.latest
@@ -196,7 +201,28 @@ class Daemon:
                 self.target.settings,
             )
 
+    def _start_panic_key(self) -> None:
+        """Shared mode never runs without a way for the user to stop it at once."""
+        if self.target.mode != "shared":
+            return
+        if not self.target.consent:
+            raise SharedNeedsConsent
+        loop = asyncio.get_running_loop()
+
+        def pressed() -> None:
+            loop.call_soon_threadsafe(self._on_panic)
+
+        hotkey = winapi.GlobalHotkey(PANIC_MODIFIERS, PANIC_VK, pressed)
+        if not hotkey.start():
+            raise PanicKeyTaken(PANIC_KEY)
+        self.panic = hotkey
+
+    def _on_panic(self) -> None:
+        log.warning("panic hotkey pressed: stopping")
+        self.stopping.set()
+
     async def run(self) -> None:
+        self._start_panic_key()
         host = relay.HOST
         if self.target.mode == "sandbox":
             # NVDA in the sandbox reaches the host only on the Default Switch.
@@ -233,6 +259,8 @@ class Daemon:
             relay_server.close()
             ipc_server.close()
             state.remove(self.folder)
+            if self.panic is not None:
+                self.panic.stop()
             log.info("stopped")
 
 

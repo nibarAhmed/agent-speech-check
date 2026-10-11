@@ -14,11 +14,11 @@ from agent_speech_check.errors import (
     AlreadyRunning,
     DaemonStartFailed,
     FirewallRuleMissing,
-    ModeNotBuilt,
     NotConnected,
     NvdaDidNotConnect,
     SandboxBusy,
     SandboxFailed,
+    SharedNeedsConsent,
 )
 from agent_speech_check.targets import Target
 
@@ -91,8 +91,8 @@ def _check_sandbox(target: Target) -> None:
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
-    if target.mode == "shared":
-        raise ModeNotBuilt(target.mode)
+    if target.mode == "shared" and not target.consent:
+        raise SharedNeedsConsent
     if target.mode == "desktop" and target.launch:
         nvda.require_exe(nvda.folder_for(target.nvda_dir))
         nvda.refuse_if_running()

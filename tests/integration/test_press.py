@@ -136,3 +136,21 @@ def test_press_without_nvda() -> None:
     result = run_asc("press", "Tab", "--target", "d")
     assert result.returncode == 3
     assert 'NVDA is not connected to target "d"' in result.stderr
+
+
+@pytest.mark.usefixtures("env")
+def test_shared_mode_with_consent_sends_keys_and_has_a_panic_key(env: Env) -> None:
+    (env.root / "agent-speech-check" / "targets.toml").write_text(
+        f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n", encoding="utf-8"
+    )
+    started = run_asc("start", "--target", "sh", "--i-understand")
+    assert started.returncode == 0, started.stderr
+    assert "sh (shared mode, keys allowed)" in started.stdout
+    assert "panic key: Control+Shift+Alt+F12 stops asc and releases keys" in started.stdout
+    fake = env.fake("sh", {"Tab": [f.speak("OK button")]})
+    try:
+        pressed = run_asc("press", "Tab", "--expect", "OK", "--target", "sh")
+        assert pressed.returncode == 0, pressed.stderr
+        assert fake.held == set()
+    finally:
+        fake.close()

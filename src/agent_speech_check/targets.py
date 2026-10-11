@@ -48,6 +48,9 @@ class Target:
     nvda_dir: str | None = None
     share: tuple[str, ...] = ()
     settings: tuple[Setting, ...] = ()
+    # Shared mode only: the user passed --i-understand at asc start. Never
+    # read from targets.toml, so consent can't be given once and forgotten.
+    consent: bool = False
 
     def to_json(self) -> str:
         data = asdict(self)
@@ -62,7 +65,7 @@ class Target:
         except ValueError as error:
             raise bad_field(UsageError, "daemon target", "JSON", str(error)) from None
         where = "daemon target"
-        f = Fields(raw, where, UsageError, ("name", *_KEYS, "settings"))
+        f = Fields(raw, where, UsageError, ("name", *_KEYS, "settings", "consent"))
         settings = _strings(f, "settings")
         target = Target(
             check_name(f.text("name")),
@@ -73,11 +76,15 @@ class Target:
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             share=_strings(f, "share"),
             settings=tuple(Setting.parse(s) for s in settings),
+            consent=f.flag("consent") if f.has("consent") else False,
         )
         return _checked(target, where)
 
     def with_settings(self, settings: tuple[Setting, ...]) -> Target:
         return replace(self, settings=settings)
+
+    def with_consent(self, consent: bool) -> Target:
+        return replace(self, consent=consent)
 
 
 def _strings(f: Fields, key: str) -> tuple[str, ...]:
@@ -100,7 +107,7 @@ def _checked(target: Target, where: str) -> Target:
 
 
 def defaults(name: str, mode: str) -> Target:
-    ports = {"watch": WATCH_PORT, "sandbox": SANDBOX_PORT}
+    ports = {"watch": WATCH_PORT, "shared": WATCH_PORT, "sandbox": SANDBOX_PORT}
     return Target(
         name,
         mode,

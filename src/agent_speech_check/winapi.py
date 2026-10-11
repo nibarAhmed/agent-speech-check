@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import threading
+from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
 
@@ -254,3 +256,75 @@ def kill_on_close_job(pid: int) -> int:
 
 def close_handle(handle: int) -> None:
     _kernel32.CloseHandle(handle)
+
+
+# ---------------------------------------------------------------- global hotkey
+
+MOD_ALT = 0x0001
+MOD_CONTROL = 0x0002
+MOD_SHIFT = 0x0004
+MOD_NOREPEAT = 0x4000
+WM_HOTKEY = 0x0312
+WM_QUIT = 0x0012
+_HOTKEY_ID = 1
+
+_user32.RegisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int, wintypes.UINT, wintypes.UINT]
+_user32.UnregisterHotKey.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.GetMessageW.argtypes = [
+    ctypes.POINTER(wintypes.MSG),
+    wintypes.HWND,
+    wintypes.UINT,
+    wintypes.UINT,
+]
+_user32.PostThreadMessageW.argtypes = [
+    wintypes.DWORD,
+    wintypes.UINT,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
+]
+_kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+
+
+class GlobalHotkey:
+    """A system-wide hotkey on its own thread with a message loop.
+
+    `start` returns False if another program already owns the combination.
+    `on_press` runs on the hotkey thread.
+    """
+
+    def __init__(self, modifiers: int, vk: int, on_press: Callable[[], None]) -> None:
+        self._modifiers = modifiers | MOD_NOREPEAT
+        self._vk = vk
+        self._on_press = on_press
+        self._thread_id = 0
+        self._registered = threading.Event()
+        self._ok = False
+        self._thread = threading.Thread(target=self._loop, name="panic-hotkey", daemon=True)
+
+    def start(self) -> bool:
+        self._thread.start()
+        self._registered.wait(5)
+        return self._ok
+
+    def _loop(self) -> None:
+        self._thread_id = int(_kernel32.GetCurrentThreadId())
+        self._ok = bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
+        self._registered.set()
+        if not self._ok:
+            return
+        message = wintypes.MSG()
+        try:
+            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
+                if message.message == WM_HOTKEY:
+                    self._on_press()
+        finally:
+            _user32.UnregisterHotKey(None, _HOTKEY_ID)
+
+    def post(self, message: int) -> None:
+        """Post a message to the hotkey thread (WM_QUIT stops it)."""
+        if self._thread_id:
+            _user32.PostThreadMessageW(self._thread_id, message, 0, 0)
+
+    def stop(self) -> None:
+        self.post(WM_QUIT)
+        self._thread.join(5)

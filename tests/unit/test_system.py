@@ -10,6 +10,7 @@ import asyncio
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -169,3 +170,22 @@ def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.Monkey
     installer.write_bytes(b"already here")
     assert nvda.download("2026.2") == installer
     assert installer.read_bytes() == b"already here"
+
+
+def test_global_hotkey_fires_and_is_exclusive() -> None:
+    pressed = threading.Event()
+    f23 = 0x86  # a key no keyboard has, so the test never steals a real shortcut
+    modifiers = winapi.MOD_CONTROL | winapi.MOD_SHIFT | winapi.MOD_ALT
+    hotkey = winapi.GlobalHotkey(modifiers, f23, pressed.set)
+    assert hotkey.start()
+    try:
+        second = winapi.GlobalHotkey(modifiers, f23, pressed.set)
+        assert not second.start()
+        second.stop()
+        hotkey.post(winapi.WM_HOTKEY)
+        assert pressed.wait(5)
+    finally:
+        hotkey.stop()
+    again = winapi.GlobalHotkey(modifiers, f23, pressed.set)
+    assert again.start()
+    again.stop()

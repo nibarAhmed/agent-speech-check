@@ -1,7 +1,7 @@
 # `asc` command reference
 
-Status: M3 (watch, desktop and sandbox mode). Shared mode is planned for
-M4 (see `docs/planning/agent-speech-check-plan.md`). This file is
+Status: M4 (watch, desktop, sandbox and shared mode). Later work is listed in
+the plan (`docs/planning/agent-speech-check-plan.md`). This file is
 updated with every command change.
 
 Results go to stdout and errors to stderr. An error prints `error: <message>`
@@ -51,7 +51,7 @@ certificate.
 
 ## Commands
 
-### `asc start [--mode watch|desktop|sandbox|shared]`
+### `asc start [--mode watch|desktop|sandbox|shared] [--nvda-setting S] [--i-understand]`
 
 Starts the daemon for the target and prints its status. Exits 4 if it is
 already running, and 3 with the last daemon log lines if it fails to start.
@@ -93,7 +93,14 @@ desktop and your own NVDA keeps running undisturbed.
 - Folders listed in the target's `share` are mapped read-only into the sandbox
   at `C:\share\<folder name>`, so `asc launch` can start your app from there.
 
-Shared mode exits 2 for now.
+**Shared mode** drives your own NVDA, so keys go into your real Windows
+session. Connect your NVDA to `asc` as in watch mode.
+- It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every
+  time. This is never read from `targets.toml`.
+- While it runs, the global panic hotkey **Control+Shift+Alt+F12** releases any
+  held keys and stops `asc` at once. If another program owns that hotkey, shared
+  mode refuses to start (exit 4): it never runs without one.
+- `asc status` shows the panic key.
 
 ### `asc stop`
 
