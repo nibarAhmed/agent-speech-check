@@ -188,6 +188,28 @@ def test_wsb_errors_for_an_unknown_sandbox() -> None:
     assert sandbox.wait_gone(0) in (True, False)
 
 
+def test_wait_exit_returns_once_the_process_ends() -> None:
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+    winapi.wait_exit(child.pid)
+    assert child.poll() is not None
+    winapi.wait_exit(child.pid)  # already gone: returns at once
+
+
+def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:
+    try:
+        sandbox.require_available()
+    except (SandboxNeedsPro, WsbMissing):
+        pytest.skip("needs Windows Sandbox")
+    owner = subprocess.Popen([sys.executable, "-c", "pass"])
+    owner.wait(10)
+    unknown = "00000000-0000-0000-0000-000000000000"
+    sandbox.guard(owner.pid, unknown)  # no `wsb stop` of an unknown id, so no error
+    err = tmp_path / "guard.err"
+    guard = sandbox.start_guard(owner.pid, unknown, err)
+    assert guard.wait(60) == 0, err.read_text(encoding="utf-8")
+    assert err.read_bytes() == b""
+
+
 def test_running_nvda_stop_kills_its_job() -> None:
     # A stand-in child process: Running only needs a process and its job.
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])

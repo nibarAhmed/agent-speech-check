@@ -101,7 +101,8 @@ desktop and your own NVDA keeps running undisturbed.
 - Only one sandbox can run at a time (exit 4 if one already runs).
 - `asc start` downloads the NVDA installer if needed (only a file download),
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
-  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox.
+  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
+  and so does the daemon ending any other way (even killed).
 - With `--nvda-dir DIR` (or `nvda_dir`), the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
   started with a copy of your config, as in desktop mode. Nothing is

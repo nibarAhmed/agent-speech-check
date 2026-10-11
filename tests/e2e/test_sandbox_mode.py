@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import time
 from pathlib import Path
 
 import pytest
 from tests.integration.conftest import run_asc
 
-from agent_speech_check import nvda, sandbox, winapi
+from agent_speech_check import nvda, sandbox, state, winapi
 
 pytestmark = [
     pytest.mark.e2e,
@@ -77,6 +78,35 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     time.sleep(1)
 
 
+def test_sandbox_goes_when_its_daemon_is_killed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    root = tmp_path / "agent-speech-check"
+    installer = nvda.installer_path(nvda.VERSION)
+    installer.parent.mkdir(parents=True)
+    shutil.copy(os.environ["ASC_E2E_INSTALLER"], installer)
+    (root / "targets.toml").write_text("[targets.k]\nmode = 'sandbox'\n", encoding="utf-8")
+
+    started = run_asc("start", "--target", "k", "--window", "taskbar", timeout=420)
+    assert started.returncode == 0, started.stdout + started.stderr
+    daemon_pid = state.read(root / "k", "k").pid
+    try:
+        assert sandbox.running()
+        # A hard kill (TerminateProcess on Windows): the daemon gets no chance
+        # to stop its sandbox.
+        os.kill(daemon_pid, signal.SIGTERM)
+        deadline = time.monotonic() + 120
+        while sandbox.running():
+            assert time.monotonic() < deadline, "the sandbox outlived its daemon"
+            time.sleep(2)
+    finally:
+        for sandbox_id in sandbox.running():
+            sandbox.stop(sandbox_id)
+    assert sandbox.wait_gone(120)
+    time.sleep(1)
+
+
 def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
     """Make a portable NVDA with the real installer, inside a throwaway sandbox:
     on the host it would restart the user's NVDA."""
@@ -97,7 +127,7 @@ def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
 def _make_portable(
     config: str, window: sandbox.SandboxWindow, installer: Path, portable: Path
 ) -> None:
-    sandbox_id = sandbox.start_connected(config, window)
+    sandbox_id = sandbox.start_connected(config, window, portable.parent / "guard.err")
     try:
         # Mute the sandbox first, as the real start script does: the
         # installer's NVDA plays its start sound otherwise.

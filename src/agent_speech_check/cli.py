@@ -504,6 +504,10 @@ def run(argv: Sequence[str] | None) -> int:
     if args_list[:1] == ["_daemon"] and len(args_list) == 2:  # noqa: PLR2004 - _daemon JSON
         # Hidden: how `asc start` runs the daemon.
         return daemon.run(args_list[1])
+    if args_list[:1] == ["_sandbox_guard"] and len(args_list) == 3:  # noqa: PLR2004 - pid, id
+        # Hidden: stops a sandbox once the process that started it is gone.
+        sandbox.guard(int(args_list[1]), args_list[2])
+        return 0
     args = build_parser().parse_args(args_list)
     if args.command is None:
         raise NoCommand

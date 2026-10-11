@@ -156,7 +156,8 @@ def main() -> int:
 
 
 def run_tests(window: sandbox.SandboxWindow, cmd: Path, *, show: bool) -> int:
-    sandbox_id = sandbox.start_connected(sandbox.config_xml(mapped(), networking=False), window)
+    config = sandbox.config_xml(mapped(), networking=False)
+    sandbox_id = sandbox.start_connected(config, window, WORK / "guard.err")
     print(f"sandbox {sandbox_id} started{'' if show else ', minimised'}")
     runner = subprocess.Popen(
         [

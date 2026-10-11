@@ -108,6 +108,23 @@ def image_path(pid: int) -> Path | None:
         _kernel32.CloseHandle(handle)
 
 
+SYNCHRONIZE = 0x00100000
+INFINITE = 0xFFFFFFFF
+_kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+_kernel32.WaitForSingleObject.restype = wintypes.DWORD
+
+
+def wait_exit(pid: int) -> None:
+    """Block until a process exits, however it ends. Returns at once if it's gone."""
+    handle = _kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+    if not handle:
+        return
+    try:
+        _kernel32.WaitForSingleObject(handle, INFINITE)
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
 def process_image(image: str) -> Path | None:
     for pid in process_ids(image):
         path = image_path(pid)

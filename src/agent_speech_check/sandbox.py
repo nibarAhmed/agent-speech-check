@@ -11,6 +11,8 @@ Observed on Windows 11 Pro 26200 (2026-10-11):
   2026-10-11, both sandbox e2e tests pass). A visible sandbox window takes
   focus and catches keys typed on the host, so it is hidden (behind a tray
   icon) or minimised the moment it appears, and kept so (`SandboxWindow`).
+- A sandbox runs on when the process that started it dies. So a guard process
+  starts with each one and stops it once its owner is gone (`guard`).
 
 Pure parts (config XML, parsing `wsb --raw` output) are separate from the thin
 shell that runs `wsb`, so they can be unit-tested.
@@ -20,15 +22,17 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import shutil
 import subprocess
 import threading
 import time
 import winreg
 from dataclasses import dataclass
+from pathlib import Path
 from xml.sax.saxutils import escape
 
-from agent_speech_check import powershell, winapi
+from agent_speech_check import powershell, spawn, winapi
 from agent_speech_check.errors import NotConnected, SandboxFailed, SandboxNeedsPro, WsbMissing
 from agent_speech_check.validate import Fields
 
@@ -394,17 +398,19 @@ class SandboxWindow:
             winapi.focus(self._return_to)
 
 
-def start_connected(config: str, window: SandboxWindow) -> str:
-    """Start a sandbox with a logged-in user. Call it inside `with window:`."""
+def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:
+    """Start a sandbox with a logged-in user, guarded so it goes with this
+    process (`guard_err` takes the guard's errors). Call it inside `with window:`."""
     if not wait_gone(60):
         raise SandboxFailed("start", "the previous sandbox is still shutting down")
     sandbox_id = parse_start(wsb("start", "--config", config, what="start"))
+    start_guard(os.getpid(), sandbox_id, guard_err)
     window.remember_focus()
     subprocess.Popen(["wsb", "connect", "--id", sandbox_id])  # noqa: S603, S607
     deadline = time.monotonic() + SESSION_TIMEOUT_S
     while not _has_session(sandbox_id):
         if time.monotonic() > deadline:
-            # Nobody else knows this id yet, so stop it here or it outlives asc.
+            # This process lives on, so its guard won't: stop it here.
             with contextlib.suppress(SandboxFailed):
                 stop(sandbox_id)
             raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
@@ -418,3 +424,17 @@ def ip_address(sandbox_id: str) -> str | None:
 
 def stop(sandbox_id: str) -> None:
     wsb("stop", "--id", sandbox_id, what="stop")
+
+
+def guard(owner_pid: int, sandbox_id: str) -> None:
+    """Wait for the owner process to end, however it ends, then stop its
+    sandbox if that is still running. Runs as `asc _sandbox_guard`."""
+    winapi.wait_exit(owner_pid)
+    if sandbox_id in running():
+        stop(sandbox_id)
+
+
+def start_guard(owner_pid: int, sandbox_id: str, err: Path) -> subprocess.Popen[bytes]:
+    with err.open("ab") as stream:
+        command = spawn.asc_command("_sandbox_guard", str(owner_pid), sandbox_id)
+        return spawn.detached(command, stream)

@@ -22,6 +22,9 @@ from agent_speech_check.targets import Target
 
 log = logging.getLogger(__name__)
 
+# Outside `sandbox/`, which the next start deletes while a guard may still write.
+GUARD_ERR = "sandbox_guard.err"
+
 
 class SandboxSession:
     def __init__(self, folder: Path, target: Target, relay: Relay) -> None:
@@ -59,7 +62,9 @@ class SandboxSession:
 
     def _start(self) -> None:
         config = self._prepare()
-        self.sandbox_id = sandbox.start_connected(config, self.window)
+        self.sandbox_id = sandbox.start_connected(
+            config, self.window, self.folder.parent / GUARD_ERR
+        )
         log.info("sandbox %s started", self.sandbox_id)
         code = sandbox.exec_as_user(self.sandbox_id, sandbox.script_command())
         if code:
