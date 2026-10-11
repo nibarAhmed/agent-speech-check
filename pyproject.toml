@@ -68,7 +68,6 @@ ignore_fail = "return_non_zero"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
-extend-exclude = ["docs/planning"]
 
 [tool.ruff.lint]
 select = [
@@ -127,6 +126,6 @@ parallel = true
 # ---------------------------------------------------------------- codespell
 
 [tool.codespell]
-skip = "./.git,./.venv,./uv.lock,./docs/planning,./build,./dist,*.html"
+skip = "./.git,./.venv,./uv.lock,./build,./dist,*.html"
 # fo: the tasklist /fo flag. caf: the start of "Café" in a Unicode test.
 ignore-words-list = "fo,caf"
