@@ -14,7 +14,7 @@ from collections.abc import Sequence
 
 from agent_speech_check import __version__
 from agent_speech_check.errors import EXIT_INTERRUPTED, AscError, InternalError, NoCommand
-from agent_speech_check.paths import log_dir
+from agent_speech_check.paths import state_root
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
@@ -65,7 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_INTERRUPTED
     except Exception as error:  # noqa: BLE001 - last resort: turn any bug into exit 6
         print(f"internal error: {type(error).__name__}: {error}", file=sys.stderr)
-        print(f"logs: {log_dir()}", file=sys.stderr)
+        print(f"logs: {state_root()}", file=sys.stderr)
         if os.environ.get("ASC_DEBUG") == "1":
             traceback.print_exc()
         return InternalError.exit_code

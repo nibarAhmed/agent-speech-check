@@ -1,4 +1,4 @@
-"""Stop hook: the fast gate (ruff, mypy, vulture, unit tests).
+"""Stop hook: runs the fast gate, `poe fast` (see pyproject.toml).
 
 If anything fails it blocks stopping (exit 2) and feeds the failures back. When
 Claude Code reports `stop_hook_active` (it is already continuing because of this
@@ -12,13 +12,7 @@ import json
 import subprocess
 import sys
 
-STEPS: list[list[str]] = [
-    ["ruff", "format", "--check", "."],
-    ["ruff", "check", "."],
-    ["mypy"],
-    ["vulture"],
-    ["pytest", "tests/unit", "-q", "--no-cov", "-p", "no:cacheprovider"],
-]
+GATE = ["poe", "fast"]
 MAX_OUTPUT = 4000
 
 
@@ -27,17 +21,12 @@ def main() -> int:
     payload = json.loads(raw) if raw.strip() else {}
     already_continuing = bool(payload.get("stop_hook_active"))
 
-    failures: list[str] = []
-    for step in STEPS:
-        result = subprocess.run(step, capture_output=True, text=True, check=False)
-        if result.returncode != 0:
-            output = (result.stdout + result.stderr).strip()
-            failures.append(f"$ {' '.join(step)}\n{output[-MAX_OUTPUT:]}")
-
-    if not failures:
+    result = subprocess.run(GATE, capture_output=True, text=True, check=False)
+    if result.returncode == 0:
         return 0
+    output = (result.stdout + result.stderr).strip()
     print("Fast gate failed. Fix these before finishing:\n", file=sys.stderr)
-    print("\n\n".join(failures), file=sys.stderr)
+    print(output[-MAX_OUTPUT:], file=sys.stderr)
     return 0 if already_continuing else 2
 
 

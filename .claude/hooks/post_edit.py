@@ -1,8 +1,8 @@
 """PostToolUse hook for Edit and Write.
 
 Reads the hook JSON on stdin. For a `.py` file it runs `ruff format` and
-`ruff check --fix`. For any file it blocks (exit 2) if the file contains an em
-dash, reporting the lines, or if ruff leaves unfixable problems.
+`ruff check --fix`. For any file it blocks (exit 2) if `scripts/check_dashes.py`
+finds an em dash, or if ruff leaves unfixable problems.
 """
 
 from __future__ import annotations
@@ -11,8 +11,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-
-EM_DASH = chr(0x2014)
 
 
 def main() -> int:
@@ -27,15 +25,14 @@ def main() -> int:
         return 0
 
     problems: list[str] = []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        text = ""
-    problems.extend(
-        f"{path}:{n}: em dash (U+2014); use a colon, comma, parentheses or a new sentence"
-        for n, line in enumerate(text.splitlines(), start=1)
-        if EM_DASH in line
+    dashes = subprocess.run(
+        [sys.executable, "scripts/check_dashes.py", str(path)],
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    if dashes.returncode != 0:
+        problems.append(dashes.stdout.strip())
 
     if path.suffix == ".py":
         subprocess.run(["ruff", "format", "--quiet", str(path)], check=False)

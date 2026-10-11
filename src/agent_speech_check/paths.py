@@ -12,7 +12,3 @@ def state_root() -> Path:
     local = os.environ.get("LOCALAPPDATA")
     base = Path(local) if local else Path.home() / "AppData" / "Local"
     return base / APP_DIR_NAME
-
-
-def log_dir() -> Path:
-    return state_root()

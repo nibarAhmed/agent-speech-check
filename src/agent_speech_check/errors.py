@@ -84,6 +84,8 @@ CATEGORIES: tuple[type[AscError], ...] = (
     InternalError,
 )
 
+_BY_KIND = {category.kind: category for category in CATEGORIES}
+
 EXIT_INTERRUPTED = 130
 
 
@@ -92,7 +94,7 @@ def from_kind(kind: str, message: str, hint: str | None = None) -> AscError:
 
     An unknown `kind` means the daemon and CLI disagree, which is itself a bug.
     """
-    for category in CATEGORIES:
-        if category.kind == kind:
-            return category(message, hint)
+    category = _BY_KIND.get(kind)
+    if category is not None:
+        return category(message, hint)
     return InternalError(f"daemon sent unknown error kind {kind!r}: {message}", hint)

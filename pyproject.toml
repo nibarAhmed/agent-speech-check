@@ -53,7 +53,14 @@ types = "mypy"
 dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
+unit = "pytest tests/unit -q --no-cov -p no:cacheprovider"
 check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
+
+# The Stop hook's gate. Runs every step even after a failure, so all problems
+# are reported at once.
+[tool.poe.tasks.fast]
+sequence = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "unit"]
+ignore_fail = "return_non_zero"
 
 # ---------------------------------------------------------------- ruff
 
@@ -74,9 +81,10 @@ select = [
 "src/agent_speech_check/cli.py" = ["T20"]
 "tests/**" = ["S101", "PLR2004"]
 # Throwaway M0 spike: prints results and drives subprocesses on purpose.
-"scripts/spike_remote.py" = ["T20", "S603", "S607", "PLR0915", "PLR2004", "BLE001"]
-"scripts/check_dashes.py" = ["T20", "S603", "S607"]
-".claude/hooks/*.py" = ["T20", "S603", "S607"]
+"scripts/spike_remote.py" = ["PLR0915", "PLR2004", "BLE001"]
+# Dev scripts and hooks print and run tools on purpose.
+"scripts/**" = ["T20", "S603", "S607"]
+".claude/**" = ["T20", "S603", "S607"]
 
 # ---------------------------------------------------------------- mypy
 
