@@ -35,7 +35,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda_config import Setting
 from agent_speech_check.paths import state_root, target_dir, targets_file
-from agent_speech_check.targets import MODES, Target, resolve
+from agent_speech_check.targets import MODES, WINDOWS, Target, resolve
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
@@ -221,6 +221,11 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
         "--nvda-dir", metavar="DIR", help="desktop or sandbox: launch this portable NVDA"
     )
     parser.add_argument(
+        "--window",
+        choices=WINDOWS,
+        help="sandbox: its window in the tray (default), on the taskbar, or shown",
+    )
+    parser.add_argument(
         "--i-understand",
         action="store_true",
         help="shared mode: yes, send keys into my own session",
@@ -360,7 +365,7 @@ def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) ->
 
 
 def cmd_start(args: argparse.Namespace) -> int:
-    target = _target(args).with_nvda_dir(args.nvda_dir)
+    target = _target(args).with_nvda_dir(args.nvda_dir).with_window(args.window)
     settings = tuple(Setting.parse(text) for text in args.nvda_setting)
     if settings and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
@@ -499,6 +504,10 @@ def run(argv: Sequence[str] | None) -> int:
     if args_list[:1] == ["_daemon"] and len(args_list) == 2:  # noqa: PLR2004 - _daemon JSON
         # Hidden: how `asc start` runs the daemon.
         return daemon.run(args_list[1])
+    if args_list[:1] == ["_sandbox_guard"] and len(args_list) == 3:  # noqa: PLR2004 - pid, id
+        # Hidden: stops a sandbox once the process that started it is gone.
+        sandbox.guard(int(args_list[1]), args_list[2])
+        return 0
     args = build_parser().parse_args(args_list)
     if args.command is None:
         raise NoCommand

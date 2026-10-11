@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import daemon, firewall, ipc, nvda, nvda_config, sandbox, state
+from agent_speech_check import daemon, firewall, ipc, nvda, nvda_config, sandbox, spawn, state
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
@@ -32,20 +31,9 @@ STATUS_TIMEOUT_S = 5.0
 CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0}
 CONNECT_POLL_S = 1.0
 
-_DETACHED = (
-    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined,unused-ignore]
-)
-_BREAKAWAY = 0x01000000  # CREATE_BREAKAWAY_FROM_JOB
-
 
 def status(folder: Path, target: str) -> dict[str, Any]:
     return ipc.call(folder, target, ipc.Request("status", ipc.NoArgs()), STATUS_TIMEOUT_S)
-
-
-def daemon_command(target: Target) -> list[str]:
-    if getattr(sys, "frozen", False):
-        return [sys.executable, "_daemon", target.to_json()]
-    return [sys.executable, "-m", "agent_speech_check", "_daemon", target.to_json()]
 
 
 def log_tail(folder: Path) -> str:
@@ -59,25 +47,7 @@ def log_tail(folder: Path) -> str:
 
 def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
     with (folder / ERR_FILE).open("wb") as err:
-
-        def popen(flags: int) -> subprocess.Popen[bytes]:
-            return subprocess.Popen(  # noqa: S603 - our own executable and arguments
-                daemon_command(target),
-                creationflags=flags,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=err,
-                cwd=folder,
-                close_fds=True,
-            )
-
-        try:
-            # Leave the caller's job object, so the daemon outlives the shell
-            # that started it.
-            return popen(_DETACHED | _BREAKAWAY)
-        except PermissionError:
-            # The job doesn't allow breakaway; the daemon then lives as long as it.
-            return popen(_DETACHED)
+        return spawn.detached(spawn.asc_command("_daemon", target.to_json()), err, folder)
 
 
 def _check_nvda(target: Target) -> None:

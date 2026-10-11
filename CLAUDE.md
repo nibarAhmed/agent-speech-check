@@ -1,8 +1,8 @@
 # Agent Speech Check (`asc`)
 
 A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVDA
-Remote Access client. The plan is `docs/planning/agent-speech-check-plan.md`; its
-"Status" section says where work stands.
+Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
+evidence, is in `docs/protocol.md`.
 
 ## Commands
 

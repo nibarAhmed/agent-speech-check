@@ -3,7 +3,9 @@
 The sandbox gets three mapped folders (the start script, the NVDA installer or
 your own portable NVDA, and a writable config folder) plus the target's `share`
 folders. Its NVDA connects out to the relay on the host's Default Switch
-address. The window is kept minimised for the whole session.
+address. For the whole session the window is kept hidden behind a tray icon
+that shows and hides it ("tray", the default), minimised ("taskbar"), or left
+alone ("show").
 """
 
 from __future__ import annotations
@@ -13,32 +15,30 @@ import logging
 import shutil
 from pathlib import Path
 
-from agent_speech_check import nvda, nvda_config, sandbox
+from agent_speech_check import nvda, nvda_config, sandbox, winapi
 from agent_speech_check.errors import AscError, LaunchFailed, SandboxFailed
-from agent_speech_check.nvda_config import Relay, Setting
+from agent_speech_check.nvda_config import Relay
+from agent_speech_check.targets import Target
 
 log = logging.getLogger(__name__)
 
-MINIMIZE_EVERY_S = 0.5
+# Outside `sandbox/`, which the next start deletes while a guard may still write.
+GUARD_ERR = "sandbox_guard.err"
 
 
 class SandboxSession:
-    def __init__(
-        self,
-        folder: Path,
-        shares: tuple[str, ...],
-        relay: Relay,
-        settings: tuple[Setting, ...],
-        nvda_dir: Path | None = None,
-    ) -> None:
+    def __init__(self, folder: Path, target: Target, relay: Relay) -> None:
         self.folder = folder / "sandbox"
-        self.shares = shares
+        self.shares = target.share
         self.relay = relay
-        self.settings = settings
-        self.nvda_dir = nvda_dir
+        self.settings = target.settings
+        self.nvda_dir = Path(target.nvda_dir) if target.nvda_dir else None
         self.state = "starting"
         self.failure: str | None = None
         self.sandbox_id: str | None = None
+        self.window = sandbox.SandboxWindow(target.sandbox_window)
+        self.name = target.name
+        self._icon: winapi.TrayIcon | None = None
 
     def _prepare(self) -> str:
         """Write the mapped folders and return the sandbox configuration."""
@@ -61,25 +61,46 @@ class SandboxSession:
 
     def _start(self) -> None:
         config = self._prepare()
-        self.sandbox_id = sandbox.start_minimized(config)
+        self.sandbox_id = sandbox.start_connected(
+            config, self.window, self.folder.parent / GUARD_ERR
+        )
         log.info("sandbox %s started", self.sandbox_id)
         code = sandbox.exec_as_user(self.sandbox_id, sandbox.script_command())
         if code:
             raise SandboxFailed("exec", f"the NVDA start script exited with {code}")
 
-    async def run(self, stopping: asyncio.Event) -> None:
-        """Start the sandbox, then keep its window minimised until stopping."""
+    def _tray_icon(self) -> winapi.TrayIcon | None:
+        if self.window.window != "tray":
+            return None
+        icon = winapi.TrayIcon(f"asc sandbox {self.name}: show or hide", self.window.toggle)
+        if icon.start():
+            return icon
+        # A hidden window with no icon could never be shown again.
+        log.warning("no tray icon, so the sandbox window is minimised instead")
+        icon.stop()
+        self.window.window = "taskbar"
+        return None
+
+    async def run(self) -> None:
+        """Start the sandbox. Its window is kept in place until `stop`."""
+        # Off the loop: adding the icon waits on its thread for up to 5 s.
+        self._icon = await asyncio.to_thread(self._tray_icon)
+        self.window.start()
         try:
             await asyncio.to_thread(self._start)
         except AscError as error:
             self.failure = error.message
             self.state = f"failed: {error.message}"
             log.warning("sandbox did not start: %s", error.message)
+            await asyncio.to_thread(self._stop_keeping)
             return
         self.state = "running"
-        while not stopping.is_set():
-            sandbox.keep_minimized()
-            await asyncio.sleep(MINIMIZE_EVERY_S)
+
+    def _stop_keeping(self) -> None:
+        self.window.stop()
+        if self._icon is not None:
+            self._icon.stop()
+            self._icon = None
 
     async def launch(self, command: str) -> None:
         if self.sandbox_id is None:
@@ -99,3 +120,6 @@ class SandboxSession:
             except SandboxFailed as error:
                 log.warning("sandbox stop: %s", error.message)
             self.sandbox_id = None
+        # Only now: the client shows its window again as the sandbox stops.
+        # Off the loop: it joins the keeping and tray threads.
+        await asyncio.to_thread(self._stop_keeping)

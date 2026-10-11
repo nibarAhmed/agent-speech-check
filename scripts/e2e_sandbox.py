@@ -151,7 +151,13 @@ def main() -> int:
         return 3
     prepare()
     cmd = write_cmd(pytest_args)
-    sandbox_id = sandbox.start_minimized(sandbox.config_xml(mapped(), networking=False), show=show)
+    with sandbox.SandboxWindow("show" if show else "taskbar") as window:
+        return run_tests(window, cmd, show=show)
+
+
+def run_tests(window: sandbox.SandboxWindow, cmd: Path, *, show: bool) -> int:
+    config = sandbox.config_xml(mapped(), networking=False)
+    sandbox_id = sandbox.start_connected(config, window, WORK / "guard.err")
     print(f"sandbox {sandbox_id} started{'' if show else ', minimised'}")
     runner = subprocess.Popen(
         [
@@ -170,8 +176,6 @@ def main() -> int:
     deadline = time.monotonic() + TIMEOUT_S
     done = OUT / "DONE"
     while not done.exists() and time.monotonic() < deadline:
-        if not show:
-            sandbox.keep_minimized()
         time.sleep(0.5)
     runner.kill()
     report = OUT / "pytest.txt"

@@ -7,10 +7,13 @@ depend on the machine (Hyper-V, wsb) accept either documented outcome.
 from __future__ import annotations
 
 import asyncio
+import ctypes
 import os
 import subprocess
 import sys
 import threading
+import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -28,6 +31,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda_config import Relay, Setting
 from agent_speech_check.sandboxed import SandboxSession
+from agent_speech_check.targets import defaults
 
 
 def test_kill_on_close_job_kills_the_child() -> None:
@@ -54,7 +58,15 @@ def test_process_lookups() -> None:
 
 def test_window_helpers_without_a_sandbox() -> None:
     assert winapi.windows_titled("no window has this title, asc") == []
-    sandbox.keep_minimized()  # nothing to do, and it must not fail
+    for window in ("tray", "taskbar", "show"):
+        keeper = sandbox.SandboxWindow(window)
+        keeper.toggle()
+        keeper.keep()  # nothing to do, and it must not fail
+        assert keeper.shown
+        keeper.remember_focus()
+        with keeper:  # the keeping thread starts, runs and stops
+            time.sleep(sandbox.KEEP_WINDOW_EVERY_S * 3)
+        assert keeper.shown
 
 
 def test_mutex_is_exclusive(tmp_path: Path) -> None:
@@ -118,12 +130,12 @@ def test_sandbox_session_prepares_its_folders(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    session = SandboxSession(
-        tmp_path / "target",
-        ("C:/src/app",),
-        Relay("172.24.80.1", 16837, "key", "fp"),
-        (Setting.parse("speech.symbolLevel=300"),),
+    target = replace(
+        defaults("x", "sandbox"),
+        share=("C:/src/app",),
+        settings=(Setting.parse("speech.symbolLevel=300"),),
     )
+    session = SandboxSession(tmp_path / "target", target, Relay("172.24.80.1", 16837, "key", "fp"))
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
     script = (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
@@ -141,7 +153,8 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
     portable = tmp_path / "portable"
     (portable / "userConfig" / "addons" / "a").mkdir(parents=True)
     (portable / "userConfig" / "nvda.ini").write_text("[speech]\nrate = 40\n", encoding="utf-8")
-    session = SandboxSession(tmp_path / "target", (), Relay("h", 1, "k", "f"), (), portable)
+    target = replace(defaults("x", "sandbox"), nvda_dir=str(portable))
+    session = SandboxSession(tmp_path / "target", target, Relay("h", 1, "k", "f"))
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
     assert "robocopy" in (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
@@ -153,7 +166,7 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
 
 
 def test_sandbox_session_before_start() -> None:
-    session = SandboxSession(Path("x"), (), Relay("h", 1, "k", "f"), ())
+    session = SandboxSession(Path("x"), defaults("x", "sandbox"), Relay("h", 1, "k", "f"))
     with pytest.raises(SandboxFailed, match="not running yet"):
         asyncio.run(session.launch("x"))
     asyncio.run(session.stop())  # nothing started, nothing to stop
@@ -173,6 +186,28 @@ def test_wsb_errors_for_an_unknown_sandbox() -> None:
     with pytest.raises(SandboxFailed, match="wsb ip failed"):
         sandbox.ip_address(unknown)
     assert sandbox.wait_gone(0) in (True, False)
+
+
+def test_wait_exit_returns_once_the_process_ends() -> None:
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
+    winapi.wait_exit(child.pid)
+    assert child.poll() is not None
+    winapi.wait_exit(child.pid)  # already gone: returns at once
+
+
+def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:
+    try:
+        sandbox.require_available()
+    except (SandboxNeedsPro, WsbMissing):
+        pytest.skip("needs Windows Sandbox")
+    owner = subprocess.Popen([sys.executable, "-c", "pass"])
+    owner.wait(10)
+    unknown = "00000000-0000-0000-0000-000000000000"
+    sandbox.guard(owner.pid, unknown)  # no `wsb stop` of an unknown id, so no error
+    err = tmp_path / "guard.err"
+    guard = sandbox.start_guard(owner.pid, unknown, err)
+    assert guard.wait(60) == 0, err.read_text(encoding="utf-8")
+    assert err.read_bytes() == b""
 
 
 def test_running_nvda_stop_kills_its_job() -> None:
@@ -237,3 +272,71 @@ def test_nvda_version_check() -> None:
     with pytest.raises(NvdaTooOld, match=r"C:/nvda is version 2024\.4") as exc:
         nvda.check_version("C:/nvda", (2024, 4))
     assert exc.value.exit_code == 3
+
+
+def test_tray_icon_selects_and_goes_away() -> None:
+    selected = threading.Event()
+    icon = winapi.TrayIcon("asc test icon", selected.set)
+    assert icon.start()
+    try:
+        # The window class is registered once per process; a second icon works too.
+        second = winapi.TrayIcon("asc test icon 2", lambda: None)
+        assert second.start()
+        second.stop()
+        icon.post(winapi.NIN_KEYSELECT)
+        assert selected.wait(5)
+    finally:
+        icon.stop()
+    selected.clear()
+    icon.post(winapi.NIN_SELECT)  # gone: nothing to post to, nothing runs
+    assert not selected.wait(0.2)
+
+
+def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
+    relay = Relay("h", 1, "k", "f")
+    tray = SandboxSession(tmp_path, defaults("x", "sandbox"), relay)
+    tray._icon = tray._tray_icon()
+    assert tray._icon is not None
+    assert tray.window.window == "tray"
+    tray.window.start()
+    asyncio.run(tray.stop())  # no sandbox started; the icon and the thread still go
+    assert tray._icon is None
+    assert not tray.window._thread.is_alive()
+    for window in ("taskbar", "show"):
+        other = SandboxSession(tmp_path, replace(defaults("x", "sandbox"), window=window), relay)
+        assert other._tray_icon() is None
+
+
+def _plain_window(title: str) -> int:
+    """A real top-level window, shown without taking focus."""
+    user32 = ctypes.WinDLL("user32")
+    user32.CreateWindowExW.restype = ctypes.c_void_p
+    user32.CreateWindowExW.argtypes = [ctypes.c_uint32, ctypes.c_wchar_p, ctypes.c_wchar_p]
+    user32.CreateWindowExW.argtypes += [ctypes.c_uint32] + [ctypes.c_int] * 4
+    user32.CreateWindowExW.argtypes += [ctypes.c_void_p] * 4
+    overlapped_window, show_no_activate = 0x00CF0000, 4
+    hwnd = user32.CreateWindowExW(
+        0, "STATIC", title, overlapped_window, 0, 0, 200, 100, None, None, None, None
+    )
+    user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
+    user32.ShowWindow(hwnd, show_no_activate)
+    return int(hwnd)
+
+
+def test_sandbox_window_puts_a_real_window_away() -> None:
+    if winapi.process_ids("WindowsSandboxRemoteSession.exe"):
+        pytest.skip("a real sandbox window is open")
+    user32 = ctypes.WinDLL("user32")
+    user32.DestroyWindow.argtypes = [ctypes.c_void_p]
+    for window, hidden in (("taskbar", False), ("tray", True)):
+        hwnd = _plain_window(f"{sandbox.WINDOW_TITLE} (asc test)")
+        try:
+            assert hwnd in winapi.windows_titled(sandbox.WINDOW_TITLE)
+            keeper = sandbox.SandboxWindow(window)
+            keeper.remember_focus()  # someone else's window: focus stays there
+            keeper.keep()
+            assert winapi.is_visible(hwnd) is not hidden
+            assert winapi.is_minimized(hwnd)
+            assert winapi.window_pid(hwnd) == os.getpid()
+        finally:
+            user32.DestroyWindow(hwnd)

@@ -137,3 +137,43 @@ def test_relative_nvda_dir_in_file_is_refused(tmp_path: Path) -> None:
     with pytest.raises(UsageError, match="a full path") as exc:
         resolve(path, "app", None)
     assert exc.value.exit_code == 2
+
+
+def test_window_defaults_to_tray_in_sandbox_mode(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.s]\nmode = 'sandbox'\n")
+    target = resolve(path, "s", None)
+    assert target.window is None
+    assert target.sandbox_window == "tray"
+
+
+@pytest.mark.parametrize("window", ["tray", "taskbar", "show"])
+def test_window_from_file(tmp_path: Path, window: str) -> None:
+    path = write(tmp_path, f"[targets.s]\nmode = 'sandbox'\nwindow = '{window}'\n")
+    target = resolve(path, "s", None)
+    assert target.sandbox_window == window
+    assert Target.from_json(target.to_json()) == target
+
+
+def test_bad_window(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.s]\nmode = 'sandbox'\nwindow = 'hidden'\n")
+    with pytest.raises(UsageError, match="window: expected one of tray, taskbar, show") as exc:
+        resolve(path, "s", None)
+    assert exc.value.exit_code == 2
+
+
+@pytest.mark.parametrize(
+    "table", ["mode = 'watch'", "mode = 'desktop'", "mode = 'sandbox'\nlaunch = false"]
+)
+def test_window_only_for_a_sandbox_asc_launches(tmp_path: Path, table: str) -> None:
+    path = write(tmp_path, f"[targets.app]\n{table}\nwindow = 'tray'\n")
+    with pytest.raises(UsageError, match="window: expected only in sandbox mode") as exc:
+        resolve(path, "app", None)
+    assert exc.value.exit_code == 2
+
+
+def test_with_window() -> None:
+    target = defaults("x", "sandbox")
+    assert target.with_window(None) is target
+    assert target.with_window("taskbar").sandbox_window == "taskbar"
+    with pytest.raises(UsageError, match="--window window: expected only in sandbox mode"):
+        defaults("x", "desktop").with_window("show")

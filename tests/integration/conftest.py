@@ -42,11 +42,16 @@ class Env:
     def folder(self, target: str) -> Path:
         return self.root / "agent-speech-check" / target
 
+    def channel(self, target: str) -> str:
+        relay = (self.folder(target) / "relay.json").read_text(encoding="utf-8")
+        channel: str = json.loads(relay)["channel"]
+        return channel
+
     def fake(self, target: str, replies: dict[str, Reply | str] | None = None) -> FakeNvda:
         """A fake NVDA connected to the target's relay, using its stored key and cert."""
         folder = self.folder(target)
-        channel = json.loads((folder / "relay.json").read_text(encoding="utf-8"))["channel"]
-        fake = FakeNvda(self.port, channel, fingerprint(folder / "relay_cert.pem"), replies or {})
+        cert = fingerprint(folder / "relay_cert.pem")
+        fake = FakeNvda(self.port, self.channel(target), cert, replies or {})
         return fake.start()
 
 

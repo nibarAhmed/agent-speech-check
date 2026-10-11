@@ -1,8 +1,7 @@
 # `asc` command reference
 
-Status: M4 (watch, desktop, sandbox and shared mode). Later work is listed in
-the plan (`docs/planning/agent-speech-check-plan.md`). This file is
-updated with every command change.
+Covers watch, desktop, sandbox and shared mode. This file is updated with every
+command change.
 
 Results go to stdout and errors to stderr. An error prints `error: <message>`
 and, when there is one, `hint: <what to do>`.
@@ -39,9 +38,11 @@ keys = false        # may send keys; never true in watch mode
 launch = true       # desktop: false if NVDA is started elsewhere and connects itself
 nvda_dir = 'C:\nvda' # desktop or sandbox: your portable NVDA (default: asc get-nvda's)
 share = ['C:\src\app'] # sandbox: folders mapped read-only to C:\share\<name>
+window = "tray"     # sandbox: its window in the tray (default), taskbar or show
 ```
 
-Unknown keys are errors. `nvda_dir` must be a full path (exit 2 otherwise). A target that isn't listed gets the defaults for
+Unknown keys are errors. `nvda_dir` must be a full path (exit 2 otherwise).
+`window` is refused (exit 2) outside sandbox mode. A target that isn't listed gets the defaults for
 `--mode` (watch if left out).
 
 Each target has a folder `%LOCALAPPDATA%\agent-speech-check\<target>\` with the
@@ -51,7 +52,7 @@ certificate.
 
 ## Commands
 
-### `asc start [--mode watch|desktop|sandbox|shared] [--nvda-setting S] [--nvda-dir DIR] [--i-understand]`
+### `asc start [--mode watch|desktop|sandbox|shared] [--nvda-setting S] [--nvda-dir DIR] [--window tray|taskbar|show] [--i-understand]`
 
 Starts the daemon for the target and prints its status. Exits 4 if it is
 already running, and 3 with the last daemon log lines if it fails to start.
@@ -99,14 +100,22 @@ desktop and your own NVDA keeps running undisturbed.
 - Only one sandbox can run at a time (exit 4 if one already runs).
 - `asc start` downloads the NVDA installer if needed (only a file download),
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
-  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox.
+  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
+  and so does the daemon ending any other way (even killed).
 - With `--nvda-dir DIR` (or `nvda_dir`), the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
   started with a copy of your config, as in desktop mode. Nothing is
   downloaded. Your NVDA on the host may keep running.
-- The sandbox window is kept minimised: a visible sandbox window would take
-  focus and catch keys you type. NVDA needs the window's session, so the window
-  can't be closed altogether.
+- The sandbox window goes to the system tray: it is hidden, with no taskbar
+  button, and an "asc sandbox" tray icon shows or hides it (click it, or select
+  it and press Enter). Minimising the shown window sends it back to the tray.
+  `--window taskbar` (or `window = "taskbar"`) keeps it minimised on the
+  taskbar instead, and `--window show` leaves it alone. A visible sandbox
+  window takes focus and catches keys you type. NVDA needs the window's
+  session, so the window can't be closed altogether. `--window` holds for this
+  start only, and is refused (exit 2) outside sandbox mode. If the tray icon
+  can't be added, the window is minimised instead. When the sandbox window
+  opens, focus goes back to the window you were in.
 - The relay listens only on this computer's Hyper-V Default Switch address
   (looked up at every start), on port 16837 unless the target sets `port`.
 - Folders listed in the target's `share` are mapped read-only into the sandbox

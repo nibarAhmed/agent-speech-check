@@ -15,7 +15,7 @@ import pytest
 from tests import fake_nvda as f
 from tests.integration.conftest import Env, free_port, run_asc
 
-from agent_speech_check import firewall
+from agent_speech_check import firewall, state, winapi
 from agent_speech_check.targets import SANDBOX_PORT, Target
 
 
@@ -245,3 +245,30 @@ def test_too_many_gestures_send_nothing() -> None:
     result = run_asc("press", *(["Tab"] * 101), "--target", "w")
     assert result.returncode == 2
     assert "gestures: expected 1 to 100 key names" in result.stderr
+
+
+def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
+    """A sandbox's NVDA vanishes without closing when its sandbox stops. The
+    daemon must still exit at once, not when the TLS close times out."""
+    assert run_asc("start", "--target", "w").returncode == 0
+    pid = state.read(env.folder("w"), "w").pid
+    channel = env.channel("w")
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    with (
+        socket.create_connection(("127.0.0.1", env.port), timeout=5) as raw,
+        context.wrap_socket(raw) as sock,
+    ):
+        sock.sendall(json.dumps({"type": "protocol_version", "version": 2}).encode() + b"\n")
+        join = {"type": "join", "channel": channel, "connection_type": "slave"}
+        sock.sendall(json.dumps(join).encode() + b"\n")
+        received = b""
+        while b"channel_joined" not in received:
+            received += sock.recv(65536)
+        # From here on it never reads or answers, like a peer that is gone.
+        stopped = time.monotonic()
+        assert run_asc("stop", "--target", "w").returncode == 0
+        while winapi.image_path(pid) is not None:
+            assert time.monotonic() - stopped < 10, "the daemon waited on the silent peer"
+            time.sleep(0.1)
