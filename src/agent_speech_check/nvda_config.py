@@ -234,13 +234,16 @@ def _merged(relay: Relay, settings: tuple[Setting, ...], user: Section | None = 
             if not isinstance(child, dict):
                 raise BadSetting(".".join(setting.path), f"{name} is a key, not a section")
             section = child
+        if isinstance(section.get(key), dict):
+            raise BadSetting(".".join(setting.path), f"{key} is a section, not a key")
         section[key] = setting.value
     return config
 
 
-def check(settings: tuple[Setting, ...]) -> None:
-    """Refuse settings that clash with each other, before anything starts."""
-    _merged(_ANY_RELAY, settings)
+def check(settings: tuple[Setting, ...], user: Section | None = None) -> None:
+    """Refuse settings that clash with each other or with the user's own
+    config, before anything starts."""
+    _merged(_ANY_RELAY, settings, user)
 
 
 def render(relay: Relay, settings: tuple[Setting, ...] = (), user: Section | None = None) -> str:

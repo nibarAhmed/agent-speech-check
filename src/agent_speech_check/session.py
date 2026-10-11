@@ -80,15 +80,17 @@ def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
             return popen(_DETACHED)
 
 
-def _check_nvda(folder: Path) -> None:
-    """The NVDA asc will launch exists, is new enough, and its own config reads."""
+def _check_nvda(target: Target) -> None:
+    """The NVDA asc will launch exists, is new enough, and its own config reads
+    and takes the target's settings."""
+    folder = nvda.folder_for(target.nvda_dir)
     nvda.require_exe(folder)
-    nvda_config.user_ini(nvda_config.source_config(folder))
+    nvda_config.check(target.settings, nvda_config.user_ini(nvda_config.source_config(folder)))
 
 
 def _check_sandbox(target: Target) -> None:
     if target.nvda_dir:
-        _check_nvda(Path(target.nvda_dir))
+        _check_nvda(target)
     sandbox.require_available()
     if not firewall.rule_ok(target.port, firewall.daemon_program()):
         raise FirewallRuleMissing
@@ -106,7 +108,7 @@ def precheck(target: Target) -> None:
             raise SharedNeedsConsent
         daemon.check_panic_key()
     if target.launches_portable:
-        _check_nvda(nvda.folder_for(target.nvda_dir))
+        _check_nvda(target)
         nvda.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)

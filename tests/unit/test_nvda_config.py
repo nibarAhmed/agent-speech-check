@@ -7,6 +7,7 @@ from agent_speech_check.nvda_config import (
     Raw,
     Relay,
     Setting,
+    check,
     parse_ini,
     render,
     source_config,
@@ -177,6 +178,15 @@ def test_user_key_where_asc_needs_a_section() -> None:
     lines = render(Relay("h", 1, "k", "f"), (), {"remote": Raw("x"), "speech": Raw("y")})
     assert "[speech]" in lines.splitlines()
     assert "synth = silence" in lines.splitlines()
+
+
+def test_settings_are_checked_against_the_user_config() -> None:
+    user = parse_ini("[speech]\nvoice = de\n[[espeak]]\nrate = 1\n", "nvda.ini")
+    check((Setting.parse("speech.voice.x=1"),))
+    with pytest.raises(BadSetting, match="voice is a key"):
+        check((Setting.parse("speech.voice.x=1"),), user)
+    with pytest.raises(BadSetting, match="espeak is a section"):
+        check((Setting.parse("speech.espeak=x"),), user)
 
 
 def test_write_copies_the_user_config(tmp_path: Path) -> None:

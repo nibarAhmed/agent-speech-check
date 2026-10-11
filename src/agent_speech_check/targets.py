@@ -104,7 +104,8 @@ class Target:
     def with_nvda_dir(self, nvda_dir: str | None) -> Target:
         if nvda_dir is None:
             return self
-        return _checked(replace(self, nvda_dir=nvda_dir), "--nvda-dir")
+        # The daemon runs in its own folder, so a relative path must be made absolute here.
+        return _checked(replace(self, nvda_dir=str(Path(nvda_dir).absolute())), "--nvda-dir")
 
 
 def _strings(f: Fields, key: str) -> tuple[str, ...]:
