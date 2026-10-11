@@ -15,7 +15,9 @@ classifiers = [
     "Topic :: Software Development :: Testing",
     "Topic :: Adaptive Technologies",
 ]
-dependencies = []
+dependencies = [
+    "cryptography>=50.0.2",
+]
 
 [project.scripts]
 asc = "agent_speech_check.cli:main"
@@ -38,7 +40,6 @@ dev = [
     "pytest-asyncio",
     "pytest-cov",
     "ruff",
-    "trustme",
     "vulture",
 ]
 
@@ -79,7 +80,7 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # cli.py is the only module allowed to print.
 "src/agent_speech_check/cli.py" = ["T20"]
-"tests/**" = ["S101", "PLR2004"]
+"tests/**" = ["S101", "PLR2004", "TRY003"]
 # Throwaway M0 spike: prints results and drives subprocesses on purpose.
 "scripts/spike_remote.py" = ["PLR0915", "PLR2004", "BLE001"]
 # Dev scripts and hooks print and run tools on purpose.
@@ -91,7 +92,8 @@ select = [
 [tool.mypy]
 strict = true
 files = ["src", "tests", "scripts/check_dashes.py", ".claude/hooks"]
-mypy_path = "src"
+mypy_path = ["src", "."]
+explicit_package_bases = true
 
 # ---------------------------------------------------------------- vulture
 
@@ -111,6 +113,7 @@ testpaths = ["tests"]
 # Coverage and its 90% floor live in the `test` poe task, so `pytest -m e2e`
 # (a small subset of the code) is not failed by the floor.
 addopts = ["--strict-markers"]
+pythonpath = ["."]
 markers = ["e2e: needs a real portable NVDA (manual or nightly)"]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"

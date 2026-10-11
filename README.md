@@ -9,7 +9,7 @@ keys, get NVDA's speech back as text, and check it. It works with any Windows ap
 `asc` connects to NVDA as a Remote Access client (NVDA 2025.1 or newer), so
 nothing is installed inside NVDA.
 
-**Status: early development (M0).** Nothing is usable yet. See
+**Status: early development (M1, watch mode).** See
 `docs/planning/agent-speech-check-plan.md` for the plan and `docs/cli.md` for the
 commands as they land.
 

@@ -1,0 +1,138 @@
+"""Keys end to end, and every fault fake_nvda can script. No key may stay held.
+
+Target `d` is a desktop target with `launch = false`: NVDA (here the fake)
+connects by itself, so keys are allowed without launching a real NVDA.
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Iterator
+
+import pytest
+from tests import fake_nvda as f
+from tests.fake_nvda import FakeNvda
+from tests.integration.conftest import Env, run_asc
+
+
+@pytest.fixture
+def nvda(env: Env) -> Iterator[FakeNvda]:
+    started = run_asc("start", "--target", "d")
+    assert started.returncode == 0, started.stderr
+    assert "d (desktop mode, keys allowed)" in started.stdout
+    fake = env.fake("d")
+    yield fake
+    fake.close()
+
+
+def wait_rejoined(fake: FakeNvda, joins: int) -> None:
+    deadline = time.monotonic() + 10
+    while fake.joins <= joins and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert fake.joins > joins, fake.failure
+    # Give the relay a moment to send its releases after channel_joined.
+    time.sleep(0.2)
+
+
+def test_press_prints_new_speech_and_releases(nvda: FakeNvda) -> None:
+    nvda.replies["NVDA+T"] = [f.CANCEL, f.speak("Program Manager ")]
+    result = run_asc("press", "NVDA+T", "--target", "d")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == 'said: "Program Manager"\n'
+    assert nvda.gestures == ["NVDA+T"]
+    assert nvda.held == set()
+    keys = [(m["vk_code"], m["pressed"]) for m in nvda.received if m["type"] == "key"]
+    assert keys == [(0x2D, True), (0x54, True), (0x54, False), (0x2D, False)]
+
+
+def test_several_gestures_and_mode_line(nvda: FakeNvda) -> None:
+    nvda.replies["Tab"] = [f.speak("Your name ", "edit ", "blank "), f.wave("focusMode.wav")]
+    nvda.replies["Escape"] = [f.wave("browseMode.wav")]
+    result = run_asc("press", "Tab", "Esc", "--target", "d")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        'said: "Your name edit blank"',
+        "mode: focus",
+        "mode: browse",
+    ]
+    assert "browse/focus: browse" in run_asc("status", "--target", "d").stdout
+
+
+def test_expect(nvda: FakeNvda) -> None:
+    nvda.replies["H"] = [f.speak("Second heading ", "heading ", "level 2")]
+    ok = run_asc("press", "H", "--expect", "level 2", "--target", "d")
+    assert ok.returncode == 0
+    nvda.replies["H"] = [f.speak("no next heading")]
+    failed = run_asc("press", "H", "--expect", "level 3", "--timeout", "800", "--target", "d")
+    assert failed.returncode == 1
+    assert 'no speech matched "level 3" within 800 ms' in failed.stderr
+    assert 'said: "no next heading"' in failed.stderr
+    assert nvda.held == set()
+
+
+def test_silence(nvda: FakeNvda) -> None:
+    nvda.replies["Space"] = f.SILENCE
+    result = run_asc("press", "Space", "--target", "d")
+    assert result.returncode == 0
+    assert result.stdout == "(nothing said)\n"
+
+
+def test_unknown_type_is_ignored(nvda: FakeNvda) -> None:
+    nvda.replies["Down"] = f.UNKNOWN
+    result = run_asc("press", "Down", "--target", "d")
+    assert result.returncode == 0
+    assert result.stdout == 'said: "after unknown"\n'
+
+
+@pytest.mark.parametrize(
+    ("fault", "message"),
+    [
+        (f.MALFORMED, "NVDA sent a line that is not a JSON object"),
+        (f.OVERSIZE, "NVDA sent a line longer than 1048576 bytes"),
+        (f.SERVER_ERROR, 'NVDA reported an error: "boom"'),
+    ],
+)
+def test_protocol_faults_exit_5_and_recover(nvda: FakeNvda, fault: str, message: str) -> None:
+    nvda.replies["Up"] = fault
+    joins = nvda.joins
+    result = run_asc("press", "Up", "--target", "d")
+    assert result.returncode == 5, result.stdout + result.stderr
+    assert message in result.stderr
+    wait_rejoined(nvda, joins)
+    assert nvda.held == set()
+    status = run_asc("status", "--target", "d").stdout
+    assert "nvda: connected" in status
+    del nvda.replies["Up"]
+    assert run_asc("press", "Up", "--target", "d").stdout == 'said: "pressed Up"\n'
+
+
+def test_disconnect_mid_gesture_releases_after_reconnect(nvda: FakeNvda) -> None:
+    nvda.replies["Shift+Tab"] = f.DISCONNECT_MID_GESTURE
+    joins = nvda.joins
+    result = run_asc("press", "Shift+Tab", "--target", "d")
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "NVDA is not connected" in result.stderr
+    wait_rejoined(nvda, joins)
+    assert nvda.held == set()
+
+
+def test_bad_input_sends_nothing(nvda: FakeNvda) -> None:
+    unknown = run_asc("press", "Tab", "Escap", "--target", "d")
+    assert unknown.returncode == 2
+    assert 'unknown key "Escap"' in unknown.stderr
+    assert "hint: did you mean Escape" in unknown.stderr
+    regex = run_asc("press", "Tab", "--expect", "(", "--target", "d")
+    assert regex.returncode == 2
+    assert 'bad regex "(": missing ), unterminated subpattern at position 0' in regex.stderr
+    settle = run_asc("press", "Tab", "--settle", "5", "--target", "d")
+    assert settle.returncode == 2
+    assert "settle_ms: expected a whole number from 50 to 10000, got 5" in settle.stderr
+    assert not any(m["type"] == "key" for m in nvda.received)
+
+
+@pytest.mark.usefixtures("env")
+def test_press_without_nvda() -> None:
+    assert run_asc("start", "--target", "d").returncode == 0
+    result = run_asc("press", "Tab", "--target", "d")
+    assert result.returncode == 3
+    assert 'NVDA is not connected to target "d"' in result.stderr

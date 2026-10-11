@@ -1,0 +1,73 @@
+from pathlib import Path
+
+import pytest
+
+from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError
+from agent_speech_check.targets import Target, defaults, resolve
+
+
+def write(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "targets.toml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_no_file_gives_watch_default(tmp_path: Path) -> None:
+    target = resolve(tmp_path / "targets.toml", None, None)
+    assert target == Target("default", "watch", 6837, keys=False, launch=False)
+
+
+def test_mode_defaults() -> None:
+    assert defaults("x", "desktop") == Target("x", "desktop", 0, keys=True, launch=True)
+    assert defaults("x", "sandbox").launch is False
+
+
+def test_listed_target_and_default_name(tmp_path: Path) -> None:
+    path = write(
+        tmp_path,
+        'default = "app"\n[targets.app]\nmode = "desktop"\nport = 16837\nlaunch = false\n',
+    )
+    target = resolve(path, None, None)
+    assert target == Target("app", "desktop", 16837, keys=True, launch=False)
+    assert resolve(path, "app", "desktop") == target
+    assert resolve(path, "other", None).mode == "watch"
+
+
+def test_mode_mismatch(tmp_path: Path) -> None:
+    path = write(tmp_path, '[targets.app]\nmode = "watch"\n')
+    with pytest.raises(ModeMismatch, match=r'target "app" is watch mode in targets\.toml'):
+        resolve(path, "app", "desktop")
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ('[targets.app]\nmode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared"),
+        ('[targets.app]\nmode = "watch"\nkeys = true\n', "keys: expected false in watch mode"),
+        ('[targets.app]\nmode = "watch"\nport = 0\n', "port: expected a whole number from 1"),
+        ('[targets.app]\nmode = "watch"\nprot = 1\n', "expected only known keys, got prot"),
+        ('default_target = "x"\n', "expected only known keys, got default_target"),
+    ],
+)
+def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
+    with pytest.raises(UsageError, match=message):
+        resolve(write(tmp_path, text), "app", None)
+
+
+def test_toml_syntax_error(tmp_path: Path) -> None:
+    with pytest.raises(TargetsFileError, match=r"targets.toml: "):
+        resolve(write(tmp_path, "[targets\n"), None, None)
+
+
+def test_bad_target_name(tmp_path: Path) -> None:
+    with pytest.raises(UsageError, match="target name: expected 1 to 32 letters"):
+        resolve(tmp_path / "none.toml", "bad name!", None)
+
+
+def test_json_round_trip() -> None:
+    target = defaults("x", "desktop")
+    assert Target.from_json(target.to_json()) == target
+    with pytest.raises(UsageError, match="daemon target: expected JSON"):
+        Target.from_json("{")
+    with pytest.raises(UsageError, match="keys: expected false in watch mode"):
+        Target.from_json('{"name":"x","mode":"watch","port":1,"keys":true,"launch":false}')
