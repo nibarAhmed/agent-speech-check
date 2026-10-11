@@ -45,6 +45,8 @@ log = logging.getLogger(__name__)
 
 HOST = "127.0.0.1"
 JOIN_TIMEOUT_S = 10.0
+# A peer that is gone (its sandbox stopped) never answers the TLS close.
+CLOSE_TIMEOUT_S = 1.0
 KEEPALIVE_S = 120.0
 CERT_DAYS = 3650
 
@@ -172,8 +174,13 @@ class Relay:
             if self._writer is writer:
                 self._lost()
             writer.close()
-            with contextlib.suppress(ConnectionError, ssl.SSLError):
-                await writer.wait_closed()
+            try:
+                async with asyncio.timeout(CLOSE_TIMEOUT_S):
+                    await writer.wait_closed()
+            except TimeoutError:
+                writer.transport.abort()
+            except OSError:  # ConnectionError, ssl.SSLError, or the peer timing out
+                pass
 
     def _failed(self, error: AscError) -> None:
         self.last_error = error.message
