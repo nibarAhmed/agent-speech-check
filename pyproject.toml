@@ -35,7 +35,6 @@ dev = [
     "deptry",
     "mypy",
     "poethepoet",
-    "pre-commit",
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
@@ -57,7 +56,7 @@ test = "pytest -m 'not e2e' --cov=agent_speech_check --cov-report=term-missing:s
 unit = "pytest tests/unit -q --no-cov -p no:cacheprovider"
 check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
 
-# The Stop hook's gate. Runs every step even after a failure, so all problems
+# A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.
 [tool.poe.tasks.fast]
 sequence = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "unit"]
@@ -91,7 +90,7 @@ select = [
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "scripts/check_dashes.py", ".claude/hooks"]
+files = ["src", "tests", "scripts/check_dashes.py"]
 mypy_path = ["src", "."]
 explicit_package_bases = true
 

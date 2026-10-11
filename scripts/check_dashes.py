@@ -1,7 +1,7 @@
 """Fail if any file contains an em dash (U+2014).
 
-With no arguments, checks every file git tracks or would add. With arguments
-(as pre-commit passes them), checks just those files. Binary files are skipped.
+With no arguments, checks every file git tracks or would add. With arguments,
+checks just those files. Binary files are skipped.
 """
 
 from __future__ import annotations

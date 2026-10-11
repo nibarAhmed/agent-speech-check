@@ -6,8 +6,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 1. Install [uv](https://docs.astral.sh/uv/).
 2. `uv sync`
-3. `uv run pre-commit install`
-4. `uv run poe check` must pass before you open a pull request.
+3. `uv run poe check` must pass before you open a pull request.
 
 ## Rules
 
