@@ -40,6 +40,13 @@ class UsageError(AscError):
     kind = "usage"
 
 
+class NoCommand(UsageError):
+    """`asc` was run without a command."""
+
+    def __init__(self) -> None:
+        super().__init__("no command given", hint="run asc --help")
+
+
 class NotConnected(AscError):
     """No daemon, no target, NVDA not connected, or NVDA not found."""
 

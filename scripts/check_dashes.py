@@ -17,12 +17,14 @@ def candidate_files(args: list[str]) -> list[Path]:
     if args:
         return [Path(a) for a in args]
     listed = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        # -z: raw NUL-separated UTF-8 paths. Without it git quotes and escapes
+        # non-ASCII names, which then do not exist and would be silently skipped.
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     ).stdout
-    return [Path(line) for line in listed.splitlines() if line]
+    return [Path(name) for name in listed.split("\0") if name]
 
 
 def find_dashes(path: Path) -> list[int]:

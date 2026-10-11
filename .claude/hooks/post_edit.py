@@ -21,7 +21,9 @@ def main() -> int:
     if not isinstance(raw_path, str):
         return 0
     path = Path(raw_path)
-    if not path.is_file():
+    # The hook command runs from the project root. Leave files outside the repo
+    # (memory, global settings) alone: their rules are not this repo's rules.
+    if not path.is_file() or not path.resolve().is_relative_to(Path.cwd().resolve()):
         return 0
 
     problems: list[str] = []

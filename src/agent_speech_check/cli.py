@@ -13,7 +13,7 @@ import traceback
 from collections.abc import Sequence
 
 from agent_speech_check import __version__
-from agent_speech_check.errors import EXIT_INTERRUPTED, AscError, InternalError, UsageError
+from agent_speech_check.errors import EXIT_INTERRUPTED, AscError, InternalError, NoCommand
 from agent_speech_check.paths import log_dir
 
 DESCRIPTION = """\
@@ -34,11 +34,6 @@ exit codes:
   6    internal error (a bug in asc)
   130  interrupted (Ctrl+C)
 """
-
-
-class NoCommand(UsageError):
-    def __init__(self) -> None:
-        super().__init__("no command given", hint="run asc --help")
 
 
 def build_parser() -> argparse.ArgumentParser:

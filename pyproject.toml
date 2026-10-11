@@ -52,7 +52,7 @@ lint = "ruff check ."
 types = "mypy"
 dead = "vulture"
 deps = "deptry src"
-test = "pytest -m 'not e2e'"
+test = "pytest -m 'not e2e' --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
 check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
 
 # ---------------------------------------------------------------- ruff
@@ -100,12 +100,9 @@ known_first_party = ["agent_speech_check"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = [
-    "--strict-markers",
-    "--cov=agent_speech_check",
-    "--cov-report=term-missing:skip-covered",
-    "--cov-fail-under=90",
-]
+# Coverage and its 90% floor live in the `test` poe task, so `pytest -m e2e`
+# (a small subset of the code) is not failed by the floor.
+addopts = ["--strict-markers"]
 markers = ["e2e: needs a real portable NVDA (manual or nightly)"]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"

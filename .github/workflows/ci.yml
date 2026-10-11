@@ -20,6 +20,6 @@ jobs:
       - name: PyInstaller smoke build
         shell: bash
         run: |
-          uv run --with pyinstaller pyinstaller --onefile --name asc --paths src src/agent_speech_check/__main__.py
+          uv run --with pyinstaller pyinstaller --onefile --name asc --copy-metadata agent-speech-check --paths src src/agent_speech_check/__main__.py
           ./dist/asc.exe --help
           ./dist/asc.exe --version
