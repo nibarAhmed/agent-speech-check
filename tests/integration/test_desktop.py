@@ -189,6 +189,7 @@ def test_start_nvda_dir(tmp_path: Path) -> None:
     desktop = run_asc("start", "--mode", "desktop", "--target", "own", "--nvda-dir", str(missing))
     assert desktop.returncode == 3
     assert f"NVDA not found. Looked in: the portable NVDA ({missing})" in desktop.stderr
+    assert "hint: check --nvda-dir or nvda_dir" in desktop.stderr
     broken = tmp_path / "broken"
     (broken / "userConfig").mkdir(parents=True)
     (broken / "nvda.exe").write_bytes(b"")

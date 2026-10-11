@@ -73,8 +73,11 @@ def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert nvda.installer_path("2026.2").name == "nvda_2026.2.exe"
     assert nvda.installer_url("2026.2").startswith("https://download.nvaccess.org/releases/")
     with pytest.raises(NvdaNotFound) as exc:
-        nvda.require_exe(tmp_path)
+        nvda.require_exe(nvda.managed_dir())
     assert exc.value.hint == "asc get-nvda"
+    with pytest.raises(NvdaNotFound) as exc:
+        nvda.require_exe(tmp_path)
+    assert exc.value.hint == "check --nvda-dir or nvda_dir"
     (tmp_path / "nvda.exe").write_bytes(b"")
     assert nvda.require_exe(tmp_path) == tmp_path / "nvda.exe"
 

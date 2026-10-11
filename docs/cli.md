@@ -41,7 +41,7 @@ nvda_dir = 'C:\nvda' # desktop or sandbox: your portable NVDA (default: asc get-
 share = ['C:\src\app'] # sandbox: folders mapped read-only to C:\share\<name>
 ```
 
-Unknown keys are errors. A target that isn't listed gets the defaults for
+Unknown keys are errors. `nvda_dir` must be a full path (exit 2 otherwise). A target that isn't listed gets the defaults for
 `--mode` (watch if left out).
 
 Each target has a folder `%LOCALAPPDATA%\agent-speech-check\<target>\` with the
@@ -81,7 +81,8 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
   the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
-- Exits 3 with the hint `asc get-nvda` if there is no portable NVDA.
+- Exits 3 if there is no portable NVDA, with the hint `asc get-nvda`, or to
+  check `--nvda-dir` / `nvda_dir` when you named the folder.
 - `--nvda-setting section.key=value` (repeatable) adds an `nvda.ini` setting,
   for example `--nvda-setting speech.symbolLevel=300`. Names are letters,
   digits and `_`, with dots for nested sections. Settings `asc` writes itself

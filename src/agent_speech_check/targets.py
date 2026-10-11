@@ -157,13 +157,17 @@ def _from_table(name: str, raw: object, path: Path) -> Target:
     f = Fields(raw, where, UsageError, _KEYS)
     mode = f.choice("mode", MODES)
     base = defaults(name, mode)
+    nvda_dir = f.opt_text("nvda_dir", max_len=1000)
+    # Relative to what? The daemon's folder or this file's would both surprise.
+    if nvda_dir is not None and not Path(nvda_dir).is_absolute():
+        raise bad_field(UsageError, f"{where} nvda_dir", "a full path, like C:\\nvda", nvda_dir)
     target = Target(
         name,
         mode,
         f.number("port", low=1, high=65535) if f.has("port") else base.port,
         f.flag("keys") if f.has("keys") else base.keys,
         f.flag("launch") if f.has("launch") else base.launch,
-        f.opt_text("nvda_dir", max_len=1000),
+        nvda_dir,
         _strings(f, "share"),
     )
     return _checked(target, where)
