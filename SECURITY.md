@@ -1,0 +1,17 @@
+# Security
+
+`asc` handles sensitive data: NVDA's speech can include passwords, private messages and email,
+and `asc` can press keys on a computer.
+
+## Reporting a problem
+
+Please report security issues privately, not in a public issue. Once the repository is on GitHub,
+use its private vulnerability reporting (the Security tab). Include what you found, how to
+reproduce it and what an attacker could do with it.
+
+## What `asc` promises
+
+- Speech stays in memory unless you pass `--log-file`. Logs never contain speech text or tokens.
+- The daemon's control port listens on 127.0.0.1 only and needs a random token.
+- Watch mode never sends keys; the daemon enforces this.
+- `asc` never writes your own NVDA configuration.

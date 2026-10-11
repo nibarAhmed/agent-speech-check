@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --locked
+      - name: Check (lint, types, dead code, deps, tests)
+        run: uv run poe check
+      - name: PyInstaller smoke build
+        shell: bash
+        run: |
+          uv run --with pyinstaller pyinstaller --onefile --name asc --paths src src/agent_speech_check/__main__.py
+          ./dist/asc.exe --help
+          ./dist/asc.exe --version
