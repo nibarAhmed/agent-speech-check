@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import daemon, firewall, ipc, nvda, sandbox, state
+from agent_speech_check import daemon, firewall, ipc, nvda, nvda_config, sandbox, state
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
@@ -80,14 +80,23 @@ def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
             return popen(_DETACHED)
 
 
+def _check_nvda(folder: Path) -> None:
+    """The NVDA asc will launch exists, is new enough, and its own config reads."""
+    nvda.require_exe(folder)
+    nvda_config.user_ini(nvda_config.source_config(folder))
+
+
 def _check_sandbox(target: Target) -> None:
+    if target.nvda_dir:
+        _check_nvda(Path(target.nvda_dir))
     sandbox.require_available()
     if not firewall.rule_ok(target.port, firewall.daemon_program()):
         raise FirewallRuleMissing
     if sandbox.running():
         raise SandboxBusy
-    # Only a file download; the installer runs inside the sandbox.
-    nvda.download(nvda.VERSION)
+    if not target.nvda_dir:
+        # Only a file download; the installer runs inside the sandbox.
+        nvda.download(nvda.VERSION)
 
 
 def precheck(target: Target) -> None:
@@ -97,7 +106,7 @@ def precheck(target: Target) -> None:
             raise SharedNeedsConsent
         daemon.check_panic_key()
     if target.launches_portable:
-        nvda.require_exe(nvda.folder_for(target.nvda_dir))
+        _check_nvda(nvda.folder_for(target.nvda_dir))
         nvda.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)

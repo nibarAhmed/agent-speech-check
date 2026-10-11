@@ -99,3 +99,32 @@ def test_share_list(tmp_path: Path) -> None:
     assert Target.from_json(target.to_json()) == target
     with pytest.raises(UsageError, match="share: expected a list of strings"):
         resolve(write(tmp_path, "[targets.s]\nmode = 'sandbox'\nshare = [1]\n"), "s", None)
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "mode = 'watch'",
+        "mode = 'shared'",
+        "mode = 'desktop'\nlaunch = false",
+        "mode = 'sandbox'\nlaunch = false",
+    ],
+)
+def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
+    path = write(tmp_path, f"[targets.app]\n{table}\nnvda_dir = 'C:/nvda'\n")
+    with pytest.raises(UsageError, match="only for an NVDA that asc launches") as exc:
+        resolve(path, "app", None)
+    assert exc.value.exit_code == 2
+
+
+def test_nvda_dir_for_sandbox(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.app]\nmode = 'sandbox'\nnvda_dir = 'C:/nvda'\n")
+    assert resolve(path, "app", None).nvda_dir == "C:/nvda"
+
+
+def test_with_nvda_dir() -> None:
+    target = defaults("x", "desktop")
+    assert target.with_nvda_dir(None) is target
+    assert target.with_nvda_dir("C:/n").nvda_dir == "C:/n"
+    with pytest.raises(UsageError, match="only for an NVDA that asc launches"):
+        defaults("x", "watch").with_nvda_dir("C:/n")

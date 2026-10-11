@@ -21,6 +21,7 @@ from agent_speech_check.errors import (
     DownloadFailed,
     NvdaAlreadyRunning,
     NvdaNotFound,
+    NvdaTooOld,
     PortableFailed,
 )
 from agent_speech_check.nvda_config import Relay, Setting
@@ -29,6 +30,8 @@ from agent_speech_check.paths import state_root
 log = logging.getLogger(__name__)
 
 VERSION = "2026.2"
+# Remote Access is built in from 2025.1.
+MIN_VERSION = (2025, 1)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
 CREATE_TIMEOUT_S = 180
@@ -59,10 +62,17 @@ def refuse_if_running() -> None:
         raise NvdaAlreadyRunning
 
 
+def check_version(folder: str, version: tuple[int, int] | None) -> None:
+    """Refuse an NVDA without Remote Access. An unknown version is let through."""
+    if version is not None and version < MIN_VERSION:
+        raise NvdaTooOld(folder, ".".join(map(str, version)))
+
+
 def require_exe(folder: Path) -> Path:
     exe = folder / "nvda.exe"
     if not exe.is_file():
         raise NvdaNotFound([f"the portable NVDA ({folder})"], hint="asc get-nvda")
+    check_version(str(folder), winapi.file_version(exe))
     return exe
 
 
@@ -124,10 +134,10 @@ def launch(
     relay: Relay,
     settings: tuple[Setting, ...],
 ) -> Running:
-    """Start the portable NVDA with a fresh config that connects to the relay."""
+    """Start the portable NVDA with a copy of its own config that connects to the relay."""
     exe = require_exe(folder)
     refuse_if_running()
-    nvda_config.write(config_dir, relay, settings)
+    nvda_config.write(config_dir, relay, settings, nvda_config.source_config(folder))
     process = subprocess.Popen(  # noqa: S603 - the portable NVDA asc manages
         [
             str(exe),

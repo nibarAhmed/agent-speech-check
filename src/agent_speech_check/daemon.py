@@ -256,8 +256,13 @@ class Daemon:
             async with asyncio.TaskGroup() as group:
                 keepalive = group.create_task(self.relay.keepalive())
                 if self.target.launches_sandbox:
+                    nvda_dir = self.target.nvda_dir
                     self.sandbox = SandboxSession(
-                        self.folder, self.target.share, self._relay_info(), self.target.settings
+                        self.folder,
+                        self.target.share,
+                        self._relay_info(),
+                        self.target.settings,
+                        Path(nvda_dir) if nvda_dir else None,
                     )
                     group.create_task(self.sandbox.run(self.stopping))
                 await self.stopping.wait()

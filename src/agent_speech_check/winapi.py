@@ -258,6 +258,52 @@ def close_handle(handle: int) -> None:
     _kernel32.CloseHandle(handle)
 
 
+# ---------------------------------------------------------------- file version
+
+_version = ctypes.WinDLL("version", use_last_error=True)
+_version.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, wintypes.LPDWORD]
+_version.GetFileVersionInfoSizeW.restype = wintypes.DWORD
+_version.GetFileVersionInfoW.argtypes = [
+    wintypes.LPCWSTR,
+    wintypes.DWORD,
+    wintypes.DWORD,
+    wintypes.LPVOID,
+]
+_version.VerQueryValueW.argtypes = [
+    wintypes.LPCVOID,
+    wintypes.LPCWSTR,
+    ctypes.POINTER(wintypes.LPVOID),
+    wintypes.PUINT,
+]
+
+
+class _FixedFileInfo(ctypes.Structure):
+    _fields_ = (
+        ("dwSignature", wintypes.DWORD),
+        ("dwStrucVersion", wintypes.DWORD),
+        ("dwFileVersionMS", wintypes.DWORD),
+        ("dwFileVersionLS", wintypes.DWORD),
+    )
+
+
+def file_version(path: Path) -> tuple[int, int] | None:
+    """The first two numbers of a file's version resource, or None if it has none."""
+    size = _version.GetFileVersionInfoSizeW(str(path), None)
+    if not size:
+        return None
+    data = ctypes.create_string_buffer(size)
+    if not _version.GetFileVersionInfoW(str(path), 0, size, data):
+        return None
+    pointer = wintypes.LPVOID()
+    length = wintypes.UINT()
+    if not _version.VerQueryValueW(data, "\\", ctypes.byref(pointer), ctypes.byref(length)):
+        return None
+    if length.value < ctypes.sizeof(_FixedFileInfo):
+        return None
+    info = ctypes.cast(pointer, ctypes.POINTER(_FixedFileInfo)).contents
+    return info.dwFileVersionMS >> 16, info.dwFileVersionMS & 0xFFFF
+
+
 # ---------------------------------------------------------------- global hotkey
 
 MOD_ALT = 0x0001

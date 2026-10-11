@@ -21,6 +21,7 @@ from agent_speech_check.errors import (
     NoDefaultSwitch,
     NvdaAlreadyRunning,
     NvdaNotFound,
+    NvdaTooOld,
     SandboxFailed,
     SandboxNeedsPro,
     WsbMissing,
@@ -133,6 +134,21 @@ def test_sandbox_session_prepares_its_folders(
     assert session.state == "starting"
 
 
+def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
+    portable = tmp_path / "portable"
+    (portable / "userConfig" / "addons" / "a").mkdir(parents=True)
+    (portable / "userConfig" / "nvda.ini").write_text("[speech]\nrate = 40\n", encoding="utf-8")
+    session = SandboxSession(tmp_path / "target", (), Relay("h", 1, "k", "f"), (), portable)
+    config = session._prepare()
+    folder = tmp_path / "target" / "sandbox"
+    assert "robocopy" in (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
+    assert f"<HostFolder>{portable}</HostFolder>" in config
+    assert (folder / "config" / "addons" / "a").is_dir()
+    ini = (folder / "config" / "nvda.ini").read_text(encoding="utf-8").splitlines()
+    assert "rate = 40" in ini
+    assert "synth = silence" in ini
+
+
 def test_sandbox_session_before_start() -> None:
     session = SandboxSession(Path("x"), (), Relay("h", 1, "k", "f"), ())
     with pytest.raises(SandboxFailed, match="not running yet"):
@@ -198,3 +214,23 @@ def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.Mo
     with pytest.raises(DownloadFailed, match="cannot download NVDA"):
         nvda.download("0.0-asc-no-such-version")
     assert not nvda.installer_path("0.0-asc-no-such-version").exists()
+
+
+def test_file_version(tmp_path: Path) -> None:
+    kernel32 = Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll"
+    version = winapi.file_version(kernel32)
+    assert version is not None
+    assert version[0] == 10  # Windows 10 and 11 both report 10
+    empty = tmp_path / "nvda.exe"
+    empty.write_bytes(b"")
+    assert winapi.file_version(empty) is None
+    assert winapi.file_version(tmp_path / "missing.exe") is None
+
+
+def test_nvda_version_check() -> None:
+    nvda.check_version("C:/nvda", None)
+    nvda.check_version("C:/nvda", (2025, 1))
+    nvda.check_version("C:/nvda", (2026, 2))
+    with pytest.raises(NvdaTooOld, match=r"C:/nvda is version 2024\.4") as exc:
+        nvda.check_version("C:/nvda", (2024, 4))
+    assert exc.value.exit_code == 3

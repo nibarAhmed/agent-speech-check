@@ -93,3 +93,10 @@ def test_launch_command_encodes_the_command() -> None:
     assert script.endswith("-Command 'mshta.exe \"C:/share/it''s here/app.html\"'")
     assert "launch.ps1" in script
     assert "exit 3" in sandbox.LAUNCH_PS1
+
+
+def test_nvda_script_from_a_portable() -> None:
+    lines = sandbox.nvda_script(None).split("\r\n")
+    assert r"robocopy C:\asc\nvda C:\nvda /e /njh /njs /nfl /ndl /np > nul" in lines
+    assert not any("--create-portable-silent" in line for line in lines)
+    assert lines[-2].startswith(r'start "" C:\nvda\nvda.exe --config-path=C:\asc\config ')

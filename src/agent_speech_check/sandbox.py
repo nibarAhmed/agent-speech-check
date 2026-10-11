@@ -115,16 +115,23 @@ SHARE = r"C:\share"
 SCRIPT = "start_nvda.cmd"
 
 
-def nvda_script(installer: str) -> str:
+def nvda_script(installer: str | None) -> str:
     """Runs in the sandbox's user session: mute it, make NVDA portable, start it.
 
-    Stopping Windows Audio silences the sandbox completely (proven in M0).
+    With `installer`, NVDA_IN holds that installer, which makes the portable
+    copy. Without, NVDA_IN is your own portable NVDA, copied because the mapped
+    folder is read-only. Stopping Windows Audio silences the sandbox completely
+    (proven in M0).
     """
+    if installer is None:
+        make = f"robocopy {NVDA_IN} {PORTABLE} /e /njh /njs /nfl /ndl /np > nul"
+    else:
+        make = f'"{NVDA_IN}\\{installer}" --create-portable-silent --portable-path={PORTABLE}'
     return "\r\n".join(
         [
             "@echo off",
             "net stop audiosrv /y > nul 2>&1",
-            f'"{NVDA_IN}\\{installer}" --create-portable-silent --portable-path={PORTABLE}',
+            make,
             ":wait",
             f"if not exist {PORTABLE}\\nvda.exe (",
             "  timeout /t 1 /nobreak > nul",

@@ -66,3 +66,79 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert sandbox.wait_gone(120)
     assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
     time.sleep(1)
+
+
+def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
+    """Make a portable NVDA with the real installer, inside a throwaway sandbox:
+    on the host it would restart the user's NVDA."""
+    config = sandbox.config_xml(
+        [
+            sandbox.Mapped(str(installer.parent), sandbox.NVDA_IN),
+            sandbox.Mapped(str(out), r"C:\out", read_only=False),
+        ],
+        networking=False,
+    )
+    portable = out / "portable"
+    sandbox_id = sandbox.start_minimized(config)
+    try:
+        # Mute the sandbox first, as the real start script does: the
+        # installer's NVDA plays its start sound otherwise.
+        muted = sandbox.exec_as_user(sandbox_id, "cmd /c net stop audiosrv /y")
+        assert muted == 0, f"net stop audiosrv exited {muted}"
+        sandbox.exec_as_user(
+            sandbox_id,
+            f"cmd /c {sandbox.NVDA_IN}\\{installer.name} --create-portable-silent "
+            r"--portable-path=C:\out\portable",
+        )
+        deadline = time.monotonic() + 180
+        count = -1
+        while not (portable / "nvda.exe").is_file() or count != len(list(portable.rglob("*"))):
+            assert time.monotonic() < deadline, "no portable NVDA within 180 s"
+            count = len(list(portable.rglob("*"))) if portable.exists() else -1
+            time.sleep(3)
+    finally:
+        sandbox.stop(sandbox_id)
+    assert sandbox.wait_gone(120)
+    return portable
+
+
+def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    root = tmp_path / "agent-speech-check"
+    root.mkdir()
+    out = tmp_path / "out"
+    out.mkdir()
+    portable = _portable_from_a_sandbox(Path(os.environ["ASC_E2E_INSTALLER"]), out)
+    user_config = portable / "userConfig"
+    user_config.mkdir(exist_ok=True)
+    (user_config / "nvda.ini").write_text(
+        "[speech]\nsymbolLevel = 300\nsynth = espeak\n", encoding="utf-8"
+    )
+    (user_config / "asc-marker.txt").write_text("x", encoding="utf-8")
+    users_nvda = sorted(winapi.process_ids("nvda.exe"))
+
+    started = run_asc(
+        "start", "--mode", "sandbox", "--target", "own", "--nvda-dir", str(portable), timeout=420
+    )
+    assert started.returncode == 0, started.stdout + started.stderr
+    assert "nvda: connected" in started.stdout
+    try:
+        config = root / "own" / "sandbox" / "config"
+        assert (config / "asc-marker.txt").is_file()
+        # NVDA has rewritten the file by now, in its own layout.
+        ini = [
+            line.strip() for line in (config / "nvda.ini").read_text(encoding="utf-8").splitlines()
+        ]
+        assert "symbolLevel = 300" in ini
+        assert "synth = silence" in ini
+        title = run_asc("press", "NVDA+T", "--settle", "800", "--target", "own")
+        assert title.returncode == 0, title.stderr
+        assert title.stdout.startswith('said: "'), title.stdout
+    finally:
+        stopped = run_asc("stop", "--target", "own", timeout=120)
+    assert stopped.returncode == 0
+    assert sandbox.wait_gone(120)
+    assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
+    assert (
+        (user_config / "nvda.ini").read_text(encoding="utf-8").startswith("[speech]\nsymbolLevel")
+    )

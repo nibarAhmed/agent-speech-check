@@ -9,11 +9,12 @@
     port = 16837        # relay port; watch 6837, sandbox 16837, desktop a free one
     keys = true         # may send keys; never true in watch mode
     launch = true       # desktop mode: false if NVDA is started elsewhere and connects itself
-    nvda_dir = 'C:\\nvda'  # desktop mode: a portable NVDA (default: the one asc get-nvda made)
+    nvda_dir = 'C:\\nvda'  # desktop or sandbox: your portable NVDA (default: asc get-nvda's)
     share = ['C:\\src\\app']  # sandbox mode: host folders, read-only at C:\\share\\<name>
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
-`--nvda-setting` values are added at `asc start`; they are not kept in the file.
+`--nvda-setting` and `--nvda-dir` are added at `asc start`; they are not kept in
+the file.
 """
 
 from __future__ import annotations
@@ -100,6 +101,11 @@ class Target:
     def with_consent(self, consent: bool) -> Target:
         return replace(self, consent=consent)
 
+    def with_nvda_dir(self, nvda_dir: str | None) -> Target:
+        if nvda_dir is None:
+            return self
+        return _checked(replace(self, nvda_dir=nvda_dir), "--nvda-dir")
+
 
 def _strings(f: Fields, key: str) -> tuple[str, ...]:
     items = f.items(key) if f.has(key) else []
@@ -117,6 +123,10 @@ def check_name(name: str) -> str:
 def _checked(target: Target, where: str) -> Target:
     if target.mode == "watch" and target.keys:
         raise bad_field(UsageError, f"{where} keys", "false in watch mode", target.keys)
+    if target.nvda_dir is not None and not target.launches_nvda:
+        raise bad_field(
+            UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
+        )
     return target
 
 
