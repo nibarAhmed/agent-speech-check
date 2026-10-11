@@ -191,6 +191,10 @@ NO_WINDOW_EXIT = 3
 # focus-stealing rules), so NVDA never hears of it (observed). This script
 # starts the app, waits for its new window, and brings it forward by attaching
 # to the foreground thread's input, the documented way to be allowed to.
+# A process's MainWindowHandle isn't always the window a user sees: mshta's is
+# a hidden "Internet Explorer_Hidden" window, which NVDA reads as "unknown"
+# (observed). So it leaves the focus alone when the app already has it, and
+# otherwise picks the app's topmost visible window with a title.
 LAUNCH_PS1 = r"""param([string]$Command)
 Add-Type @"
 using System;
@@ -198,12 +202,30 @@ using System.Runtime.InteropServices;
 public static class AscFocus {
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
-    public static void Focus(IntPtr h) {
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);
+    delegate bool EnumProc(IntPtr h, IntPtr p);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr p);
+    static uint Owner(IntPtr h) { uint pid; GetWindowThreadProcessId(h, out pid); return pid; }
+    public static void FocusApp(int pid, IntPtr main) {
+        if (Owner(GetForegroundWindow()) == (uint)pid) { return; }
+        IntPtr pick = main;
+        EnumWindows((h, p) => {
+            if (Owner(h) == (uint)pid && IsWindowVisible(h) && GetWindowTextLength(h) > 0) {
+                pick = h;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        Focus(pick);
+    }
+    static void Focus(IntPtr h) {
         uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
         uint me = GetCurrentThreadId();
         AttachThreadInput(me, fg, true);
@@ -222,7 +244,7 @@ for ($i = 0; $i -lt 150; $i++) {
     $new = Get-Process |
         Where-Object { $_.MainWindowHandle -ne 0 -and $before -notcontains $_.MainWindowHandle } |
         Select-Object -First 1
-    if ($new) { [AscFocus]::Focus($new.MainWindowHandle); exit 0 }
+    if ($new) { [AscFocus]::FocusApp($new.Id, $new.MainWindowHandle); exit 0 }
 }
 exit 3
 """

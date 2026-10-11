@@ -58,6 +58,10 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         page = sandbox.share_folder(str(app)) + "\\app.html"
         launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app", "--target", "sb")
         assert launched.returncode == 0, launched.stderr
+        # The app's own window has focus, not a hidden helper window of it
+        # (mshta's MainWindowHandle is one, which NVDA calls "unknown").
+        title = run_asc("press", "NVDA+t", "--target", "sb")
+        assert "asc app" in title.stdout, title.stdout
         ok = run_asc("press", "Tab", "--expect", "OK button", "--target", "sb")
         assert ok.returncode == 0, ok.stdout + ok.stderr
         field = run_asc("press", "Tab", "--settle", "800", "--target", "sb")
