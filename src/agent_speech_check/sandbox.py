@@ -333,6 +333,8 @@ class SandboxWindow:
         self._hidden: list[int] = []
         self._client_pids: set[int] = set()
         self._return_to = 0
+        # `toggle` (tray thread) and `keep` (keeping thread) both write `shown`.
+        self._lock = threading.Lock()
         self._done = threading.Event()
         self._thread = threading.Thread(target=self._keep_loop, name="sandbox-window", daemon=True)
 
@@ -353,9 +355,14 @@ class SandboxWindow:
         self._return_to = winapi.foreground()
 
     def toggle(self) -> None:
-        self.shown = not self.shown
+        with self._lock:
+            self.shown = not self.shown
 
     def keep(self) -> None:
+        with self._lock:
+            self._keep()
+
+    def _keep(self) -> None:
         if self.shown:
             for hwnd in self._hidden:
                 winapi.restore(hwnd)
@@ -404,7 +411,13 @@ def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:
     if not wait_gone(60):
         raise SandboxFailed("start", "the previous sandbox is still shutting down")
     sandbox_id = parse_start(wsb("start", "--config", config, what="start"))
-    start_guard(os.getpid(), sandbox_id, guard_err)
+    try:
+        start_guard(os.getpid(), sandbox_id, guard_err)
+    except OSError:
+        # No guard, and the caller never learns this id: stop it here.
+        with contextlib.suppress(SandboxFailed):
+            stop(sandbox_id)
+        raise
     window.remember_focus()
     subprocess.Popen(["wsb", "connect", "--id", sandbox_id])  # noqa: S603, S607
     deadline = time.monotonic() + SESSION_TIMEOUT_S

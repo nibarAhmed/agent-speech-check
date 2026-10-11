@@ -179,7 +179,7 @@ class Relay:
                     await writer.wait_closed()
             except TimeoutError:
                 writer.transport.abort()
-            except OSError:  # ConnectionError, ssl.SSLError, or the peer timing out
+            except OSError:  # ConnectionError or ssl.SSLError
                 pass
 
     def _failed(self, error: AscError) -> None:

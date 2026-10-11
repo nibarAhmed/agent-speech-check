@@ -84,7 +84,8 @@ class SandboxSession:
 
     async def run(self) -> None:
         """Start the sandbox. Its window is kept in place until `stop`."""
-        self._icon = self._tray_icon()
+        # Off the loop: adding the icon waits on its thread for up to 5 s.
+        self._icon = await asyncio.to_thread(self._tray_icon)
         self.window.__enter__()
         self._keeping = True
         try:
@@ -93,7 +94,7 @@ class SandboxSession:
             self.failure = error.message
             self.state = f"failed: {error.message}"
             log.warning("sandbox did not start: %s", error.message)
-            self._stop_keeping()
+            await asyncio.to_thread(self._stop_keeping)
             return
         self.state = "running"
 
@@ -124,4 +125,5 @@ class SandboxSession:
                 log.warning("sandbox stop: %s", error.message)
             self.sandbox_id = None
         # Only now: the client shows its window again as the sandbox stops.
-        self._stop_keeping()
+        # Off the loop: it joins the keeping and tray threads.
+        await asyncio.to_thread(self._stop_keeping)
