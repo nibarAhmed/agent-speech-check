@@ -100,3 +100,24 @@ def test_nvda_script_from_a_portable() -> None:
     assert r"robocopy C:\asc\nvda C:\nvda /e /njh /njs /nfl /ndl /np > nul" in lines
     assert not any("--create-portable-silent" in line for line in lines)
     assert lines[-2].startswith(r'start "" C:\nvda\nvda.exe --config-path=C:\asc\config ')
+
+
+@pytest.mark.parametrize(
+    ("window", "shown", "minimized", "step"),
+    [
+        # Tray: hidden unless the user showed it from the tray icon.
+        ("tray", False, False, ("hide", False)),
+        ("tray", False, True, ("hide", False)),
+        ("tray", True, False, (None, True)),
+        # Minimising a shown window sends it back to the tray.
+        ("tray", True, True, ("hide", False)),
+        ("taskbar", False, False, ("minimize", False)),
+        ("taskbar", False, True, (None, False)),
+        ("show", False, False, (None, False)),
+        ("show", False, True, (None, False)),
+    ],
+)
+def test_window_step(
+    window: str, shown: bool, minimized: bool, step: tuple[str | None, bool]
+) -> None:
+    assert sandbox.window_step(window, shown=shown, minimized=minimized) == step

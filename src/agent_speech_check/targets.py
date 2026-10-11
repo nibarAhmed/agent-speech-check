@@ -11,9 +11,10 @@
     launch = true       # desktop mode: false if NVDA is started elsewhere and connects itself
     nvda_dir = 'C:\\nvda'  # desktop or sandbox: your portable NVDA (default: asc get-nvda's)
     share = ['C:\\src\\app']  # sandbox mode: host folders, read-only at C:\\share\\<name>
+    window = "tray"     # sandbox mode: its window in the tray (default), taskbar or show
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
-`--nvda-setting` and `--nvda-dir` are added at `asc start`; they are not kept in
+`--nvda-setting`, `--nvda-dir` and `--window` are added at `asc start`; they are not kept in
 the file.
 """
 
@@ -31,12 +32,15 @@ from agent_speech_check.nvda_config import Setting
 from agent_speech_check.validate import Fields
 
 MODES = ("watch", "desktop", "sandbox", "shared")
+# Where the sandbox window goes: hidden behind a tray icon, minimised on the
+# taskbar, or left alone.
+WINDOWS = ("tray", "taskbar", "show")
 DEFAULT_TARGET = "default"
 WATCH_PORT = 6837
 # Fixed, so the one firewall rule `asc sandbox-setup` makes keeps matching.
 SANDBOX_PORT = 16837
 _NAME = re.compile(r"[A-Za-z0-9_-]{1,32}")
-_KEYS = ("mode", "port", "keys", "launch", "nvda_dir", "share")
+_KEYS = ("mode", "port", "keys", "launch", "nvda_dir", "share", "window")
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,7 @@ class Target:
     launch: bool
     nvda_dir: str | None = None
     share: tuple[str, ...] = ()
+    window: str | None = None  # sandbox mode; None: the default, tray
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from targets.toml, so consent can't be given once and forgotten.
@@ -76,6 +81,7 @@ class Target:
             launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             share=_strings(f, "share"),
+            window=f.opt_text("window", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent") if f.has("consent") else False,
         )
@@ -95,6 +101,10 @@ class Target:
     def launches_nvda(self) -> bool:
         return self.launches_portable or self.launches_sandbox
 
+    @property
+    def sandbox_window(self) -> str:
+        return self.window or "tray"
+
     def with_settings(self, settings: tuple[Setting, ...]) -> Target:
         return replace(self, settings=settings)
 
@@ -106,6 +116,11 @@ class Target:
             return self
         # The daemon runs in its own folder, so a relative path must be made absolute here.
         return _checked(replace(self, nvda_dir=str(Path(nvda_dir).absolute())), "--nvda-dir")
+
+    def with_window(self, window: str | None) -> Target:
+        if window is None:
+            return self
+        return _checked(replace(self, window=window), "--window")
 
 
 def _strings(f: Fields, key: str) -> tuple[str, ...]:
@@ -128,6 +143,13 @@ def _checked(target: Target, where: str) -> Target:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
         )
+    if target.window is not None:
+        if not target.launches_sandbox:
+            raise bad_field(UsageError, f"{where} window", "only in sandbox mode", target.window)
+        if target.window not in WINDOWS:
+            raise bad_field(
+                UsageError, f"{where} window", f"one of {', '.join(WINDOWS)}", target.window
+            )
     return target
 
 
@@ -169,6 +191,7 @@ def _from_table(name: str, raw: object, path: Path) -> Target:
         f.flag("launch") if f.has("launch") else base.launch,
         nvda_dir,
         _strings(f, "share"),
+        f.opt_text("window", max_len=20),
     )
     return _checked(target, where)
 

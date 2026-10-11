@@ -27,6 +27,8 @@ this file.
 - If the user names their own portable NVDA, pass `--nvda-dir DIR` to
   `asc start` (sandbox, or desktop). It runs with a copy of their settings and
   add-ons; `asc` never writes their copy.
+- The sandbox window sits in the system tray by default. If the user wants it
+  on the taskbar or shown, pass `--window taskbar` or `--window show`.
 
 ## Workflow
 

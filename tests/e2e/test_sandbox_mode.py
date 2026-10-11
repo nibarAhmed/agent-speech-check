@@ -50,6 +50,11 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert "nvda: connected" in started.stdout
     assert "sandbox: running" in started.stdout
     try:
+        # The default, tray: the window is hidden, so none is visible.
+        assert winapi.windows_titled(sandbox.WINDOW_TITLE) == []
+        # And focus went back: the sandbox client doesn't keep it.
+        client = winapi.process_ids("WindowsSandboxRemoteSession.exe")
+        assert winapi.window_pid(winapi.foreground()) not in client
         page = sandbox.share_folder(str(app)) + "\\app.html"
         launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app", "--target", "sb")
         assert launched.returncode == 0, launched.stderr
@@ -79,7 +84,16 @@ def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
         networking=False,
     )
     portable = out / "portable"
-    sandbox_id = sandbox.start_minimized(config)
+    with sandbox.SandboxWindow("taskbar") as window:
+        _make_portable(config, window, installer, portable)
+    assert sandbox.wait_gone(120)
+    return portable
+
+
+def _make_portable(
+    config: str, window: sandbox.SandboxWindow, installer: Path, portable: Path
+) -> None:
+    sandbox_id = sandbox.start_connected(config, window)
     try:
         # Mute the sandbox first, as the real start script does: the
         # installer's NVDA plays its start sound otherwise.
@@ -98,8 +112,6 @@ def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
             time.sleep(3)
     finally:
         sandbox.stop(sandbox_id)
-    assert sandbox.wait_gone(120)
-    return portable
 
 
 def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -118,11 +130,23 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
     users_nvda = sorted(winapi.process_ids("nvda.exe"))
 
     started = run_asc(
-        "start", "--mode", "sandbox", "--target", "own", "--nvda-dir", str(portable), timeout=420
+        "start",
+        "--mode",
+        "sandbox",
+        "--target",
+        "own",
+        "--nvda-dir",
+        str(portable),
+        "--window",
+        "taskbar",
+        timeout=420,
     )
     assert started.returncode == 0, started.stdout + started.stderr
     assert "nvda: connected" in started.stdout
     try:
+        windows = winapi.windows_titled(sandbox.WINDOW_TITLE)
+        assert windows
+        assert all(winapi.is_minimized(hwnd) for hwnd in windows)
         config = root / "own" / "sandbox" / "config"
         assert (config / "asc-marker.txt").is_file()
         # NVDA has rewritten the file by now, in its own layout.

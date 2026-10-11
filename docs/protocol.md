@@ -233,7 +233,17 @@ Observed on Windows 11 Pro 26200 with the `wsb` CLI:
 - If the connect client is closed, the session lives on, disconnected, and
   `exec` still works in it. But **NVDA goes silent there**: it connects and says
   "Connected as controlled computer", yet keys and focus changes produce no
-  speech. So `asc` keeps the client running, minimised.
+  speech. So `asc` keeps the client running, minimised or hidden.
+- Hidden (`ShowWindow` with `SW_HIDE`, no taskbar button) works as well as
+  minimised: both sandbox e2e tests passed with the window hidden
+  (2026-10-11).
+- But hidden straight from the foreground, the client kept every key and click
+  on the host until the sandbox closed (the user lost control of the PC,
+  2026-10-11). Minimising first, then hiding, fixed it.
+- The client also keeps focus once its window is minimised or hidden: the
+  user's NVDA said "Windows Sandbox pane" and they had to Alt+Tab back. `asc`
+  now notes the focused window before `wsb connect` and gives focus back to it
+  while an out-of-sight client window has it (fixed, confirmed by the user).
 - With networking on, the sandbox sits on the Hyper-V Default Switch subnet
   (here 172.24.82.2/20), and its gateway is the host's Default Switch address
   (172.24.80.1). NVDA inside reaches a relay bound to that address once one

@@ -1,4 +1,4 @@
-"""Windows Sandbox through the `wsb` CLI, kept minimised.
+"""Windows Sandbox through the `wsb` CLI, its window kept out of the way.
 
 Observed on Windows 11 Pro 26200 (2026-10-11):
 - `wsb start` runs a sandbox with no window, but with no user session either:
@@ -7,9 +7,10 @@ Observed on Windows 11 Pro 26200 (2026-10-11):
 - If the connect client is then closed, the session lives on, disconnected,
   and commands still run in it. But NVDA goes silent there: it connects, yet
   injected keys and focus changes produce no speech. So the client stays.
-- Minimised, the connected sandbox works normally. A visible sandbox window
-  takes focus and catches keys typed on the host, so it is minimised the
-  moment it appears and kept minimised (`keep_minimized`).
+- Minimised or hidden, the connected sandbox works normally (hidden: seen
+  2026-10-11, both sandbox e2e tests pass). A visible sandbox window takes
+  focus and catches keys typed on the host, so it is hidden (behind a tray
+  icon) or minimised the moment it appears, and kept so (`SandboxWindow`).
 
 Pure parts (config XML, parsing `wsb --raw` output) are separate from the thin
 shell that runs `wsb`, so they can be unit-tested.
@@ -21,6 +22,7 @@ import contextlib
 import json
 import shutil
 import subprocess
+import threading
 import time
 import winreg
 from dataclasses import dataclass
@@ -35,6 +37,8 @@ VM_IMAGE = "vmmemWindowsSandbox"
 SESSION_TIMEOUT_S = 120
 WSB_TIMEOUT_S = 120
 POLL_S = 0.1
+# The client shows its window again now and then, and shows it on stop too.
+KEEP_WINDOW_EVERY_S = 0.05
 GONE_POLL_S = 0.25
 _HOME_EDITIONS = ("Core", "CoreN", "CoreSingleLanguage", "CoreCountrySpecific")
 
@@ -100,6 +104,19 @@ def parse_exec(text: str) -> int:
 def parse_list(text: str) -> list[str]:
     environments = _json(text, "list").items("WindowsSandboxEnvironments")
     return [Fields(e, "wsb list entry", NotConnected).text("Id", max_len=100) for e in environments]
+
+
+def window_step(window: str, *, shown: bool, minimized: bool) -> tuple[str | None, bool]:
+    """For one visible sandbox window: what to do ("hide", "minimize" or None),
+    and whether the user now wants it shown. `window` is the target's choice."""
+    if window == "tray":
+        if shown and not minimized:
+            return None, True
+        # Minimising a window the user showed sends it back to the tray.
+        return "hide", False
+    if window == "taskbar" and not minimized:
+        return "minimize", shown
+    return None, shown
 
 
 def is_home_edition(edition_id: str) -> bool:
@@ -278,11 +295,89 @@ def _has_session(sandbox_id: str) -> bool:
         return False
 
 
-def start_minimized(config: str, *, show: bool = False) -> str:
-    """Start a sandbox with a logged-in user, its window minimised unless `show`."""
+class SandboxWindow:
+    """Keeps the sandbox window where the target wants it: "tray" (hidden, the
+    tray icon toggles it), "taskbar" (minimised) or "show". Use it as a context
+    manager around the sandbox's whole life: `keep` then runs on its own thread
+    every KEEP_WINDOW_EVERY_S. `toggle` may run on the tray icon's thread."""
+
+    def __init__(self, window: str) -> None:
+        self.window = window
+        self.shown = False
+        self._hidden: list[int] = []
+        self._client_pids: set[int] = set()
+        self._return_to = 0
+        self._done = threading.Event()
+        self._thread = threading.Thread(target=self._keep_loop, name="sandbox-window", daemon=True)
+
+    def __enter__(self) -> SandboxWindow:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self._done.set()
+        self._thread.join(5)
+
+    def _keep_loop(self) -> None:
+        while not self._done.wait(KEEP_WINDOW_EVERY_S):
+            self.keep()
+
+    def remember_focus(self) -> None:
+        """Note the window that has focus now, before the sandbox window opens."""
+        self._return_to = winapi.foreground()
+
+    def toggle(self) -> None:
+        self.shown = not self.shown
+
+    def keep(self) -> None:
+        if self.shown:
+            for hwnd in self._hidden:
+                winapi.restore(hwnd)
+            self._hidden.clear()
+        acted = False
+        for hwnd in winapi.windows_titled(WINDOW_TITLE):
+            minimized = winapi.is_minimized(hwnd)
+            action, self.shown = window_step(self.window, shown=self.shown, minimized=minimized)
+            if action:
+                acted = True
+                self._client_pids.add(winapi.window_pid(hwnd))
+            if action == "hide":
+                # Hidden straight from the foreground, the sandbox client kept
+                # every key and click on the host (seen 2026-10-11). Minimising
+                # first makes it let go.
+                if not minimized:
+                    winapi.minimize(hwnd)
+                winapi.hide(hwnd)
+                self._hidden.append(hwnd)
+            elif action == "minimize":
+                winapi.minimize(hwnd)
+        self._give_focus_back(acted=acted)
+
+    def _give_focus_back(self, *, acted: bool) -> None:
+        """The opening sandbox window takes focus, and the client keeps it even
+        once its window is hidden or minimised (the user's NVDA said "Windows
+        Sandbox pane", 2026-10-11). Give focus back to the window that had it,
+        but only while an out-of-sight sandbox client window has it, or nothing
+        has it just after a window was put away."""
+        if not self._return_to:
+            return
+        current = winapi.foreground()
+        if current == 0:
+            stuck = acted
+        else:
+            stuck = winapi.window_pid(current) in self._client_pids and (
+                not winapi.is_visible(current) or winapi.is_minimized(current)
+            )
+        if stuck:
+            winapi.focus(self._return_to)
+
+
+def start_connected(config: str, window: SandboxWindow) -> str:
+    """Start a sandbox with a logged-in user. Call it inside `with window:`."""
     if not wait_gone(60):
         raise SandboxFailed("start", "the previous sandbox is still shutting down")
     sandbox_id = parse_start(wsb("start", "--config", config, what="start"))
+    window.remember_focus()
     subprocess.Popen(["wsb", "connect", "--id", sandbox_id])  # noqa: S603, S607
     deadline = time.monotonic() + SESSION_TIMEOUT_S
     while not _has_session(sandbox_id):
@@ -291,17 +386,8 @@ def start_minimized(config: str, *, show: bool = False) -> str:
             with contextlib.suppress(SandboxFailed):
                 stop(sandbox_id)
             raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
-        if not show:
-            keep_minimized()
         time.sleep(POLL_S)
     return sandbox_id
-
-
-def keep_minimized() -> None:
-    """Minimise any sandbox window that is showing. Call it again and again."""
-    for hwnd in winapi.windows_titled(WINDOW_TITLE):
-        if not winapi.is_minimized(hwnd):
-            winapi.minimize(hwnd)
 
 
 def ip_address(sandbox_id: str) -> str | None:
