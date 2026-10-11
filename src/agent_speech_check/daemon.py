@@ -22,7 +22,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import ipc, nvda, relay, state, winapi
+from agent_speech_check import firewall, ipc, nvda, nvda_config, relay, state, winapi
 from agent_speech_check.errors import (
     AlreadyRunning,
     LaunchFailed,
@@ -33,6 +33,7 @@ from agent_speech_check.errors import (
 from agent_speech_check.keyboard import Keyboard
 from agent_speech_check.paths import state_root, target_dir
 from agent_speech_check.relay import Relay
+from agent_speech_check.sandboxed import SandboxSession
 from agent_speech_check.speech_log import SpeechLog
 from agent_speech_check.targets import Target
 
@@ -75,6 +76,7 @@ class Daemon:
         self.keyboard = Keyboard(target, self.relay, self.speech)
         self.stopping = asyncio.Event()
         self.nvda: nvda.Running | None = None
+        self.sandbox: SandboxSession | None = None
 
     async def handle(self, request: ipc.Request) -> dict[str, Any]:
         handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
@@ -114,7 +116,7 @@ class Daemon:
             "mode": self.target.mode,
             "keys": self.target.keys,
             "connected": self.relay.connected,
-            "host": f"{relay.HOST}:{self.relay.port}",
+            "host": f"{self.relay.host}:{self.relay.port}",
             "channel": self.relay.credentials.channel,
             "fingerprint": self.relay.credentials.fingerprint,
             "nvda_mode": self.speech.mode,
@@ -123,6 +125,7 @@ class Daemon:
             "mark": self.speech.mark,
             "last_error": self.relay.last_error,
             "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
+            "sandbox": None if self.sandbox is None else self.sandbox.state,
         }
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
@@ -157,12 +160,15 @@ class Daemon:
         return {"lines": [e.line() for e in typed.entries]}
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
-        if self.target.mode not in ("watch", "desktop"):
+        if self.target.mode == "shared":
             raise LaunchRefused(self.target.mode)
         if not self.relay.connected:
             raise NvdaNotConnected(self.target.name)
         start = self.speech.latest
-        start_app(args.command)
+        if self.sandbox is not None:
+            await self.sandbox.launch(args.command)
+        else:
+            start_app(args.command)
         timeout_s = args.timeout_ms / 1000
         title = args.regex
         if title is None:
@@ -175,18 +181,27 @@ class Daemon:
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, timeout_s)
         return {"lines": [e.line() for e in self.speech.since(start).entries]}
 
+    def _relay_info(self) -> nvda_config.Relay:
+        credentials = self.relay.credentials
+        return nvda_config.Relay(
+            self.relay.host, self.relay.port, credentials.channel, credentials.fingerprint
+        )
+
     def _start_nvda(self) -> None:
         if self.target.mode == "desktop" and self.target.launch:
-            credentials = self.relay.credentials
             self.nvda = nvda.launch(
                 nvda.folder_for(self.target.nvda_dir),
                 self.folder / "nvda_config",
-                (credentials.channel, self.relay.port, credentials.fingerprint),
+                self._relay_info(),
                 self.target.settings,
             )
 
     async def run(self) -> None:
-        relay_server = await self.relay.start(self.target.port)
+        host = relay.HOST
+        if self.target.mode == "sandbox":
+            # NVDA in the sandbox reaches the host only on the Default Switch.
+            host = await asyncio.to_thread(firewall.default_switch_address)
+        relay_server = await self.relay.start(self.target.port, host)
         token = secrets.token_urlsafe(32)
         ipc_server = await asyncio.start_server(
             functools.partial(ipc.serve_one, token, self.handle),
@@ -201,12 +216,19 @@ class Daemon:
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
                 keepalive = group.create_task(self.relay.keepalive())
+                if self.target.mode == "sandbox" and self.target.launch:
+                    self.sandbox = SandboxSession(
+                        self.folder, self.target.share, self._relay_info(), self.target.settings
+                    )
+                    group.create_task(self.sandbox.run(self.stopping))
                 await self.stopping.wait()
                 keepalive.cancel()
         finally:
             await self.keyboard.release_all()
             if self.nvda is not None:
                 self.nvda.stop()
+            if self.sandbox is not None:
+                await self.sandbox.stop()
             self.relay.disconnect()
             relay_server.close()
             ipc_server.close()

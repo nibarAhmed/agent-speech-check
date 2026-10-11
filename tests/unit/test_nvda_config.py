@@ -1,11 +1,11 @@
 import pytest
 
 from agent_speech_check.errors import BadSetting
-from agent_speech_check.nvda_config import Setting, render
+from agent_speech_check.nvda_config import Relay, Setting, render
 
 
 def test_base_config_matches_protocol_doc() -> None:
-    ini = render("k1", 16837, "ab" * 32)
+    ini = render(Relay("127.0.0.1", 16837, "k1", "ab" * 32))
     lines = ini.splitlines()
     for expected in [
         "[general]",
@@ -38,7 +38,7 @@ def test_user_settings_are_added_and_quoted() -> None:
         Setting.parse("speech.symbolLevel=300"),
         Setting.parse('documentFormatting.note=a, b # "c"'),
     )
-    lines = render("k", 1, "f", settings).splitlines()
+    lines = render(Relay("127.0.0.1", 1, "k", "f"), settings).splitlines()
     assert "[[espeak]]" in lines
     assert "rate = 50" in lines
     assert "[presentation]" in lines
@@ -73,4 +73,10 @@ def test_bad_settings(text: str, reason: str) -> None:
 
 def test_key_used_as_section() -> None:
     with pytest.raises(BadSetting, match="synth is a key, not a section"):
-        render("k", 1, "f", (Setting(("speech", "synth", "x"), "1"),))
+        render(Relay("127.0.0.1", 1, "k", "f"), (Setting(("speech", "synth", "x"), "1"),))
+
+
+def test_sandbox_relay_address_and_pinned_key() -> None:
+    lines = render(Relay("172.24.80.1", 16837, "k", "f")).splitlines()
+    assert "host = 172.24.80.1:16837" in lines
+    assert '"172.24.80.1:16837" = f' in lines

@@ -6,10 +6,11 @@
 
     [targets.app]
     mode = "desktop"    # watch, desktop, sandbox or shared
-    port = 16837        # relay port; watch mode defaults to 6837, others pick a free one
+    port = 16837        # relay port; watch 6837, sandbox 16837, desktop a free one
     keys = true         # may send keys; never true in watch mode
     launch = true       # desktop mode: false if NVDA is started elsewhere and connects itself
     nvda_dir = 'C:\\nvda'  # desktop mode: a portable NVDA (default: the one asc get-nvda made)
+    share = ['C:\\src\\app']  # sandbox mode: host folders, read-only at C:\\share\\<name>
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
 `--nvda-setting` values are added at `asc start`; they are not kept in the file.
@@ -31,8 +32,10 @@ from agent_speech_check.validate import Fields
 MODES = ("watch", "desktop", "sandbox", "shared")
 DEFAULT_TARGET = "default"
 WATCH_PORT = 6837
+# Fixed, so the one firewall rule `asc sandbox-setup` makes keeps matching.
+SANDBOX_PORT = 16837
 _NAME = re.compile(r"[A-Za-z0-9_-]{1,32}")
-_KEYS = ("mode", "port", "keys", "launch", "nvda_dir")
+_KEYS = ("mode", "port", "keys", "launch", "nvda_dir", "share")
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,7 @@ class Target:
     keys: bool
     launch: bool
     nvda_dir: str | None = None
+    share: tuple[str, ...] = ()
     settings: tuple[Setting, ...] = ()
 
     def to_json(self) -> str:
@@ -59,9 +63,7 @@ class Target:
             raise bad_field(UsageError, "daemon target", "JSON", str(error)) from None
         where = "daemon target"
         f = Fields(raw, where, UsageError, ("name", *_KEYS, "settings"))
-        settings = f.items("settings")
-        if not all(isinstance(s, str) for s in settings):
-            raise bad_field(UsageError, f"{where} settings", "strings", settings)
+        settings = _strings(f, "settings")
         target = Target(
             check_name(f.text("name")),
             f.choice("mode", MODES),
@@ -69,12 +71,20 @@ class Target:
             keys=f.flag("keys"),
             launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
+            share=_strings(f, "share"),
             settings=tuple(Setting.parse(s) for s in settings),
         )
         return _checked(target, where)
 
     def with_settings(self, settings: tuple[Setting, ...]) -> Target:
         return replace(self, settings=settings)
+
+
+def _strings(f: Fields, key: str) -> tuple[str, ...]:
+    items = f.items(key) if f.has(key) else []
+    if not all(isinstance(item, str) and item for item in items):
+        raise bad_field(UsageError, f"{f.where} {key}", "a list of strings", items)
+    return tuple(items)
 
 
 def check_name(name: str) -> str:
@@ -90,12 +100,13 @@ def _checked(target: Target, where: str) -> Target:
 
 
 def defaults(name: str, mode: str) -> Target:
+    ports = {"watch": WATCH_PORT, "sandbox": SANDBOX_PORT}
     return Target(
         name,
         mode,
-        WATCH_PORT if mode == "watch" else 0,
+        ports.get(mode, 0),
         keys=mode != "watch",
-        launch=mode == "desktop",
+        launch=mode in ("desktop", "sandbox"),
     )
 
 
@@ -121,6 +132,7 @@ def _from_table(name: str, raw: object, path: Path) -> Target:
         f.flag("keys") if f.has("keys") else base.keys,
         f.flag("launch") if f.has("launch") else base.launch,
         f.opt_text("nvda_dir", max_len=1000),
+        _strings(f, "share"),
     )
     return _checked(target, where)
 

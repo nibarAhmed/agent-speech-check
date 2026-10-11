@@ -18,7 +18,7 @@ from pathlib import Path
 
 from agent_speech_check import winapi
 from agent_speech_check.errors import NvdaAlreadyRunning, NvdaNotFound, PortableFailed
-from agent_speech_check.nvda_config import Setting, render
+from agent_speech_check.nvda_config import Relay, Setting, render
 from agent_speech_check.paths import state_root
 
 log = logging.getLogger(__name__)
@@ -38,6 +38,11 @@ def folder_for(nvda_dir: str | None) -> Path:
     return Path(nvda_dir) if nvda_dir else managed_dir()
 
 
+def installer_path(version: str) -> Path:
+    """Where `asc get-nvda` and sandbox mode keep the downloaded installer."""
+    return state_root() / "nvda" / f"nvda_{version}.exe"
+
+
 def installer_url(version: str) -> str:
     return f"https://download.nvaccess.org/releases/{version}/nvda_{version}.exe"
 
@@ -54,9 +59,10 @@ def require_exe(folder: Path) -> Path:
     return exe
 
 
-def download(version: str, dest: Path) -> Path:
-    dest.mkdir(parents=True, exist_ok=True)
-    installer = dest / f"nvda_{version}.exe"
+def download(version: str) -> Path:
+    """Download the installer once. Only a file download: nothing runs."""
+    installer = installer_path(version)
+    installer.parent.mkdir(parents=True, exist_ok=True)
     if not installer.exists():
         partial = installer.with_suffix(".part")
         urllib.request.urlretrieve(installer_url(version), partial)  # noqa: S310 - fixed https URL
@@ -99,20 +105,16 @@ class Running:
 def launch(
     folder: Path,
     config_dir: Path,
-    relay: tuple[str, int, str],
+    relay: Relay,
     settings: tuple[Setting, ...],
 ) -> Running:
-    """Start the portable NVDA with a fresh config that connects to the relay.
-
-    `relay` is (channel, port, fingerprint).
-    """
+    """Start the portable NVDA with a fresh config that connects to the relay."""
     exe = require_exe(folder)
     refuse_if_running()
     if config_dir.exists():
         shutil.rmtree(config_dir)
     config_dir.mkdir(parents=True)
-    channel, port, fingerprint = relay
-    ini = render(channel, port, fingerprint, settings)
+    ini = render(relay, settings)
     (config_dir / "nvda.ini").write_text(ini, encoding="utf-8")
     process = subprocess.Popen(  # noqa: S603 - the portable NVDA asc manages
         [

@@ -18,7 +18,7 @@ import pytest
 from tests.integration.conftest import free_port, run_asc
 
 from agent_speech_check import winapi
-from agent_speech_check.nvda_config import render
+from agent_speech_check.nvda_config import Relay, render
 from agent_speech_check.relay import fingerprint
 
 pytestmark = [
@@ -63,7 +63,7 @@ def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     channel = json.loads((folder / "relay.json").read_text(encoding="utf-8"))["channel"]
     config = tmp_path / "nvda_config"
     config.mkdir()
-    ini = render(channel, port, fingerprint(folder / "relay_cert.pem"))
+    ini = render(Relay("127.0.0.1", port, channel, fingerprint(folder / "relay_cert.pem")))
     (config / "nvda.ini").write_text(ini, encoding="utf-8")
     nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
     log = Path(os.environ.get("ASC_E2E_OUT", tmp_path)) / "nvda.log"

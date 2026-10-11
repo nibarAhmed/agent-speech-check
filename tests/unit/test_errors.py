@@ -1,5 +1,7 @@
+import inspect
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -35,3 +37,34 @@ def test_from_kind_unknown_is_internal() -> None:
     rebuilt = errors.from_kind("nonsense", "boom")
     assert isinstance(rebuilt, errors.InternalError)
     assert "nonsense" in rebuilt.message
+
+
+def _sample(annotation: str) -> object:
+    if annotation.startswith("Sequence"):
+        return ["x"]
+    if "None" in annotation:
+        return None
+    return {"str": "x", "int": 1, "float": 1.5, "object": "x"}.get(annotation, "x")
+
+
+def _concrete() -> list[type[errors.AscError]]:
+    found = [
+        cls
+        for cls in vars(errors).values()
+        if isinstance(cls, type)
+        and issubclass(cls, errors.AscError)
+        and cls not in (errors.AscError, *errors.CATEGORIES)
+    ]
+    assert len(found) > 30
+    return found
+
+
+@pytest.mark.parametrize("cls", _concrete(), ids=lambda c: c.__name__)
+def test_every_error_builds_a_message(cls: type[errors.AscError]) -> None:
+    params = list(inspect.signature(cls.__init__).parameters.values())[1:]
+    args: list[Any] = [_sample(str(p.annotation)) for p in params]
+    error = cls(*args)
+    assert error.message
+    assert error.kind in {c.kind for c in errors.CATEGORIES}
+    assert error.exit_code == next(c for c in errors.CATEGORIES if isinstance(error, c)).exit_code
+    assert chr(0x2014) not in error.message + (error.hint or "")

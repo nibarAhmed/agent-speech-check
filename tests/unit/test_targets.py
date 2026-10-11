@@ -21,7 +21,7 @@ def test_no_file_gives_watch_default(tmp_path: Path) -> None:
 
 def test_mode_defaults() -> None:
     assert defaults("x", "desktop") == Target("x", "desktop", 0, keys=True, launch=True)
-    assert defaults("x", "sandbox").launch is False
+    assert defaults("x", "sandbox") == Target("x", "sandbox", 16837, keys=True, launch=True)
 
 
 def test_listed_target_and_default_name(tmp_path: Path) -> None:
@@ -75,7 +75,7 @@ def test_json_round_trip() -> None:
         Target.from_json(
             '{"name":"x","mode":"watch","port":1,"keys":true,"launch":false,"settings":[]}'
         )
-    with pytest.raises(UsageError, match="settings: expected strings"):
+    with pytest.raises(UsageError, match="settings: expected a list of strings"):
         Target.from_json(
             '{"name":"x","mode":"desktop","port":1,"keys":true,"launch":true,"settings":[1]}'
         )
@@ -90,3 +90,12 @@ def test_json_round_trip_with_settings_and_nvda_dir() -> None:
 def test_nvda_dir_from_file(tmp_path: Path) -> None:
     path = write(tmp_path, "[targets.app]\nmode = 'desktop'\nnvda_dir = 'C:/nvda'\n")
     assert resolve(path, "app", None).nvda_dir == "C:/nvda"
+
+
+def test_share_list(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.s]\nmode = 'sandbox'\nshare = ['C:/app', 'D:/data']\n")
+    target = resolve(path, "s", None)
+    assert target.share == ("C:/app", "D:/data")
+    assert Target.from_json(target.to_json()) == target
+    with pytest.raises(UsageError, match="share: expected a list of strings"):
+        resolve(write(tmp_path, "[targets.s]\nmode = 'sandbox'\nshare = [1]\n"), "s", None)

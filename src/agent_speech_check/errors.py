@@ -245,6 +245,66 @@ class LaunchRefused(Refused):
         )
 
 
+class SandboxFailed(NotConnected):
+    def __init__(self, what: str, detail: str) -> None:
+        super().__init__(f"wsb {what} failed: {detail or 'no detail'}")
+
+
+class NoDefaultSwitch(NotConnected):
+    def __init__(self, interface: str) -> None:
+        super().__init__(
+            f"no IPv4 address on {_show(interface)}, so the sandbox can't reach asc",
+            hint="start any Windows Sandbox once, which creates the Default Switch",
+        )
+
+
+class FirewallRuleMissing(NotConnected):
+    def __init__(self) -> None:
+        super().__init__(
+            "the firewall rule that lets the sandbox reach asc is missing",
+            hint="asc sandbox-setup (asks for admin rights once)",
+        )
+
+
+class FirewallFailed(NotConnected):
+    def __init__(self, rule: str) -> None:
+        super().__init__(
+            f"the firewall rule {_show(rule)} was not created",
+            hint="approve the admin prompt, or run asc sandbox-setup again",
+        )
+
+
+class NvdaDidNotConnect(NotConnected):
+    def __init__(self, seconds: float, log_tail: str) -> None:
+        tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
+        super().__init__(f"NVDA did not connect within {seconds:g} s, so asc stopped{tail}")
+
+
+class SandboxBusy(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "a Windows Sandbox is already running, and Windows allows only one",
+            hint="close it, or asc stop the target that started it",
+        )
+
+
+class SandboxNeedsPro(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "sandbox mode is unavailable: Windows Sandbox needs Windows Pro, "
+            "Enterprise or Education",
+            hint="use watch or desktop mode",
+        )
+
+
+class WsbMissing(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "sandbox mode is unavailable: the wsb command is missing",
+            hint="turn on the Windows Sandbox feature, then sign out and in",
+        )
+
+
 class KeysRefused(Refused):
     def __init__(self, target: str) -> None:
         super().__init__(

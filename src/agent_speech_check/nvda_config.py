@@ -54,7 +54,7 @@ class Setting:
         lowered = tuple(p.lower() for p in self.path)
         if lowered[0] == "remote":
             return True
-        owned = _flatten(base_config("", 1, ""))
+        owned = _flatten(base_config(Relay("", 1, "", "")))
         return any(lowered == tuple(p.lower() for p in key) for key in owned)
 
 
@@ -68,8 +68,18 @@ def _flatten(section: Section, prefix: tuple[str, ...] = ()) -> list[tuple[str, 
     return keys
 
 
-def base_config(channel: str, port: int, fingerprint: str) -> Section:
-    host = f"127.0.0.1:{port}"
+@dataclass(frozen=True)
+class Relay:
+    """Where NVDA connects: the relay's address and port, channel key and cert."""
+
+    host: str
+    port: int
+    channel: str
+    fingerprint: str
+
+
+def base_config(relay: Relay) -> Section:
+    host = f"{relay.host}:{relay.port}"
     return {
         "general": {"showWelcomeDialogAtStartup": "False"},
         "update": {
@@ -88,10 +98,10 @@ def base_config(channel: str, port: int, fingerprint: str) -> Section:
                 "selfHosted": "False",
                 "connectionMode": "0",
                 "host": host,
-                "port": str(port),
-                "key": channel,
+                "port": str(relay.port),
+                "key": relay.channel,
             },
-            "trustedCertificates": {f'"{host}"': fingerprint},
+            "trustedCertificates": {f'"{host}"': relay.fingerprint},
         },
     }
 
@@ -114,8 +124,8 @@ def _render(section: Section, depth: int, lines: list[str]) -> None:
             _render(value, depth + 1, lines)
 
 
-def render(channel: str, port: int, fingerprint: str, settings: tuple[Setting, ...] = ()) -> str:
-    config = base_config(channel, port, fingerprint)
+def render(relay: Relay, settings: tuple[Setting, ...] = ()) -> str:
+    config = base_config(relay)
     for setting in settings:
         section = config
         *sections, key = setting.path

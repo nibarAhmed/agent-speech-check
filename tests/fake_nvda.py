@@ -95,6 +95,10 @@ class FakeNvda:
         self.wait_joined(timeout_s)
         return self
 
+    @property
+    def connected(self) -> bool:
+        return self._joined.is_set()
+
     def wait_joined(self, timeout_s: float = 10) -> None:
         if not self._joined.wait(timeout_s):
             raise AssertionError(f"fake NVDA did not join: {self.failure}")

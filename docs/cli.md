@@ -1,7 +1,7 @@
 # `asc` command reference
 
-Status: M2 (watch and desktop mode). Sandbox and shared mode are planned for
-M3 and M4 (see `docs/planning/agent-speech-check-plan.md`). This file is
+Status: M3 (watch, desktop and sandbox mode). Shared mode is planned for
+M4 (see `docs/planning/agent-speech-check-plan.md`). This file is
 updated with every command change.
 
 Results go to stdout and errors to stderr. An error prints `error: <message>`
@@ -34,10 +34,11 @@ default = "app"
 
 [targets.app]
 mode = "watch"      # watch, desktop, sandbox or shared
-port = 6837         # relay port; watch defaults to 6837, other modes pick a free one
+port = 6837         # relay port; watch 6837, sandbox 16837, desktop a free one
 keys = false        # may send keys; never true in watch mode
 launch = true       # desktop: false if NVDA is started elsewhere and connects itself
 nvda_dir = 'C:\nvda' # desktop: a portable NVDA (default: the one asc get-nvda made)
+share = ['C:\src\app'] # sandbox: folders mapped read-only to C:\share\<name>
 ```
 
 Unknown keys are errors. A target that isn't listed gets the defaults for
@@ -76,7 +77,23 @@ so it dies with the daemon even after a crash. `asc stop` ends it.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
   connects to the relay itself.
 
-Sandbox and shared mode exit 2 for now.
+**Sandbox mode** runs NVDA inside Windows Sandbox, so its keys never reach your
+desktop and your own NVDA keeps running undisturbed.
+- Needs Windows Pro, Enterprise or Education (exit 4 on Home), and
+  `asc sandbox-setup` done once (exit 3 with that hint otherwise).
+- Only one sandbox can run at a time (exit 4 if one already runs).
+- `asc start` downloads the NVDA installer if needed (only a file download),
+  starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
+  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox.
+- The sandbox window is kept minimised: a visible sandbox window would take
+  focus and catch keys you type. NVDA needs the window's session, so the window
+  can't be closed altogether.
+- The relay listens only on this computer's Hyper-V Default Switch address
+  (looked up at every start), on port 16837 unless the target sets `port`.
+- Folders listed in the target's `share` are mapped read-only into the sandbox
+  at `C:\share\<folder name>`, so `asc launch` can start your app from there.
+
+Shared mode exits 2 for now.
 
 ### `asc stop`
 
@@ -175,7 +192,18 @@ h  heading
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA said.
 Default timeout 30000 ms; on timeout it exits 1 with what NVDA did say. A
-command that can't start exits 2. Works in watch and desktop mode.
+command that can't start exits 2. Works in watch, desktop and sandbox mode; in
+sandbox mode `CMD` runs inside the sandbox, so use paths under `C:\share\`.
+
+### `asc sandbox-setup [--target NAME]`
+
+Creates the one Windows Firewall rule sandbox mode needs, after a Windows admin
+prompt: inbound TCP, only on the `vEthernet (Default Switch)` interface, only the
+target's relay port (16837 by default), only for the program that runs `asc`.
+If the rule is already in place it says so and changes nothing. Run it again
+after updating Python or `asc`, since the rule names the program. Remove it with
+`Remove-NetFirewallRule -DisplayName 'agent-speech-check sandbox relay'` in an
+admin PowerShell.
 
 ### `asc get-nvda [--version V] [--installer FILE]`
 

@@ -149,3 +149,14 @@ def test_desktop_without_portable_nvda(tmp_path: Path) -> None:
     assert "NVDA not found" in result.stderr
     assert "hint: asc get-nvda" in result.stderr
     assert str(tmp_path) in result.stderr
+
+
+def test_sandbox_needs_the_firewall_rule(env: Env) -> None:
+    # A port no rule covers, so this never starts a real sandbox.
+    (env.root / "agent-speech-check" / "targets.toml").write_text(
+        f"[targets.s]\nmode = 'sandbox'\nport = {env.port}\n", encoding="utf-8"
+    )
+    result = run_asc("start", "--target", "s")
+    assert result.returncode == 3
+    assert "the firewall rule that lets the sandbox reach asc is missing" in result.stderr
+    assert "hint: asc sandbox-setup" in result.stderr

@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import __version__, daemon, ipc, keyref, nvda, session
+from agent_speech_check import __version__, daemon, firewall, ipc, keyref, nvda, sandbox, session
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
@@ -162,6 +162,19 @@ examples:
   asc get-nvda
   asc get-nvda --installer nvda_2026.2.exe""",
     ),
+    "sandbox-setup": (
+        "allow the sandbox's NVDA to reach asc (asks for admin once)",
+        """Sandbox mode runs NVDA in Windows Sandbox, which connects to asc on this
+computer's Hyper-V Default Switch address. Windows Firewall blocks that until
+one rule allows it. This command creates that rule after a Windows admin
+prompt: inbound TCP only, only on the Default Switch, only the relay port
+(16837 unless the target sets another), only for the program running asc.
+Run it again after updating Python or asc, since the rule names the program.
+
+examples:
+  asc sandbox-setup
+  asc sandbox-setup --target app""",
+    ),
 }
 
 
@@ -238,6 +251,10 @@ def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
 
 
+def _sandbox_setup_args(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(mode="sandbox")
+
+
 ARGS: dict[str, Callable[[argparse.ArgumentParser], None]] = {
     "start": _start_args,
     "speech": _speech_args,
@@ -247,6 +264,7 @@ ARGS: dict[str, Callable[[argparse.ArgumentParser], None]] = {
     "keys": _keys_args,
     "launch": _launch_args,
     "get-nvda": _get_nvda_args,
+    "sandbox-setup": _sandbox_setup_args,
 }
 
 
@@ -294,6 +312,8 @@ def _show_status(status: dict[str, Any]) -> None:
         print(_connect_line(status))
     print(f"browse/focus: {status['nvda_mode']}")
     print(f"speech: {status['lines']} lines kept, latest {status['latest']}, mark {status['mark']}")
+    if status.get("sandbox"):
+        print(f"sandbox: {status['sandbox']}")
     if status["last_error"]:
         print(f"last error: {status['last_error']}")
 
@@ -410,6 +430,19 @@ def cmd_launch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sandbox_setup(args: argparse.Namespace) -> int:
+    sandbox.require_available()
+    target = _target(args)
+    program = firewall.daemon_program()
+    if firewall.rule_ok(target.port, program):
+        print(f"firewall rule already in place for port {target.port}")
+        return 0
+    print("asking Windows for admin rights to add one firewall rule")
+    firewall.create_rule(target.port, program)
+    print(f"firewall rule added: {firewall.RULE_NAME}, TCP {target.port}, {firewall.INTERFACE}")
+    return 0
+
+
 def cmd_get_nvda(args: argparse.Namespace) -> int:
     nvda.refuse_if_running()
     folder = nvda.managed_dir()
@@ -417,7 +450,7 @@ def cmd_get_nvda(args: argparse.Namespace) -> int:
         installer = Path(args.installer)
     else:
         print(f"downloading {nvda.installer_url(args.nvda_version)}")
-        installer = nvda.download(args.nvda_version, folder.parent)
+        installer = nvda.download(args.nvda_version)
     exe = nvda.create_portable(installer, folder)
     print(f"portable NVDA ready: {exe}")
     return 0
@@ -436,6 +469,7 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "keys": cmd_keys,
     "launch": cmd_launch,
     "get-nvda": cmd_get_nvda,
+    "sandbox-setup": cmd_sandbox_setup,
 }
 
 

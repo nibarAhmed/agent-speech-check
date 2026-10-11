@@ -10,12 +10,13 @@ Prepares `.e2e/` (git-ignored):
   in/nvda_<v>.exe
   out/         written by the sandbox: progress.txt, pytest.txt, DONE
 
-Then starts the sandbox with the repo mapped read-only and waits for DONE.
+Then starts the sandbox with `wsb`, the repo mapped read-only, runs the tests
+in its user session with `wsb exec`, and waits for DONE.
 The sandbox stops Windows Audio first (silent on the host), creates the
 portable NVDA at C:\\nvda, runs the e2e tests, and shuts itself down.
 
-The sandbox window is kept minimized so it never takes focus; pass --show to
-watch it.
+The sandbox window is kept minimised (see `sandbox.py`), so it never takes
+focus or catches keys typed on the host; pass --show to keep it visible.
 
 Usage: uv run python scripts/e2e_sandbox.py [--show] [pytest args...]
 """
@@ -29,7 +30,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from agent_speech_check import winapi
+from agent_speech_check import sandbox
 
 NVDA_VERSION = "2026.2"
 NVDA_URL = f"https://download.nvaccess.org/releases/{NVDA_VERSION}/nvda_{NVDA_VERSION}.exe"
@@ -42,18 +43,11 @@ TIMEOUT_S = 20 * 60
 SANDBOX_REPO = r"C:\asc\repo"
 SANDBOX_IN = r"C:\asc\in"
 SANDBOX_OUT = r"C:\asc\out"
-SANDBOX_TITLE = "Windows Sandbox"
+SANDBOX_WORK = SANDBOX_REPO.replace("repo", "work")
 
 
 def run(*args: str) -> None:
     subprocess.run(args, check=True)
-
-
-def sandbox_running() -> bool:
-    listing = subprocess.run(
-        ["tasklist", "/FO", "csv", "/nh"], capture_output=True, text=True, check=False
-    ).stdout.lower()
-    return "vmmemwindowssandbox" in listing or "windowssandboxclient" in listing
 
 
 def python_exe() -> Path | None:
@@ -143,67 +137,57 @@ def write_cmd(pytest_args: list[str]) -> Path:
     return cmd
 
 
-def write_wsb(cmd: Path) -> Path:
-    wsb = WORK / "e2e.wsb"
-    wsb.write_text(
-        f"""<Configuration>
-  <Networking>Disable</Networking>
-  <AudioInput>Disable</AudioInput>
-  <VideoInput>Disable</VideoInput>
-  <ClipboardRedirection>Disable</ClipboardRedirection>
-  <MappedFolders>
-    <MappedFolder><HostFolder>{REPO}</HostFolder><SandboxFolder>{SANDBOX_REPO}</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder>
-    <MappedFolder><HostFolder>{IN}</HostFolder><SandboxFolder>{SANDBOX_IN}</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder>
-    <MappedFolder><HostFolder>{OUT}</HostFolder><SandboxFolder>{SANDBOX_OUT}</SandboxFolder><ReadOnly>false</ReadOnly></MappedFolder>
-    <MappedFolder><HostFolder>{WORK}</HostFolder><SandboxFolder>C:\\asc\\work</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder>
-  </MappedFolders>
-  <LogonCommand><Command>C:\\asc\\work\\{cmd.name}</Command></LogonCommand>
-</Configuration>
-""",
-        encoding="utf-8",
-    )
-    return wsb
-
-
-def keep_minimized(done: Path, deadline: float) -> None:
-    """Minimize the sandbox window whenever it shows, until the run is done.
-
-    A visible sandbox window takes focus, so keys typed on the host land in the
-    sandbox and disturb the test (seen: Alt+Tab opened its task switcher).
-    """
-    while not done.exists() and time.monotonic() < deadline:
-        for hwnd in winapi.windows_titled(SANDBOX_TITLE):
-            if not winapi.is_minimized(hwnd):
-                winapi.minimize(hwnd)
-        time.sleep(0.2)
+def mapped() -> list[sandbox.Mapped]:
+    return [
+        sandbox.Mapped(str(REPO), SANDBOX_REPO),
+        sandbox.Mapped(str(IN), SANDBOX_IN),
+        sandbox.Mapped(str(OUT), SANDBOX_OUT, read_only=False),
+        sandbox.Mapped(str(WORK), SANDBOX_WORK),
+    ]
 
 
 def main() -> int:
     args = sys.argv[1:]
     show = "--show" in args
     pytest_args = [a for a in args if a != "--show"]
-    if sandbox_running():
-        print("a Windows Sandbox is still running or closing; wait for it to exit")
+    sandbox.require_available()
+    if sandbox.running():
+        print("a Windows Sandbox is already running; stop it first")
         return 3
     prepare()
-    wsb = write_wsb(write_cmd(pytest_args))
-    subprocess.Popen(["WindowsSandbox.exe", str(wsb)])
+    cmd = write_cmd(pytest_args)
+    sandbox_id = sandbox.start_minimized(sandbox.config_xml(mapped(), networking=False), show=show)
+    print(f"sandbox {sandbox_id} started{'' if show else ', minimised'}")
+    runner = subprocess.Popen(
+        [
+            "wsb",
+            "exec",
+            "--id",
+            sandbox_id,
+            "--run-as",
+            "ExistingLogin",
+            "-c",
+            f"cmd /c {SANDBOX_WORK}{chr(92)}{cmd.name}",
+            "--raw",
+        ],
+        stdout=subprocess.DEVNULL,
+    )
     deadline = time.monotonic() + TIMEOUT_S
     done = OUT / "DONE"
-    if show:
-        while not done.exists() and time.monotonic() < deadline:
-            time.sleep(5)
-    else:
-        keep_minimized(done, deadline)
+    while not done.exists() and time.monotonic() < deadline:
+        if not show:
+            sandbox.keep_minimized()
+        time.sleep(0.5)
+    runner.kill()
     report = OUT / "pytest.txt"
     print(report.read_text(encoding="utf-8", errors="replace") if report.exists() else "")
+    if sandbox_id in sandbox.running():
+        sandbox.stop(sandbox_id)
+    sandbox.wait_gone(120)
     if not done.exists():
         print(f"no result after {TIMEOUT_S // 60} min; see {OUT / 'progress.txt'}")
         return 1
-    code = int(done.read_text(encoding="utf-8").strip() or "1")
-    while sandbox_running() and time.monotonic() < deadline + 120:
-        time.sleep(2)
-    return code
+    return int(done.read_text(encoding="utf-8").strip() or "1")
 
 
 if __name__ == "__main__":

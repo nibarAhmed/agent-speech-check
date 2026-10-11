@@ -128,6 +128,6 @@ def test_daemon_that_cannot_bind_reports_its_log(env: Env) -> None:
 
 @pytest.mark.usefixtures("env")
 def test_unbuilt_mode() -> None:
-    result = run_asc("start", "--mode", "sandbox", "--target", "s")
+    result = run_asc("start", "--mode", "shared", "--target", "s")
     assert result.returncode == 2
-    assert "sandbox mode is not built yet" in result.stderr
+    assert "shared mode is not built yet" in result.stderr

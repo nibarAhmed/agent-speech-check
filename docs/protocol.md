@@ -221,6 +221,31 @@ Windows Sandbox.
   switcher in the middle of a test. With the window minimised the whole time,
   the tests passed, so the sandbox keeps working while minimised.
 
+## Sandbox mode (M3, 2026-10-11)
+
+Observed on Windows 11 Pro 26200 with the `wsb` CLI:
+- `wsb start --config <xml>` starts a sandbox with no window and **no user
+  session**: the LogonCommand doesn't run, and `wsb exec --run-as
+  ExistingLogin` fails with "A specified logon session does not exist".
+  `--run-as System` works.
+- `wsb connect` logs the user in (the LogonCommand runs) and opens the window
+  about 0.6 s later.
+- If the connect client is closed, the session lives on, disconnected, and
+  `exec` still works in it. But **NVDA goes silent there**: it connects and says
+  "Connected as controlled computer", yet keys and focus changes produce no
+  speech. So `asc` keeps the client running, minimised.
+- With networking on, the sandbox sits on the Hyper-V Default Switch subnet
+  (here 172.24.82.2/20), and its gateway is the host's Default Switch address
+  (172.24.80.1). NVDA inside reaches a relay bound to that address once one
+  inbound firewall rule allows it (`asc sandbox-setup`). No firewall dialog
+  appeared with the rule in place.
+- **An app started through `wsb exec` doesn't get the foreground**, because of
+  Windows' focus-stealing rules: `mshta` ran, but focus stayed on "Program
+  Manager" and NVDA said nothing. `asc launch` therefore starts the app through
+  a PowerShell script in the session that waits for the new window and brings it
+  forward (`AttachThreadInput`, then `SetForegroundWindow`). With that, NVDA
+  announced the window and the page.
+
 ## Open questions (not answered by the spike)
 
 - The exact shape of a server `error` message (not seen on the wire).

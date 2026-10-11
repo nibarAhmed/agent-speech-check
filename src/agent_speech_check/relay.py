@@ -136,22 +136,25 @@ class Relay:
         # Counts every lost connection, so a press can tell that NVDA went away
         # (and maybe came back) while it ran.
         self.drops = 0
+        self.host = HOST
         self.port = 0
 
     @property
     def connected(self) -> bool:
         return self._writer is not None
 
-    async def start(self, port: int) -> asyncio.Server:
+    async def start(self, port: int, host: str = HOST) -> asyncio.Server:
+        """Listen on exactly one address: 127.0.0.1, or the Default Switch address
+        for sandbox mode. Never on all interfaces."""
         server = await asyncio.start_server(
             self._handle,
-            HOST,
+            host,
             port,
             ssl=self._ssl,
             ssl_handshake_timeout=JOIN_TIMEOUT_S,
             limit=protocol.MAX_LINE + 1,
         )
-        self.port = server.sockets[0].getsockname()[1]
+        self.host, self.port = host, server.sockets[0].getsockname()[1]
         return server
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
