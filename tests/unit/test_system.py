@@ -17,6 +17,7 @@ import pytest
 
 from agent_speech_check import firewall, nvda, sandbox, winapi
 from agent_speech_check.errors import (
+    DownloadFailed,
     NoDefaultSwitch,
     NvdaAlreadyRunning,
     NvdaNotFound,
@@ -189,3 +190,11 @@ def test_global_hotkey_fires_and_is_exclusive() -> None:
     again = winapi.GlobalHotkey(modifiers, f23, pressed.set)
     assert again.start()
     again.stop()
+
+
+def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # No such release: NV Access answers 404, or there is no network at all.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    with pytest.raises(DownloadFailed, match="cannot download NVDA"):
+        nvda.download("0.0-asc-no-such-version")
+    assert not nvda.installer_path("0.0-asc-no-such-version").exists()

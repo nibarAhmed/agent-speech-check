@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import firewall, ipc, nvda, sandbox, state
+from agent_speech_check import daemon, firewall, ipc, nvda, sandbox, state
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
@@ -91,8 +91,10 @@ def _check_sandbox(target: Target) -> None:
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
-    if target.mode == "shared" and not target.consent:
-        raise SharedNeedsConsent
+    if target.mode == "shared":
+        if not target.consent:
+            raise SharedNeedsConsent
+        daemon.check_panic_key()
     if target.mode == "desktop" and target.launch:
         nvda.require_exe(nvda.folder_for(target.nvda_dir))
         nvda.refuse_if_running()

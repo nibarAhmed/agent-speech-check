@@ -23,7 +23,7 @@ from agent_speech_check.errors import (
     InternalError,
     NoCommand,
 )
-from agent_speech_check.nvda_config import Setting
+from agent_speech_check.nvda_config import Relay, Setting, render
 from agent_speech_check.paths import state_root, target_dir, targets_file
 from agent_speech_check.targets import MODES, Target, resolve
 
@@ -351,6 +351,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     settings = tuple(Setting.parse(text) for text in args.nvda_setting)
     if settings and not (target.mode in ("desktop", "sandbox") and target.launch):
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
+    render(Relay("", 1, "", ""), settings)  # clashes between settings, before anything starts
     target = target.with_settings(settings).with_consent(args.i_understand)
     status = session.start(target, target_dir(target.name))
     print(f"started: {target.name}")
@@ -418,7 +419,7 @@ def _nvda_dirs(args: argparse.Namespace) -> list[tuple[str, Path]]:
     if args.nvda_dir:
         return [("--nvda-dir", Path(args.nvda_dir))]
     target = _target(args)
-    if target.mode in ("desktop", "sandbox") and target.launch:
+    if target.mode == "desktop" and target.launch:
         return [("the portable NVDA", nvda.folder_for(target.nvda_dir))]
     return keyref.candidates()
 
@@ -433,7 +434,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
 
 def cmd_launch(args: argparse.Namespace) -> int:
     raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
-    _show_said(_call(_target(args), "launch", raw, args.timeout)["lines"])
+    _show_said(_call(_target(args), "launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
     return 0
 
 

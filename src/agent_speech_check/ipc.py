@@ -52,6 +52,9 @@ CONNECT_TIMEOUT_S = 3.0
 MAX_GESTURES = 100
 MAX_TYPED = 2000
 DEFAULT_LAUNCH_TIMEOUT_MS = 30_000
+# How long starting the app may take before --timeout starts counting. In
+# sandbox mode the launch script alone waits up to 30 s for a new window.
+LAUNCH_START_MS = 60_000
 
 
 def compile_regex(pattern: str) -> re.Pattern[str]:

@@ -25,17 +25,17 @@ INTERFACE = "vEthernet (Default Switch)"
 PS_TIMEOUT_S = 60
 
 
-def _quote(text: str) -> str:
+def ps_quote(text: str) -> str:
     """A PowerShell single-quoted string: only ' needs doubling."""
     return "'" + text.replace("'", "''") + "'"
 
 
 def create_script(port: int, program: str) -> str:
     return (
-        f"Remove-NetFirewallRule -DisplayName {_quote(RULE_NAME)} -ErrorAction SilentlyContinue; "
-        f"New-NetFirewallRule -DisplayName {_quote(RULE_NAME)} -Direction Inbound "
+        f"Remove-NetFirewallRule -DisplayName {ps_quote(RULE_NAME)} -ErrorAction SilentlyContinue; "
+        f"New-NetFirewallRule -DisplayName {ps_quote(RULE_NAME)} -Direction Inbound "
         f"-Action Allow -Protocol TCP -LocalPort {int(port)} "
-        f"-InterfaceAlias {_quote(INTERFACE)} -Program {_quote(program)} -Profile Any "
+        f"-InterfaceAlias {ps_quote(INTERFACE)} -Program {ps_quote(program)} -Profile Any "
         "| Out-Null"
     )
 
@@ -43,17 +43,17 @@ def create_script(port: int, program: str) -> str:
 def check_script(port: int, program: str) -> str:
     """Prints `ok` when the rule exists with this port and program."""
     return (
-        f"$r = Get-NetFirewallRule -DisplayName {_quote(RULE_NAME)} -ErrorAction "
+        f"$r = Get-NetFirewallRule -DisplayName {ps_quote(RULE_NAME)} -ErrorAction "
         "SilentlyContinue; if ($r -and $r.Enabled -eq 'True' -and "
         f"($r | Get-NetFirewallPortFilter).LocalPort -eq '{int(port)}' -and "
-        f"($r | Get-NetFirewallApplicationFilter).Program -eq {_quote(program)}) "
+        f"($r | Get-NetFirewallApplicationFilter).Program -eq {ps_quote(program)}) "
         "{ 'ok' } else { 'missing' }"
     )
 
 
 def address_script() -> str:
     return (
-        f"(Get-NetIPAddress -InterfaceAlias {_quote(INTERFACE)} -AddressFamily IPv4 "
+        f"(Get-NetIPAddress -InterfaceAlias {ps_quote(INTERFACE)} -AddressFamily IPv4 "
         "-ErrorAction SilentlyContinue).IPAddress"
     )
 

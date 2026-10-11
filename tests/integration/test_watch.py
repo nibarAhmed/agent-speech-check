@@ -7,6 +7,8 @@ import json
 import pytest
 from tests.integration.conftest import Env, run_asc
 
+from agent_speech_check import daemon, winapi
+
 
 def test_watch_session(env: Env) -> None:
     started = run_asc("start", "--target", "w")
@@ -132,3 +134,19 @@ def test_shared_mode_needs_consent() -> None:
     assert result.returncode == 4
     assert "sends keys into your own Windows session" in result.stderr
     assert "--i-understand" in result.stderr
+
+
+@pytest.mark.usefixtures("env")
+def test_shared_mode_with_the_panic_key_taken_exits_4(env: Env) -> None:
+    (env.root / "agent-speech-check" / "targets.toml").write_text(
+        f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n", encoding="utf-8"
+    )
+    holder = winapi.GlobalHotkey(daemon.PANIC_MODIFIERS, daemon.PANIC_VK, lambda: None)
+    if not holder.start():
+        pytest.skip("another program owns the panic hotkey")
+    try:
+        result = run_asc("start", "--target", "sh", "--i-understand")
+    finally:
+        holder.stop()
+    assert result.returncode == 4, result.stderr
+    assert "cannot register the panic hotkey" in result.stderr

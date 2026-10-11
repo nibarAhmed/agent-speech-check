@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import re
 import time
 from collections import deque
@@ -115,7 +116,11 @@ class SpeechLog:
 
     def since(self, n: int) -> Since:
         """Lines numbered above `n`, and how many of those fell off the log."""
-        entries = tuple(e for e in self._entries if e.n > n)
+        # Numbers are consecutive within the log, so the first kept line
+        # above `n` is found by arithmetic instead of a scan.
+        first = self._entries[0].n if self._entries else self._next
+        count = len(self._entries) - min(max(0, n + 1 - first), len(self._entries))
+        entries = tuple(itertools.islice(reversed(self._entries), count))[::-1]
         dropped = max(0, self._dropped_below - 1 - n)
         return Since(entries, dropped)
 

@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_speech_check import winapi
-from agent_speech_check.errors import NvdaAlreadyRunning, NvdaNotFound, PortableFailed
+from agent_speech_check.errors import (
+    DownloadFailed,
+    NvdaAlreadyRunning,
+    NvdaNotFound,
+    PortableFailed,
+)
 from agent_speech_check.nvda_config import Relay, Setting, render
 from agent_speech_check.paths import state_root
 
@@ -65,7 +70,12 @@ def download(version: str) -> Path:
     installer.parent.mkdir(parents=True, exist_ok=True)
     if not installer.exists():
         partial = installer.with_suffix(".part")
-        urllib.request.urlretrieve(installer_url(version), partial)  # noqa: S310 - fixed https URL
+        url = installer_url(version)
+        try:
+            urllib.request.urlretrieve(url, partial)  # noqa: S310 - fixed https URL
+        except OSError as error:  # URLError and HTTPError are OSErrors
+            partial.unlink(missing_ok=True)
+            raise DownloadFailed(url, str(getattr(error, "reason", error))) from None
         partial.replace(installer)
     return installer
 

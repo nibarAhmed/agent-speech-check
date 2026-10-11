@@ -32,6 +32,7 @@ class Keyboard:
         self.relay = relay
         self.speech = speech
         self._lock = asyncio.Lock()
+        self._closed = False
 
     async def press(
         self,
@@ -86,6 +87,9 @@ class Keyboard:
         """Key-downs in order, then releases in reverse, released even on failure."""
         try:
             for key in gesture.strokes:
+                if self._closed:
+                    # Shutting down: release_all already ran, so press nothing new.
+                    raise NvdaNotConnected(self.target.name)
                 await self.relay.send_key(key, pressed=True)
         finally:
             for key in reversed(gesture.strokes):
@@ -96,7 +100,8 @@ class Keyboard:
             self.speech.activity()
 
     async def release_all(self) -> None:
-        """Release anything that may still be held. Used at shutdown."""
+        """Release anything that may still be held, and press nothing after. Used at shutdown."""
+        self._closed = True
         for key in list(self.relay.maybe_held):
             with contextlib.suppress(NvdaNotConnected):
                 await self.relay.send_key(key, pressed=False)

@@ -224,6 +224,14 @@ class PortableFailed(NotConnected):
         )
 
 
+class DownloadFailed(NotConnected):
+    def __init__(self, url: str, reason: str) -> None:
+        super().__init__(
+            f"cannot download NVDA from {url}: {reason}",
+            hint="check the network, or pass --installer to asc get-nvda",
+        )
+
+
 class LaunchFailed(UsageError):
     def __init__(self, command: str, reason: str) -> None:
         super().__init__(f"cannot start {_show(command)}: {reason}")

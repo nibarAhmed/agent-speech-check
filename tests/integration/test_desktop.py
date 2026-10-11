@@ -160,3 +160,21 @@ def test_sandbox_needs_the_firewall_rule(env: Env) -> None:
     assert result.returncode == 3
     assert "the firewall rule that lets the sandbox reach asc is missing" in result.stderr
     assert "hint: asc sandbox-setup" in result.stderr
+
+
+def test_keys_for_sandbox_target_reads_your_own_nvda(env: Env) -> None:
+    # Sandbox mode makes its portable NVDA inside the sandbox, never on the host.
+    (env.root / "agent-speech-check" / "targets.toml").write_text(
+        "[targets.s]\nmode = 'sandbox'\n", encoding="utf-8"
+    )
+    found = run_asc("keys", "x", "--target", "s")
+    assert "the portable NVDA" not in found.stderr
+
+
+@pytest.mark.usefixtures("env")
+def test_settings_are_checked_together_before_anything_starts() -> None:
+    result = run_asc(
+        "start", "--mode", "desktop", "--target", "x", "--nvda-setting", "speech.synth.rate=1"
+    )
+    assert result.returncode == 2, result.stderr
+    assert "synth is a key, not a section" in result.stderr

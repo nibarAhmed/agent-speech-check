@@ -58,6 +58,15 @@ def _setup_logging(folder: Path) -> None:
     root.setLevel(logging.INFO)
 
 
+def check_panic_key() -> None:
+    """Refuse shared mode up front if another program owns the panic hotkey."""
+    hotkey = winapi.GlobalHotkey(PANIC_MODIFIERS, PANIC_VK, lambda: None)
+    free = hotkey.start()
+    hotkey.stop()
+    if not free:
+        raise PanicKeyTaken(PANIC_KEY)
+
+
 def start_app(command: str) -> None:
     """Start the app under test, detached. Popen returns at once."""
     try:
@@ -174,16 +183,19 @@ class Daemon:
             await self.sandbox.launch(args.command)
         else:
             start_app(args.command)
-        timeout_s = args.timeout_ms / 1000
+        # One deadline for the title and the quiet after it, so the CLI's
+        # timeout (--timeout plus ipc.LAUNCH_START_MS) always covers both.
+        deadline = time.monotonic() + args.timeout_ms / 1000
         title = args.regex
         if title is None:
             # No title given: wait for the first speech, then for quiet.
             title = re.compile(".")
-        found = await self.speech.wait_match(title, start, timeout_s)
+        found = await self.speech.wait_match(title, start, args.timeout_ms / 1000)
         if found is None:
             said = [e.text for e in self.speech.since(start).entries if e.kind == "said"]
             raise NoMatch(args.title or ".", args.timeout_ms, said)
-        await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, timeout_s)
+        remaining = max(0.0, deadline - time.monotonic())
+        await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
         return {"lines": [e.line() for e in self.speech.since(start).entries]}
 
     def _relay_info(self) -> nvda_config.Relay:

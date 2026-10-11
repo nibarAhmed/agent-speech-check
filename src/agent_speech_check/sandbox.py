@@ -17,7 +17,7 @@ shell that runs `wsb`, so they can be unit-tested.
 
 from __future__ import annotations
 
-import base64
+import contextlib
 import json
 import subprocess
 import time
@@ -27,6 +27,8 @@ from xml.sax.saxutils import escape
 
 from agent_speech_check import winapi
 from agent_speech_check.errors import NotConnected, SandboxFailed, SandboxNeedsPro, WsbMissing
+from agent_speech_check.firewall import encoded as ps_encoded
+from agent_speech_check.firewall import ps_quote
 from agent_speech_check.validate import Fields
 
 WINDOW_TITLE = "Windows Sandbox"
@@ -158,6 +160,7 @@ def script_command() -> str:
 
 
 LAUNCH_SCRIPT = "launch.ps1"
+LAUNCH_PATH = f"{IN}\\{LAUNCH_SCRIPT}"
 NO_WINDOW_EXIT = 3
 
 # An app started through `wsb exec` doesn't get the foreground (Windows'
@@ -204,9 +207,8 @@ exit 3
 def launch_command(command: str) -> str:
     """Run the launch script on `command`. The command travels base64-encoded,
     so no quote in it can break out."""
-    script = f"& '{IN}\\{LAUNCH_SCRIPT}' -Command '{command.replace(chr(39), chr(39) * 2)}'"
-    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-    return f"powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}"
+    script = f"& {ps_quote(LAUNCH_PATH)} -Command {ps_quote(command)}"
+    return f"powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand {ps_encoded(script)}"
 
 
 # ---------------------------------------------------------------- the thin shell
@@ -231,14 +233,17 @@ def require_available() -> None:
 
 
 def wsb(*args: str, what: str) -> str:
-    result = subprocess.run(  # noqa: S603 - the Windows Sandbox CLI
-        ["wsb", *args, "--raw"],  # noqa: S607
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        timeout=WSB_TIMEOUT_S,
-    )
+    try:
+        result = subprocess.run(  # noqa: S603 - the Windows Sandbox CLI
+            ["wsb", *args, "--raw"],  # noqa: S607
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=WSB_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        raise SandboxFailed(what, f"no answer within {WSB_TIMEOUT_S} s") from None
     if result.returncode:
         raise SandboxFailed(what, (result.stderr or result.stdout).strip()[:300])
     return result.stdout
@@ -278,7 +283,10 @@ def start_minimized(config: str, *, show: bool = False) -> str:
     deadline = time.monotonic() + SESSION_TIMEOUT_S
     while not _has_session(sandbox_id):
         if time.monotonic() > deadline:
-            raise SandboxFailed("connect", "no user session after 120 s")
+            # Nobody else knows this id yet, so stop it here or it outlives asc.
+            with contextlib.suppress(SandboxFailed):
+                stop(sandbox_id)
+            raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
         if not show:
             keep_minimized()
         time.sleep(POLL_S)
