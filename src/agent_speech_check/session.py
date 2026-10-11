@@ -96,7 +96,7 @@ def _check_sandbox(target: Target) -> None:
         raise FirewallRuleMissing
     if sandbox.running():
         raise SandboxBusy
-    if not target.nvda_dir:
+    if target.nvda_dir is None:
         # Only a file download; the installer runs inside the sandbox.
         nvda.download(nvda.VERSION)
 

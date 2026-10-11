@@ -251,7 +251,8 @@ class Daemon:
         port = ipc_server.sockets[0].getsockname()[1]
         log.info("relay on %s, IPC on %d", self.relay.port, port)
         try:
-            self._start_nvda()
+            # Off the loop: copying the user's config (add-ons too) can take a while.
+            await asyncio.to_thread(self._start_nvda)
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
                 keepalive = group.create_task(self.relay.keepalive())

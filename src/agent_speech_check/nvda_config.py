@@ -222,9 +222,7 @@ def _overlay(base: Section, top: Section) -> None:
 
 
 def _merged(relay: Relay, settings: tuple[Setting, ...], user: Section | None = None) -> Section:
-    config: Section = {}
-    if user is not None:
-        config = {k: copy.deepcopy(v) for k, v in user.items() if k.lower() != "remote"}
+    config = {k: copy.deepcopy(v) for k, v in (user or {}).items() if k.lower() != "remote"}
     _overlay(config, base_config(relay))
     for setting in settings:
         section = config
@@ -263,7 +261,8 @@ def write(
     if source is not None and source.is_dir():
 
         def skip(directory: str, names: list[str]) -> set[str]:
-            return set(_NOT_COPIED & set(names)) if Path(directory) == source else set()
+            # Only at the top: an add-on may ship files with these names.
+            return {n for n in names if n in _NOT_COPIED} if Path(directory) == source else set()
 
         shutil.copytree(source, config_dir, ignore=skip)
     else:
