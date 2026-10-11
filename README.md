@@ -9,16 +9,22 @@ keys, get NVDA's speech back as text, and check it. It works with any Windows ap
 `asc` connects to NVDA as a Remote Access client (NVDA 2025.1 or newer), so
 nothing is installed inside NVDA.
 
-**Status: early development (M1, watch mode).** See
-`docs/planning/agent-speech-check-plan.md` for the plan and `docs/cli.md` for the
-commands as they land.
+**Status: all four modes work (tested against NVDA 2026.2).** See
+`docs/cli.md` for the commands and `docs/planning/agent-speech-check-plan.md`
+for the plan.
 
-## Modes (planned)
+## Modes
 
 - **watch**: listen to your own NVDA while you drive. Never sends keys.
 - **desktop**: `asc` runs its own silent portable NVDA on the desktop.
 - **sandbox**: `asc` runs its own NVDA inside Windows Sandbox, so your NVDA is never disturbed.
 - **shared**: drive your own NVDA, only with an explicit opt-in and a panic hotkey.
+
+## Claude Code skill
+
+`skills/asc/SKILL.md` tells an agent when to use `asc`, the workflow and the
+gotchas. Install it for all your projects by copying the `skills/asc` folder to
+`~/.claude/skills/`, and copy it again after it changes.
 
 ## Development
 
