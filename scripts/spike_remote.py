@@ -11,7 +11,7 @@ Writes its log to stdout and a JSON summary to C:\\spike\\out\\summary.json.
 
 Route B: this script is the relay. NVDA connects out to it as the follower.
 Route A: NVDA hosts the relay (selfHosted). This script joins it as the leader.
-Written from observed behaviour and docs, not from NVDA source.
+Wire facts come from reading NVDA's source; no NVDA code is copied here.
 """
 
 from __future__ import annotations

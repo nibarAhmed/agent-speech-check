@@ -1,8 +1,9 @@
 # NVDA Remote Access protocol, as `asc` uses it
 
 There are no official docs for this protocol. This file records what we
-**observed** against a real NVDA. Where something comes only from reading
-behaviour descriptions and was not seen on the wire, it says "not observed".
+**observed** against a real NVDA. Where something comes only from reading NVDA's
+source (facts only, no code copied) and was not seen on the wire, it says "not
+observed".
 `asc` implements from this file. It never copies or imports NVDA code (GPL).
 
 Observed with: portable NVDA 2026.2 inside Windows Sandbox, M0 spike
@@ -148,7 +149,7 @@ key = <random key>
 "127.0.0.1:16837" = <lowercase hex SHA-256 of the relay cert, DER>
 ```
 - `enabled = True` is required. Without it, Remote Access doesn't start at all
-  (from behaviour descriptions; not tested here).
+  (from reading NVDA's source; not tested here).
 - `host` carries the port. The `trustedCertificates` key is `host:port`, or just
   `host` when the port is 6837.
 - **Pinning is silent on 2026.2**, which already has the fix for
@@ -184,7 +185,7 @@ If a user hosts the relay in their own NVDA:
   matched the SHA-256 of the cert the relay served.
 - As leader, `channel_joined` lists the follower:
   `"clients":[{"id":1,"connection_type":"slave"}]`.
-- Wrong channel key: per behaviour descriptions the relay sends
+- Wrong channel key: per NVDA's source the relay sends
   `{"type":"error","message":"incorrect_password"}` and closes. Not observed: our
   test connection failed with a TLS error first.
 
