@@ -19,16 +19,15 @@ from __future__ import annotations
 
 import contextlib
 import json
+import shutil
 import subprocess
 import time
 import winreg
 from dataclasses import dataclass
 from xml.sax.saxutils import escape
 
-from agent_speech_check import winapi
+from agent_speech_check import powershell, winapi
 from agent_speech_check.errors import NotConnected, SandboxFailed, SandboxNeedsPro, WsbMissing
-from agent_speech_check.firewall import encoded as ps_encoded
-from agent_speech_check.firewall import ps_quote
 from agent_speech_check.validate import Fields
 
 WINDOW_TITLE = "Windows Sandbox"
@@ -36,6 +35,7 @@ VM_IMAGE = "vmmemWindowsSandbox"
 SESSION_TIMEOUT_S = 120
 WSB_TIMEOUT_S = 120
 POLL_S = 0.1
+GONE_POLL_S = 0.25
 _HOME_EDITIONS = ("Core", "CoreN", "CoreSingleLanguage", "CoreCountrySpecific")
 
 
@@ -205,10 +205,9 @@ exit 3
 
 
 def launch_command(command: str) -> str:
-    """Run the launch script on `command`. The command travels base64-encoded,
-    so no quote in it can break out."""
-    script = f"& {ps_quote(LAUNCH_PATH)} -Command {ps_quote(command)}"
-    return f"powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand {ps_encoded(script)}"
+    """Run the launch script on `command`."""
+    quote = powershell.quote
+    return powershell.command_line(f"& {quote(LAUNCH_PATH)} -Command {quote(command)}")
 
 
 # ---------------------------------------------------------------- the thin shell
@@ -224,11 +223,7 @@ def edition_id() -> str:
 def require_available() -> None:
     if is_home_edition(edition_id()):
         raise SandboxNeedsPro
-    if subprocess.run(
-        ["where", "wsb"],  # noqa: S607
-        capture_output=True,
-        check=False,
-    ).returncode:
+    if shutil.which("wsb") is None:
         raise WsbMissing
 
 
@@ -257,9 +252,11 @@ def wait_gone(timeout_s: float) -> bool:
     """Wait for the last sandbox VM to exit. Starting a new one before that
     attaches to the session that is logging off (seen in M0)."""
     deadline = time.monotonic() + timeout_s
-    while winapi.process_ids(VM_IMAGE) and time.monotonic() < deadline:
-        time.sleep(1)
-    return not winapi.process_ids(VM_IMAGE)
+    while winapi.process_ids(VM_IMAGE):
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(GONE_POLL_S)
+    return True
 
 
 def exec_as_user(sandbox_id: str, command: str) -> int:

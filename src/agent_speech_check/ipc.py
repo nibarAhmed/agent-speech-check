@@ -71,13 +71,25 @@ class NoArgs:
         return cls()
 
 
+def _timeout(f: Fields) -> int:
+    return f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS)
+
+
+def _settle(f: Fields) -> int:
+    return f.number("settle_ms", low=SETTLE_MS[0], high=SETTLE_MS[1])
+
+
+def _since(f: Fields) -> int | None:
+    return f.opt_number("since", low=0, high=2**53)
+
+
 @dataclass(frozen=True)
 class SpeechArgs:
     since: int | None
 
     @classmethod
     def parse(cls, f: Fields) -> SpeechArgs:
-        return cls(f.opt_number("since", low=0, high=2**53))
+        return cls(_since(f))
 
 
 @dataclass(frozen=True)
@@ -94,8 +106,8 @@ class WaitArgs:
     def parse(cls, f: Fields) -> WaitArgs:
         args = cls(
             f.text("pattern", max_len=2000),
-            f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS),
-            f.opt_number("since", low=0, high=2**53),
+            _timeout(f),
+            _since(f),
         )
         compile_regex(args.pattern)
         return args
@@ -126,8 +138,8 @@ class PressArgs:
         args = cls(
             tuple(raw),
             f.opt_text("expect", max_len=2000),
-            f.number("settle_ms", low=SETTLE_MS[0], high=SETTLE_MS[1]),
-            f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS),
+            _settle(f),
+            _timeout(f),
         )
         # Check everything before anything is sent.
         args.parsed  # noqa: B018 - parsing is the check
@@ -149,8 +161,8 @@ class TypeArgs:
     def parse(cls, f: Fields) -> TypeArgs:
         args = cls(
             f.text("text", max_len=MAX_TYPED),
-            f.number("settle_ms", low=SETTLE_MS[0], high=SETTLE_MS[1]),
-            f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS),
+            _settle(f),
+            _timeout(f),
         )
         args.parsed  # noqa: B018 - every character is checked before any is typed
         return args
@@ -171,7 +183,7 @@ class LaunchArgs:
         args = cls(
             f.text("command", max_len=8000),
             f.opt_text("title", max_len=2000),
-            f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS),
+            _timeout(f),
         )
         args.regex  # noqa: B018 - compiling is the check
         return args

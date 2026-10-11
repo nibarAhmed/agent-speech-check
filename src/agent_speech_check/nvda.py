@@ -16,19 +16,21 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_speech_check import winapi
+from agent_speech_check import nvda_config, winapi
 from agent_speech_check.errors import (
     DownloadFailed,
     NvdaAlreadyRunning,
     NvdaNotFound,
     PortableFailed,
 )
-from agent_speech_check.nvda_config import Relay, Setting, render
+from agent_speech_check.nvda_config import Relay, Setting
 from agent_speech_check.paths import state_root
 
 log = logging.getLogger(__name__)
 
 VERSION = "2026.2"
+# Per blocking read, not for the whole file: a stalled connection fails.
+DOWNLOAD_TIMEOUT_S = 60
 CREATE_TIMEOUT_S = 180
 STOP_TIMEOUT_S = 10
 
@@ -72,7 +74,11 @@ def download(version: str) -> Path:
         partial = installer.with_suffix(".part")
         url = installer_url(version)
         try:
-            urllib.request.urlretrieve(url, partial)  # noqa: S310 - fixed https URL
+            with (
+                urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response,  # noqa: S310 - fixed https URL
+                partial.open("wb") as file,
+            ):
+                shutil.copyfileobj(response, file)
         except OSError as error:  # URLError and HTTPError are OSErrors
             partial.unlink(missing_ok=True)
             raise DownloadFailed(url, str(getattr(error, "reason", error))) from None
@@ -121,11 +127,7 @@ def launch(
     """Start the portable NVDA with a fresh config that connects to the relay."""
     exe = require_exe(folder)
     refuse_if_running()
-    if config_dir.exists():
-        shutil.rmtree(config_dir)
-    config_dir.mkdir(parents=True)
-    ini = render(relay, settings)
-    (config_dir / "nvda.ini").write_text(ini, encoding="utf-8")
+    nvda_config.write(config_dir, relay, settings)
     process = subprocess.Popen(  # noqa: S603 - the portable NVDA asc manages
         [
             str(exe),

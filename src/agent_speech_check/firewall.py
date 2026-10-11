@@ -11,31 +11,24 @@ rule never names it.
 
 from __future__ import annotations
 
-import base64
 import ipaddress
 import os
-import subprocess
 import sys
 
 from agent_speech_check import winapi
 from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch
+from agent_speech_check.powershell import encoded, quote, run
 
 RULE_NAME = "agent-speech-check sandbox relay"
 INTERFACE = "vEthernet (Default Switch)"
-PS_TIMEOUT_S = 60
-
-
-def ps_quote(text: str) -> str:
-    """A PowerShell single-quoted string: only ' needs doubling."""
-    return "'" + text.replace("'", "''") + "'"
 
 
 def create_script(port: int, program: str) -> str:
     return (
-        f"Remove-NetFirewallRule -DisplayName {ps_quote(RULE_NAME)} -ErrorAction SilentlyContinue; "
-        f"New-NetFirewallRule -DisplayName {ps_quote(RULE_NAME)} -Direction Inbound "
+        f"Remove-NetFirewallRule -DisplayName {quote(RULE_NAME)} -ErrorAction SilentlyContinue; "
+        f"New-NetFirewallRule -DisplayName {quote(RULE_NAME)} -Direction Inbound "
         f"-Action Allow -Protocol TCP -LocalPort {int(port)} "
-        f"-InterfaceAlias {ps_quote(INTERFACE)} -Program {ps_quote(program)} -Profile Any "
+        f"-InterfaceAlias {quote(INTERFACE)} -Program {quote(program)} -Profile Any "
         "| Out-Null"
     )
 
@@ -43,17 +36,17 @@ def create_script(port: int, program: str) -> str:
 def check_script(port: int, program: str) -> str:
     """Prints `ok` when the rule exists with this port and program."""
     return (
-        f"$r = Get-NetFirewallRule -DisplayName {ps_quote(RULE_NAME)} -ErrorAction "
+        f"$r = Get-NetFirewallRule -DisplayName {quote(RULE_NAME)} -ErrorAction "
         "SilentlyContinue; if ($r -and $r.Enabled -eq 'True' -and "
         f"($r | Get-NetFirewallPortFilter).LocalPort -eq '{int(port)}' -and "
-        f"($r | Get-NetFirewallApplicationFilter).Program -eq {ps_quote(program)}) "
+        f"($r | Get-NetFirewallApplicationFilter).Program -eq {quote(program)}) "
         "{ 'ok' } else { 'missing' }"
     )
 
 
 def address_script() -> str:
     return (
-        f"(Get-NetIPAddress -InterfaceAlias {ps_quote(INTERFACE)} -AddressFamily IPv4 "
+        f"(Get-NetIPAddress -InterfaceAlias {quote(INTERFACE)} -AddressFamily IPv4 "
         "-ErrorAction SilentlyContinue).IPAddress"
     )
 
@@ -67,22 +60,7 @@ def parse_address(output: str) -> str | None:
     return None
 
 
-def encoded(script: str) -> str:
-    return base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-
-
 # ---------------------------------------------------------------- the thin shell
-
-
-def _powershell(script: str) -> str:
-    return subprocess.run(  # noqa: S603 - fixed program, our own script
-        ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded(script)],  # noqa: S607
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        timeout=PS_TIMEOUT_S,
-    ).stdout
 
 
 def daemon_program() -> str:
@@ -96,14 +74,14 @@ def daemon_program() -> str:
 
 
 def default_switch_address() -> str:
-    address = parse_address(_powershell(address_script()))
+    address = parse_address(run(address_script()))
     if address is None:
         raise NoDefaultSwitch(INTERFACE)
     return address
 
 
 def rule_ok(port: int, program: str) -> bool:
-    return _powershell(check_script(port, program)).strip() == "ok"
+    return run(check_script(port, program)).strip() == "ok"
 
 
 def create_rule(port: int, program: str) -> None:
@@ -113,6 +91,6 @@ def create_rule(port: int, program: str) -> None:
         "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList "
         f"'-NoProfile','-NonInteractive','-EncodedCommand','{inner}'"
     )
-    _powershell(outer)
+    run(outer)
     if not rule_ok(port, program):
         raise FirewallFailed(RULE_NAME)

@@ -80,6 +80,20 @@ class Target:
         )
         return _checked(target, where)
 
+    @property
+    def launches_portable(self) -> bool:
+        """asc starts a portable NVDA on this computer (desktop mode)."""
+        return self.mode == "desktop" and self.launch
+
+    @property
+    def launches_sandbox(self) -> bool:
+        """asc starts NVDA inside Windows Sandbox (sandbox mode)."""
+        return self.mode == "sandbox" and self.launch
+
+    @property
+    def launches_nvda(self) -> bool:
+        return self.launches_portable or self.launches_sandbox
+
     def with_settings(self, settings: tuple[Setting, ...]) -> Target:
         return replace(self, settings=settings)
 

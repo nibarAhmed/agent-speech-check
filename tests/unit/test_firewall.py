@@ -1,6 +1,6 @@
 import base64
 
-from agent_speech_check import firewall
+from agent_speech_check import firewall, powershell
 
 
 def test_create_script_is_narrow() -> None:
@@ -36,4 +36,4 @@ def test_parse_address() -> None:
 
 
 def test_encoded_is_utf16_base64() -> None:
-    assert base64.b64decode(firewall.encoded("hi")).decode("utf-16-le") == "hi"
+    assert base64.b64decode(powershell.encoded("hi")).decode("utf-16-le") == "hi"

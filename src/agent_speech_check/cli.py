@@ -15,7 +15,17 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import __version__, daemon, firewall, ipc, keyref, nvda, sandbox, session
+from agent_speech_check import (
+    __version__,
+    daemon,
+    firewall,
+    ipc,
+    keyref,
+    nvda,
+    nvda_config,
+    sandbox,
+    session,
+)
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
@@ -23,7 +33,7 @@ from agent_speech_check.errors import (
     InternalError,
     NoCommand,
 )
-from agent_speech_check.nvda_config import Relay, Setting, render
+from agent_speech_check.nvda_config import Setting
 from agent_speech_check.paths import state_root, target_dir, targets_file
 from agent_speech_check.targets import MODES, Target, resolve
 
@@ -349,9 +359,9 @@ def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) ->
 def cmd_start(args: argparse.Namespace) -> int:
     target = _target(args)
     settings = tuple(Setting.parse(text) for text in args.nvda_setting)
-    if settings and not (target.mode in ("desktop", "sandbox") and target.launch):
+    if settings and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
-    render(Relay("", 1, "", ""), settings)  # clashes between settings, before anything starts
+    nvda_config.check(settings)
     target = target.with_settings(settings).with_consent(args.i_understand)
     status = session.start(target, target_dir(target.name))
     print(f"started: {target.name}")
@@ -419,7 +429,7 @@ def _nvda_dirs(args: argparse.Namespace) -> list[tuple[str, Path]]:
     if args.nvda_dir:
         return [("--nvda-dir", Path(args.nvda_dir))]
     target = _target(args)
-    if target.mode == "desktop" and target.launch:
+    if target.launches_portable:
         return [("the portable NVDA", nvda.folder_for(target.nvda_dir))]
     return keyref.candidates()
 

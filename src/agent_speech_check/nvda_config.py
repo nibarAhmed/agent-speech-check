@@ -16,7 +16,9 @@ The ini is built as data and rendered; user text is never pasted in raw.
 from __future__ import annotations
 
 import re
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from agent_speech_check.errors import BadSetting
 
@@ -54,7 +56,7 @@ class Setting:
         lowered = tuple(p.lower() for p in self.path)
         if lowered[0] == "remote":
             return True
-        owned = _flatten(base_config(Relay("", 1, "", "")))
+        owned = _flatten(base_config(_ANY_RELAY))
         return any(lowered == tuple(p.lower() for p in key) for key in owned)
 
 
@@ -76,6 +78,10 @@ class Relay:
     port: int
     channel: str
     fingerprint: str
+
+
+# Stands in for the real relay where only the config's shape matters.
+_ANY_RELAY = Relay("", 1, "", "")
 
 
 def base_config(relay: Relay) -> Section:
@@ -124,7 +130,7 @@ def _render(section: Section, depth: int, lines: list[str]) -> None:
             _render(value, depth + 1, lines)
 
 
-def render(relay: Relay, settings: tuple[Setting, ...] = ()) -> str:
+def _merged(relay: Relay, settings: tuple[Setting, ...]) -> Section:
     config = base_config(relay)
     for setting in settings:
         section = config
@@ -135,6 +141,23 @@ def render(relay: Relay, settings: tuple[Setting, ...] = ()) -> str:
                 raise BadSetting(".".join(setting.path), f"{name} is a key, not a section")
             section = child
         section[key] = setting.value
+    return config
+
+
+def check(settings: tuple[Setting, ...]) -> None:
+    """Refuse settings that clash with each other, before anything starts."""
+    _merged(_ANY_RELAY, settings)
+
+
+def render(relay: Relay, settings: tuple[Setting, ...] = ()) -> str:
     lines: list[str] = []
-    _render(config, 1, lines)
+    _render(_merged(relay, settings), 1, lines)
     return "\n".join(lines) + "\n"
+
+
+def write(config_dir: Path, relay: Relay, settings: tuple[Setting, ...]) -> None:
+    """Make `config_dir` a fresh NVDA config folder holding only `nvda.ini`."""
+    if config_dir.exists():
+        shutil.rmtree(config_dir)
+    config_dir.mkdir(parents=True)
+    (config_dir / "nvda.ini").write_text(render(relay, settings), encoding="utf-8")

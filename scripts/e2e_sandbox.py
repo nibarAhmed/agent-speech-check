@@ -27,13 +27,11 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
-from agent_speech_check import sandbox
+from agent_speech_check import nvda, sandbox
 
-NVDA_VERSION = "2026.2"
-NVDA_URL = f"https://download.nvaccess.org/releases/{NVDA_VERSION}/nvda_{NVDA_VERSION}.exe"
+NVDA_VERSION = nvda.VERSION
 PYTHON = "3.13"
 REPO = Path(__file__).resolve().parents[1]
 WORK = REPO / ".e2e"
@@ -93,10 +91,7 @@ def prepare() -> None:
     )
     installer = IN / f"nvda_{NVDA_VERSION}.exe"
     if not installer.exists():
-        print(f"downloading {NVDA_URL}")
-        partial = installer.with_suffix(".part")
-        urllib.request.urlretrieve(NVDA_URL, partial)
-        partial.replace(installer)
+        shutil.copy2(nvda.download(NVDA_VERSION), installer)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()

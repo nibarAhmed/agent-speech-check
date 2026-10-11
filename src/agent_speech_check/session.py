@@ -59,24 +59,25 @@ def log_tail(folder: Path) -> str:
 
 def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
     with (folder / ERR_FILE).open("wb") as err:
-        kwargs: dict[str, Any] = {
-            "stdin": subprocess.DEVNULL,
-            "stdout": subprocess.DEVNULL,
-            "stderr": err,
-            "cwd": folder,
-            "close_fds": True,
-        }
+
+        def popen(flags: int) -> subprocess.Popen[bytes]:
+            return subprocess.Popen(  # noqa: S603 - our own executable and arguments
+                daemon_command(target),
+                creationflags=flags,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=err,
+                cwd=folder,
+                close_fds=True,
+            )
+
         try:
             # Leave the caller's job object, so the daemon outlives the shell
             # that started it.
-            return subprocess.Popen(  # noqa: S603 - our own executable and arguments
-                daemon_command(target), creationflags=_DETACHED | _BREAKAWAY, **kwargs
-            )
+            return popen(_DETACHED | _BREAKAWAY)
         except PermissionError:
             # The job doesn't allow breakaway; the daemon then lives as long as it.
-            return subprocess.Popen(  # noqa: S603 - our own executable and arguments
-                daemon_command(target), creationflags=_DETACHED, **kwargs
-            )
+            return popen(_DETACHED)
 
 
 def _check_sandbox(target: Target) -> None:
@@ -95,10 +96,10 @@ def precheck(target: Target) -> None:
         if not target.consent:
             raise SharedNeedsConsent
         daemon.check_panic_key()
-    if target.mode == "desktop" and target.launch:
+    if target.launches_portable:
         nvda.require_exe(nvda.folder_for(target.nvda_dir))
         nvda.refuse_if_running()
-    if target.mode == "sandbox" and target.launch:
+    if target.launches_sandbox:
         _check_sandbox(target)
 
 
@@ -108,13 +109,13 @@ def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_s
     while True:
         current = status(folder, target.name)
-        failed = str(current.get("sandbox") or "")
         if current["connected"]:
             return current
-        if failed.startswith("failed") or time.monotonic() > deadline:
+        failure = current.get("sandbox_failure")
+        if failure or time.monotonic() > deadline:
             stop(folder, target.name)
-            if failed.startswith("failed"):
-                raise SandboxFailed("start", failed.removeprefix("failed: "))
+            if failure:
+                raise SandboxFailed("start", str(failure))
             raise NvdaDidNotConnect(timeout_s, log_tail(folder))
         time.sleep(CONNECT_POLL_S)
 
@@ -137,7 +138,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
         if code is not None:
             raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
         if state.exists(folder):
-            if target.launch and target.mode in CONNECT_TIMEOUT_S:
+            if target.launches_nvda:
                 return _wait_connected(target, folder)
             return status(folder, target.name)
         time.sleep(POLL_S)

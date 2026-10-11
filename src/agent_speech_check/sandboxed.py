@@ -13,9 +13,9 @@ import logging
 import shutil
 from pathlib import Path
 
-from agent_speech_check import nvda, sandbox
+from agent_speech_check import nvda, nvda_config, sandbox
 from agent_speech_check.errors import AscError, LaunchFailed, SandboxFailed
-from agent_speech_check.nvda_config import Relay, Setting, render
+from agent_speech_check.nvda_config import Relay, Setting
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ class SandboxSession:
         self.relay = relay
         self.settings = settings
         self.state = "starting"
+        self.failure: str | None = None
         self.sandbox_id: str | None = None
 
     def _prepare(self) -> str:
@@ -39,13 +40,11 @@ class SandboxSession:
             shutil.rmtree(self.folder)
         in_dir, config_dir = self.folder / "in", self.folder / "config"
         in_dir.mkdir(parents=True)
-        config_dir.mkdir()
         installer = nvda.installer_path(nvda.VERSION)
         script = sandbox.nvda_script(installer.name)
         (in_dir / sandbox.SCRIPT).write_text(script, encoding="utf-8")
         (in_dir / sandbox.LAUNCH_SCRIPT).write_text(sandbox.LAUNCH_PS1, encoding="utf-8")
-        ini = render(self.relay, self.settings)
-        (config_dir / "nvda.ini").write_text(ini, encoding="utf-8")
+        nvda_config.write(config_dir, self.relay, self.settings)
         folders = sandbox.session_folders(
             str(in_dir), str(installer.parent), str(config_dir), self.shares
         )
@@ -64,6 +63,7 @@ class SandboxSession:
         try:
             await asyncio.to_thread(self._start)
         except AscError as error:
+            self.failure = error.message
             self.state = f"failed: {error.message}"
             log.warning("sandbox did not start: %s", error.message)
             return

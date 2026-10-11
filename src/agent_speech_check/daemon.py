@@ -58,13 +58,17 @@ def _setup_logging(folder: Path) -> None:
     root.setLevel(logging.INFO)
 
 
+def take_panic_key(on_press: Callable[[], None]) -> winapi.GlobalHotkey:
+    """Shared mode never runs without a way for the user to stop it at once."""
+    hotkey = winapi.GlobalHotkey(PANIC_MODIFIERS, PANIC_VK, on_press)
+    if not hotkey.start():
+        raise PanicKeyTaken(PANIC_KEY)
+    return hotkey
+
+
 def check_panic_key() -> None:
     """Refuse shared mode up front if another program owns the panic hotkey."""
-    hotkey = winapi.GlobalHotkey(PANIC_MODIFIERS, PANIC_VK, lambda: None)
-    free = hotkey.start()
-    hotkey.stop()
-    if not free:
-        raise PanicKeyTaken(PANIC_KEY)
+    take_panic_key(lambda: None).stop()
 
 
 def start_app(command: str) -> None:
@@ -92,9 +96,7 @@ class Daemon:
         self.nvda: nvda.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
-
-    async def handle(self, request: ipc.Request) -> dict[str, Any]:
-        handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
+        self.handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
             "status": self._status,
             "stop": self._stop,
             "mark": self._mark,
@@ -105,7 +107,9 @@ class Daemon:
             "type": self._type,
             "launch": self._launch,
         }
-        return await handlers[request.cmd](request.args)
+
+    async def handle(self, request: ipc.Request) -> dict[str, Any]:
+        return await self.handlers[request.cmd](request.args)
 
     async def _status(self, _args: ipc.NoArgs) -> dict[str, Any]:
         return self.status()
@@ -141,6 +145,7 @@ class Daemon:
             "last_error": self.relay.last_error,
             "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
+            "sandbox_failure": None if self.sandbox is None else self.sandbox.failure,
             "panic_key": None if self.panic is None else PANIC_KEY,
         }
 
@@ -205,7 +210,7 @@ class Daemon:
         )
 
     def _start_nvda(self) -> None:
-        if self.target.mode == "desktop" and self.target.launch:
+        if self.target.launches_portable:
             self.nvda = nvda.launch(
                 nvda.folder_for(self.target.nvda_dir),
                 self.folder / "nvda_config",
@@ -214,7 +219,6 @@ class Daemon:
             )
 
     def _start_panic_key(self) -> None:
-        """Shared mode never runs without a way for the user to stop it at once."""
         if self.target.mode != "shared":
             return
         if not self.target.consent:
@@ -224,10 +228,7 @@ class Daemon:
         def pressed() -> None:
             loop.call_soon_threadsafe(self._on_panic)
 
-        hotkey = winapi.GlobalHotkey(PANIC_MODIFIERS, PANIC_VK, pressed)
-        if not hotkey.start():
-            raise PanicKeyTaken(PANIC_KEY)
-        self.panic = hotkey
+        self.panic = take_panic_key(pressed)
 
     def _on_panic(self) -> None:
         log.warning("panic hotkey pressed: stopping")
@@ -254,7 +255,7 @@ class Daemon:
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
                 keepalive = group.create_task(self.relay.keepalive())
-                if self.target.mode == "sandbox" and self.target.launch:
+                if self.target.launches_sandbox:
                     self.sandbox = SandboxSession(
                         self.folder, self.target.share, self._relay_info(), self.target.settings
                     )
