@@ -12,16 +12,24 @@ import asyncio
 import functools
 import logging
 import os
+import re
 import secrets
 import signal
+import subprocess
 import time
 from collections.abc import Awaitable, Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import ipc, relay, state, winapi
-from agent_speech_check.errors import AlreadyRunning, NoMatch, NvdaNotConnected
+from agent_speech_check import ipc, nvda, relay, state, winapi
+from agent_speech_check.errors import (
+    AlreadyRunning,
+    LaunchFailed,
+    LaunchRefused,
+    NoMatch,
+    NvdaNotConnected,
+)
 from agent_speech_check.keyboard import Keyboard
 from agent_speech_check.paths import state_root, target_dir
 from agent_speech_check.relay import Relay
@@ -44,6 +52,20 @@ def _setup_logging(folder: Path) -> None:
     root.setLevel(logging.INFO)
 
 
+def start_app(command: str) -> None:
+    """Start the app under test, detached. Popen returns at once."""
+    try:
+        subprocess.Popen(  # noqa: S603 - the user's own app, run as asked
+            command,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as error:
+        raise LaunchFailed(command, error.strerror or str(error)) from None
+
+
 class Daemon:
     def __init__(self, target: Target, folder: Path) -> None:
         self.target = target
@@ -52,6 +74,7 @@ class Daemon:
         self.relay = Relay(target.name, relay.load_or_create(folder), self.speech)
         self.keyboard = Keyboard(target, self.relay, self.speech)
         self.stopping = asyncio.Event()
+        self.nvda: nvda.Running | None = None
 
     async def handle(self, request: ipc.Request) -> dict[str, Any]:
         handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
@@ -62,6 +85,8 @@ class Daemon:
             "speech": self._speech,
             "wait": self._wait,
             "press": self._press,
+            "type": self._type,
+            "launch": self._launch,
         }
         return await handlers[request.cmd](request.args)
 
@@ -97,6 +122,7 @@ class Daemon:
             "latest": self.speech.latest,
             "mark": self.speech.mark,
             "last_error": self.relay.last_error,
+            "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
         }
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
@@ -124,6 +150,41 @@ class Daemon:
             raise NoMatch(args.expect or "", args.timeout_ms, said)
         return {"lines": [e.line() for e in pressed.entries]}
 
+    async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
+        typed = await self.keyboard.press(
+            args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
+        )
+        return {"lines": [e.line() for e in typed.entries]}
+
+    async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
+        if self.target.mode not in ("watch", "desktop"):
+            raise LaunchRefused(self.target.mode)
+        if not self.relay.connected:
+            raise NvdaNotConnected(self.target.name)
+        start = self.speech.latest
+        start_app(args.command)
+        timeout_s = args.timeout_ms / 1000
+        title = args.regex
+        if title is None:
+            # No title given: wait for the first speech, then for quiet.
+            title = re.compile(".")
+        found = await self.speech.wait_match(title, start, timeout_s)
+        if found is None:
+            said = [e.text for e in self.speech.since(start).entries if e.kind == "said"]
+            raise NoMatch(args.title or ".", args.timeout_ms, said)
+        await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, timeout_s)
+        return {"lines": [e.line() for e in self.speech.since(start).entries]}
+
+    def _start_nvda(self) -> None:
+        if self.target.mode == "desktop" and self.target.launch:
+            credentials = self.relay.credentials
+            self.nvda = nvda.launch(
+                nvda.folder_for(self.target.nvda_dir),
+                self.folder / "nvda_config",
+                (credentials.channel, self.relay.port, credentials.fingerprint),
+                self.target.settings,
+            )
+
     async def run(self) -> None:
         relay_server = await self.relay.start(self.target.port)
         token = secrets.token_urlsafe(32)
@@ -136,6 +197,7 @@ class Daemon:
         port = ipc_server.sockets[0].getsockname()[1]
         log.info("relay on %s, IPC on %d", self.relay.port, port)
         try:
+            self._start_nvda()
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
                 keepalive = group.create_task(self.relay.keepalive())
@@ -143,6 +205,8 @@ class Daemon:
                 keepalive.cancel()
         finally:
             await self.keyboard.release_all()
+            if self.nvda is not None:
+                self.nvda.stop()
             self.relay.disconnect()
             relay_server.close()
             ipc_server.close()

@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import ipc, state
+from agent_speech_check import ipc, nvda, state
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
@@ -74,8 +74,12 @@ def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
 
 def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its first status."""
-    if target.mode in ("sandbox", "shared") or (target.mode == "desktop" and target.launch):
+    if target.mode in ("sandbox", "shared"):
         raise ModeNotBuilt(target.mode)
+    if target.mode == "desktop" and target.launch:
+        # The daemon checks again; checking here gives the right exit code.
+        nvda.require_exe(nvda.folder_for(target.nvda_dir))
+        nvda.refuse_if_running()
     folder.mkdir(parents=True, exist_ok=True)
     if state.exists(folder):
         try:

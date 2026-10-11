@@ -129,3 +129,5 @@ parallel = true
 
 [tool.codespell]
 skip = "./.git,./.venv,./uv.lock,./docs/planning,./build,./dist,*.html"
+# fo: the tasklist /fo flag. caf: the start of "Café" in a Unicode test.
+ignore-words-list = "fo,caf"

@@ -206,6 +206,21 @@ If a user hosts the relay in their own NVDA:
   environment is logging off"). Wait until `vmmemWindowsSandbox` has exited
   before starting another sandbox.
 
+## Observed by the e2e suite (M1 and M2, 2026-10-11)
+
+`scripts/e2e_sandbox.py` runs `tests/e2e` against portable NVDA 2026.2 in
+Windows Sandbox.
+- NVDA pinned and accepted the relay cert `asc` generates (RSA 2048,
+  self-signed, SAN `localhost` and `127.0.0.1`), joined, and sent speech. Keys
+  sent through the daemon were released (Insert not held afterwards).
+- With `[audio] soundVolumeFollowsVoice = False` and `soundVolume = 0`, NVDA
+  still sends the `focusMode.wav` wave on Tab into an edit field. So `asc` can
+  mute NVDA's own sounds and still track the mode.
+- **A visible sandbox window takes keyboard focus on the host.** In one run,
+  keys typed on the host (Alt+Tab) reached the sandbox and opened its task
+  switcher in the middle of a test. With the window minimised the whole time,
+  the tests passed, so the sandbox keeps working while minimised.
+
 ## Open questions (not answered by the spike)
 
 - The exact shape of a server `error` message (not seen on the wire).

@@ -37,7 +37,7 @@ from agent_speech_check.errors import (
     bad_field,
     from_kind,
 )
-from agent_speech_check.keys import Gesture, parse_gestures
+from agent_speech_check.keys import Gesture, parse_gestures, text_gestures
 from agent_speech_check.validate import Fields
 
 log = logging.getLogger(__name__)
@@ -50,6 +50,8 @@ DEFAULT_SETTLE_MS = 400
 DEFAULT_TIMEOUT_MS = 5_000
 CONNECT_TIMEOUT_S = 3.0
 MAX_GESTURES = 100
+MAX_TYPED = 2000
+DEFAULT_LAUNCH_TIMEOUT_MS = 30_000
 
 
 def compile_regex(pattern: str) -> re.Pattern[str]:
@@ -130,7 +132,49 @@ class PressArgs:
         return args
 
 
-type Args = NoArgs | SpeechArgs | WaitArgs | PressArgs
+@dataclass(frozen=True)
+class TypeArgs:
+    text: str
+    settle_ms: int
+    timeout_ms: int
+
+    @property
+    def parsed(self) -> tuple[Gesture, ...]:
+        return text_gestures(self.text)
+
+    @classmethod
+    def parse(cls, f: Fields) -> TypeArgs:
+        args = cls(
+            f.text("text", max_len=MAX_TYPED),
+            f.number("settle_ms", low=SETTLE_MS[0], high=SETTLE_MS[1]),
+            f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS),
+        )
+        args.parsed  # noqa: B018 - every character is checked before any is typed
+        return args
+
+
+@dataclass(frozen=True)
+class LaunchArgs:
+    command: str
+    title: str | None
+    timeout_ms: int
+
+    @property
+    def regex(self) -> re.Pattern[str] | None:
+        return None if self.title is None else compile_regex(self.title)
+
+    @classmethod
+    def parse(cls, f: Fields) -> LaunchArgs:
+        args = cls(
+            f.text("command", max_len=8000),
+            f.opt_text("title", max_len=2000),
+            f.number("timeout_ms", low=1, high=MAX_TIMEOUT_MS),
+        )
+        args.regex  # noqa: B018 - compiling is the check
+        return args
+
+
+type Args = NoArgs | SpeechArgs | WaitArgs | PressArgs | TypeArgs | LaunchArgs
 
 COMMANDS: dict[str, Any] = {
     "status": NoArgs,
@@ -140,6 +184,8 @@ COMMANDS: dict[str, Any] = {
     "speech": SpeechArgs,
     "wait": WaitArgs,
     "press": PressArgs,
+    "type": TypeArgs,
+    "launch": LaunchArgs,
 }
 
 

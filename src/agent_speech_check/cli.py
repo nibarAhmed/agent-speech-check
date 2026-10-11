@@ -7,14 +7,23 @@ errors to stderr.
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import sys
 import traceback
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Any
 
-from agent_speech_check import __version__, daemon, ipc, session
-from agent_speech_check.errors import EXIT_INTERRUPTED, AscError, InternalError, NoCommand
+from agent_speech_check import __version__, daemon, ipc, keyref, nvda, session
+from agent_speech_check.errors import (
+    EXIT_INTERRUPTED,
+    AscError,
+    BadSetting,
+    InternalError,
+    NoCommand,
+)
+from agent_speech_check.nvda_config import Setting
 from agent_speech_check.paths import state_root, target_dir, targets_file
 from agent_speech_check.targets import MODES, Target, resolve
 
@@ -105,11 +114,140 @@ examples:
   asc press H H --expect "level 2"
   asc press Control+Home NVDA+Down""",
     ),
+    "type": (
+        "type text and print what NVDA said",
+        """\
+Type TEXT one character at a time, using this computer's keyboard layout.
+Every character is checked first; if any can't be typed, nothing is (exit 2).
+NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
+
+examples:
+  asc type "hello world"
+  asc type "x@example.com" --settle 800""",
+    ),
+    "keys": (
+        "look up NVDA commands in NVDA's own reference",
+        """\
+Print commands from NVDA's Commands Quick Reference whose name, keys,
+description or section contain every SEARCH word, one per line:
+KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
+NVDA the target uses: for desktop mode the portable copy, otherwise your own
+NVDA (the running nvda.exe, the uninstall registry entry, Program Files).
+In browse mode, single letters jump to elements; add Shift to go back.
+
+examples:
+  asc keys heading
+  asc keys report title
+  asc keys --layout laptop current line""",
+    ),
+    "launch": (
+        "start an app and wait until NVDA speaks",
+        """\
+Start CMD and wait until NVDA says something matching --title (a regex), or
+anything at all if --title is left out. Prints what NVDA said.
+Default timeout 30000 ms.
+
+examples:
+  asc launch "notepad.exe" --title Notepad
+  asc launch "py -m myapp" --title "My App" --timeout 60000""",
+    ),
+    "get-nvda": (
+        "make the portable NVDA that desktop mode launches",
+        """\
+Download NVDA from NV Access and make a portable copy for desktop mode, in
+%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Refuses (exit 4) while any
+NVDA runs, because the NVDA installer would restart it.
+
+examples:
+  asc get-nvda
+  asc get-nvda --installer nvda_2026.2.exe""",
+    ),
 }
 
 
 def _add_target(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--target", metavar="NAME", help="target name (default: default)")
+
+
+def _timeout(parser: argparse.ArgumentParser, default: int = ipc.DEFAULT_TIMEOUT_MS) -> None:
+    parser.add_argument(
+        "--timeout", type=int, default=default, metavar="MS", help=f"default {default}"
+    )
+
+
+def _settle(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--settle",
+        type=int,
+        default=ipc.DEFAULT_SETTLE_MS,
+        metavar="MS",
+        help=f"quiet period (default {ipc.DEFAULT_SETTLE_MS})",
+    )
+
+
+def _start_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--mode", choices=MODES, help="mode for an unlisted target")
+    parser.add_argument(
+        "--nvda-setting",
+        action="append",
+        default=[],
+        metavar="SECTION.KEY=VALUE",
+        help="an nvda.ini setting for the NVDA asc launches (repeatable)",
+    )
+
+
+def _speech_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--since", type=int, metavar="N", help="lines after N")
+
+
+def _wait_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("regex", metavar="REGEX")
+    _timeout(parser)
+    parser.add_argument("--since", type=int, metavar="N", help="lines after N")
+
+
+def _press_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("gestures", nargs="+", metavar="KEY")
+    parser.add_argument("--expect", metavar="REGEX", help="exit 1 unless the speech matches")
+    _settle(parser)
+    _timeout(parser)
+
+
+def _type_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("text", metavar="TEXT")
+    _settle(parser)
+    _timeout(parser)
+
+
+def _keys_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("words", nargs="*", metavar="SEARCH")
+    parser.add_argument("--layout", choices=("desktop", "laptop"), default="desktop")
+    parser.add_argument("--nvda-dir", metavar="DIR", help="read this NVDA's reference")
+    parser.add_argument("--lang", default="en", help="reference language (default en)")
+    parser.add_argument("--braille", action="store_true", help="include braille displays")
+
+
+def _launch_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("app", metavar="CMD")
+    parser.add_argument("--title", metavar="REGEX", help="wait until NVDA says this")
+    _timeout(parser, ipc.DEFAULT_LAUNCH_TIMEOUT_MS)
+
+
+def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--version", default=nvda.VERSION, dest="nvda_version")
+    parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
+
+
+ARGS: dict[str, Callable[[argparse.ArgumentParser], None]] = {
+    "start": _start_args,
+    "speech": _speech_args,
+    "wait": _wait_args,
+    "press": _press_args,
+    "type": _type_args,
+    "keys": _keys_args,
+    "launch": _launch_args,
+    "get-nvda": _get_nvda_args,
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -131,22 +269,8 @@ def build_parser() -> argparse.ArgumentParser:
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         _add_target(sub[name])
-    sub["start"].add_argument("--mode", choices=MODES, help="mode for an unlisted target")
-    sub["speech"].add_argument("--since", type=int, metavar="N", help="lines after N")
-    sub["wait"].add_argument("regex", metavar="REGEX")
-    sub["wait"].add_argument("--timeout", type=int, default=ipc.DEFAULT_TIMEOUT_MS, metavar="MS")
-    sub["wait"].add_argument("--since", type=int, metavar="N", help="lines after N")
-    press = sub["press"]
-    press.add_argument("gestures", nargs="+", metavar="KEY")
-    press.add_argument("--expect", metavar="REGEX", help="exit 1 unless the speech matches")
-    press.add_argument(
-        "--settle",
-        type=int,
-        default=ipc.DEFAULT_SETTLE_MS,
-        metavar="MS",
-        help=f"quiet period per gesture (default {ipc.DEFAULT_SETTLE_MS})",
-    )
-    press.add_argument("--timeout", type=int, default=ipc.DEFAULT_TIMEOUT_MS, metavar="MS")
+        if name in ARGS:
+            ARGS[name](sub[name])
     return parser
 
 
@@ -174,8 +298,12 @@ def _show_status(status: dict[str, Any]) -> None:
         print(f"last error: {status['last_error']}")
 
 
+def _show_lines(lines: list[str], empty: str) -> None:
+    print("\n".join(lines) if lines else empty)
+
+
 def _show_said(lines: list[str]) -> None:
-    print("\n".join(lines) if lines else "(nothing said)")
+    _show_lines(lines, "(nothing said)")
 
 
 # ---------------------------------------------------------------- commands
@@ -193,6 +321,10 @@ def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) ->
 
 def cmd_start(args: argparse.Namespace) -> int:
     target = _target(args)
+    settings = tuple(Setting.parse(text) for text in args.nvda_setting)
+    if settings and not (target.mode in ("desktop", "sandbox") and target.launch):
+        raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
+    target = target.with_settings(settings)
     status = session.start(target, target_dir(target.name))
     print(f"started: {target.name}")
     _show_status(status)
@@ -249,6 +381,48 @@ def cmd_press(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_type(args: argparse.Namespace) -> int:
+    raw = {"text": args.text, "settle_ms": args.settle, "timeout_ms": args.timeout}
+    _show_said(_call(_target(args), "type", raw, args.timeout)["lines"])
+    return 0
+
+
+def _nvda_dirs(args: argparse.Namespace) -> list[tuple[str, Path]]:
+    if args.nvda_dir:
+        return [("--nvda-dir", Path(args.nvda_dir))]
+    target = _target(args)
+    if target.mode in ("desktop", "sandbox") and target.launch:
+        return [("the portable NVDA", nvda.folder_for(target.nvda_dir))]
+    return keyref.candidates()
+
+
+def cmd_keys(args: argparse.Namespace) -> int:
+    path = keyref.reference(_nvda_dirs(args), args.lang)
+    commands = keyref.parse(path.read_text(encoding="utf-8"))
+    found = keyref.search(commands, args.words, args.layout, braille=args.braille)
+    _show_lines([c.line(args.layout) for c in found], "(no match)")
+    return 0
+
+
+def cmd_launch(args: argparse.Namespace) -> int:
+    raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
+    _show_said(_call(_target(args), "launch", raw, args.timeout)["lines"])
+    return 0
+
+
+def cmd_get_nvda(args: argparse.Namespace) -> int:
+    nvda.refuse_if_running()
+    folder = nvda.managed_dir()
+    if args.installer:
+        installer = Path(args.installer)
+    else:
+        print(f"downloading {nvda.installer_url(args.nvda_version)}")
+        installer = nvda.download(args.nvda_version, folder.parent)
+    exe = nvda.create_portable(installer, folder)
+    print(f"portable NVDA ready: {exe}")
+    return 0
+
+
 COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "start": cmd_start,
     "stop": cmd_stop,
@@ -258,6 +432,10 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "mark": cmd_mark,
     "clear": cmd_clear,
     "press": cmd_press,
+    "type": cmd_type,
+    "keys": cmd_keys,
+    "launch": cmd_launch,
+    "get-nvda": cmd_get_nvda,
 }
 
 
@@ -272,7 +450,16 @@ def run(argv: Sequence[str] | None) -> int:
     return COMMANDS[args.command](args)
 
 
+def _utf8_streams() -> None:
+    """NVDA speech can hold any character. The Windows default code page can't
+    print them all, so results and errors are always UTF-8."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _utf8_streams()
     try:
         return run(argv)
     except AscError as error:

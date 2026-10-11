@@ -148,6 +148,11 @@ class ModeMismatch(UsageError):
         )
 
 
+class BadSetting(UsageError):
+    def __init__(self, setting: str, reason: str) -> None:
+        super().__init__(f"--nvda-setting {_show(setting)}: {reason}")
+
+
 class ModeNotBuilt(UsageError):
     def __init__(self, mode: str) -> None:
         super().__init__(
@@ -214,9 +219,30 @@ class DaemonHungUp(DaemonUnreachable):
 
 
 class NvdaNotFound(NotConnected):
-    def __init__(self, looked: Sequence[str]) -> None:
+    def __init__(self, looked: Sequence[str], hint: str = "pass --nvda-dir") -> None:
         where = "; ".join(looked) if looked else "nowhere"
-        super().__init__(f"NVDA not found. Looked in: {where}", hint="pass --nvda-dir")
+        super().__init__(f"NVDA not found. Looked in: {where}", hint=hint)
+
+
+class PortableFailed(NotConnected):
+    def __init__(self, folder: str) -> None:
+        super().__init__(
+            f"the NVDA installer made no portable copy in {folder}",
+            hint="no other NVDA may run meanwhile; try asc get-nvda again",
+        )
+
+
+class LaunchFailed(UsageError):
+    def __init__(self, command: str, reason: str) -> None:
+        super().__init__(f"cannot start {_show(command)}: {reason}")
+
+
+class LaunchRefused(Refused):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"asc launch is not available in {mode} mode yet",
+            hint="start the app yourself, then asc wait for its title",
+        )
 
 
 class KeysRefused(Refused):
@@ -238,8 +264,8 @@ class AlreadyRunning(Refused):
 class NvdaAlreadyRunning(Refused):
     def __init__(self) -> None:
         super().__init__(
-            "nvda.exe is already running, and desktop mode would fight it for the keyboard",
-            hint="use --mode watch, or --mode sandbox",
+            "nvda.exe is already running; starting another NVDA would restart it",
+            hint="use watch or sandbox mode, which leave your NVDA alone",
         )
 
 

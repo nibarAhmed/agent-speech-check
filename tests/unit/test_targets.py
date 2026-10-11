@@ -1,8 +1,10 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError
+from agent_speech_check.nvda_config import Setting
 from agent_speech_check.targets import Target, defaults, resolve
 
 
@@ -70,4 +72,21 @@ def test_json_round_trip() -> None:
     with pytest.raises(UsageError, match="daemon target: expected JSON"):
         Target.from_json("{")
     with pytest.raises(UsageError, match="keys: expected false in watch mode"):
-        Target.from_json('{"name":"x","mode":"watch","port":1,"keys":true,"launch":false}')
+        Target.from_json(
+            '{"name":"x","mode":"watch","port":1,"keys":true,"launch":false,"settings":[]}'
+        )
+    with pytest.raises(UsageError, match="settings: expected strings"):
+        Target.from_json(
+            '{"name":"x","mode":"desktop","port":1,"keys":true,"launch":true,"settings":[1]}'
+        )
+
+
+def test_json_round_trip_with_settings_and_nvda_dir() -> None:
+    settings = (Setting.parse("speech.symbolLevel=300"), Setting.parse("presentation.x=a, b"))
+    target = replace(defaults("x", "desktop"), nvda_dir="C:/nvda").with_settings(settings)
+    assert Target.from_json(target.to_json()) == target
+
+
+def test_nvda_dir_from_file(tmp_path: Path) -> None:
+    path = write(tmp_path, "[targets.app]\nmode = 'desktop'\nnvda_dir = 'C:/nvda'\n")
+    assert resolve(path, "app", None).nvda_dir == "C:/nvda"

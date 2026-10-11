@@ -13,3 +13,5 @@ dist/
 # M0 spike: downloaded NVDA, generated certs, sandbox outputs
 .spike/
 .claude/settings.local.json
+# e2e harness: portable Python, downloaded NVDA, sandbox outputs
+.e2e/

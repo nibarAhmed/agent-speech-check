@@ -10,7 +10,8 @@ from __future__ import annotations
 import difflib
 from dataclasses import dataclass
 
-from agent_speech_check.errors import BadGesture, UnknownKey
+from agent_speech_check import winapi
+from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
 
 
 @dataclass(frozen=True)
@@ -160,3 +161,38 @@ def parse_gesture(text: str) -> Gesture:
 def parse_gestures(texts: list[str]) -> tuple[Gesture, ...]:
     """Parse every gesture before any is sent."""
     return tuple(parse_gesture(text) for text in texts)
+
+
+_SHIFT_BITS = ((1, "shift"), (2, "control"), (4, "alt"))
+_MAX_UTF16_UNIT = 0xFFFF
+_TYPED_SPECIALS = {"\n": "enter", "\t": "tab"}
+
+
+def text_gestures(text: str) -> tuple[Gesture, ...]:
+    """One gesture per character, from the current keyboard layout.
+
+    Every character is checked first; if any can't be typed, nothing is.
+    """
+    gestures: list[Gesture] = []
+    bad: list[str] = []
+    for char in text.replace("\r\n", "\n"):
+        special = _TYPED_SPECIALS.get(char)
+        scan = None if special else _scan(char)
+        if special is not None:
+            gestures.append(Gesture((), KEYS[special]))
+        elif scan is None:
+            bad.append(char)
+        else:
+            vk, state = scan
+            modifiers = tuple(MODIFIERS[name] for bit, name in _SHIFT_BITS if state & bit)
+            gestures.append(Gesture(modifiers, Key(char, vk, extended=False)))
+    if bad:
+        raise UntypableText(list(dict.fromkeys(bad)))
+    return tuple(gestures)
+
+
+def _scan(char: str) -> tuple[int, int] | None:
+    # VkKeyScanW takes one UTF-16 unit, so characters outside the BMP can't be typed.
+    if ord(char) > _MAX_UTF16_UNIT:
+        return None
+    return winapi.vk_key_scan(char)

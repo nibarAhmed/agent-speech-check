@@ -39,7 +39,14 @@ class Keyboard:
         settle_s: float,
         timeout_s: float,
         expect: re.Pattern[str] | None = None,
+        *,
+        settle_each: bool = True,
     ) -> Pressed:
+        """Send the gestures and collect what NVDA said.
+
+        With `settle_each` (asc press) NVDA gets a quiet period after every
+        gesture; without it (asc type) only after the last.
+        """
         if not self.target.keys:
             raise KeysRefused(self.target.name)
         if not self.relay.connected:
@@ -52,9 +59,11 @@ class Keyboard:
         try:
             start = self.speech.latest
             failures, drops = self.relay.failures, self.relay.drops
-            for gesture in gestures:
+            for index, gesture in enumerate(gestures):
                 await self._send(gesture)
-                await self.speech.wait_quiet(settle_s, max(0.0, deadline - time.monotonic()))
+                if settle_each or index == len(gestures) - 1:
+                    remaining = max(0.0, deadline - time.monotonic())
+                    await self.speech.wait_quiet(settle_s, remaining)
                 self._check(failures, drops)
             matched = True
             if expect is not None:

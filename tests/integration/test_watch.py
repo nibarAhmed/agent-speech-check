@@ -67,6 +67,22 @@ def test_watch_session(env: Env) -> None:
     assert "not recording" in gone.stderr
 
 
+# Built with chr() so linters don't flag look-alike characters in the source.
+SAMPLE = f"Caf{chr(0xE9)} {chr(0x2019)}q{chr(0x2019)} {chr(0x2026)} {chr(0x4E2D)} {chr(0x1F600)}"
+
+
+def test_any_unicode_speech_prints_as_utf8(env: Env) -> None:
+    assert run_asc("start", "--target", "w").returncode == 0
+    fake = env.fake("w")
+    try:
+        fake.say(SAMPLE)
+        waited = run_asc("wait", SAMPLE[:4], "--target", "w")
+        assert waited.returncode == 0, waited.stderr
+        assert waited.stdout == f'1 said: "{SAMPLE}"' + chr(10)
+    finally:
+        fake.close()
+
+
 def test_cert_and_key_stay_the_same(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
     folder = env.folder("w")

@@ -1,7 +1,7 @@
 import pytest
 
-from agent_speech_check.errors import BadGesture, UnknownKey
-from agent_speech_check.keys import parse_gesture, parse_gestures, parse_key
+from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
+from agent_speech_check.keys import parse_gesture, parse_gestures, parse_key, text_gestures
 
 
 def test_nvda_key_is_extended_insert() -> None:
@@ -81,3 +81,21 @@ def test_all_parsed_before_any_used() -> None:
     with pytest.raises(UnknownKey):
         parse_gestures(["Tab", "Nope"])
     assert len(parse_gestures(["Tab", "H"])) == 2
+
+
+def test_text_gestures_use_the_keyboard_layout() -> None:
+    gestures = text_gestures("aB1")
+    assert [str(g) for g in gestures] == ["a", "Shift+B", "1"]
+    assert [g.key.vk for g in gestures] == [ord("A"), ord("B"), ord("1")]
+
+
+def test_text_gestures_newline_and_tab() -> None:
+    assert [str(g) for g in text_gestures("a\tb\r\nc")] == ["a", "Tab", "b", "Enter", "c"]
+
+
+def test_untypable_characters_listed_once() -> None:
+    emoji = chr(0x1F600)
+    with pytest.raises(UntypableText) as exc:
+        text_gestures(f"a{emoji}b{emoji}")
+    assert exc.value.message.count(emoji) == 1
+    assert exc.value.hint == "nothing was sent; use asc press for special keys"

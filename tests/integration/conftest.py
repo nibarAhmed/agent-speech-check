@@ -21,7 +21,7 @@ def run_asc(*args: str, timeout: float = 60) -> subprocess.CompletedProcess[str]
     return subprocess.run(  # noqa: S603 - fixed interpreter and arguments
         [sys.executable, "-m", "agent_speech_check", *args],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
         timeout=timeout,
     )
@@ -65,6 +65,20 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     # Never leave a daemon behind, even when a test failed half way.
     for state in config.glob("*/state.json"):
         if run_asc("stop", "--target", state.parent.name).returncode != 0:
-            pid = json.loads(state.read_text(encoding="utf-8"))["pid"]
-            subprocess.run(["taskkill", "/f", "/pid", str(pid)], check=False)  # noqa: S603, S607
+            _kill_if_ours(json.loads(state.read_text(encoding="utf-8"))["pid"])
     assert os.environ["LOCALAPPDATA"] == str(tmp_path)
+
+
+def _kill_if_ours(pid: int) -> None:
+    """Kill a stuck test daemon, but only if the pid is still a Python process.
+
+    A dead daemon's pid can be reused, maybe by the user's own NVDA.
+    """
+    listing = subprocess.run(  # noqa: S603 - fixed command
+        ["tasklist", "/fi", f"PID eq {pid}", "/FO", "csv", "/nh"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.lower()
+    if listing.startswith('"python'):
+        subprocess.run(["taskkill", "/f", "/pid", str(pid)], check=False)  # noqa: S603, S607

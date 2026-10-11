@@ -1,8 +1,8 @@
 # `asc` command reference
 
-Status: M1 (watch mode). Commands not listed under "Commands" are planned for
-M2 to M4 (see `docs/planning/agent-speech-check-plan.md`). This file is updated
-with every command change.
+Status: M2 (watch and desktop mode). Sandbox and shared mode are planned for
+M3 and M4 (see `docs/planning/agent-speech-check-plan.md`). This file is
+updated with every command change.
 
 Results go to stdout and errors to stderr. An error prints `error: <message>`
 and, when there is one, `hint: <what to do>`.
@@ -37,6 +37,7 @@ mode = "watch"      # watch, desktop, sandbox or shared
 port = 6837         # relay port; watch defaults to 6837, other modes pick a free one
 keys = false        # may send keys; never true in watch mode
 launch = true       # desktop: false if NVDA is started elsewhere and connects itself
+nvda_dir = 'C:\nvda' # desktop: a portable NVDA (default: the one asc get-nvda made)
 ```
 
 Unknown keys are errors. A target that isn't listed gets the defaults for
@@ -59,8 +60,23 @@ once in NVDA: Tools, Remote Access, Connect; choose to allow this computer to
 be controlled, enter the host and key `asc start` printed, and trust the
 certificate when NVDA asks. `asc` never writes your NVDA config.
 
-In M1, desktop mode works only with `launch = false` (NVDA is started
-elsewhere and connects to the relay itself). Sandbox and shared mode exit 2.
+**Desktop mode** launches a portable NVDA (made by `asc get-nvda`, or the
+target's `nvda_dir`) with its own config folder and `nvda.ini`. That NVDA starts
+unattended, uses the silent synth, mutes its own sounds, uses the desktop
+keyboard layout, and connects to the relay by itself. It runs in a Windows job,
+so it dies with the daemon even after a crash. `asc stop` ends it.
+- It refuses with exit 4 while any `nvda.exe` runs, because starting a second
+  NVDA restarts the running one. Use watch mode next to your own NVDA.
+- Exits 3 with the hint `asc get-nvda` if there is no portable NVDA.
+- `--nvda-setting section.key=value` (repeatable) adds an `nvda.ini` setting,
+  for example `--nvda-setting speech.symbolLevel=300`. Names are letters,
+  digits and `_`, with dots for nested sections. Settings `asc` writes itself
+  (`remote`, the synth, sound volume, keyboard layout, the mode sounds) are
+  refused with exit 2, and so is a setting for an NVDA `asc` doesn't launch.
+- With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
+  connects to the relay itself.
+
+Sandbox and shared mode exit 2 for now.
 
 ### `asc stop`
 
@@ -126,7 +142,45 @@ or `(nothing said)`.
 - Two presses never interleave. The second waits for the first, within its own
   `--timeout` (default 5000 ms), and exits 1 if it can't get the keyboard.
 
-## Planned commands
+### `asc type TEXT [--settle MS] [--timeout MS]`
 
-- Keys: `asc type`, `asc keys`
-- Apps: `asc launch`
+Types `TEXT` one character at a time, mapped to keys with this computer's
+keyboard layout (`VkKeyScanW`). Newlines become Enter and tabs become Tab.
+Every character is checked first: if any can't be typed (for example emoji),
+it exits 2 listing them and sends nothing. NVDA gets one quiet period at the
+end. Prints the new speech like `press`. Watch mode refuses with exit 4.
+
+### `asc keys [SEARCH ...] [--layout desktop|laptop] [--nvda-dir DIR] [--lang L] [--braille]`
+
+Prints commands from NVDA's own Commands Quick Reference whose name, keys,
+description or section contain every `SEARCH` word, one per line:
+
+```
+NVDA+t  Report title: Reports the title of the currently active window. ...
+h  heading
+```
+
+`(no match)` when nothing matches. It needs no running `asc`.
+- The reference is `documentation\<lang>\keyCommands.html` (default `en`,
+  falling back to `en`) of the NVDA the target uses. For a desktop target that
+  is its portable NVDA. Otherwise it is your own NVDA: the running `nvda.exe`,
+  then the NVDA uninstall registry entry, then Program Files. `--nvda-dir`
+  overrides this. If none is found it exits 3 and says where it looked.
+- Rows for braille displays are left out unless `--braille` is given.
+- Single letter navigation keys (`h  heading`) work in browse mode; add Shift
+  to go back.
+
+### `asc launch CMD [--title REGEX] [--timeout MS]`
+
+Starts `CMD` and waits until NVDA says something matching `--title`, or
+anything at all if `--title` is left out, then for quiet. Prints what NVDA said.
+Default timeout 30000 ms; on timeout it exits 1 with what NVDA did say. A
+command that can't start exits 2. Works in watch and desktop mode.
+
+### `asc get-nvda [--version V] [--installer FILE]`
+
+Downloads the NVDA installer from NV Access (default version 2026.2) and makes a
+portable copy in `%LOCALAPPDATA%\agent-speech-check\nvda\portable` for
+desktop mode. `--installer` uses a local installer instead of downloading. It
+refuses with exit 4 while any `nvda.exe` runs, because the installer would
+restart it.

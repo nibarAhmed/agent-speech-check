@@ -9,8 +9,10 @@
     port = 16837        # relay port; watch mode defaults to 6837, others pick a free one
     keys = true         # may send keys; never true in watch mode
     launch = true       # desktop mode: false if NVDA is started elsewhere and connects itself
+    nvda_dir = 'C:\\nvda'  # desktop mode: a portable NVDA (default: the one asc get-nvda made)
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
+`--nvda-setting` values are added at `asc start`; they are not kept in the file.
 """
 
 from __future__ import annotations
@@ -18,18 +20,19 @@ from __future__ import annotations
 import json
 import re
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError, bad_field
+from agent_speech_check.nvda_config import Setting
 from agent_speech_check.validate import Fields
 
 MODES = ("watch", "desktop", "sandbox", "shared")
 DEFAULT_TARGET = "default"
 WATCH_PORT = 6837
 _NAME = re.compile(r"[A-Za-z0-9_-]{1,32}")
-_KEYS = ("mode", "port", "keys", "launch")
+_KEYS = ("mode", "port", "keys", "launch", "nvda_dir")
 
 
 @dataclass(frozen=True)
@@ -39,9 +42,13 @@ class Target:
     port: int  # 0: pick a free port
     keys: bool
     launch: bool
+    nvda_dir: str | None = None
+    settings: tuple[Setting, ...] = ()
 
     def to_json(self) -> str:
-        return json.dumps(asdict(self))
+        data = asdict(self)
+        data["settings"] = [f"{'.'.join(s.path)}={s.value}" for s in self.settings]
+        return json.dumps(data)
 
     @classmethod
     def from_json(cls, text: str) -> Target:
@@ -50,15 +57,24 @@ class Target:
             raw = json.loads(text)
         except ValueError as error:
             raise bad_field(UsageError, "daemon target", "JSON", str(error)) from None
-        f = Fields(raw, "daemon target", UsageError, ("name", *_KEYS))
+        where = "daemon target"
+        f = Fields(raw, where, UsageError, ("name", *_KEYS, "settings"))
+        settings = f.items("settings")
+        if not all(isinstance(s, str) for s in settings):
+            raise bad_field(UsageError, f"{where} settings", "strings", settings)
         target = Target(
             check_name(f.text("name")),
             f.choice("mode", MODES),
             f.number("port", low=0, high=65535),
             keys=f.flag("keys"),
             launch=f.flag("launch"),
+            nvda_dir=f.opt_text("nvda_dir", max_len=1000),
+            settings=tuple(Setting.parse(s) for s in settings),
         )
-        return _checked(target, "daemon target")
+        return _checked(target, where)
+
+    def with_settings(self, settings: tuple[Setting, ...]) -> Target:
+        return replace(self, settings=settings)
 
 
 def check_name(name: str) -> str:
@@ -98,10 +114,15 @@ def _from_table(name: str, raw: object, path: Path) -> Target:
     f = Fields(raw, where, UsageError, _KEYS)
     mode = f.choice("mode", MODES)
     base = defaults(name, mode)
-    port = f.number("port", low=1, high=65535) if f.has("port") else base.port
-    keys = f.flag("keys") if f.has("keys") else base.keys
-    launch = f.flag("launch") if f.has("launch") else base.launch
-    return _checked(Target(name, mode, port, keys, launch), where)
+    target = Target(
+        name,
+        mode,
+        f.number("port", low=1, high=65535) if f.has("port") else base.port,
+        f.flag("keys") if f.has("keys") else base.keys,
+        f.flag("launch") if f.has("launch") else base.launch,
+        f.opt_text("nvda_dir", max_len=1000),
+    )
+    return _checked(target, where)
 
 
 def resolve(path: Path, name: str | None, mode: str | None) -> Target:
