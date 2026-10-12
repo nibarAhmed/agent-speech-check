@@ -5,41 +5,34 @@ from __future__ import annotations
 import json
 import socket
 import ssl
-import subprocess
-import sys
 import threading
 import time
 from collections.abc import Iterator
 
 import pytest
 from tests import fake_nvda as f
-from tests.integration.conftest import Env, free_port, run_asc
+from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client
 
 from agent_speech_check import firewall, state, winapi
 from agent_speech_check.targets import SANDBOX_PORT, Target
 
 
-def _tls(port: int) -> ssl.SSLSocket:
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    return context.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=15))
-
-
 def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
-    with _tls(env.port) as sock:
+    with tls_client(env.port) as sock:
         sock.sendall(b'{"type":"protocol_version","version":2}\n')
         sock.sendall(b'{"type":"join","channel":"wrong","connection_type":"slave"}\n')
         reply = sock.recv(4096)
         assert json.loads(reply) == {"type": "error", "message": "incorrect_password"}
         assert sock.recv(4096) == b""
-    assert "nvda: not connected" in run_asc("status", "--target", "w").stdout
+    status = run_asc("status", "--target", "w").stdout
+    assert "nvda: not connected" in status
+    assert "last error: refused a join with the wrong channel key or role" in status
 
 
 def test_connection_that_never_joins_is_dropped(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
-    with _tls(env.port) as sock:
+    with tls_client(env.port) as sock:
         started = time.monotonic()
         assert sock.recv(4096) == b""
         assert 9 < time.monotonic() - started < 14
@@ -51,21 +44,7 @@ def test_second_press_waits_then_gives_up(env: Env) -> None:
     assert run_asc("start", "--target", "d").returncode == 0
     fake = env.fake("d", {"Space": f.SILENCE})
     try:
-        slow = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "agent_speech_check",
-                "press",
-                "Space",
-                "--settle",
-                "3000",
-                "--target",
-                "d",
-            ],
-            stdout=subprocess.PIPE,
-            text=True,
-        )
+        slow = start_asc("press", "Space", "--settle", "3000", "--target", "d")
         time.sleep(1.5)
         busy = run_asc("press", "Tab", "--timeout", "300", "--target", "d")
         assert busy.returncode == 1

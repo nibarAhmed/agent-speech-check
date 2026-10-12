@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import ssl
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -25,6 +26,24 @@ def run_asc(*args: str, timeout: float = 60) -> subprocess.CompletedProcess[str]
         check=False,
         timeout=timeout,
     )
+
+
+def start_asc(*args: str) -> subprocess.Popen[str]:
+    """Run asc in the background, for a command that must still be running."""
+    return subprocess.Popen(  # noqa: S603 - fixed interpreter and arguments
+        [sys.executable, "-m", "agent_speech_check", *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+    )
+
+
+def tls_client(port: int) -> ssl.SSLSocket:
+    """A TLS connection to the relay that doesn't check its cert, like a stranger's."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=15))
 
 
 def free_port() -> int:

@@ -8,7 +8,6 @@ never touched and a clean CI machine never launches one.
 from __future__ import annotations
 
 import shutil
-import subprocess
 import sys
 import time
 from collections.abc import Iterator
@@ -17,7 +16,7 @@ from pathlib import Path
 import pytest
 from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
-from tests.integration.conftest import Env, run_asc
+from tests.integration.conftest import Env, run_asc, start_asc
 
 from agent_speech_check import winapi
 
@@ -58,21 +57,7 @@ def test_type_refused_in_watch_mode() -> None:
 
 def test_launch_waits_for_the_title(nvda: FakeNvda) -> None:
     app = f'"{sys.executable}" -c "import time; time.sleep(3)"'
-    launching = subprocess.Popen(  # noqa: S603 - fixed interpreter and arguments
-        [
-            sys.executable,
-            "-m",
-            "agent_speech_check",
-            "launch",
-            app,
-            "--title",
-            "My App",
-            "--target",
-            "d",
-        ],
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    )
+    launching = start_asc("launch", app, "--title", "My App", "--target", "d")
     time.sleep(1)
     nvda.say("Loading")
     nvda.say("My App window")
