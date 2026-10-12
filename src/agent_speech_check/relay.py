@@ -20,6 +20,7 @@ import json
 import logging
 import secrets
 import ssl
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,7 @@ from cryptography.x509.oid import NameOID
 from agent_speech_check import protocol
 from agent_speech_check.errors import (
     AscError,
+    JoinRefused,
     LineTooLong,
     NoJoin,
     NvdaNotConnected,
@@ -115,29 +117,33 @@ def load_or_create(folder: Path) -> Credentials:
 
 
 class Relay:
-    """Holds at most one follower connection. The newest NVDA to join wins."""
+    """Holds at most one follower connection. The newest NVDA to join wins.
 
-    def __init__(self, target: str, credentials: Credentials, speech: SpeechLog) -> None:
+    Transport only. `on_join` runs each time NVDA joins, so the keyboard can
+    release keys that a lost connection may have left down.
+    """
+
+    def __init__(
+        self,
+        target: str,
+        credentials: Credentials,
+        speech: SpeechLog,
+        on_join: Callable[[], Awaitable[None]],
+    ) -> None:
         self.target = target
         self.credentials = credentials
         self.speech = speech
+        self.on_join = on_join
         self._ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self._ssl.load_cert_chain(credentials.cert, credentials.key)
         self._writer: asyncio.StreamWriter | None = None
-        # Keys that may still be down in NVDA. NVDA keeps keys held even across
-        # reconnects (observed), so a new follower gets their releases first.
-        # A release written just before a drop may never arrive, so every key
-        # pressed on a lost connection counts as maybe held.
-        self.maybe_held: set[Key] = set()
-        self._pressed_here: set[Key] = set()
+        # Any failed connection, for `asc status`. Cleared when NVDA joins.
         self.last_error: str | None = None
-        # Counts dropped connections, so a press or wait can tell that its
-        # NVDA was dropped for a protocol error while it ran.
-        self.failures = 0
-        self.failure: AscError | None = None
-        # Counts every lost connection, so a press can tell that NVDA went away
-        # (and maybe came back) while it ran.
-        self.drops = 0
+        # One entry per lost NVDA connection: the protocol error that ended it,
+        # or None. A command notes len(losses) when it starts and passes it to
+        # `check`. A connection that never joined can't be told apart from a
+        # stranger's, so it never lands here.
+        self.losses: list[AscError | None] = []
         self.host = HOST
         self.port = 0
 
@@ -160,6 +166,7 @@ class Relay:
         return server
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        reason: ProtocolError | None = None
         try:
             joined = await asyncio.wait_for(self._join(reader, writer), JOIN_TIMEOUT_S)
             if joined:
@@ -167,12 +174,13 @@ class Relay:
         except TimeoutError:
             self._failed(NoJoin(JOIN_TIMEOUT_S))
         except ProtocolError as error:
+            reason = error
             self._failed(error)
         except (ConnectionError, ssl.SSLError) as error:
             log.info("connection lost: %s", type(error).__name__)
         finally:
             if self._writer is writer:
-                self._lost()
+                self._lost(reason)
             writer.close()
             try:
                 async with asyncio.timeout(CLOSE_TIMEOUT_S):
@@ -184,23 +192,26 @@ class Relay:
 
     def _failed(self, error: AscError) -> None:
         self.last_error = error.message
-        self.failures += 1
-        self.failure = error
         log.warning("dropped a connection: %s", error.message)
-        self.speech.activity()
 
-    def _lost(self) -> None:
+    def _lost(self, reason: AscError | None = None) -> None:
         self._writer = None
-        self.drops += 1
-        self.maybe_held |= self._pressed_here
-        self._pressed_here.clear()
+        self.losses.append(reason)
         log.info("NVDA disconnected")
         self.speech.activity()
 
-    def raise_failure_since(self, failures: int) -> None:
-        """Raise the protocol error that dropped NVDA, if one did after `failures`."""
-        if self.failures != failures and self.failure is not None:
-            raise self.failure
+    def check(self, since: int, *, drop_fails: bool) -> None:
+        """Raise if NVDA's connection broke after `since`, a length of `losses`.
+
+        A protocol error that ended it is raised. With `drop_fails`, any lost
+        connection, or none now, raises `NvdaNotConnected`, even if NVDA came back.
+        """
+        new = self.losses[since:]
+        for reason in new:
+            if reason is not None:
+                raise reason
+        if drop_fails and (new or not self.connected):
+            raise NvdaNotConnected(self.target)
 
     async def _read(self, reader: asyncio.StreamReader) -> protocol.Message | None:
         try:
@@ -224,7 +235,7 @@ class Relay:
             if isinstance(message, protocol.Join):
                 break
         if message.channel != self.credentials.channel or message.connection_type != "slave":
-            log.warning("refused a join with the wrong key or role")
+            self._failed(JoinRefused())
             writer.write(protocol.encode_error("incorrect_password"))
             await writer.drain()
             return False
@@ -237,7 +248,7 @@ class Relay:
         self._writer = writer
         self.last_error = None
         log.info("NVDA joined")
-        await self._release_maybe_held()
+        await self.on_join()
         return True
 
     async def _follow(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -263,26 +274,17 @@ class Relay:
             case _:
                 self.speech.activity()
 
-    async def _release_maybe_held(self) -> None:
-        for key in sorted(self.maybe_held, key=lambda k: k.vk):
-            await self.send_key(key, pressed=False)
-
     async def send_key(self, key: Key, *, pressed: bool) -> None:
-        """Send one key event. Only `keyboard.Keyboard` calls this, inside its lock."""
+        """Send one key event. Only `keyboard.Keyboard` calls this; it tracks held keys."""
         writer = self._writer
         if writer is None:
             raise NvdaNotConnected(self.target)
-        if pressed:
-            self.maybe_held.add(key)
-            self._pressed_here.add(key)
         try:
             writer.write(protocol.encode_key(key.vk, extended=key.extended, pressed=pressed))
             await writer.drain()
         except ConnectionError:
             self.disconnect()
             raise NvdaNotConnected(self.target) from None
-        if not pressed:
-            self.maybe_held.discard(key)
 
     async def keepalive(self) -> None:
         while True:

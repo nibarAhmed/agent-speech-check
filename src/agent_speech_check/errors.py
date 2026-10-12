@@ -182,6 +182,16 @@ class NvdaNotConnected(NotConnected):
         )
 
 
+class NvdaGone(NotConnected):
+    def __init__(self, target: str, timeout_ms: int, last_error: str | None) -> None:
+        why = f"; last error: {last_error}" if last_error else ""
+        super().__init__(
+            f"NVDA disconnected from target {_show(target)} and did not come back "
+            f"within {timeout_ms} ms{why}",
+            hint="asc status shows how NVDA should connect",
+        )
+
+
 class DaemonStartFailed(NotConnected):
     def __init__(self, exit_code: int | None, waited_s: float, log_tail: str) -> None:
         reason = (
@@ -382,6 +392,11 @@ class MalformedLine(ProtocolError):
 class ServerSentError(ProtocolError):
     def __init__(self, text: str) -> None:
         super().__init__(f"NVDA reported an error: {_show(text)}")
+
+
+class JoinRefused(ProtocolError):
+    def __init__(self) -> None:
+        super().__init__("refused a join with the wrong channel key or role")
 
 
 class NoJoin(ProtocolError):

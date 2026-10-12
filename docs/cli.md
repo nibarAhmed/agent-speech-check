@@ -145,7 +145,9 @@ speech: 12 lines kept, latest 12, mark 10
 ```
 
 When NVDA isn't connected it prints how to connect it. `browse/focus` is
-`unknown` until NVDA first switches modes. If `asc` isn't running, it exits 3
+`unknown` until NVDA first switches modes. A `last error:` line says why the
+last failed connection was dropped (for example a wrong channel key), until
+NVDA next joins. If `asc` isn't running, it exits 3
 with `asc is not running for target "default" (not recording)`.
 
 ### `asc speech [--since N]`
@@ -167,6 +169,11 @@ Returns as soon as an utterance after the mark (or `N`) matches `REGEX` (Python
 syntax, searched; use `(?i)` to ignore case), and prints it. Default timeout
 5000 ms, at most 600000. On timeout it exits 1 and prints what NVDA did say.
 Exits 3 if NVDA isn't connected, and 5 if NVDA's connection broke the protocol.
+If NVDA disconnects meanwhile, `wait` keeps waiting, since NVDA reconnects by
+itself. If it's still gone at the timeout, `wait` exits 3 instead of 1, with the
+last connection error if there was one. A connection that never joins (not
+NVDA, as far as `asc` can tell) never fails a `wait`; it only shows in
+`asc status`.
 
 ### `asc mark`
 
@@ -228,7 +235,8 @@ h  heading
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA said.
 Default timeout 30000 ms; on timeout it exits 1 with what NVDA did say. A
-command that can't start exits 2. Works in watch, desktop and sandbox mode; in
+command that can't start exits 2. NVDA disconnecting or breaking the protocol
+meanwhile is handled as in `wait` (exit 3 or 5). Works in watch, desktop and sandbox mode; in
 sandbox mode `CMD` runs inside the sandbox, so use paths under `C:\share\`.
 
 ### `asc sandbox-setup [--target NAME]`
