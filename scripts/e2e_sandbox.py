@@ -15,8 +15,9 @@ in its user session with `wsb exec`, and waits for DONE.
 The sandbox stops Windows Audio first (silent on the host), creates the
 portable NVDA at C:\\nvda, runs the e2e tests, and shuts itself down.
 
-The sandbox window is kept minimised (see `sandbox.py`), so it never takes
-focus or catches keys typed on the host; pass --show to keep it visible.
+The sandbox window is kept hidden behind an "asc e2e sandbox" tray icon, as in
+sandbox mode (see `sandbox.py`), so it never takes focus or catches keys typed
+on the host. The icon shows and hides it; pass --show to keep it visible.
 
 Usage: uv run python scripts/e2e_sandbox.py [--show] [pytest args...]
 """
@@ -151,14 +152,15 @@ def main() -> int:
         return 3
     prepare()
     cmd = write_cmd(pytest_args)
-    with sandbox.SandboxWindow("show" if show else "taskbar") as window:
+    tooltip = "asc e2e sandbox: show or hide"
+    with sandbox.SandboxWindow("show" if show else "tray", tooltip) as window:
         return run_tests(window, cmd, show=show)
 
 
 def run_tests(window: sandbox.SandboxWindow, cmd: Path, *, show: bool) -> int:
     config = sandbox.config_xml(mapped(), networking=False)
     sandbox_id = sandbox.start_connected(config, window, WORK / "guard.err")
-    print(f"sandbox {sandbox_id} started{'' if show else ', minimised'}")
+    print(f"sandbox {sandbox_id} started{'' if show else ', in the tray'}")
     runner = subprocess.Popen(
         [
             "wsb",

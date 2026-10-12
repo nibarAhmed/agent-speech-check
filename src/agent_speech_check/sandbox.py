@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -35,6 +36,8 @@ from xml.sax.saxutils import escape
 from agent_speech_check import powershell, spawn, winapi
 from agent_speech_check.errors import NotConnected, SandboxFailed, SandboxNeedsPro, WsbMissing
 from agent_speech_check.validate import Fields
+
+log = logging.getLogger(__name__)
 
 WINDOW_TITLE = "Windows Sandbox"
 VM_IMAGE = "vmmemWindowsSandbox"
@@ -328,8 +331,10 @@ class SandboxWindow:
     runs on its own thread every KEEP_WINDOW_EVERY_S in between. `toggle` may
     run on the tray icon's thread."""
 
-    def __init__(self, window: str) -> None:
+    def __init__(self, window: str, tooltip: str = "asc sandbox: show or hide") -> None:
         self.window = window
+        self._tooltip = tooltip
+        self._icon: winapi.TrayIcon | None = None
         self.shown = False
         self._hidden: list[int] = []
         self._client_pids: set[int] = set()
@@ -340,13 +345,26 @@ class SandboxWindow:
         self._thread = threading.Thread(target=self._keep_loop, name="sandbox-window", daemon=True)
 
     def start(self) -> None:
+        """Add the tray icon (for "tray"; this waits up to 5 s), then start keeping."""
+        if self.window == "tray":
+            icon = winapi.TrayIcon(self._tooltip, self.toggle)
+            if icon.start():
+                self._icon = icon
+            else:
+                # A hidden window with no icon could never be shown again.
+                log.warning("no tray icon, so the sandbox window is minimised instead")
+                icon.stop()
+                self.window = "taskbar"
         self._thread.start()
 
     def stop(self) -> None:
-        """Stop keeping. Safe to call more than once, or before `start`."""
+        """Stop keeping and remove the icon. Safe to call more than once, or before `start`."""
         self._done.set()
         if self._thread.is_alive():
             self._thread.join(5)
+        if self._icon is not None:
+            self._icon.stop()
+            self._icon = None
 
     def __enter__(self) -> SandboxWindow:
         self.start()

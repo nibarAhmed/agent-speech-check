@@ -89,7 +89,7 @@ def test_sandbox_goes_when_its_daemon_is_killed(
     root = _with_installer(tmp_path, monkeypatch)
     (root / "targets.toml").write_text("[targets.k]\nmode = 'sandbox'\n", encoding="utf-8")
 
-    started = run_asc("start", "--target", "k", "--window", "taskbar", timeout=420)
+    started = run_asc("start", "--target", "k", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
     daemon_pid = state.read(root / "k", "k").pid
     try:
@@ -119,7 +119,7 @@ def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
         networking=False,
     )
     portable = out / "portable"
-    with sandbox.SandboxWindow("taskbar") as window:
+    with sandbox.SandboxWindow("tray", "asc e2e sandbox: show or hide") as window:
         _make_portable(config, window, installer, portable)
     assert sandbox.wait_gone(120)
     return portable
@@ -172,16 +172,12 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
         "own",
         "--nvda-dir",
         str(portable),
-        "--window",
-        "taskbar",
         timeout=420,
     )
     assert started.returncode == 0, started.stdout + started.stderr
     assert "nvda: connected" in started.stdout
     try:
-        windows = winapi.windows_titled(sandbox.WINDOW_TITLE)
-        assert windows
-        assert all(winapi.is_minimized(hwnd) for hwnd in windows)
+        assert winapi.windows_titled(sandbox.WINDOW_TITLE) == []
         config = root / "own" / "sandbox" / "config"
         assert (config / "asc-marker.txt").is_file()
         # NVDA has rewritten the file by now, in its own layout.
