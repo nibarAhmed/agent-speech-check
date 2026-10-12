@@ -175,19 +175,13 @@ class NotRunning(NotConnected):
 
 
 class NvdaNotConnected(NotConnected):
-    def __init__(self, target: str) -> None:
-        super().__init__(
-            f"NVDA is not connected to target {_show(target)}",
-            hint="asc status shows how NVDA should connect",
-        )
-
-
-class NvdaGone(NotConnected):
-    def __init__(self, target: str, timeout_ms: int, last_error: str | None) -> None:
+    def __init__(
+        self, target: str, waited_ms: int | None = None, last_error: str | None = None
+    ) -> None:
+        waited = "" if waited_ms is None else f" after waiting {waited_ms} ms"
         why = f"; last error: {last_error}" if last_error else ""
         super().__init__(
-            f"NVDA was not connected to target {_show(target)} when the {timeout_ms} ms "
-            f"wait ended{why}",
+            f"NVDA is not connected to target {_show(target)}{waited}{why}",
             hint="asc status shows how NVDA should connect",
         )
 
@@ -364,9 +358,9 @@ class NvdaAlreadyRunning(Refused):
 
 
 class KeysBusy(ExpectationFailed):
-    def __init__(self, timeout_ms: int, by: str = "another asc command") -> None:
+    def __init__(self, timeout_ms: int) -> None:
         super().__init__(
-            f"{by} kept the keyboard for the whole {timeout_ms} ms timeout",
+            f"another asc command kept the keyboard for the whole {timeout_ms} ms timeout",
             hint="retry, or raise --timeout",
         )
 

@@ -4,20 +4,20 @@
 holds one lock across each gesture and its settle period so two `asc press`
 calls never interleave, and always releases every key it pressed.
 
-NVDA keeps keys held even across reconnects (observed), so a key pressed on a
-lost connection is released when NVDA joins again. Releases don't take the
-lock, which a press holds through its settle period: a gesture never carries
-on into a new connection, and a new press waits until the releases on a join
-are done, so a release can't land in the middle of a gesture.
+NVDA keeps keys held even across reconnects (observed), so every key pressed
+since NVDA last joined is released again when it next joins. Releases only
+queue a write and never await, so they need no lock: nothing else can run
+between two of them, and a gesture never carries on into a new connection.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from agent_speech_check.errors import KeysBusy, KeysRefused, NvdaNotConnected
@@ -40,14 +40,10 @@ class Keyboard:
         self.speech = speech
         self._lock = asyncio.Lock()
         self._closed = False
-        # Keys that may still be down in NVDA.
-        self._maybe_held: set[Key] = set()
-        # Keys pressed on the current connection. A release written just before
-        # a drop may never arrive, so on the next join they all count as maybe held.
-        self._pressed_here: set[Key] = set()
-        # Clear while `joined` releases keys; presses wait for it.
-        self._released = asyncio.Event()
-        self._released.set()
+        # Keys pressed since NVDA last joined. A release written just before a
+        # drop may never arrive, so all of them are released on the next join.
+        self._pressed: set[Key] = set()
+        relay.on_join = self.joined
 
     async def press(
         self,
@@ -73,17 +69,9 @@ class Keyboard:
         except TimeoutError:
             raise KeysBusy(int(timeout_s * 1000)) from None
         try:
-            try:
-                await asyncio.wait_for(self._released.wait(), deadline - time.monotonic())
-            except TimeoutError:
-                by = "releasing keys after NVDA reconnected"
-                raise KeysBusy(int(timeout_s * 1000), by) from None
             start = self.speech.latest
-            since = len(self.relay.losses)
-
-            def check() -> None:
-                # Fail if NVDA was dropped while this press ran, even if it came back.
-                self.relay.check(since, drop_fails=True)
+            # Fail if NVDA was dropped while this press ran, even if it came back.
+            check = functools.partial(self.relay.check, len(self.relay.losses), drop_fails=True)
 
             for index, gesture in enumerate(gestures):
                 await self._send(gesture, check)
@@ -102,42 +90,32 @@ class Keyboard:
 
     async def _send(self, gesture: Gesture, check: Callable[[], None]) -> None:
         """Key-downs in order, then releases in reverse, released even on failure."""
+        down: list[Key] = []
         try:
             for key in gesture.strokes:
                 if self._closed:
                     # Shutting down: release_all already ran, so press nothing new.
                     raise NvdaNotConnected(self.target.name)
                 check()
-                self._maybe_held.add(key)
-                self._pressed_here.add(key)
+                self._pressed.add(key)
+                down.append(key)
                 await self.relay.send_key(key, pressed=True)
         finally:
-            for key in reversed(gesture.strokes):
-                if key in self._maybe_held:
-                    # NVDA gone: the key stays maybe held and is released on rejoin.
-                    with contextlib.suppress(NvdaNotConnected):
-                        await self._release(key)
+            self._release(reversed(down))
             self.speech.activity()
 
-    async def _release(self, key: Key) -> None:
-        await self.relay.send_key(key, pressed=False)
-        self._maybe_held.discard(key)
+    def _release(self, keys: Iterable[Key]) -> None:
+        for key in keys:
+            # NVDA gone: the key stays in `_pressed` and is released on rejoin.
+            with contextlib.suppress(NvdaNotConnected):
+                self.relay.write_key(key, pressed=False)
 
-    async def joined(self) -> None:
+    def joined(self) -> None:
         """NVDA joined: release every key a lost connection may have left down."""
-        self._maybe_held |= self._pressed_here
-        self._pressed_here.clear()
-        self._released.clear()
-        try:
-            for key in sorted(self._maybe_held, key=lambda k: k.vk):
-                with contextlib.suppress(NvdaNotConnected):
-                    await self._release(key)
-        finally:
-            self._released.set()
+        self._release(sorted(self._pressed, key=lambda k: k.vk))
+        self._pressed.clear()
 
-    async def release_all(self) -> None:
+    def release_all(self) -> None:
         """Release anything that may still be held, and press nothing after. Used at shutdown."""
         self._closed = True
-        for key in list(self._maybe_held):
-            with contextlib.suppress(NvdaNotConnected):
-                await self._release(key)
+        self._release(self._pressed)

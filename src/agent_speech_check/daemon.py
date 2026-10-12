@@ -28,7 +28,6 @@ from agent_speech_check.errors import (
     AscError,
     LaunchFailed,
     NoMatch,
-    NvdaGone,
     NvdaNotConnected,
     PanicKeyTaken,
     SharedNeedsConsent,
@@ -87,14 +86,16 @@ def start_app(command: str) -> None:
         raise LaunchFailed(command, error.strerror or str(error)) from None
 
 
+def _said(entries: tuple[Entry, ...]) -> list[str]:
+    return [e.text for e in entries if e.kind == "said"]
+
+
 class Daemon:
     def __init__(self, target: Target, folder: Path) -> None:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        self.relay = Relay(
-            target.name, relay.load_or_create(folder), self.speech, self._nvda_joined
-        )
+        self.relay = Relay(target.name, relay.load_or_create(folder), self.speech)
         self.keyboard = Keyboard(target, self.relay, self.speech)
         self.stopping = asyncio.Event()
         self.nvda: nvda.Running | None = None
@@ -111,9 +112,6 @@ class Daemon:
             "type": self._type,
             "launch": self._launch,
         }
-
-    async def _nvda_joined(self) -> None:
-        await self.keyboard.joined()
 
     async def handle(self, request: ipc.Request) -> dict[str, Any]:
         return await self.handlers[request.cmd](request.args)
@@ -160,29 +158,28 @@ class Daemon:
         if not self.relay.connected:
             raise NvdaNotConnected(self.target.name)
         after = self.speech.mark if args.since is None else args.since
-        since = len(self.relay.losses)
-        entry = await self._wait_match(args.regex, after, args.timeout_ms, since)
+        losses_before = len(self.relay.losses)
+        entry = await self._wait_match(args.regex, after, args.timeout_ms, losses_before)
         if entry is None:
-            raise self._no_match(args.pattern, args.timeout_ms, self.speech.since(after).entries)
+            raise self._no_match(args.pattern, args.timeout_ms, after)
         return {"line": [entry.n, entry.line()]}
 
     async def _wait_match(
-        self, pattern: re.Pattern[str], after: int, timeout_ms: int, since: int
+        self, pattern: re.Pattern[str], after: int, timeout_ms: int, losses_before: int
     ) -> Entry | None:
         """Like `SpeechLog.wait_match`, but fails on a protocol error from NVDA
-        since `since` (a count of `relay.losses`, taken when the command began).
+        after `losses_before` (`len(relay.losses)` when the command began).
 
         A plain drop doesn't fail it: NVDA reconnects by itself about 5 s later.
         """
-        return await self.speech.wait_match(
-            pattern, after, timeout_ms / 1000, lambda: self.relay.check(since, drop_fails=False)
-        )
+        check = functools.partial(self.relay.check, losses_before, drop_fails=False)
+        return await self.speech.wait_match(pattern, after, timeout_ms / 1000, check)
 
-    def _no_match(self, pattern: str, timeout_ms: int, entries: tuple[Entry, ...]) -> AscError:
+    def _no_match(self, pattern: str, timeout_ms: int, after: int) -> AscError:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
-            return NvdaGone(self.target.name, timeout_ms, self.relay.last_error)
-        return NoMatch(pattern, timeout_ms, [e.text for e in entries if e.kind == "said"])
+            return NvdaNotConnected(self.target.name, timeout_ms, self.relay.last_error)
+        return NoMatch(pattern, timeout_ms, _said(self.speech.since(after).entries))
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:
         pressed = await self.keyboard.press(
@@ -190,8 +187,7 @@ class Daemon:
         )
         if not pressed.matched:
             # A drop fails a press before this, so NVDA is still connected here.
-            said = [e.text for e in pressed.entries if e.kind == "said"]
-            raise NoMatch(args.expect or "", args.timeout_ms, said)
+            raise NoMatch(args.expect or "", args.timeout_ms, _said(pressed.entries))
         return {"lines": [e.line() for e in pressed.entries]}
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
@@ -205,7 +201,7 @@ class Daemon:
             raise NvdaNotConnected(self.target.name)
         start = self.speech.latest
         # Before the launch, which can take seconds in a sandbox.
-        since = len(self.relay.losses)
+        losses_before = len(self.relay.losses)
         if self.sandbox is not None:
             await self.sandbox.launch(args.command)
         else:
@@ -217,11 +213,9 @@ class Daemon:
         if title is None:
             # No title given: wait for the first speech, then for quiet.
             title = re.compile(".")
-        found = await self._wait_match(title, start, args.timeout_ms, since)
+        found = await self._wait_match(title, start, args.timeout_ms, losses_before)
         if found is None:
-            raise self._no_match(
-                args.title or ".", args.timeout_ms, self.speech.since(start).entries
-            )
+            raise self._no_match(args.title or ".", args.timeout_ms, start)
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
         return {"lines": [e.line() for e in self.speech.since(start).entries]}
@@ -285,7 +279,7 @@ class Daemon:
                 await self.stopping.wait()
                 keepalive.cancel()
         finally:
-            await self.keyboard.release_all()
+            self.keyboard.release_all()
             # Before NVDA goes, so it can still answer the close.
             self.relay.disconnect()
             if self.nvda is not None:

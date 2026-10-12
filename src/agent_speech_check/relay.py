@@ -20,7 +20,7 @@ import json
 import logging
 import secrets
 import ssl
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -119,31 +119,26 @@ def load_or_create(folder: Path) -> Credentials:
 class Relay:
     """Holds at most one follower connection. The newest NVDA to join wins.
 
-    Transport only. `on_join` runs each time NVDA joins, so the keyboard can
-    release keys that a lost connection may have left down.
+    Transport only. `on_join` runs each time NVDA joins, before anything else
+    can be sent, so the keyboard can release keys that a lost connection may
+    have left down. It must not await, or a press could get in first.
     """
 
-    def __init__(
-        self,
-        target: str,
-        credentials: Credentials,
-        speech: SpeechLog,
-        on_join: Callable[[], Awaitable[None]],
-    ) -> None:
+    def __init__(self, target: str, credentials: Credentials, speech: SpeechLog) -> None:
         self.target = target
         self.credentials = credentials
         self.speech = speech
-        self.on_join = on_join
+        self.on_join: Callable[[], None] = lambda: None
         self._ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         self._ssl.load_cert_chain(credentials.cert, credentials.key)
         self._writer: asyncio.StreamWriter | None = None
         # Any failed connection, for `asc status`. Cleared when NVDA joins.
         self.last_error: str | None = None
-        # One entry per lost NVDA connection: the protocol error that ended it,
-        # or None. A command notes len(losses) when it starts and passes it to
-        # `check`. A connection that never joined can't be told apart from a
-        # stranger's, so it never lands here.
-        self.losses: list[AscError | None] = []
+        # One entry per lost NVDA connection: the message of the protocol error
+        # that ended it, or None. A command notes len(losses) when it starts and
+        # passes it to `check`. A connection that never joined can't be told
+        # apart from a stranger's, so it never lands here.
+        self.losses: list[str | None] = []
         self.host = HOST
         self.port = 0
 
@@ -170,8 +165,6 @@ class Relay:
         try:
             joined = await asyncio.wait_for(self._join(reader, writer), JOIN_TIMEOUT_S)
             if joined:
-                # Outside the join timeout: slow releases are not a missing join.
-                await self.on_join()
                 await self._follow(reader, writer)
         except TimeoutError:
             self._failed(NoJoin(JOIN_TIMEOUT_S))
@@ -198,7 +191,7 @@ class Relay:
 
     def _lost(self, reason: AscError | None = None) -> None:
         self._writer = None
-        self.losses.append(reason)
+        self.losses.append(None if reason is None else reason.message)
         log.info("NVDA disconnected")
         self.speech.activity()
 
@@ -211,7 +204,7 @@ class Relay:
         new = self.losses[since:]
         for reason in new:
             if reason is not None:
-                raise reason
+                raise ProtocolError(reason)
         if drop_fails and (new or not self.connected):
             raise NvdaNotConnected(self.target)
 
@@ -250,6 +243,7 @@ class Relay:
         self._writer = writer
         self.last_error = None
         log.info("NVDA joined")
+        self.on_join()
         return True
 
     async def _follow(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -275,13 +269,18 @@ class Relay:
             case _:
                 self.speech.activity()
 
-    async def send_key(self, key: Key, *, pressed: bool) -> None:
-        """Send one key event. Only `keyboard.Keyboard` calls this; it tracks held keys."""
+    def write_key(self, key: Key, *, pressed: bool) -> asyncio.StreamWriter:
+        """Queue one key event without waiting. Only `keyboard.Keyboard` sends keys."""
         writer = self._writer
         if writer is None:
             raise NvdaNotConnected(self.target)
+        writer.write(protocol.encode_key(key.vk, extended=key.extended, pressed=pressed))
+        return writer
+
+    async def send_key(self, key: Key, *, pressed: bool) -> None:
+        """Send one key event and wait until it is written."""
+        writer = self.write_key(key, pressed=pressed)
         try:
-            writer.write(protocol.encode_key(key.vk, extended=key.extended, pressed=pressed))
             await writer.drain()
         except ConnectionError:
             self.disconnect()
