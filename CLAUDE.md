@@ -25,7 +25,8 @@ evidence, is in `docs/protocol.md`.
 
 ## Code
 
-- Runtime stays stdlib-only. Any new dependency needs a stated reason.
+- Runtime is the stdlib plus `cryptography` (the stdlib can't create the relay cert). Any other
+  dependency needs a stated reason.
 - No `print` outside `cli.py`.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - The rule that watch mode refuses keys lives in the daemon.
@@ -35,7 +36,8 @@ evidence, is in `docs/protocol.md`.
 - Catch broad exceptions only in `cli.main` and the daemon's request handler.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.
-- Key sending goes through the one locked function that guarantees release.
+- Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
+  release; `Keyboard` alone tracks which keys may be held.
 
 ## Writing
 
