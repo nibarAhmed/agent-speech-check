@@ -160,19 +160,20 @@ class Daemon:
         if not self.relay.connected:
             raise NvdaNotConnected(self.target.name)
         after = self.speech.mark if args.since is None else args.since
-        entry = await self._wait_match(args.regex, after, args.timeout_ms)
+        since = len(self.relay.losses)
+        entry = await self._wait_match(args.regex, after, args.timeout_ms, since)
         if entry is None:
             raise self._no_match(args.pattern, args.timeout_ms, self.speech.since(after).entries)
         return {"line": [entry.n, entry.line()]}
 
     async def _wait_match(
-        self, pattern: re.Pattern[str], after: int, timeout_ms: int
+        self, pattern: re.Pattern[str], after: int, timeout_ms: int, since: int
     ) -> Entry | None:
-        """Like `SpeechLog.wait_match`, but fails on a protocol error from NVDA.
+        """Like `SpeechLog.wait_match`, but fails on a protocol error from NVDA
+        since `since` (a count of `relay.losses`, taken when the command began).
 
         A plain drop doesn't fail it: NVDA reconnects by itself about 5 s later.
         """
-        since = len(self.relay.losses)
         return await self.speech.wait_match(
             pattern, after, timeout_ms / 1000, lambda: self.relay.check(since, drop_fails=False)
         )
@@ -188,7 +189,9 @@ class Daemon:
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, args.regex
         )
         if not pressed.matched:
-            raise self._no_match(args.expect or "", args.timeout_ms, pressed.entries)
+            # A drop fails a press before this, so NVDA is still connected here.
+            said = [e.text for e in pressed.entries if e.kind == "said"]
+            raise NoMatch(args.expect or "", args.timeout_ms, said)
         return {"lines": [e.line() for e in pressed.entries]}
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
@@ -201,6 +204,8 @@ class Daemon:
         if not self.relay.connected:
             raise NvdaNotConnected(self.target.name)
         start = self.speech.latest
+        # Before the launch, which can take seconds in a sandbox.
+        since = len(self.relay.losses)
         if self.sandbox is not None:
             await self.sandbox.launch(args.command)
         else:
@@ -212,7 +217,7 @@ class Daemon:
         if title is None:
             # No title given: wait for the first speech, then for quiet.
             title = re.compile(".")
-        found = await self._wait_match(title, start, args.timeout_ms)
+        found = await self._wait_match(title, start, args.timeout_ms, since)
         if found is None:
             raise self._no_match(
                 args.title or ".", args.timeout_ms, self.speech.since(start).entries

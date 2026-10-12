@@ -75,7 +75,7 @@ def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(nvda: FakeNvda) -> No
     nvda.close()
     _, err = waiting.communicate(timeout=30)
     assert waiting.returncode == 3, err
-    assert 'NVDA disconnected from target "d" and did not come back within 3000 ms' in err
+    assert 'NVDA was not connected to target "d" when the 3000 ms wait ended' in err
 
 
 def test_wrong_channel_key_shows_in_status(env: Env) -> None:

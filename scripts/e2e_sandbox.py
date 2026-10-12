@@ -154,13 +154,15 @@ def main() -> int:
     cmd = write_cmd(pytest_args)
     tooltip = "asc e2e sandbox: show or hide"
     with sandbox.SandboxWindow("show" if show else "tray", tooltip) as window:
-        return run_tests(window, cmd, show=show)
+        return run_tests(window, cmd)
 
 
-def run_tests(window: sandbox.SandboxWindow, cmd: Path, *, show: bool) -> int:
+def run_tests(window: sandbox.SandboxWindow, cmd: Path) -> int:
     config = sandbox.config_xml(mapped(), networking=False)
     sandbox_id = sandbox.start_connected(config, window, WORK / "guard.err")
-    print(f"sandbox {sandbox_id} started{'' if show else ', in the tray'}")
+    # `window.window` is "taskbar" if the tray icon could not be added.
+    where = {"tray": ", in the tray", "taskbar": ", minimised"}.get(window.window, "")
+    print(f"sandbox {sandbox_id} started{where}")
     runner = subprocess.Popen(
         [
             "wsb",

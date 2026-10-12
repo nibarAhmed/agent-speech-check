@@ -186,8 +186,8 @@ class NvdaGone(NotConnected):
     def __init__(self, target: str, timeout_ms: int, last_error: str | None) -> None:
         why = f"; last error: {last_error}" if last_error else ""
         super().__init__(
-            f"NVDA disconnected from target {_show(target)} and did not come back "
-            f"within {timeout_ms} ms{why}",
+            f"NVDA was not connected to target {_show(target)} when the {timeout_ms} ms "
+            f"wait ended{why}",
             hint="asc status shows how NVDA should connect",
         )
 
