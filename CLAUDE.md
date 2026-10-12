@@ -29,7 +29,9 @@ evidence, is in `docs/protocol.md`.
 - No `print` outside `cli.py`.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - The rule that watch mode refuses keys lives in the daemon.
-- Raise only `AscError` subclasses from `errors.py`. Exit codes are decided there and nowhere else.
+- Raise only `AscError` subclasses from `errors.py` for expected failures (bad input, daemon down, NVDA
+  unreachable). Exit codes are decided there and nowhere else. Don't wrap bugs or broken invariants:
+  let them crash, and `cli.main` reports them as exit 6.
 - Catch broad exceptions only in `cli.main` and the daemon's request handler.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.
