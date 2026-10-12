@@ -170,6 +170,8 @@ class Relay:
         try:
             joined = await asyncio.wait_for(self._join(reader, writer), JOIN_TIMEOUT_S)
             if joined:
+                # Outside the join timeout: slow releases are not a missing join.
+                await self.on_join()
                 await self._follow(reader, writer)
         except TimeoutError:
             self._failed(NoJoin(JOIN_TIMEOUT_S))
@@ -248,7 +250,6 @@ class Relay:
         self._writer = writer
         self.last_error = None
         log.info("NVDA joined")
-        await self.on_join()
         return True
 
     async def _follow(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

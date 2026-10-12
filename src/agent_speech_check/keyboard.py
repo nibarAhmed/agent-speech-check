@@ -5,9 +5,10 @@ holds one lock across each gesture and its settle period so two `asc press`
 calls never interleave, and always releases every key it pressed.
 
 NVDA keeps keys held even across reconnects (observed), so a key pressed on a
-lost connection is released when NVDA joins again. Releases never need the
-lock: a gesture never carries on into a new connection, so a release can't
-land in the middle of one.
+lost connection is released when NVDA joins again. Releases don't take the
+lock, which a press holds through its settle period: a gesture never carries
+on into a new connection, and a new press waits until the releases on a join
+are done, so a release can't land in the middle of a gesture.
 """
 
 from __future__ import annotations
@@ -44,6 +45,9 @@ class Keyboard:
         # Keys pressed on the current connection. A release written just before
         # a drop may never arrive, so on the next join they all count as maybe held.
         self._pressed_here: set[Key] = set()
+        # Clear while `joined` releases keys; presses wait for it.
+        self._released = asyncio.Event()
+        self._released.set()
 
     async def press(
         self,
@@ -69,6 +73,11 @@ class Keyboard:
         except TimeoutError:
             raise KeysBusy(int(timeout_s * 1000)) from None
         try:
+            try:
+                await asyncio.wait_for(self._released.wait(), deadline - time.monotonic())
+            except TimeoutError:
+                by = "releasing keys after NVDA reconnected"
+                raise KeysBusy(int(timeout_s * 1000), by) from None
             start = self.speech.latest
             since = len(self.relay.losses)
 
@@ -118,9 +127,13 @@ class Keyboard:
         """NVDA joined: release every key a lost connection may have left down."""
         self._maybe_held |= self._pressed_here
         self._pressed_here.clear()
-        for key in sorted(self._maybe_held, key=lambda k: k.vk):
-            with contextlib.suppress(NvdaNotConnected):
-                await self._release(key)
+        self._released.clear()
+        try:
+            for key in sorted(self._maybe_held, key=lambda k: k.vk):
+                with contextlib.suppress(NvdaNotConnected):
+                    await self._release(key)
+        finally:
+            self._released.set()
 
     async def release_all(self) -> None:
         """Release anything that may still be held, and press nothing after. Used at shutdown."""

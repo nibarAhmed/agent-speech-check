@@ -200,6 +200,7 @@ or `(nothing said)`.
   during the press, and 5 if NVDA broke the protocol.
 - Two presses never interleave. The second waits for the first, within its own
   `--timeout` (default 5000 ms), and exits 1 if it can't get the keyboard.
+  A press also waits while `asc` releases keys after NVDA reconnects.
 
 ### `asc type TEXT [--settle MS] [--timeout MS]`
 

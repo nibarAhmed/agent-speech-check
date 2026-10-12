@@ -364,9 +364,9 @@ class NvdaAlreadyRunning(Refused):
 
 
 class KeysBusy(ExpectationFailed):
-    def __init__(self, timeout_ms: int) -> None:
+    def __init__(self, timeout_ms: int, by: str = "another asc command") -> None:
         super().__init__(
-            f"another asc command kept the keyboard for the whole {timeout_ms} ms timeout",
+            f"{by} kept the keyboard for the whole {timeout_ms} ms timeout",
             hint="retry, or raise --timeout",
         )
 
