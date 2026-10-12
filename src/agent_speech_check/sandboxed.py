@@ -17,7 +17,7 @@ from pathlib import Path
 
 from agent_speech_check import nvda, nvda_config, sandbox, winapi
 from agent_speech_check.errors import AscError, LaunchFailed, SandboxFailed
-from agent_speech_check.nvda_config import Relay
+from agent_speech_check.nvda_config import RelayAddress
 from agent_speech_check.targets import Target
 
 log = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ GUARD_ERR = "sandbox_guard.err"
 
 
 class SandboxSession:
-    def __init__(self, folder: Path, target: Target, relay: Relay) -> None:
+    def __init__(self, folder: Path, target: Target, relay: RelayAddress) -> None:
         self.folder = folder / "sandbox"
         self.shares = target.share
         self.relay = relay

@@ -221,9 +221,9 @@ class Daemon:
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
         return {"lines": [e.line() for e in self.speech.since(start).entries]}
 
-    def _relay_info(self) -> nvda_config.Relay:
+    def _relay_info(self) -> nvda_config.RelayAddress:
         credentials = self.relay.credentials
-        return nvda_config.Relay(
+        return nvda_config.RelayAddress(
             self.relay.host, self.relay.port, credentials.channel, credentials.fingerprint
         )
 

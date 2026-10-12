@@ -24,7 +24,7 @@ from agent_speech_check.errors import (
     NvdaTooOld,
     PortableFailed,
 )
-from agent_speech_check.nvda_config import Relay, Setting
+from agent_speech_check.nvda_config import RelayAddress, Setting
 from agent_speech_check.paths import state_root
 
 log = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ class Running:
 def launch(
     folder: Path,
     config_dir: Path,
-    relay: Relay,
+    relay: RelayAddress,
     settings: tuple[Setting, ...],
 ) -> Running:
     """Start the portable NVDA with a copy of its own config that connects to the relay."""

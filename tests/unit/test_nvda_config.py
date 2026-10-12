@@ -5,7 +5,7 @@ import pytest
 from agent_speech_check.errors import BadSetting, UserConfigUnreadable
 from agent_speech_check.nvda_config import (
     Raw,
-    Relay,
+    RelayAddress,
     Setting,
     check,
     parse_ini,
@@ -17,7 +17,7 @@ from agent_speech_check.nvda_config import (
 
 
 def test_base_config_matches_protocol_doc() -> None:
-    ini = render(Relay("127.0.0.1", 16837, "k1", "ab" * 32))
+    ini = render(RelayAddress("127.0.0.1", 16837, "k1", "ab" * 32))
     lines = ini.splitlines()
     for expected in [
         "[general]",
@@ -50,7 +50,7 @@ def test_user_settings_are_added_and_quoted() -> None:
         Setting.parse("speech.symbolLevel=300"),
         Setting.parse('documentFormatting.note=a, b # "c"'),
     )
-    lines = render(Relay("127.0.0.1", 1, "k", "f"), settings).splitlines()
+    lines = render(RelayAddress("127.0.0.1", 1, "k", "f"), settings).splitlines()
     assert "[[espeak]]" in lines
     assert "rate = 50" in lines
     assert "[presentation]" in lines
@@ -85,11 +85,11 @@ def test_bad_settings(text: str, reason: str) -> None:
 
 def test_key_used_as_section() -> None:
     with pytest.raises(BadSetting, match="synth is a key, not a section"):
-        render(Relay("127.0.0.1", 1, "k", "f"), (Setting(("speech", "synth", "x"), "1"),))
+        render(RelayAddress("127.0.0.1", 1, "k", "f"), (Setting(("speech", "synth", "x"), "1"),))
 
 
 def test_sandbox_relay_address_and_pinned_key() -> None:
-    lines = render(Relay("172.24.80.1", 16837, "k", "f")).splitlines()
+    lines = render(RelayAddress("172.24.80.1", 16837, "k", "f")).splitlines()
     assert "host = 172.24.80.1:16837" in lines
     assert '"172.24.80.1:16837" = f' in lines
 
@@ -151,7 +151,7 @@ def test_parse_ini_refuses_what_it_cannot_read(text: str, line: int) -> None:
 
 def test_user_config_merge() -> None:
     settings = (Setting.parse("speech.symbolLevel=100"),)
-    relay = Relay("127.0.0.1", 16837, "k1", "ab" * 32)
+    relay = RelayAddress("127.0.0.1", 16837, "k1", "ab" * 32)
     ini = render(relay, settings, parse_ini(USER_INI, "nvda.ini"))
     lines = ini.splitlines()
     # Kept from the user's config.
@@ -175,7 +175,7 @@ def test_user_config_merge() -> None:
 
 
 def test_user_key_where_asc_needs_a_section() -> None:
-    lines = render(Relay("h", 1, "k", "f"), (), {"remote": Raw("x"), "speech": Raw("y")})
+    lines = render(RelayAddress("h", 1, "k", "f"), (), {"remote": Raw("x"), "speech": Raw("y")})
     assert "[speech]" in lines.splitlines()
     assert "synth = silence" in lines.splitlines()
 
@@ -199,7 +199,7 @@ def test_write_copies_the_user_config(tmp_path: Path) -> None:
     (source / "nvda.ini").write_text("\ufeff[speech]\nrate = 40\n", encoding="utf-8")
     config = tmp_path / "config"
     (config / "old").mkdir(parents=True)
-    write(config, Relay("h", 1, "k", "f"), (), source)
+    write(config, RelayAddress("h", 1, "k", "f"), (), source)
     assert (config / "addons" / "a" / "manifest.ini").is_file()
     assert (config / "profiles" / "p.ini").is_file()
     assert not (config / "profileTriggers.ini").exists()
@@ -211,7 +211,7 @@ def test_write_copies_the_user_config(tmp_path: Path) -> None:
 
 
 def test_write_without_a_user_config(tmp_path: Path) -> None:
-    relay = Relay("h", 1, "k", "f")
+    relay = RelayAddress("h", 1, "k", "f")
     for source in (None, tmp_path / "missing", tmp_path / "empty"):
         (tmp_path / "empty").mkdir(exist_ok=True)
         config = tmp_path / "config"

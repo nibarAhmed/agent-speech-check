@@ -29,7 +29,7 @@ from agent_speech_check.errors import (
     SandboxNeedsPro,
     WsbMissing,
 )
-from agent_speech_check.nvda_config import Relay, Setting
+from agent_speech_check.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandboxed import SandboxSession
 from agent_speech_check.targets import defaults
 
@@ -103,7 +103,7 @@ def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
     with pytest.raises(NvdaAlreadyRunning):
         nvda.create_portable(tmp_path / "installer.exe", tmp_path / "portable")
     with pytest.raises(NvdaAlreadyRunning):
-        nvda.launch(tmp_path, tmp_path / "cfg", Relay("127.0.0.1", 1, "k", "f"), ())
+        nvda.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
 
 
 def test_firewall_reads_are_harmless() -> None:
@@ -135,7 +135,9 @@ def test_sandbox_session_prepares_its_folders(
         share=("C:/src/app",),
         settings=(Setting.parse("speech.symbolLevel=300"),),
     )
-    session = SandboxSession(tmp_path / "target", target, Relay("172.24.80.1", 16837, "key", "fp"))
+    session = SandboxSession(
+        tmp_path / "target", target, RelayAddress("172.24.80.1", 16837, "key", "fp")
+    )
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
     script = (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
@@ -154,7 +156,7 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
     (portable / "userConfig" / "addons" / "a").mkdir(parents=True)
     (portable / "userConfig" / "nvda.ini").write_text("[speech]\nrate = 40\n", encoding="utf-8")
     target = replace(defaults("x", "sandbox"), nvda_dir=str(portable))
-    session = SandboxSession(tmp_path / "target", target, Relay("h", 1, "k", "f"))
+    session = SandboxSession(tmp_path / "target", target, RelayAddress("h", 1, "k", "f"))
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
     assert "robocopy" in (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
@@ -166,7 +168,7 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
 
 
 def test_sandbox_session_before_start() -> None:
-    session = SandboxSession(Path("x"), defaults("x", "sandbox"), Relay("h", 1, "k", "f"))
+    session = SandboxSession(Path("x"), defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f"))
     with pytest.raises(SandboxFailed, match="not running yet"):
         asyncio.run(session.launch("x"))
     asyncio.run(session.stop())  # nothing started, nothing to stop
@@ -293,7 +295,7 @@ def test_tray_icon_selects_and_goes_away() -> None:
 
 
 def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
-    relay = Relay("h", 1, "k", "f")
+    relay = RelayAddress("h", 1, "k", "f")
     tray = SandboxSession(tmp_path, defaults("x", "sandbox"), relay)
     tray._icon = tray._tray_icon()
     assert tray._icon is not None

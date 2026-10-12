@@ -89,7 +89,7 @@ def _flatten(section: Section, prefix: tuple[str, ...] = ()) -> list[tuple[str, 
 
 
 @dataclass(frozen=True)
-class Relay:
+class RelayAddress:
     """Where NVDA connects: the relay's address and port, channel key and cert."""
 
     host: str
@@ -99,10 +99,10 @@ class Relay:
 
 
 # Stands in for the real relay where only the config's shape matters.
-_ANY_RELAY = Relay("", 1, "", "")
+_ANY_RELAY = RelayAddress("", 1, "", "")
 
 
-def base_config(relay: Relay) -> Section:
+def base_config(relay: RelayAddress) -> Section:
     host = f"{relay.host}:{relay.port}"
     return {
         "general": {"showWelcomeDialogAtStartup": "False"},
@@ -221,7 +221,9 @@ def _overlay(base: Section, top: Section) -> None:
             base[name] = value
 
 
-def _merged(relay: Relay, settings: tuple[Setting, ...], user: Section | None = None) -> Section:
+def _merged(
+    relay: RelayAddress, settings: tuple[Setting, ...], user: Section | None = None
+) -> Section:
     config = {k: copy.deepcopy(v) for k, v in (user or {}).items() if k.lower() != "remote"}
     _overlay(config, base_config(relay))
     for setting in settings:
@@ -244,14 +246,16 @@ def check(settings: tuple[Setting, ...], user: Section | None = None) -> None:
     _merged(_ANY_RELAY, settings, user)
 
 
-def render(relay: Relay, settings: tuple[Setting, ...] = (), user: Section | None = None) -> str:
+def render(
+    relay: RelayAddress, settings: tuple[Setting, ...] = (), user: Section | None = None
+) -> str:
     lines: list[str] = []
     _render(_merged(relay, settings, user), 1, lines)
     return "\n".join(lines) + "\n"
 
 
 def write(
-    config_dir: Path, relay: Relay, settings: tuple[Setting, ...], source: Path | None = None
+    config_dir: Path, relay: RelayAddress, settings: tuple[Setting, ...], source: Path | None = None
 ) -> None:
     """Make `config_dir` a fresh NVDA config folder: a copy of `source` (if it
     exists) with `asc`'s `nvda.ini`. `source` itself is only read."""
