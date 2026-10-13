@@ -127,6 +127,13 @@ def test_values_are_converted_by_type() -> None:
         prefs.find("mode").parse(["watch", "desktop"])
 
 
+@pytest.mark.parametrize("name", ["share", "nvda_dir"])
+def test_an_empty_path_is_not_the_current_folder(name: str) -> None:
+    """`Path("").absolute()` is the current folder: an empty value would share it."""
+    with pytest.raises(BadPreference, match="a path can't be empty"):
+        prefs.find(name).parse([""])
+
+
 def test_unknown_setting_suggests() -> None:
     with pytest.raises(UnknownPreference, match='unknown setting "setle_ms"') as exc:
         prefs.find("setle_ms")

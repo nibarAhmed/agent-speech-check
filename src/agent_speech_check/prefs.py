@@ -79,6 +79,9 @@ class Pref:
     def parse(self, values: list[str]) -> Value:
         """`asc config set` text into the value the file holds. The whole file
         is checked after, so this only converts."""
+        if self.kind in ("path", "paths") and not all(v.strip() for v in values):
+            # `Path("").absolute()` is the current folder, which nobody meant.
+            raise BadPreference(self.name, "a path can't be empty")
         if self.is_list:
             return [str(Path(v).absolute()) if self.kind == "paths" else v for v in values]
         if len(values) != 1:
