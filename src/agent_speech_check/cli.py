@@ -590,10 +590,10 @@ def _config_change(settings: Config, args: argparse.Namespace) -> int:
     pref = prefs.find(args.name)
     where = config.owner(settings, pref, args.target)
     if args.action == "set":
-        data, value = config.set_value(settings, pref, args.values, args.target)
+        data, value = config.set_value(settings, pref, args.values, where)
         done = f"{pref.name} = {config.show(value)} ({config.label(where)})"
     else:
-        data = config.unset_value(settings, pref, args.target)
+        data = config.unset_value(settings, pref, where)
         done = f"{pref.name} unset ({config.label(where)})"
     # Command defaults are read by each command, so only target settings wait.
     # Asked before saving, so a failed look leaves the file as it was.
