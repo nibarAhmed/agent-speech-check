@@ -157,6 +157,41 @@ def test_corrupt_state_file_means_not_running(env: Env) -> None:
     assert not (folder / "state.json").exists()
 
 
+def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
+    """A live daemon that can't be talked to (here: a token it doesn't know, which it
+    drops without a reply) is still running: nothing may forget it, and stop ends it."""
+    assert run_asc("start", "--target", "w").returncode == 0
+    path = env.folder("w") / "state.json"
+    current = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**current, "token": "not-its-token"}), encoding="utf-8")
+
+    removed = run_asc("config", "remove-target", "w")
+    assert removed.returncode == 4, removed.stderr
+    started = run_asc("start", "--target", "w")
+    assert started.returncode == 3, started.stderr
+    assert "asc stop, then asc start" in started.stderr
+    assert path.exists()
+
+    stopped = run_asc("stop", "--target", "w")
+    assert stopped.returncode == 0, stopped.stderr
+    assert not path.exists()
+    assert winapi.image_path(current["pid"]) is None
+
+
+def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
+    """A pid in a dead daemon's file may since belong to another program."""
+    assert run_asc("start", "--target", "w").returncode == 0
+    path = env.folder("w") / "state.json"
+    current = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**current, "token": "x", "started": 1.0}), encoding="utf-8")
+    try:
+        assert run_asc("stop", "--target", "w").returncode == 0
+        assert not path.exists()
+        assert winapi.image_path(current["pid"]) is not None
+    finally:
+        winapi.terminate(current["pid"], 10)
+
+
 def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     folder = env.folder("w")
     folder.mkdir(parents=True)

@@ -20,6 +20,7 @@ from tests.integration.conftest import free_port, run_asc
 from agent_speech_check import winapi
 from agent_speech_check.nvda_config import RelayAddress, render
 from agent_speech_check.relay import fingerprint
+from agent_speech_check.setup import SYMBOL_LEVELS
 
 pytestmark = [
     pytest.mark.e2e,
@@ -174,3 +175,36 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         time.sleep(0.5)
     assert winapi.process_ids("nvda.exe") == []
     assert not insert_held()
+
+
+FIELD = """<!doctype html><html><head><title>asc field</title></head><body>
+<label>Name <input type="text" value="Wow!"></label>
+</body></html>
+"""
+
+
+@pytest.mark.parametrize(("level", "bang"), [("all", True), ("none", False)])
+def test_stored_punctuation_level(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, level: str, bang: bool
+) -> None:
+    """The values `asc setup` stores for a punctuation level are the ones NVDA reads."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    fetched = run_asc("get-nvda", "--installer", os.environ["ASC_E2E_INSTALLER"], timeout=300)
+    assert fetched.returncode == 0, fetched.stderr
+    setting = f"speech.symbolLevel={SYMBOL_LEVELS[level]}"
+    for args in (("mode", "desktop"), ("nvda_settings", setting)):
+        assert run_asc("config", "set", *args, "--target", "p").returncode == 0
+    started = run_asc("start", "--target", "p")
+    assert started.returncode == 0, started.stderr
+    try:
+        wait_connected("p")
+        page = tmp_path / "field.html"
+        page.write_text(FIELD, encoding="utf-8")
+        launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc field", "--target", "p")
+        assert launched.returncode == 0, launched.stderr
+        field = run_asc("press", "Tab", "--expect", "Wow", "--settle", "800", "--target", "p")
+        assert field.returncode == 0, field.stdout + field.stderr
+        assert ("bang" in field.stdout.lower()) == bang, field.stdout
+    finally:
+        subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
+        run_asc("stop", "--target", "p")

@@ -7,13 +7,24 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import daemon, firewall, ipc, nvda, nvda_config, sandbox, spawn, state
+from agent_speech_check import (
+    daemon,
+    firewall,
+    ipc,
+    nvda,
+    nvda_config,
+    sandbox,
+    spawn,
+    state,
+    winapi,
+)
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
     DaemonStartFailed,
     FirewallRuleMissing,
     NotConnected,
+    NotRunning,
     NvdaDidNotConnect,
     SandboxBusy,
     SandboxFailed,
@@ -37,13 +48,19 @@ def status(folder: Path, target: str) -> dict[str, Any]:
 
 
 def is_running(folder: Path, target: str) -> bool:
-    """A daemon answers for the target. A stale state file is removed on the way."""
+    """A daemon runs for the target. A stale state file is removed on the way.
+
+    A daemon that is there but can't be talked to (an older asc, or one that
+    doesn't reply) counts as running, so nothing forgets it: `stop` ends it.
+    """
     if not state.exists(folder):
         return False
     try:
         status(folder, target)
-    except NotConnected:
+    except NotRunning:
         return False
+    except NotConnected:
+        return True
     return True
 
 
@@ -52,6 +69,18 @@ def running_targets(root: Path) -> list[str]:
     return sorted(
         f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent, f.parent.name)
     )
+
+
+def _end(folder: Path, target: str) -> None:
+    """End a daemon that can't be asked to stop. Its NVDA goes with it (a
+    kill-on-close job) and so does its sandbox (the guard)."""
+    current = state.read(folder, target)
+    created = winapi.created_at(current.pid)
+    # A pid is reused only after its process is gone, so a process made after
+    # the daemon wrote the file is some other program: leave it alone.
+    if created is not None and created <= current.started:
+        winapi.terminate(current.pid, STOP_TIMEOUT_S)
+    state.remove(folder)
 
 
 def log_tail(folder: Path) -> str:
@@ -124,10 +153,11 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     precheck(target)
     folder.mkdir(parents=True, exist_ok=True)
     if state.exists(folder):
+        # A daemon that doesn't answer raises here: its state file is kept for `stop`.
         try:
             status(folder, target.name)
-        except NotConnected:
-            state.remove(folder)
+        except NotRunning:
+            pass
         else:
             raise AlreadyRunning(target.name)
     process = _spawn(target, folder)
@@ -145,7 +175,13 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
 
 
 def stop(folder: Path, target: str) -> None:
-    ipc.call(folder, target, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
+    try:
+        ipc.call(folder, target, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
+    except NotRunning:
+        raise
+    except NotConnected:
+        _end(folder, target)
+        return
     deadline = time.monotonic() + STOP_TIMEOUT_S
     while state.exists(folder) and time.monotonic() < deadline:
         time.sleep(POLL_S)

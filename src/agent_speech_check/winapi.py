@@ -125,6 +125,43 @@ def wait_exit(pid: int) -> None:
         _kernel32.CloseHandle(handle)
 
 
+_kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE, *[ctypes.POINTER(wintypes.FILETIME)] * 4]
+# FILETIME counts 100 ns steps from 1601; Unix time counts seconds from 1970.
+_FILETIME_UNIX_START = 116444736000000000
+
+
+def created_at(pid: int) -> float | None:
+    """When a running process started, in Unix seconds. None if it's gone."""
+    handle = _kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return None
+    try:
+        times = [wintypes.FILETIME() for _ in range(4)]
+        if not _kernel32.GetProcessTimes(handle, *map(ctypes.byref, times)):
+            return None
+        created = times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
+        return (created - _FILETIME_UNIX_START) / 10_000_000
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
+PROCESS_TERMINATE = 0x0001
+_kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+
+
+def terminate(pid: int, timeout_s: float) -> None:
+    """End a process and wait up to `timeout_s` for it to go. Nothing if it's gone."""
+    handle = _kernel32.OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, False, pid)
+    if not handle:
+        return
+    try:
+        if not _kernel32.TerminateProcess(handle, 1):
+            raise ctypes.WinError(ctypes.get_last_error())
+        _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000))
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
 def process_image(image: str) -> Path | None:
     for pid in process_ids(image):
         path = image_path(pid)
@@ -247,7 +284,6 @@ def focus(hwnd: int) -> None:
 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
 JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9
 PROCESS_SET_QUOTA = 0x0100
-PROCESS_TERMINATE = 0x0001
 
 
 class _IoCounters(ctypes.Structure):

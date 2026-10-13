@@ -89,7 +89,10 @@ examples:
   asc start
   asc start --target app""",
     ),
-    "stop": ("stop recording and forget the speech", "Stop the daemon. Held keys are released."),
+    "stop": (
+        "stop recording and forget the speech",
+        "Stop the daemon. Held keys are released. A daemon that doesn't answer is ended.",
+    ),
     "status": (
         "show whether asc is recording and NVDA is connected",
         "Show the target, whether NVDA is connected, how to connect it, and the\n"

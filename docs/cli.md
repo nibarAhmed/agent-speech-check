@@ -229,6 +229,11 @@ app. Change them with `asc config set` when needed.
 
 Releases any held keys, stops the daemon and forgets the speech.
 
+A daemon that is there but doesn't answer (an older asc, or one that is stuck)
+still counts as running: `asc start`, `asc setup` and `asc config remove-target`
+refuse. `asc stop` then ends its process, along with its NVDA or sandbox. It
+can't release held keys that way.
+
 ### `asc status`
 
 ```
