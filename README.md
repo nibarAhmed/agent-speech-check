@@ -22,6 +22,15 @@ NVDA.
 
 ## Getting started
 
+Install [uv](https://docs.astral.sh/uv/), then in a clone of this repository:
+
+```
+uv tool install .
+```
+
+That puts `asc` on your PATH. After pulling changes, run
+`uv tool install --reinstall .` to update it.
+
 ```
 asc setup      # a few questions; saves your settings
 asc start
