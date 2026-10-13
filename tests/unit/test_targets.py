@@ -52,6 +52,7 @@ def test_mode_mismatch(tmp_path: Path) -> None:
         ('[targets.app]\nmode = "watch"\nkeys = true\n', "keys: expected false in watch mode"),
         ('[targets.app]\nmode = "watch"\nport = 0\n', "port: expected a whole number from 1"),
         ('[targets.app]\nmode = "watch"\nprot = 1\n', "expected only known keys, got prot"),
+        ("[targets.app]\nmode = 'sandbox'\nshare = ['site']\n", "share: expected full paths"),
         ('default_target = "x"\n', "expected only known keys, got default_target"),
     ],
 )

@@ -130,15 +130,30 @@ _kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE, *[ctypes.POINTER(wintypes
 _FILETIME_UNIX_START = 116444736000000000
 
 
+ERROR_INVALID_PARAMETER = 87  # from OpenProcess: no process has that pid
+
+
+def _open_live(access: int, pid: int) -> int | None:
+    """A handle to the process, or None if it's gone. Raises if it runs but
+    can't be opened (access denied, say): that is not the same as gone."""
+    handle = _kernel32.OpenProcess(access, False, pid)
+    if handle:
+        return int(handle)
+    error = ctypes.get_last_error()
+    if error == ERROR_INVALID_PARAMETER:
+        return None
+    raise ctypes.WinError(error)
+
+
 def created_at(pid: int) -> float | None:
     """When a running process started, in Unix seconds. None if it's gone."""
-    handle = _kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if not handle:
+    handle = _open_live(PROCESS_QUERY_LIMITED_INFORMATION, pid)
+    if handle is None:
         return None
     try:
         times = [wintypes.FILETIME() for _ in range(4)]
         if not _kernel32.GetProcessTimes(handle, *map(ctypes.byref, times)):
-            return None
+            raise ctypes.WinError(ctypes.get_last_error())
         created = times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
         return (created - _FILETIME_UNIX_START) / 10_000_000
     finally:
@@ -146,18 +161,22 @@ def created_at(pid: int) -> float | None:
 
 
 PROCESS_TERMINATE = 0x0001
+WAIT_OBJECT_0 = 0
+WAIT_TIMEOUT = 258
 _kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
 
 
 def terminate(pid: int, timeout_s: float) -> None:
-    """End a process and wait up to `timeout_s` for it to go. Nothing if it's gone."""
-    handle = _kernel32.OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE, False, pid)
-    if not handle:
+    """End a process and wait up to `timeout_s` for it to go. Nothing if it's
+    gone; raises if it can't be ended or is still there after the wait."""
+    handle = _open_live(PROCESS_TERMINATE | SYNCHRONIZE, pid)
+    if handle is None:
         return
     try:
         if not _kernel32.TerminateProcess(handle, 1):
             raise ctypes.WinError(ctypes.get_last_error())
-        _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000))
+        if _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000)) != WAIT_OBJECT_0:
+            raise ctypes.WinError(WAIT_TIMEOUT)
     finally:
         _kernel32.CloseHandle(handle)
 

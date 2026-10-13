@@ -61,16 +61,16 @@ class Pref:
             return f.number(self.name, low=self.low, high=self.high)
         if self.kind == "choice":
             return f.choice(self.name, self.choices)
+        if self.kind in ("path", "paths"):
+            one = self.kind == "path"
+            paths = [f.text(self.name, max_len=1000)] if one else list(f.strings(self.name))
+            # Relative to what? The daemon's folder or this file's would both surprise.
+            if not all(Path(path).is_absolute() for path in paths):
+                expected = "a full path, like C:\\nvda" if one else "full paths, like C:\\src\\app"
+                raise bad_field(UsageError, f"{where} {self.name}", expected, raw)
+            return paths[0] if one else paths
         if self.is_list:
             return list(f.strings(self.name))
-        if self.kind == "path":
-            path = f.text(self.name, max_len=1000)
-            # Relative to what? The daemon's folder or this file's would both surprise.
-            if not Path(path).is_absolute():
-                raise bad_field(
-                    UsageError, f"{where} {self.name}", "a full path, like C:\\nvda", path
-                )
-            return path
         value = f.text(self.name, max_len=40)
         if not re.fullmatch(self.pattern, value):
             raise bad_field(UsageError, f"{where} {self.name}", "a value like the default", value)

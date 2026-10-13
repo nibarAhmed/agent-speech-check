@@ -168,8 +168,10 @@ def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     removed = run_asc("config", "remove-target", "w")
     assert removed.returncode == 4, removed.stderr
     started = run_asc("start", "--target", "w")
-    assert started.returncode == 3, started.stderr
-    assert "asc stop, then asc start" in started.stderr
+    # Refused, not "not connected": retrying start can't help, stopping can.
+    assert started.returncode == 4, started.stderr
+    assert 'asc is running for target "w" but doesn\'t answer' in started.stderr
+    assert "hint: asc stop --target w, then asc start" in started.stderr
     assert path.exists()
 
     stopped = run_asc("stop", "--target", "w")
@@ -190,6 +192,37 @@ def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
         assert winapi.image_path(current["pid"]) is not None
     finally:
         winapi.terminate(current["pid"], 10)
+
+
+def test_stop_clears_a_state_file_without_a_pid(env: Env) -> None:
+    """A state file this asc can't read names no process to end: stop drops it."""
+    folder = env.folder("w")
+    folder.mkdir(parents=True)
+    (folder / "state.json").write_text('{"pid": "old"}', encoding="utf-8")
+    assert run_asc("stop", "--target", "w").returncode == 0
+    assert not (folder / "state.json").exists()
+    assert run_asc("start", "--target", "w").returncode == 0
+
+
+@pytest.mark.parametrize("daemon_reply", [b'{"v":1,"ok":true,"result":{}}\n'], indirect=True)
+@pytest.mark.usefixtures("daemon_reply")
+def test_stop_ends_a_daemon_that_agrees_but_stays(env: Env) -> None:
+    result = run_asc("stop", "--target", "w")
+    assert result.returncode == 0, result.stderr
+    assert not (env.folder("w") / "state.json").exists()
+
+
+@pytest.mark.parametrize("daemon_reply", [b""], indirect=True)
+@pytest.mark.usefixtures("daemon_reply")
+def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
+    """Pid 4 is Windows' System process: running since boot, and no one may end it."""
+    path = env.folder("w") / "state.json"
+    current = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**current, "pid": 4, "started": time.time()}), encoding="utf-8")
+    result = run_asc("stop", "--target", "w")
+    assert result.returncode == 4, result.stderr
+    assert 'cannot end the asc daemon for target "w" (pid 4)' in result.stderr
+    assert path.exists()
 
 
 def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:

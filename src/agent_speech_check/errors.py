@@ -387,6 +387,22 @@ class AlreadyRunning(Refused):
         )
 
 
+class DaemonNotAnswering(Refused):
+    def __init__(self, target: str, reason: str) -> None:
+        super().__init__(
+            f"asc is running for target {_show(target)} but doesn't answer: {reason}",
+            hint=f"asc stop --target {target}, then asc start",
+        )
+
+
+class DaemonUnstoppable(Refused):
+    def __init__(self, target: str, pid: int) -> None:
+        super().__init__(
+            f"cannot end the asc daemon for target {_show(target)} (pid {pid})",
+            hint="end that process in Task Manager",
+        )
+
+
 class TargetsRunning(Refused):
     def __init__(self, targets: Sequence[str]) -> None:
         names = ", ".join(_show(t) for t in targets)

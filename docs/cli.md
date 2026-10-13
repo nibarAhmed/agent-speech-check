@@ -83,7 +83,7 @@ the built-in default.
 | `keys` | false in watch mode, else true | may send keys; never true in watch mode |
 | `launch` | true in desktop and sandbox mode | false if NVDA is started elsewhere and connects itself |
 | `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
-| `share` | none | sandbox: folders mapped read-only to `C:\share\<name>` |
+| `share` | none | sandbox: folders mapped read-only to `C:\share\<name>`, full paths |
 | `window` | tray | sandbox: its window in the tray, taskbar or show |
 | `nvda_settings` | none | `section.key=value` settings for an NVDA that `asc` launches, as `--nvda-setting` takes |
 
@@ -231,8 +231,10 @@ Releases any held keys, stops the daemon and forgets the speech.
 
 A daemon that is there but doesn't answer (an older asc, or one that is stuck)
 still counts as running: `asc start`, `asc setup` and `asc config remove-target`
-refuse. `asc stop` then ends its process, along with its NVDA or sandbox. It
-can't release held keys that way.
+refuse with exit 4. `asc stop` then ends its process, along with its NVDA or
+sandbox, and so it does for a daemon still there 10 s after agreeing to stop.
+It can't release held keys that way. If Windows won't let it end the process,
+it exits 4 and keeps the state file.
 
 ### `asc status`
 

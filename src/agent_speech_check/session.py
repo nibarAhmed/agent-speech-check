@@ -21,7 +21,9 @@ from agent_speech_check import (
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
+    DaemonNotAnswering,
     DaemonStartFailed,
+    DaemonUnstoppable,
     FirewallRuleMissing,
     NotConnected,
     NotRunning,
@@ -74,12 +76,21 @@ def running_targets(root: Path) -> list[str]:
 def _end(folder: Path, target: str) -> None:
     """End a daemon that can't be asked to stop. Its NVDA goes with it (a
     kill-on-close job) and so does its sandbox (the guard)."""
-    current = state.read(folder, target)
-    created = winapi.created_at(current.pid)
-    # A pid is reused only after its process is gone, so a process made after
-    # the daemon wrote the file is some other program: leave it alone.
-    if created is not None and created <= current.started:
-        winapi.terminate(current.pid, STOP_TIMEOUT_S)
+    try:
+        current = state.read(folder, target)
+    except NotConnected:
+        # A file this asc can't read names no process to end: only the file goes.
+        state.remove(folder)
+        return
+    try:
+        created = winapi.created_at(current.pid)
+        # A pid is reused only after its process is gone, so a process made after
+        # the daemon wrote the file is some other program: leave it alone.
+        if created is not None and created <= current.started:
+            winapi.terminate(current.pid, STOP_TIMEOUT_S)
+    except OSError:
+        # It may still run, so the file stays: forgetting it would orphan it.
+        raise DaemonUnstoppable(target, current.pid) from None
     state.remove(folder)
 
 
@@ -158,6 +169,8 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
             status(folder, target.name)
         except NotRunning:
             pass
+        except NotConnected as error:
+            raise DaemonNotAnswering(target.name, error.message) from None
         else:
             raise AlreadyRunning(target.name)
     process = _spawn(target, folder)
@@ -185,3 +198,6 @@ def stop(folder: Path, target: str) -> None:
     deadline = time.monotonic() + STOP_TIMEOUT_S
     while state.exists(folder) and time.monotonic() < deadline:
         time.sleep(POLL_S)
+    if state.exists(folder):
+        # It said yes but is still there: end it.
+        _end(folder, target)
