@@ -271,8 +271,23 @@ Observed on Windows 11 Pro 26200 with the `wsb` CLI:
 - A portable NVDA keeps its config in `<portable>\userConfig`. `asc` copies it
   and rewrites `nvda.ini` on top; see `nvda_config.py`.
 
+## NVDA 2025.1 (checked 2026-10-14)
+
+`scripts/e2e_sandbox.py --nvda-version 2025.1` ran `tests/e2e/test_real_nvda.py` in
+Windows Sandbox, with Windows Audio stopped as usual: all 6 tests failed.
+- NVDA joined the relay, but asc never got any speech (`wait` timed out, not
+  disconnected).
+- NVDA's log: on joining, it plays a Remote Access cue; with no audio device,
+  opening it raises `OSError: [WinError -2147023728] Element not found`
+  (`nvwave.WavePlayer.open`). That exception ends `handleChannelJoined`
+  early, and speech is never forwarded.
+- NVDA 2026.2 in the same setup, the same day: all 6 passed.
+- Sandbox mode also stops Windows Audio, so it hits the same failure with
+  2025.1. Not tested: 2025.1 with an audio device, and versions between 2025.1
+  and 2026.2.
+
 ## Open questions (not answered by the spike)
 
 - The exact shape of a server `error` message (not seen on the wire).
 - The `tone` message (not triggered).
-- Behaviour on NVDA versions before 2026.2 (only 2026.2 was tested).
+- Behaviour on NVDA versions between 2025.1 and 2026.2 (not tested).

@@ -19,7 +19,10 @@ The sandbox window is kept hidden behind an "asc e2e sandbox" tray icon, as in
 sandbox mode (see `sandbox.py`), so it never takes focus or catches keys typed
 on the host. The icon shows and hides it; pass --show to keep it visible.
 
-Usage: uv run python scripts/e2e_sandbox.py [--show] [pytest args...]
+Usage: uv run python scripts/e2e_sandbox.py [--show] [--nvda-version V] [pytest args...]
+
+--nvda-version tests another NVDA than the pinned one, for example 2025.1,
+the oldest asc supports.
 """
 
 from __future__ import annotations
@@ -32,7 +35,6 @@ from pathlib import Path
 
 from agent_speech_check import nvda, sandbox
 
-NVDA_VERSION = nvda.VERSION
 PYTHON = "3.13"
 REPO = Path(__file__).resolve().parents[1]
 WORK = REPO / ".e2e"
@@ -58,7 +60,7 @@ def python_exe() -> Path | None:
     return None
 
 
-def prepare() -> None:
+def prepare(nvda_version: str) -> None:
     IN.mkdir(parents=True, exist_ok=True)
     py_root = IN / "py"
     if python_exe() is None:
@@ -90,15 +92,15 @@ def prepare() -> None:
         "pytest",
         "pytest-asyncio",
     )
-    installer = IN / f"nvda_{NVDA_VERSION}.exe"
+    installer = IN / f"nvda_{nvda_version}.exe"
     if not installer.exists():
-        shutil.copy2(nvda.download(NVDA_VERSION), installer)
+        shutil.copy2(nvda.download(nvda_version), installer)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()
 
 
-def write_cmd(pytest_args: list[str]) -> Path:
+def write_cmd(nvda_version: str, pytest_args: list[str]) -> Path:
     python = python_exe()
     assert python is not None  # noqa: S101 - prepare() ran first
     py = f"{SANDBOX_IN}\\py\\{python.parent.name}\\python.exe"
@@ -109,7 +111,7 @@ def write_cmd(pytest_args: list[str]) -> Path:
         f"set OUT={SANDBOX_OUT}\r\n"
         "echo started %TIME% > %OUT%\\progress.txt\r\n"
         "net stop audiosrv /y >> %OUT%\\progress.txt 2>&1\r\n"
-        f"{SANDBOX_IN}\\nvda_{NVDA_VERSION}.exe --create-portable-silent --portable-path=C:\\nvda"
+        f"{SANDBOX_IN}\\nvda_{nvda_version}.exe --create-portable-silent --portable-path=C:\\nvda"
         " >> %OUT%\\progress.txt 2>&1\r\n"
         ":waitnvda\r\n"
         "if not exist C:\\nvda\\nvda.exe (\r\n"
@@ -119,7 +121,7 @@ def write_cmd(pytest_args: list[str]) -> Path:
         "timeout /t 5 /nobreak > nul\r\n"
         "echo portable ready %TIME% >> %OUT%\\progress.txt\r\n"
         "set ASC_E2E_NVDA=C:\\nvda\r\n"
-        f"set ASC_E2E_INSTALLER={SANDBOX_IN}\\nvda_{NVDA_VERSION}.exe\r\n"
+        f"set ASC_E2E_INSTALLER={SANDBOX_IN}\\nvda_{nvda_version}.exe\r\n"
         "set ASC_E2E_OUT=%OUT%\r\n"
         f"set PYTHONPATH={SANDBOX_IN}\\site;{SANDBOX_REPO}\r\n"
         "set PYTHONDONTWRITEBYTECODE=1\r\n"
@@ -145,13 +147,19 @@ def mapped() -> list[sandbox.Mapped]:
 def main() -> int:
     args = sys.argv[1:]
     show = "--show" in args
-    pytest_args = [a for a in args if a != "--show"]
+    args = [a for a in args if a != "--show"]
+    nvda_version = nvda.VERSION
+    if "--nvda-version" in args:
+        at = args.index("--nvda-version")
+        nvda_version = args[at + 1]
+        del args[at : at + 2]
     sandbox.require_available()
     if sandbox.running():
         print("a Windows Sandbox is already running; stop it first")
         return 3
-    prepare()
-    cmd = write_cmd(pytest_args)
+    print(f"NVDA {nvda_version}")
+    prepare(nvda_version)
+    cmd = write_cmd(nvda_version, args)
     tooltip = "asc e2e sandbox: show or hide"
     with sandbox.SandboxWindow("show" if show else "tray", tooltip) as window:
         return run_tests(window, cmd)
