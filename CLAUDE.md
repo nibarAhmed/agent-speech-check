@@ -20,6 +20,8 @@ evidence, is in `docs/protocol.md`.
 - No mocks of our own code. The one fake sits at the system boundary: `tests/fake_nvda.py`, which
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
   evidence from real NVDA.
+- Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
+  fakes. Its low coverage outside e2e is expected; never lower the coverage floor for it.
 - For changes that touch the protocol or NVDA config, run `pytest -m e2e` against real NVDA, or
   state clearly that it wasn't run.
 
