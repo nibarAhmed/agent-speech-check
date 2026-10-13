@@ -52,7 +52,8 @@ class Pref:
         return self.kind in ("paths", "settings")
 
     def check(self, raw: object, where: str) -> Value:
-        """A command default's value from the file, checked."""
+        """A value from the file, checked on its own. Rules across settings
+        (keys in watch mode, say) are checked on the whole target."""
         f = Fields({self.name: raw}, where, UsageError)
         if self.kind == "bool":
             return f.flag(self.name)
@@ -60,6 +61,16 @@ class Pref:
             return f.number(self.name, low=self.low, high=self.high)
         if self.kind == "choice":
             return f.choice(self.name, self.choices)
+        if self.is_list:
+            return list(f.strings(self.name))
+        if self.kind == "path":
+            path = f.text(self.name, max_len=1000)
+            # Relative to what? The daemon's folder or this file's would both surprise.
+            if not Path(path).is_absolute():
+                raise bad_field(
+                    UsageError, f"{where} {self.name}", "a full path, like C:\\nvda", path
+                )
+            return path
         value = f.text(self.name, max_len=40)
         if not re.fullmatch(self.pattern, value):
             raise bad_field(UsageError, f"{where} {self.name}", "a value like the default", value)

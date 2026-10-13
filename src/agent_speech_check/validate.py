@@ -87,3 +87,9 @@ class Fields:
         if not isinstance(value, list):
             raise self._bad(key, "a list")
         return value
+
+    def strings(self, key: str) -> tuple[str, ...]:
+        items = self.items(key)
+        if not all(isinstance(item, str) and item for item in items):
+            raise self._bad(key, "a list of strings")
+        return tuple(items)

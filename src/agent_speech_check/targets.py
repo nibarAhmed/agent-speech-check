@@ -125,10 +125,7 @@ class Target:
 
 
 def _strings(f: Fields, key: str) -> tuple[str, ...]:
-    items = f.items(key) if f.has(key) else []
-    if not all(isinstance(item, str) and item for item in items):
-        raise bad_field(UsageError, f"{f.where} {key}", "a list of strings", items)
-    return tuple(items)
+    return f.strings(key) if f.has(key) else ()
 
 
 def check_name(name: str) -> str:
@@ -198,31 +195,30 @@ def _from_table(name: str, raw: object, file: str) -> tuple[Target, dict[str, pr
     """A target and its own command defaults."""
     where = f"{file}: [targets.{name}]"
     f = Fields(raw, where, UsageError, prefs.TARGET_KEYS)
+    # Required: the mode decides every other default.
     mode = f.choice("mode", MODES)
-    base = defaults(name, mode)
-    nvda_dir = f.opt_text("nvda_dir", max_len=1000)
-    # Relative to what? The daemon's folder or this file's would both surprise.
-    if nvda_dir is not None and not Path(nvda_dir).is_absolute():
-        raise bad_field(UsageError, f"{where} nvda_dir", "a full path, like C:\\nvda", nvda_dir)
+    values = _checked_values(f, prefs.TARGET_KEYS)
     settings = tuple(
-        Setting.parse(text, f"{where} nvda_settings") for text in _strings(f, "nvda_settings")
+        Setting.parse(text, f"{where} nvda_settings") for text in values.get("nvda_settings", [])
     )
     nvda_config.check(settings)
-    target = Target(
-        name,
-        mode,
-        f.number("port", low=1, high=65535) if f.has("port") else base.port,
-        f.flag("keys") if f.has("keys") else base.keys,
-        f.flag("launch") if f.has("launch") else base.launch,
-        nvda_dir,
-        _strings(f, "share"),
-        f.opt_text("window", max_len=20),
-        settings,
+    kept = {key: values[key] for key in _TARGET_FIELDS if key in values}
+    target = replace(
+        defaults(name, mode),
+        **kept,
+        share=tuple(values.get("share", [])),
+        settings=settings,
     )
-    return _checked(target, where), _command_defaults(f, prefs.COMMAND_DEFAULTS)
+    overrides = {key: values[key] for key in prefs.COMMAND_DEFAULTS if key in values}
+    return _checked(target, where), overrides
 
 
-def _command_defaults(f: Fields, names: tuple[str, ...]) -> dict[str, prefs.Value]:
+# Settings stored on `Target` as the file holds them.
+_TARGET_FIELDS = ("port", "keys", "launch", "nvda_dir", "window")
+
+
+def _checked_values(f: Fields, names: tuple[str, ...]) -> dict[str, Any]:
+    """Each setting that is there, checked against its entry in `prefs`."""
     return {name: prefs.BY_NAME[name].check(f.raw[name], f.where) for name in names if f.has(name)}
 
 
@@ -250,7 +246,7 @@ class Config:
         for name, raw in tables.raw.items():
             targets[name], overrides[name] = _from_table(check_name(name), raw, file)
         return cls(
-            data, default, _command_defaults(globals_, prefs.DEFAULTS_KEYS), targets, overrides
+            data, default, _checked_values(globals_, prefs.DEFAULTS_KEYS), targets, overrides
         )
 
     def resolve(self, name: str | None, mode: str | None) -> Target:
