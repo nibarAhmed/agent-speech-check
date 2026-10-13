@@ -267,10 +267,10 @@ class NvdaNotFound(SetupNeeded):
 
 
 class NvdaTooOld(SetupNeeded):
-    def __init__(self, folder: str, version: str) -> None:
+    def __init__(self, folder: str, version: str, minimum: str) -> None:
         super().__init__(
-            f"the NVDA in {folder} is version {version}; asc needs 2025.1 or later",
-            hint="Remote Access is built into NVDA 2025.1 and later; asc get-nvda",
+            f"the NVDA in {folder} is version {version}; asc needs {minimum} or later",
+            hint="asc get-nvda",
         )
 
 

@@ -32,8 +32,9 @@ log = logging.getLogger(__name__)
 VERSION = "2026.2"
 # What an NVDA release version looks like: 2026.2, 2025.1.1.
 VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
-# Remote Access is built in from 2025.1.
-MIN_VERSION = (2025, 1)
+# Remote Access is built in from 2025.1, but 2025.1 forwards no speech without an
+# audio device (docs/protocol.md). 2026.2 is the oldest that passed the e2e tests.
+MIN_VERSION = (2026, 2)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
 CREATE_TIMEOUT_S = 180
@@ -69,9 +70,9 @@ def refuse_if_running() -> None:
 
 
 def check_version(folder: str, version: tuple[int, int] | None) -> None:
-    """Refuse an NVDA without Remote Access. An unknown version is let through."""
+    """Refuse an NVDA older than MIN_VERSION. An unknown version is let through."""
     if version is not None and version < MIN_VERSION:
-        raise NvdaTooOld(folder, ".".join(map(str, version)))
+        raise NvdaTooOld(folder, ".".join(map(str, version)), ".".join(map(str, MIN_VERSION)))
 
 
 def require_exe(folder: Path) -> Path:

@@ -125,9 +125,8 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
   the synth, sound volume, keyboard layout, mode sounds and the welcome and
   update prompts. It leaves out `profileTriggers.ini`, so no profile switches
   on by itself. `--nvda-dir` is not kept; it holds for this start only.
-- It needs NVDA 2025.1 or later (Remote Access is built in from then on).
-  NVDA 2025.1 forwards no speech when it has no audio device (see
-  `docs/protocol.md`); 2026.2 does.
+- It needs NVDA 2026.2 or later. Remote Access is built in from 2025.1, but
+  2025.1 forwards no speech without an audio device (see `docs/protocol.md`).
   An older NVDA exits 7. An `nvda.ini` that `asc` can't read exits 2 and names
   the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second

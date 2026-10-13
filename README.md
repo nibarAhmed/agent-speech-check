@@ -6,7 +6,7 @@ AI coding agents can write accessible software but can't hear it. `asc` lets an
 agent, a person or CI use the NVDA screen reader the way a blind user does: press
 keys, get NVDA's speech back as text, and check it. It works with any Windows app.
 
-`asc` connects to NVDA as a Remote Access client (NVDA 2025.1 or newer), so
+`asc` connects to NVDA as a Remote Access client (NVDA 2026.2 or newer), so
 nothing is installed inside NVDA.
 
 **Status: all four modes work (tested against NVDA 2026.2).** See
