@@ -68,3 +68,27 @@ def test_every_error_builds_a_message(cls: type[errors.AscError]) -> None:
     assert error.kind in {c.kind for c in errors.CATEGORIES}
     assert error.exit_code == next(c for c in errors.CATEGORIES if isinstance(error, c)).exit_code
     assert chr(0x2014) not in error.message + (error.hint or "")
+
+
+SETUP = (
+    errors.NvdaNotFound,
+    errors.NvdaTooOld,
+    errors.PortableFailed,
+    errors.DownloadFailed,
+    errors.NoDefaultSwitch,
+    errors.FirewallRuleMissing,
+    errors.FirewallFailed,
+    errors.SandboxNeedsPro,
+    errors.WsbMissing,
+)
+
+
+@pytest.mark.parametrize("cls", SETUP, ids=lambda c: c.__name__)
+def test_missing_setup_exits_7_not_3(cls: type[errors.AscError]) -> None:
+    # Exit 3 means retry or asc start; these need get-nvda, sandbox-setup or a person.
+    assert cls.exit_code == 7
+
+
+def test_busy_keyboard_is_refused_not_a_failed_expectation() -> None:
+    # Exit 1 says the app spoke wrongly; a busy keyboard only means retry.
+    assert errors.KeysBusy.exit_code == errors.Refused.exit_code

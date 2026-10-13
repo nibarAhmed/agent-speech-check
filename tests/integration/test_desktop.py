@@ -87,7 +87,7 @@ def test_keys_from_a_given_nvda(tmp_path: Path) -> None:
     assert found.stdout.startswith("NVDA+t  Report title: ")
     assert run_asc("keys", "zzzz", "--nvda-dir", nvda_dir).stdout == "(no match)\n"
     missing = run_asc("keys", "x", "--nvda-dir", str(tmp_path / "none"))
-    assert missing.returncode == 3
+    assert missing.returncode == 7
     assert "NVDA not found. Looked in: --nvda-dir" in missing.stderr
 
 
@@ -98,7 +98,7 @@ def test_keys_for_desktop_target_reads_the_portable_copy(env: Env, tmp_path: Pat
         encoding="utf-8",
     )
     missing = run_asc("keys", "x", "--target", "p")
-    assert missing.returncode == 3
+    assert missing.returncode == 7
     assert "the portable NVDA" in missing.stderr
 
 
@@ -130,7 +130,7 @@ def test_desktop_and_get_nvda_refuse_while_nvda_runs(tmp_path: Path) -> None:
 @pytest.mark.usefixtures("env")
 def test_desktop_without_portable_nvda(tmp_path: Path) -> None:
     result = run_asc("start", "--mode", "desktop", "--target", "x")
-    assert result.returncode == 3
+    assert result.returncode == 7
     assert "NVDA not found" in result.stderr
     assert "hint: asc get-nvda" in result.stderr
     assert str(tmp_path) in result.stderr
@@ -142,7 +142,7 @@ def test_sandbox_needs_the_firewall_rule(env: Env) -> None:
         f"[targets.s]\nmode = 'sandbox'\nport = {env.port}\n", encoding="utf-8"
     )
     result = run_asc("start", "--target", "s")
-    assert result.returncode == 3
+    assert result.returncode == 7
     assert "the firewall rule that lets the sandbox reach asc is missing" in result.stderr
     assert "hint: asc sandbox-setup" in result.stderr
 
@@ -172,7 +172,7 @@ def test_start_nvda_dir(tmp_path: Path) -> None:
     assert "--nvda-dir nvda_dir: expected only for an NVDA that asc launches" in watch.stderr
     missing = tmp_path / "none"
     desktop = run_asc("start", "--mode", "desktop", "--target", "own", "--nvda-dir", str(missing))
-    assert desktop.returncode == 3
+    assert desktop.returncode == 7
     assert f"NVDA not found. Looked in: the portable NVDA ({missing})" in desktop.stderr
     assert "hint: check --nvda-dir or nvda_dir" in desktop.stderr
     broken = tmp_path / "broken"

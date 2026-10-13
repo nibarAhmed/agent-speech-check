@@ -33,7 +33,7 @@ this file.
 ## Workflow
 
 ```
-asc start                 # prints status; exit 4 if already running (fine)
+asc start                 # prints status; exit 4 "already running" is fine
 asc mark                  # everything after this counts
 ...act (click, navigate, run the test)...
 asc wait "(?i)saved"      # returns as soon as a line matches, else exit 1
@@ -78,7 +78,7 @@ asc launch "C:\share\app\run.cmd" --title "My App"
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute. The
   app must come from a folder listed in the target's `share`
   (`targets.toml`), seen inside as `C:\share\<folder name>`. The sandbox has no
-  Edge and no Notepad. `asc sandbox-setup` must have been run once (exit 3 says
+  Edge and no Notepad. `asc sandbox-setup` must have been run once (exit 7 says
   so).
 - Shared mode needs `asc start --mode shared --i-understand` every time. Tell
   the user the panic key, Control+Shift+Alt+F12, before sending anything.
@@ -86,5 +86,6 @@ asc launch "C:\share\app\run.cmd" --title "My App"
 ## Exit codes
 
 0 ok, 1 wait or `--expect` failed, 2 usage, 3 not connected or not running, 4
-refused, 5 protocol error, 6 bug in asc (the message says where the log is).
+refused or busy, 5 protocol error, 6 bug in asc (the message says where the log is),
+7 setup needed (tell the user the hint; retrying won't help).
 On 3, run `asc status`; it says how to connect.

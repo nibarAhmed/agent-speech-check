@@ -47,7 +47,7 @@ def test_second_press_waits_then_gives_up(env: Env) -> None:
         slow = start_asc("press", "Space", "--settle", "3000", "--target", "d")
         time.sleep(1.5)
         busy = run_asc("press", "Tab", "--timeout", "300", "--target", "d")
-        assert busy.returncode == 1
+        assert busy.returncode == 4
         assert "another asc command kept the keyboard" in busy.stderr
         assert slow.wait(30) == 0
         assert fake.gestures == ["Space"]

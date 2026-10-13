@@ -13,10 +13,11 @@ and, when there is one, `hint: <what to do>`.
 | 0 | OK |
 | 1 | A `wait` or `--expect` failed |
 | 2 | Usage error |
-| 3 | Not connected, or no target |
-| 4 | Refused |
+| 3 | Not connected or not running: retry, or `asc start` |
+| 4 | Refused, or busy (the message says which) |
 | 5 | Protocol error |
 | 6 | Internal error (a bug in `asc`; the message says where the log is) |
+| 7 | Setup needed: NVDA, Windows Sandbox or its firewall rule; the hint says how |
 | 130 | Interrupted (Ctrl+C) |
 
 A unit test checks this table against `src/agent_speech_check/errors.py`.
@@ -78,7 +79,7 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
   update prompts. It leaves out `profileTriggers.ini`, so no profile switches
   on by itself. `--nvda-dir` is not kept; it holds for this start only.
 - It needs NVDA 2025.1 or later (Remote Access is built in from then on).
-  An older NVDA exits 3. An `nvda.ini` that `asc` can't read exits 2 and names
+  An older NVDA exits 7. An `nvda.ini` that `asc` can't read exits 2 and names
   the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
@@ -95,8 +96,8 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
 
 **Sandbox mode** runs NVDA inside Windows Sandbox, so its keys never reach your
 desktop and your own NVDA keeps running undisturbed.
-- Needs Windows Pro, Enterprise or Education (exit 4 on Home), and
-  `asc sandbox-setup` done once (exit 3 with that hint otherwise).
+- Needs Windows Pro, Enterprise or Education (exit 7 on Home), and
+  `asc sandbox-setup` done once (exit 7 with that hint otherwise).
 - Only one sandbox can run at a time (exit 4 if one already runs).
 - `asc start` downloads the NVDA installer if needed (only a file download),
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
@@ -199,7 +200,7 @@ or `(nothing said)`.
 - Watch mode refuses with exit 4. Exits 3 if NVDA isn't connected or drops
   during the press, and 5 if NVDA broke the protocol.
 - Two presses never interleave. The second waits for the first, within its own
-  `--timeout` (default 5000 ms), and exits 1 if it can't get the keyboard.
+  `--timeout` (default 5000 ms), and exits 4 if it can't get the keyboard.
 
 ### `asc type TEXT [--settle MS] [--timeout MS]`
 
@@ -225,7 +226,7 @@ h  heading
   sandbox target with `nvda_dir`, that is its portable NVDA. Otherwise it is
   your own NVDA: the running `nvda.exe`,
   then the NVDA uninstall registry entry, then Program Files. `--nvda-dir`
-  overrides this. If none is found it exits 3 and says where it looked.
+  overrides this. If none is found it exits 7 and says where it looked.
 - Rows for braille displays are left out unless `--braille` is given.
 - Single letter navigation keys (`h  heading`) work in browse mode; add Shift
   to go back.
@@ -255,4 +256,4 @@ Downloads the NVDA installer from NV Access (default version 2026.2) and makes a
 portable copy in `%LOCALAPPDATA%\agent-speech-check\nvda\portable` for
 desktop mode. `--installer` uses a local installer instead of downloading. It
 refuses with exit 4 while any `nvda.exe` runs, because the installer would
-restart it. A failed download exits 3.
+restart it. A failed download exits 7.

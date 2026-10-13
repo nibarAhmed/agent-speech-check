@@ -5,7 +5,7 @@ subclass of `AscError`; `cli.main` turns it into an exit code, and the daemon's
 request handler turns it into an IPC error response carrying `kind`.
 
 Messages are built inside the exception classes from structured fields, so call
-sites never format strings. Concrete errors subclass one of the six categories
+sites never format strings. Concrete errors subclass one of the seven categories
 below and override `__init__` to take their own fields.
 """
 
@@ -50,14 +50,15 @@ class NoCommand(UsageError):
 
 
 class NotConnected(AscError):
-    """No daemon, no target, NVDA not connected, or NVDA not found."""
+    """No daemon, or NVDA not connected. Retrying or `asc start` can fix it."""
 
     exit_code = 3
     kind = "not_connected"
 
 
 class Refused(AscError):
-    """Keys in watch mode, `nvda.exe` already running, or daemon already running."""
+    """Policy or something busy says no: keys in watch mode, `nvda.exe` or the
+    daemon already running, the keyboard held by another command."""
 
     exit_code = 4
     kind = "refused"
@@ -68,6 +69,13 @@ class ProtocolError(AscError):
 
     exit_code = 5
     kind = "protocol"
+
+
+class SetupNeeded(AscError):
+    """Something must be installed or set up first; retrying won't help."""
+
+    exit_code = 7
+    kind = "setup"
 
 
 class InternalError(AscError):
@@ -222,13 +230,13 @@ class DaemonHungUp(DaemonUnreachable):
         super().__init__("it closed the connection without a reply")
 
 
-class NvdaNotFound(NotConnected):
+class NvdaNotFound(SetupNeeded):
     def __init__(self, looked: Sequence[str], hint: str = "pass --nvda-dir") -> None:
         where = "; ".join(looked) if looked else "nowhere"
         super().__init__(f"NVDA not found. Looked in: {where}", hint=hint)
 
 
-class NvdaTooOld(NotConnected):
+class NvdaTooOld(SetupNeeded):
     def __init__(self, folder: str, version: str) -> None:
         super().__init__(
             f"the NVDA in {folder} is version {version}; asc needs 2025.1 or later",
@@ -236,7 +244,7 @@ class NvdaTooOld(NotConnected):
         )
 
 
-class PortableFailed(NotConnected):
+class PortableFailed(SetupNeeded):
     def __init__(self, folder: str) -> None:
         super().__init__(
             f"the NVDA installer made no portable copy in {folder}",
@@ -244,7 +252,7 @@ class PortableFailed(NotConnected):
         )
 
 
-class DownloadFailed(NotConnected):
+class DownloadFailed(SetupNeeded):
     def __init__(self, url: str, reason: str) -> None:
         super().__init__(
             f"cannot download NVDA from {url}: {reason}",
@@ -262,7 +270,7 @@ class SandboxFailed(NotConnected):
         super().__init__(f"wsb {what} failed: {detail or 'no detail'}")
 
 
-class NoDefaultSwitch(NotConnected):
+class NoDefaultSwitch(SetupNeeded):
     def __init__(self, interface: str) -> None:
         super().__init__(
             f"no IPv4 address on {_show(interface)}, so the sandbox can't reach asc",
@@ -270,7 +278,7 @@ class NoDefaultSwitch(NotConnected):
         )
 
 
-class FirewallRuleMissing(NotConnected):
+class FirewallRuleMissing(SetupNeeded):
     def __init__(self) -> None:
         super().__init__(
             "the firewall rule that lets the sandbox reach asc is missing",
@@ -278,7 +286,7 @@ class FirewallRuleMissing(NotConnected):
         )
 
 
-class FirewallFailed(NotConnected):
+class FirewallFailed(SetupNeeded):
     def __init__(self, rule: str) -> None:
         super().__init__(
             f"the firewall rule {_show(rule)} was not created",
@@ -316,7 +324,7 @@ class PanicKeyTaken(Refused):
         )
 
 
-class SandboxNeedsPro(Refused):
+class SandboxNeedsPro(SetupNeeded):
     def __init__(self) -> None:
         super().__init__(
             "sandbox mode is unavailable: Windows Sandbox needs Windows Pro, "
@@ -325,7 +333,7 @@ class SandboxNeedsPro(Refused):
         )
 
 
-class WsbMissing(Refused):
+class WsbMissing(SetupNeeded):
     def __init__(self) -> None:
         super().__init__(
             "sandbox mode is unavailable: the wsb command is missing",
@@ -357,7 +365,7 @@ class NvdaAlreadyRunning(Refused):
         )
 
 
-class KeysBusy(ExpectationFailed):
+class KeysBusy(Refused):
     def __init__(self, timeout_ms: int) -> None:
         super().__init__(
             f"another asc command kept the keyboard for the whole {timeout_ms} ms timeout",
@@ -405,6 +413,7 @@ CATEGORIES: tuple[type[AscError], ...] = (
     Refused,
     ProtocolError,
     InternalError,
+    SetupNeeded,
 )
 
 _BY_KIND = {category.kind: category for category in CATEGORIES}

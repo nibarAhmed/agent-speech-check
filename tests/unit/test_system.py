@@ -273,7 +273,7 @@ def test_nvda_version_check() -> None:
     nvda.check_version("C:/nvda", (2026, 2))
     with pytest.raises(NvdaTooOld, match=r"C:/nvda is version 2024\.4") as exc:
         nvda.check_version("C:/nvda", (2024, 4))
-    assert exc.value.exit_code == 3
+    assert exc.value.exit_code == 7
 
 
 def test_tray_icon_selects_and_goes_away() -> None:

@@ -33,6 +33,8 @@ evidence, is in `docs/protocol.md`.
 - Raise only `AscError` subclasses from `errors.py` for expected failures (bad input, daemon down, NVDA
   unreachable). Exit codes are decided there and nowhere else. Don't wrap bugs or broken invariants:
   let them crash, and `cli.main` reports them as exit 6.
+- Pick an error's category by what the caller should do next (fix input, retry, set up, stop),
+  not by what broke.
 - Catch broad exceptions only in `cli.main` and the daemon's request handler.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.

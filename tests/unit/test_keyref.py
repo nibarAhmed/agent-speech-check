@@ -73,7 +73,7 @@ def test_reference_not_found_says_where_it_looked(tmp_path: Path) -> None:
     with pytest.raises(NvdaNotFound) as exc:
         keyref.reference([("the running nvda.exe", tmp_path)], "en")
     assert f"Looked in: the running nvda.exe ({tmp_path})" in exc.value.message
-    assert exc.value.exit_code == 3
+    assert exc.value.exit_code == 7
 
 
 def test_candidates_include_program_files(monkeypatch: pytest.MonkeyPatch) -> None:
