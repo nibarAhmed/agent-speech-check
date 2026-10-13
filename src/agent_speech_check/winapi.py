@@ -171,10 +171,18 @@ def terminate(pid: int, timeout_s: float) -> None:
     if handle is None:
         return
     try:
+        # An ended process stays openable while anyone holds a handle to it,
+        # and Windows refuses to terminate it: it is gone all the same.
         if not _kernel32.TerminateProcess(handle, 1):
-            raise ctypes.WinError(ctypes.get_last_error())
-        if _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000)) != WAIT_OBJECT_0:
+            error = ctypes.get_last_error()
+            if _kernel32.WaitForSingleObject(handle, 0) == WAIT_OBJECT_0:
+                return
+            raise ctypes.WinError(error)
+        waited = _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000))
+        if waited == WAIT_TIMEOUT:
             raise ctypes.WinError(WAIT_TIMEOUT)
+        if waited != WAIT_OBJECT_0:
+            raise ctypes.WinError(ctypes.get_last_error())
     finally:
         _kernel32.CloseHandle(handle)
 
