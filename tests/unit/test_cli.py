@@ -1,6 +1,6 @@
 import pytest
 
-from agent_speech_check import __version__
+from agent_speech_check import __version__, errors
 from agent_speech_check.cli import main
 
 
@@ -15,7 +15,10 @@ def test_help_lists_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
     assert exc.value.code == 0
-    assert "130  interrupted" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "130  interrupted" in out
+    for category in errors.CATEGORIES:
+        assert f"\n  {category.exit_code}    " in out
 
 
 def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:

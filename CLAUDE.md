@@ -34,7 +34,8 @@ evidence, is in `docs/protocol.md`.
   unreachable). Exit codes are decided there and nowhere else. Don't wrap bugs or broken invariants:
   let them crash, and `cli.main` reports them as exit 6.
 - Pick an error's category by what the caller should do next (fix input, retry, set up, stop),
-  not by what broke.
+  not by what broke. Use exit 3 (retry) only when a retry usually fixes it; if the cause is
+  unknown, prefer a category that stops the caller.
 - Catch broad exceptions only in `cli.main` and the daemon's request handler.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.

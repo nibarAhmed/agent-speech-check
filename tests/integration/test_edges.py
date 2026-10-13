@@ -181,7 +181,7 @@ def test_start_replaces_a_stale_state_file(env: Env) -> None:
 @pytest.mark.usefixtures("env")
 def test_keys_finds_your_own_nvda() -> None:
     result = run_asc("keys", "report", "title")
-    if result.returncode == 3:
+    if result.returncode == 7:
         assert "NVDA not found. Looked in:" in result.stderr
     else:
         assert result.returncode == 0

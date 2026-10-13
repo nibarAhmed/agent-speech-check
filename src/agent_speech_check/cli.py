@@ -57,10 +57,11 @@ exit codes:
   0    OK
   1    a wait or --expect failed
   2    usage error
-  3    not connected, or no target
-  4    refused
+  3    not connected or not running
+  4    refused, or busy
   5    protocol error
   6    internal error (a bug in asc)
+  7    setup needed (see the hint)
   130  interrupted (Ctrl+C)
 """
 

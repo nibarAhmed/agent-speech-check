@@ -256,4 +256,4 @@ Downloads the NVDA installer from NV Access (default version 2026.2) and makes a
 portable copy in `%LOCALAPPDATA%\agent-speech-check\nvda\portable` for
 desktop mode. `--installer` uses a local installer instead of downloading. It
 refuses with exit 4 while any `nvda.exe` runs, because the installer would
-restart it. A failed download exits 7.
+restart it. A failed download exits 3.

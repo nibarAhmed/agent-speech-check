@@ -5,7 +5,7 @@ subclass of `AscError`; `cli.main` turns it into an exit code, and the daemon's
 request handler turns it into an IPC error response carrying `kind`.
 
 Messages are built inside the exception classes from structured fields, so call
-sites never format strings. Concrete errors subclass one of the seven categories
+sites never format strings. Concrete errors subclass one of the categories
 below and override `__init__` to take their own fields.
 """
 
@@ -57,8 +57,7 @@ class NotConnected(AscError):
 
 
 class Refused(AscError):
-    """Policy or something busy says no: keys in watch mode, `nvda.exe` or the
-    daemon already running, the keyboard held by another command."""
+    """Policy forbids it, or something is busy. The message says which."""
 
     exit_code = 4
     kind = "refused"
@@ -71,18 +70,18 @@ class ProtocolError(AscError):
     kind = "protocol"
 
 
-class SetupNeeded(AscError):
-    """Something must be installed or set up first; retrying won't help."""
-
-    exit_code = 7
-    kind = "setup"
-
-
 class InternalError(AscError):
     """An invariant broke. This is a bug in `asc`."""
 
     exit_code = 6
     kind = "internal"
+
+
+class SetupNeeded(AscError):
+    """Something must be installed or set up first; retrying won't help."""
+
+    exit_code = 7
+    kind = "setup"
 
 
 # ---------------------------------------------------------------- concrete errors
@@ -248,11 +247,11 @@ class PortableFailed(SetupNeeded):
     def __init__(self, folder: str) -> None:
         super().__init__(
             f"the NVDA installer made no portable copy in {folder}",
-            hint="no other NVDA may run meanwhile; try asc get-nvda again",
+            hint="check the installer, or let asc get-nvda download it again",
         )
 
 
-class DownloadFailed(SetupNeeded):
+class DownloadFailed(NotConnected):
     def __init__(self, url: str, reason: str) -> None:
         super().__init__(
             f"cannot download NVDA from {url}: {reason}",

@@ -74,7 +74,6 @@ SETUP = (
     errors.NvdaNotFound,
     errors.NvdaTooOld,
     errors.PortableFailed,
-    errors.DownloadFailed,
     errors.NoDefaultSwitch,
     errors.FirewallRuleMissing,
     errors.FirewallFailed,
@@ -92,3 +91,8 @@ def test_missing_setup_exits_7_not_3(cls: type[errors.AscError]) -> None:
 def test_busy_keyboard_is_refused_not_a_failed_expectation() -> None:
     # Exit 1 says the app spoke wrongly; a busy keyboard only means retry.
     assert errors.KeysBusy.exit_code == errors.Refused.exit_code
+
+
+def test_failed_download_exits_3_so_agents_retry() -> None:
+    # Usually the network; a retry often fixes it, so it is not a setup gap.
+    assert errors.DownloadFailed.exit_code == errors.NotConnected.exit_code
