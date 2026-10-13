@@ -1,6 +1,6 @@
 """Shared checks for every edge where data enters `asc`.
 
-Each edge (CLI arguments, IPC requests, wire messages, `targets.toml`, the state
+Each edge (CLI arguments, IPC requests, wire messages, `config.toml`, the state
 file) parses raw input into frozen dataclasses through `Fields`, so every edge
 reports a bad field the same way: `<where> <field>: expected ..., got ...`.
 
@@ -87,3 +87,12 @@ class Fields:
         if not isinstance(value, list):
             raise self._bad(key, "a list")
         return value
+
+    def strings(self, key: str) -> tuple[str, ...]:
+        items = self.items(key)
+        if not all(isinstance(item, str) and item for item in items):
+            raise self._bad(key, "a list of strings")
+        return tuple(items)
+
+    def opt_strings(self, key: str) -> tuple[str, ...]:
+        return self.strings(key) if self.has(key) else ()

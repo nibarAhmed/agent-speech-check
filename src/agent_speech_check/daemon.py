@@ -22,7 +22,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import firewall, ipc, nvda, nvda_config, relay, state, winapi
+from agent_speech_check import firewall, ipc, mouse, nvda, nvda_config, relay, state, winapi
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
@@ -84,6 +84,13 @@ def start_app(command: str) -> None:
         )
     except OSError as error:
         raise LaunchFailed(command, error.strerror or str(error)) from None
+
+
+def new_windows(before: set[int]) -> list[str]:
+    """Titles of the titled windows that weren't open in `before`. A window
+    Windows kept behind (its focus rules) is listed, though NVDA never hears it."""
+    titles = (winapi.window_title(h) for h in winapi.windows_titled("") if h not in before)
+    return [title for title in titles if title]
 
 
 def _said(entries: tuple[Entry, ...]) -> list[str]:
@@ -175,11 +182,13 @@ class Daemon:
         check = functools.partial(self.relay.check, losses_before, drop_fails=False)
         return await self.speech.wait_match(pattern, after, timeout_ms / 1000, check)
 
-    def _no_match(self, pattern: str, timeout_ms: int, after: int) -> AscError:
+    def _no_match(
+        self, pattern: str, timeout_ms: int, after: int, windows: list[str] | None = None
+    ) -> AscError:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
             return NvdaNotConnected(self.target.name, timeout_ms, self.relay.last_error)
-        return NoMatch(pattern, timeout_ms, _said(self.speech.since(after).entries))
+        return NoMatch(pattern, timeout_ms, _said(self.speech.since(after).entries), windows)
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:
         pressed = await self.keyboard.press(
@@ -202,9 +211,14 @@ class Daemon:
         start = self.speech.latest
         # Before the launch, which can take seconds in a sandbox.
         losses_before = len(self.relay.losses)
+        # The sandbox's windows can't be seen from here.
+        before = None if self.sandbox is not None else set(winapi.windows_titled(""))
         if self.sandbox is not None:
             await self.sandbox.launch(args.command)
         else:
+            # Input only where the agent may send it: in watch mode the user drives.
+            if self.target.keys and not mouse.nudge():
+                log.info("launch: Windows may keep the app behind")
             start_app(args.command)
         # One deadline for the title and the quiet after it, so the CLI's
         # timeout (--timeout plus ipc.LAUNCH_START_MS) always covers both.
@@ -215,7 +229,8 @@ class Daemon:
             title = re.compile(".")
         found = await self._wait_match(title, start, args.timeout_ms, losses_before)
         if found is None:
-            raise self._no_match(args.title or ".", args.timeout_ms, start)
+            windows = None if before is None else new_windows(before)
+            raise self._no_match(args.title or ".", args.timeout_ms, start, windows)
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
         return {"lines": [e.line() for e in self.speech.since(start).entries]}

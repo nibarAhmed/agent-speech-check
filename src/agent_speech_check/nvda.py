@@ -57,8 +57,12 @@ def installer_url(version: str) -> str:
     return f"https://download.nvaccess.org/releases/{version}/nvda_{version}.exe"
 
 
+def running() -> bool:
+    return bool(winapi.process_ids("nvda.exe"))
+
+
 def refuse_if_running() -> None:
-    if winapi.process_ids("nvda.exe"):
+    if running():
         raise NvdaAlreadyRunning
 
 

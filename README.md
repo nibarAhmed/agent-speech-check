@@ -20,6 +20,16 @@ NVDA.
 - **sandbox**: `asc` runs its own NVDA inside Windows Sandbox, so your NVDA is never disturbed.
 - **shared**: drive your own NVDA, only with an explicit opt-in and a panic hotkey.
 
+## Getting started
+
+```
+asc setup      # a few questions; saves your settings
+asc start
+asc status
+```
+
+`asc config` changes one setting at a time. See `docs/cli.md`.
+
 ## Claude Code skill
 
 `skills/asc/SKILL.md` tells an agent when to use `asc`, the workflow and the

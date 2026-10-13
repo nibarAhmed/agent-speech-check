@@ -80,7 +80,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     port = free_port()
     config = tmp_path / "agent-speech-check"
     config.mkdir()
-    (config / "targets.toml").write_text(
+    (config / "config.toml").write_text(
         f'[targets.w]\nmode = "watch"\nport = {port}\n'
         f'[targets.d]\nmode = "desktop"\nport = {port}\nlaunch = false\n',
         encoding="utf-8",

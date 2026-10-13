@@ -45,6 +45,14 @@ def test_kill_on_close_job_kills_the_child() -> None:
         child.kill()
 
 
+def test_terminate_a_process_that_ended_but_is_still_held() -> None:
+    """While any handle to it is open, an ended process can still be opened,
+    but not terminated. It is gone, so terminate has nothing to do."""
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait(10)  # Popen keeps its handle open, so the pid stays openable.
+    winapi.terminate(child.pid, 1)
+
+
 def test_process_lookups() -> None:
     me = winapi.image_path(os.getpid())
     assert me is not None

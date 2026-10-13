@@ -1,46 +1,47 @@
-"""Targets: named NVDA setups, optionally listed in `targets.toml`.
+"""Targets: named NVDA setups, listed in `config.toml` or made from defaults.
 
-`targets.toml` sits in the state folder (`%LOCALAPPDATA%\\agent-speech-check`):
+`config.toml` sits in the state folder (`%LOCALAPPDATA%\\agent-speech-check`).
+`asc setup` and `asc config` write it; `prefs.py` lists every setting it holds:
 
     default = "app"
 
+    [defaults]
+    settle_ms = 600
+
     [targets.app]
-    mode = "desktop"    # watch, desktop, sandbox or shared
-    port = 16837        # relay port; watch 6837, sandbox 16837, desktop a free one
-    keys = true         # may send keys; never true in watch mode
-    launch = true       # desktop mode: false if NVDA is started elsewhere and connects itself
-    nvda_dir = 'C:\\nvda'  # desktop or sandbox: your portable NVDA (default: asc get-nvda's)
-    share = ['C:\\src\\app']  # sandbox mode: host folders, read-only at C:\\share\\<name>
-    window = "tray"     # sandbox mode: its window in the tray (default), taskbar or show
+    mode = "sandbox"
+    share = ['C:\\src\\app']
+    nvda_settings = ["speech.symbolLevel=300"]
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
-`--nvda-setting`, `--nvda-dir` and `--window` are added at `asc start`; they are not kept in
-the file.
+`--nvda-setting`, `--nvda-dir` and `--window` are added at `asc start` and are
+not kept. The whole file is checked when it is read, so a bad table fails every
+command, not only the ones that use it.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import tomllib
-from dataclasses import asdict, dataclass, replace
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
+import tomlkit
+import tomlkit.exceptions
+
+from agent_speech_check import nvda_config, prefs
 from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError, bad_field
 from agent_speech_check.nvda_config import Setting
+from agent_speech_check.prefs import MODES, NAME_PATTERN, WINDOWS
 from agent_speech_check.validate import Fields
 
-MODES = ("watch", "desktop", "sandbox", "shared")
-# Where the sandbox window goes: hidden behind a tray icon, minimised on the
-# taskbar, or left alone.
-WINDOWS = ("tray", "taskbar", "show")
 DEFAULT_TARGET = "default"
 WATCH_PORT = 6837
 # Fixed, so the one firewall rule `asc sandbox-setup` makes keeps matching.
 SANDBOX_PORT = 16837
-_NAME = re.compile(r"[A-Za-z0-9_-]{1,32}")
-_KEYS = ("mode", "port", "keys", "launch", "nvda_dir", "share", "window")
+_NAME = re.compile(NAME_PATTERN)
 
 
 @dataclass(frozen=True)
@@ -55,12 +56,12 @@ class Target:
     window: str | None = None  # sandbox mode; None: the default, tray
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
-    # read from targets.toml, so consent can't be given once and forgotten.
+    # read from config.toml, so consent can't be given once and forgotten.
     consent: bool = False
 
     def to_json(self) -> str:
         data = asdict(self)
-        data["settings"] = [f"{'.'.join(s.path)}={s.value}" for s in self.settings]
+        data["settings"] = [setting.text for setting in self.settings]
         return json.dumps(data)
 
     @classmethod
@@ -71,8 +72,8 @@ class Target:
         except ValueError as error:
             raise bad_field(UsageError, "daemon target", "JSON", str(error)) from None
         where = "daemon target"
-        f = Fields(raw, where, UsageError, ("name", *_KEYS, "settings", "consent"))
-        settings = _strings(f, "settings")
+        f = Fields(raw, where, UsageError, tuple(field.name for field in fields(Target)))
+        settings = f.opt_strings("settings")
         target = Target(
             check_name(f.text("name")),
             f.choice("mode", MODES),
@@ -80,7 +81,7 @@ class Target:
             keys=f.flag("keys"),
             launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
-            share=_strings(f, "share"),
+            share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent") if f.has("consent") else False,
@@ -123,13 +124,6 @@ class Target:
         return _checked(replace(self, window=window), "--window")
 
 
-def _strings(f: Fields, key: str) -> tuple[str, ...]:
-    items = f.items(key) if f.has(key) else []
-    if not all(isinstance(item, str) and item for item in items):
-        raise bad_field(UsageError, f"{f.where} {key}", "a list of strings", items)
-    return tuple(items)
-
-
 def check_name(name: str) -> str:
     if not _NAME.fullmatch(name):
         raise bad_field(UsageError, "target name", "1 to 32 letters, digits, - or _", name)
@@ -142,6 +136,13 @@ def _checked(target: Target, where: str) -> Target:
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
+        )
+    if target.settings and not target.launches_nvda:
+        raise bad_field(
+            UsageError,
+            f"{where} nvda_settings",
+            "only for an NVDA that asc launches",
+            [setting.text for setting in target.settings],
         )
     if target.window is not None:
         if not target.launches_sandbox:
@@ -164,47 +165,108 @@ def defaults(name: str, mode: str) -> Target:
     )
 
 
-def _load(path: Path) -> dict[str, Any]:
+def parse(text: str, where: str) -> dict[str, Any]:
+    """TOML text as plain Python values. `unwrap` matters: tomlkit's own types
+    aren't all plain (its `Bool` isn't a `bool`), and `Fields` checks types."""
     try:
-        with path.open("rb") as file:
-            return tomllib.load(file)
+        return tomlkit.parse(text).unwrap()
+    except tomlkit.exceptions.ParseError as error:
+        raise TargetsFileError(where, str(error)) from None
+
+
+def _read(path: Path) -> dict[str, Any]:
+    try:
+        data = path.read_bytes()
     except FileNotFoundError:
         return {}
-    except tomllib.TOMLDecodeError as error:
-        raise TargetsFileError(str(path), str(error)) from None
+    try:
+        # -sig: some Windows editors start the file with a byte order mark.
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        line = data[: error.start].count(b"\n") + 1
+        raise TargetsFileError(str(path), f"not UTF-8 (line {line})") from None
+    return parse(text, str(path))
 
 
-def _from_table(name: str, raw: object, path: Path) -> Target:
-    where = f"{path.name}: [targets.{name}]"
-    f = Fields(raw, where, UsageError, _KEYS)
+def _from_table(name: str, raw: object, file: str) -> tuple[Target, dict[str, prefs.Value]]:
+    """A target and its own command defaults."""
+    where = f"{file}: [targets.{name}]"
+    f = Fields(raw, where, UsageError, prefs.TARGET_KEYS)
+    # Required: the mode decides every other default.
     mode = f.choice("mode", MODES)
-    base = defaults(name, mode)
-    nvda_dir = f.opt_text("nvda_dir", max_len=1000)
-    # Relative to what? The daemon's folder or this file's would both surprise.
-    if nvda_dir is not None and not Path(nvda_dir).is_absolute():
-        raise bad_field(UsageError, f"{where} nvda_dir", "a full path, like C:\\nvda", nvda_dir)
-    target = Target(
-        name,
-        mode,
-        f.number("port", low=1, high=65535) if f.has("port") else base.port,
-        f.flag("keys") if f.has("keys") else base.keys,
-        f.flag("launch") if f.has("launch") else base.launch,
-        nvda_dir,
-        _strings(f, "share"),
-        f.opt_text("window", max_len=20),
+    values = _checked_values(f, prefs.TARGET_KEYS)
+    settings = tuple(
+        Setting.parse(text, f"{where} nvda_settings") for text in values.get("nvda_settings", [])
     )
-    return _checked(target, where)
+    nvda_config.check(settings)
+    # Settings named like a `Target` field are kept as they are (lists frozen).
+    kept: dict[str, Any] = {
+        key: tuple(value) if isinstance(value, list) else value
+        for key, value in values.items()
+        if key in _TARGET_FIELDS
+    }
+    target = replace(defaults(name, mode), **kept, settings=settings)
+    overrides = {key: values[key] for key in prefs.COMMAND_DEFAULTS if key in values}
+    return _checked(target, where), overrides
 
 
-def resolve(path: Path, name: str | None, mode: str | None) -> Target:
-    """The target to use: from `targets.toml` if listed, else defaults for `mode`."""
-    data = _load(path)
-    top = Fields(data, path.name, UsageError, ("default", "targets"))
-    tables = Fields(data.get("targets", {}), f"{path.name}: [targets]", UsageError)
-    chosen = check_name(name or top.opt_text("default", max_len=32) or DEFAULT_TARGET)
-    if chosen in tables.raw:
-        target = _from_table(chosen, tables.raw[chosen], path)
+_TARGET_FIELDS = frozenset(field.name for field in fields(Target))
+
+
+def _checked_values(f: Fields, names: tuple[str, ...]) -> dict[str, Any]:
+    """Each setting that is there, checked against its entry in `prefs`."""
+    return {name: prefs.BY_NAME[name].check(f.raw[name], f.where) for name in names if f.has(name)}
+
+
+@dataclass(frozen=True)
+class Config:
+    """The whole of `config.toml`, checked. `data` is the file as read, for
+    `asc config` to change and write back."""
+
+    data: Mapping[str, Any] = field(default_factory=dict)
+    default: str = DEFAULT_TARGET
+    defaults: Mapping[str, prefs.Value] = field(default_factory=dict)
+    targets: Mapping[str, Target] = field(default_factory=dict)
+    overrides: Mapping[str, Mapping[str, prefs.Value]] = field(default_factory=dict)
+
+    @classmethod
+    def from_data(cls, data: dict[str, Any], file: str) -> Config:
+        top = Fields(data, file, UsageError, ("default", "defaults", "targets"))
+        default = check_name(top.opt_text("default", max_len=32) or DEFAULT_TARGET)
+        globals_ = Fields(
+            data.get("defaults", {}), f"{file}: [defaults]", UsageError, prefs.DEFAULTS_KEYS
+        )
+        tables = Fields(data.get("targets", {}), f"{file}: [targets]", UsageError)
+        targets: dict[str, Target] = {}
+        overrides: dict[str, dict[str, prefs.Value]] = {}
+        for name, raw in tables.raw.items():
+            targets[name], overrides[name] = _from_table(check_name(name), raw, file)
+        return cls(
+            data, default, _checked_values(globals_, prefs.DEFAULTS_KEYS), targets, overrides
+        )
+
+    def resolve(self, name: str | None, mode: str | None) -> Target:
+        """The target to use: listed here, or defaults for `mode`."""
+        chosen = check_name(name or self.default)
+        target = self.targets.get(chosen)
+        if target is None:
+            return defaults(chosen, mode or "watch")
         if mode is not None and mode != target.mode:
             raise ModeMismatch(chosen, target.mode, mode)
         return target
-    return defaults(chosen, mode or "watch")
+
+    def value(self, name: str, target: str | None = None) -> tuple[prefs.Value | None, str]:
+        """A global or command default setting and where it came from: target,
+        global or default."""
+        own = self.overrides.get(target or self.default, {})
+        if name in own:
+            return own[name], "target"
+        if name == "default":
+            return self.default, "global" if "default" in self.data else "default"
+        if name in self.defaults:
+            return self.defaults[name], "global"
+        return prefs.BY_NAME[name].default, "default"
+
+
+def load(path: Path) -> Config:
+    return Config.from_data(_read(path), path.name)

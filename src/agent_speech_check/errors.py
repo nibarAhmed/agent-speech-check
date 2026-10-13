@@ -36,7 +36,7 @@ class ExpectationFailed(AscError):
 
 
 class UsageError(AscError):
-    """The input is wrong: fix the arguments, `targets.toml` or `--nvda-setting`."""
+    """The input is wrong: fix the arguments, `config.toml` or `--nvda-setting`."""
 
     exit_code = 2
     kind = "usage"
@@ -154,14 +154,14 @@ class UntypableText(UsageError):
 class ModeMismatch(UsageError):
     def __init__(self, target: str, configured: str, given: str) -> None:
         super().__init__(
-            f"target {_show(target)} is {configured} mode in targets.toml, not {given}",
+            f"target {_show(target)} is {configured} mode in config.toml, not {given}",
             hint="leave out --mode, or use another --target",
         )
 
 
 class BadSetting(UsageError):
-    def __init__(self, setting: str, reason: str) -> None:
-        super().__init__(f"--nvda-setting {_show(setting)}: {reason}")
+    def __init__(self, setting: str, reason: str, where: str = "--nvda-setting") -> None:
+        super().__init__(f"{where} {_show(setting)}: {reason}")
 
 
 class UserConfigUnreadable(UsageError):
@@ -175,6 +175,33 @@ class UserConfigUnreadable(UsageError):
 class TargetsFileError(UsageError):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"{path}: {reason}")
+
+
+class UnknownPreference(UsageError):
+    def __init__(self, name: str, suggestions: Sequence[str]) -> None:
+        hint = f"did you mean {', '.join(suggestions)}?" if suggestions else "asc config list"
+        super().__init__(f"unknown setting {_show(name)}", hint=hint)
+
+
+class BadPreference(UsageError):
+    def __init__(self, name: str, reason: str, hint: str | None = None) -> None:
+        super().__init__(f"setting {_show(name)}: {reason}", hint=hint)
+
+
+class TargetNotConfigured(UsageError):
+    def __init__(self, target: str) -> None:
+        super().__init__(
+            f"target {_show(target)} is not in config.toml",
+            hint=f"asc config set mode MODE --target {target}",
+        )
+
+
+class NeedsTerminal(UsageError):
+    def __init__(self) -> None:
+        super().__init__(
+            "asc setup asks questions, so it needs a terminal",
+            hint="use asc config set to change one setting",
+        )
 
 
 class NotRunning(NotConnected):
@@ -360,6 +387,31 @@ class AlreadyRunning(Refused):
         )
 
 
+class DaemonNotAnswering(Refused):
+    def __init__(self, target: str, reason: str) -> None:
+        super().__init__(
+            f"asc is running for target {_show(target)} but doesn't answer: {reason}",
+            hint=f"asc stop --target {target}, then asc start",
+        )
+
+
+class DaemonUnstoppable(Refused):
+    def __init__(self, target: str, pid: int) -> None:
+        super().__init__(
+            f"cannot end the asc daemon for target {_show(target)} (pid {pid})",
+            hint="end that process in Task Manager",
+        )
+
+
+class TargetsRunning(Refused):
+    def __init__(self, targets: Sequence[str]) -> None:
+        names = ", ".join(_show(t) for t in targets)
+        super().__init__(
+            f"asc is running for target {names}",
+            hint=f"asc stop --target {targets[0]}, then try again",
+        )
+
+
 class NvdaAlreadyRunning(Refused):
     def __init__(self) -> None:
         super().__init__(
@@ -377,11 +429,20 @@ class KeysBusy(Refused):
 
 
 class NoMatch(ExpectationFailed):
-    def __init__(self, pattern: str, timeout_ms: int, said: Sequence[str]) -> None:
-        super().__init__(
-            f"no speech matched {_show(pattern)} within {timeout_ms} ms. "
-            f"NVDA said:\n{said_lines(said)}"
-        )
+    def __init__(
+        self,
+        pattern: str,
+        timeout_ms: int,
+        said: Sequence[str],
+        windows: Sequence[str] | None = None,
+    ) -> None:
+        """`windows`: titles of the windows that opened during a launch, when known."""
+        message = f"no speech matched {_show(pattern)} within {timeout_ms} ms. "
+        message += f"NVDA said:\n{said_lines(said)}"
+        if windows is not None:
+            shown = ", ".join(_show(title) for title in windows) or "(none)"
+            message += f"\nNew windows: {shown}"
+        super().__init__(message)
 
 
 class LineTooLong(ProtocolError):

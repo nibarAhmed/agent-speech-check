@@ -7,13 +7,26 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import daemon, firewall, ipc, nvda, nvda_config, sandbox, spawn, state
+from agent_speech_check import (
+    daemon,
+    firewall,
+    ipc,
+    nvda,
+    nvda_config,
+    sandbox,
+    spawn,
+    state,
+    winapi,
+)
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
+    DaemonNotAnswering,
     DaemonStartFailed,
+    DaemonUnstoppable,
     FirewallRuleMissing,
     NotConnected,
+    NotRunning,
     NvdaDidNotConnect,
     SandboxBusy,
     SandboxFailed,
@@ -22,7 +35,8 @@ from agent_speech_check.errors import (
 from agent_speech_check.targets import Target
 
 START_TIMEOUT_S = 15.0
-STOP_TIMEOUT_S = 10.0
+# Past the daemon's own worst case: 10 s for NVDA, then its window threads.
+STOP_TIMEOUT_S = 30.0
 POLL_S = 0.1
 ERR_FILE = "daemon.err"
 TAIL_LINES = 10
@@ -34,6 +48,56 @@ CONNECT_POLL_S = 1.0
 
 def status(folder: Path, target: str) -> dict[str, Any]:
     return ipc.call(folder, target, ipc.Request("status", ipc.NoArgs()), STATUS_TIMEOUT_S)
+
+
+def _probe(folder: Path, target: str) -> tuple[bool, NotConnected | None]:
+    """Whether a daemon runs for the target, and if it doesn't answer, why.
+    A stale state file is removed on the way.
+
+    A daemon that is there but can't be talked to (an older asc, or one that
+    doesn't reply) counts as running, so nothing forgets it: `stop` ends it.
+    """
+    if not state.exists(folder):
+        return False, None
+    try:
+        status(folder, target)
+    except NotRunning:  # a NotConnected too, so it must come first
+        return False, None
+    except NotConnected as error:
+        return True, error
+    return True, None
+
+
+def is_running(folder: Path, target: str) -> bool:
+    return _probe(folder, target)[0]
+
+
+def running_targets(root: Path) -> list[str]:
+    """Every target whose daemon runs, answering or not, by name."""
+    return sorted(
+        f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent, f.parent.name)
+    )
+
+
+def _end(folder: Path, target: str) -> None:
+    """End a daemon that can't be asked to stop. Its NVDA goes with it (a
+    kill-on-close job) and so does its sandbox (the guard)."""
+    try:
+        current = state.read(folder, target)
+    except NotConnected:
+        # A file this asc can't read names no process to end: only the file goes.
+        state.remove(folder)
+        return
+    try:
+        created = winapi.created_at(current.pid)
+        # A pid is reused only after its process is gone, so a process made after
+        # the daemon wrote the file is some other program: leave it alone.
+        if created is not None and created <= current.started:
+            winapi.terminate(current.pid, STOP_TIMEOUT_S)
+    except OSError:
+        # It may still run, so the file stays: forgetting it would orphan it.
+        raise DaemonUnstoppable(target, current.pid) from None
+    state.remove(folder)
 
 
 def log_tail(folder: Path) -> str:
@@ -105,13 +169,11 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     folder.mkdir(parents=True, exist_ok=True)
-    if state.exists(folder):
-        try:
-            status(folder, target.name)
-        except NotConnected:
-            state.remove(folder)
-        else:
-            raise AlreadyRunning(target.name)
+    running, silent = _probe(folder, target.name)
+    if silent is not None:
+        raise DaemonNotAnswering(target.name, silent.message)
+    if running:
+        raise AlreadyRunning(target.name)
     process = _spawn(target, folder)
     deadline = time.monotonic() + START_TIMEOUT_S
     while time.monotonic() < deadline:
@@ -127,7 +189,16 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
 
 
 def stop(folder: Path, target: str) -> None:
-    ipc.call(folder, target, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
+    try:
+        ipc.call(folder, target, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
+    except NotRunning:
+        raise
+    except NotConnected:
+        _end(folder, target)
+        return
     deadline = time.monotonic() + STOP_TIMEOUT_S
     while state.exists(folder) and time.monotonic() < deadline:
         time.sleep(POLL_S)
+    if state.exists(folder):
+        # It said yes but is still there: end it.
+        _end(folder, target)

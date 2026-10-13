@@ -40,6 +40,8 @@ def take_mutex(name: str) -> int | None:
 
 TH32CS_SNAPPROCESS = 0x00000002
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_TERMINATE = 0x0001
+ERROR_INVALID_PARAMETER = 87  # from OpenProcess: no process has that pid
 INVALID_HANDLE = wintypes.HANDLE(-1).value
 MAX_PATH = 32768
 
@@ -110,6 +112,8 @@ def image_path(pid: int) -> Path | None:
 
 SYNCHRONIZE = 0x00100000
 INFINITE = 0xFFFFFFFF
+WAIT_OBJECT_0 = 0
+WAIT_TIMEOUT = 258  # also the Win32 error code for a wait that timed out
 _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 _kernel32.WaitForSingleObject.restype = wintypes.DWORD
 
@@ -121,6 +125,64 @@ def wait_exit(pid: int) -> None:
         return
     try:
         _kernel32.WaitForSingleObject(handle, INFINITE)
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
+_kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE, *[ctypes.POINTER(wintypes.FILETIME)] * 4]
+# FILETIME counts 100 ns steps from 1601; Unix time counts seconds from 1970.
+_FILETIME_UNIX_START = 116444736000000000
+
+
+def _open_live(access: int, pid: int) -> int | None:
+    """A handle to the process, or None if it's gone. Raises if it runs but
+    can't be opened (access denied, say): that is not the same as gone."""
+    handle = _kernel32.OpenProcess(access, False, pid)
+    if handle:
+        return int(handle)
+    error = ctypes.get_last_error()
+    if error == ERROR_INVALID_PARAMETER:
+        return None
+    raise ctypes.WinError(error)
+
+
+def created_at(pid: int) -> float | None:
+    """When a running process started, in Unix seconds. None if it's gone."""
+    handle = _open_live(PROCESS_QUERY_LIMITED_INFORMATION, pid)
+    if handle is None:
+        return None
+    try:
+        times = [wintypes.FILETIME() for _ in range(4)]
+        if not _kernel32.GetProcessTimes(handle, *map(ctypes.byref, times)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        created = times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
+        return (created - _FILETIME_UNIX_START) / 10_000_000
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
+_kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+
+
+def terminate(pid: int, timeout_s: float) -> None:
+    """End a process and wait up to `timeout_s` for it to go. Nothing if it's
+    gone; raises if it can't be ended or is still there after the wait."""
+    handle = _open_live(PROCESS_TERMINATE | SYNCHRONIZE, pid)
+    if handle is None:
+        return
+    try:
+        # An ended process stays openable while anyone holds a handle to it,
+        # and Windows refuses to terminate it: it is gone all the same.
+        if not _kernel32.TerminateProcess(handle, 1):
+            error = ctypes.get_last_error()
+            if _kernel32.WaitForSingleObject(handle, 0) == WAIT_OBJECT_0:
+                return
+            raise ctypes.WinError(error)
+        waited = _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000))
+        if waited == WAIT_TIMEOUT:
+            raise ctypes.WinError(WAIT_TIMEOUT)
+        if waited != WAIT_OBJECT_0:
+            raise ctypes.WinError(ctypes.get_last_error())
     finally:
         _kernel32.CloseHandle(handle)
 
@@ -161,16 +223,19 @@ _user32.IsWindowVisible.argtypes = [wintypes.HWND]
 _user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 
 
+def window_title(hwnd: int) -> str:
+    buffer = ctypes.create_unicode_buffer(512)
+    _user32.GetWindowTextW(hwnd, buffer, 512)
+    return buffer.value
+
+
 def windows_titled(prefix: str) -> list[int]:
     """Visible top-level windows whose title starts with `prefix`."""
     found: list[int] = []
 
     def visit(hwnd: int, _param: int) -> bool:
-        if _user32.IsWindowVisible(hwnd):
-            buffer = ctypes.create_unicode_buffer(512)
-            _user32.GetWindowTextW(hwnd, buffer, 512)
-            if buffer.value.startswith(prefix):
-                found.append(hwnd)
+        if _user32.IsWindowVisible(hwnd) and window_title(hwnd).startswith(prefix):
+            found.append(hwnd)
         return True
 
     _user32.EnumWindows(_WNDENUMPROC(visit), 0)
@@ -212,6 +277,42 @@ _user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.B
 _user32.BringWindowToTop.argtypes = [wintypes.HWND]
 
 
+INPUT_MOUSE = 0
+ASFW_ANY = -1
+
+
+class _MouseInput(ctypes.Structure):
+    _fields_ = (
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    )
+
+
+class _Input(ctypes.Structure):
+    # The mouse member is the largest in INPUT's union, so this has its size.
+    _fields_ = (("type", wintypes.DWORD), ("mi", _MouseInput))
+
+
+_user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int]
+_user32.SendInput.restype = wintypes.UINT
+_user32.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+
+
+def send_still_mouse() -> bool:
+    """Send one mouse input that moves nothing and presses nothing."""
+    still = _Input(type=INPUT_MOUSE)
+    return int(_user32.SendInput(1, ctypes.byref(still), ctypes.sizeof(_Input))) == 1
+
+
+def allow_foreground() -> bool:
+    """Let any process take the foreground, if this one may. False if it may not."""
+    return bool(_user32.AllowSetForegroundWindow(wintypes.DWORD(ASFW_ANY).value))
+
+
 def foreground() -> int:
     return _user32.GetForegroundWindow() or 0
 
@@ -247,7 +348,6 @@ def focus(hwnd: int) -> None:
 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
 JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9
 PROCESS_SET_QUOTA = 0x0100
-PROCESS_TERMINATE = 0x0001
 
 
 class _IoCounters(ctypes.Structure):

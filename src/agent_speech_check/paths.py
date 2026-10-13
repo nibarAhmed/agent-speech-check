@@ -14,8 +14,8 @@ def state_root() -> Path:
     return base / APP_DIR_NAME
 
 
-def targets_file() -> Path:
-    return state_root() / "targets.toml"
+def config_file() -> Path:
+    return state_root() / "config.toml"
 
 
 def target_dir(name: str) -> Path:
