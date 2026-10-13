@@ -73,7 +73,7 @@ class Target:
             raise bad_field(UsageError, "daemon target", "JSON", str(error)) from None
         where = "daemon target"
         f = Fields(raw, where, UsageError, tuple(field.name for field in fields(Target)))
-        settings = _strings(f, "settings")
+        settings = f.opt_strings("settings")
         target = Target(
             check_name(f.text("name")),
             f.choice("mode", MODES),
@@ -81,7 +81,7 @@ class Target:
             keys=f.flag("keys"),
             launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
-            share=_strings(f, "share"),
+            share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent") if f.has("consent") else False,
@@ -122,10 +122,6 @@ class Target:
         if window is None:
             return self
         return _checked(replace(self, window=window), "--window")
-
-
-def _strings(f: Fields, key: str) -> tuple[str, ...]:
-    return f.strings(key) if f.has(key) else ()
 
 
 def check_name(name: str) -> str:
@@ -202,19 +198,18 @@ def _from_table(name: str, raw: object, file: str) -> tuple[Target, dict[str, pr
         Setting.parse(text, f"{where} nvda_settings") for text in values.get("nvda_settings", [])
     )
     nvda_config.check(settings)
-    kept = {key: values[key] for key in _TARGET_FIELDS if key in values}
-    target = replace(
-        defaults(name, mode),
-        **kept,
-        share=tuple(values.get("share", [])),
-        settings=settings,
-    )
+    # Settings named like a `Target` field are kept as they are (lists frozen).
+    kept: dict[str, Any] = {
+        key: tuple(value) if isinstance(value, list) else value
+        for key, value in values.items()
+        if key in _TARGET_FIELDS
+    }
+    target = replace(defaults(name, mode), **kept, settings=settings)
     overrides = {key: values[key] for key in prefs.COMMAND_DEFAULTS if key in values}
     return _checked(target, where), overrides
 
 
-# Settings stored on `Target` as the file holds them.
-_TARGET_FIELDS = ("port", "keys", "launch", "nvda_dir", "window")
+_TARGET_FIELDS = frozenset(field.name for field in fields(Target))
 
 
 def _checked_values(f: Fields, names: tuple[str, ...]) -> dict[str, Any]:

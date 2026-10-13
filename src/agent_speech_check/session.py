@@ -49,21 +49,26 @@ def status(folder: Path, target: str) -> dict[str, Any]:
     return ipc.call(folder, target, ipc.Request("status", ipc.NoArgs()), STATUS_TIMEOUT_S)
 
 
-def is_running(folder: Path, target: str) -> bool:
-    """A daemon runs for the target. A stale state file is removed on the way.
+def _probe(folder: Path, target: str) -> tuple[bool, NotConnected | None]:
+    """Whether a daemon runs for the target, and if it doesn't answer, why.
+    A stale state file is removed on the way.
 
     A daemon that is there but can't be talked to (an older asc, or one that
     doesn't reply) counts as running, so nothing forgets it: `stop` ends it.
     """
     if not state.exists(folder):
-        return False
+        return False, None
     try:
         status(folder, target)
-    except NotRunning:
-        return False
-    except NotConnected:
-        return True
-    return True
+    except NotRunning:  # a NotConnected too, so it must come first
+        return False, None
+    except NotConnected as error:
+        return True, error
+    return True, None
+
+
+def is_running(folder: Path, target: str) -> bool:
+    return _probe(folder, target)[0]
 
 
 def running_targets(root: Path) -> list[str]:
@@ -163,16 +168,11 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     folder.mkdir(parents=True, exist_ok=True)
-    if state.exists(folder):
-        # A daemon that doesn't answer raises here: its state file is kept for `stop`.
-        try:
-            status(folder, target.name)
-        except NotRunning:
-            pass
-        except NotConnected as error:
-            raise DaemonNotAnswering(target.name, error.message) from None
-        else:
-            raise AlreadyRunning(target.name)
+    running, silent = _probe(folder, target.name)
+    if silent is not None:
+        raise DaemonNotAnswering(target.name, silent.message)
+    if running:
+        raise AlreadyRunning(target.name)
     process = _spawn(target, folder)
     deadline = time.monotonic() + START_TIMEOUT_S
     while time.monotonic() < deadline:

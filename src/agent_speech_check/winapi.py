@@ -40,6 +40,8 @@ def take_mutex(name: str) -> int | None:
 
 TH32CS_SNAPPROCESS = 0x00000002
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+PROCESS_TERMINATE = 0x0001
+ERROR_INVALID_PARAMETER = 87  # from OpenProcess: no process has that pid
 INVALID_HANDLE = wintypes.HANDLE(-1).value
 MAX_PATH = 32768
 
@@ -110,6 +112,8 @@ def image_path(pid: int) -> Path | None:
 
 SYNCHRONIZE = 0x00100000
 INFINITE = 0xFFFFFFFF
+WAIT_OBJECT_0 = 0
+WAIT_TIMEOUT = 258  # also the Win32 error code for a wait that timed out
 _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 _kernel32.WaitForSingleObject.restype = wintypes.DWORD
 
@@ -128,9 +132,6 @@ def wait_exit(pid: int) -> None:
 _kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE, *[ctypes.POINTER(wintypes.FILETIME)] * 4]
 # FILETIME counts 100 ns steps from 1601; Unix time counts seconds from 1970.
 _FILETIME_UNIX_START = 116444736000000000
-
-
-ERROR_INVALID_PARAMETER = 87  # from OpenProcess: no process has that pid
 
 
 def _open_live(access: int, pid: int) -> int | None:
@@ -160,9 +161,6 @@ def created_at(pid: int) -> float | None:
         _kernel32.CloseHandle(handle)
 
 
-PROCESS_TERMINATE = 0x0001
-WAIT_OBJECT_0 = 0
-WAIT_TIMEOUT = 258
 _kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
 
 

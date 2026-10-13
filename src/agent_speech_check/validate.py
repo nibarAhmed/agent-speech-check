@@ -93,3 +93,6 @@ class Fields:
         if not all(isinstance(item, str) and item for item in items):
             raise self._bad(key, "a list of strings")
         return tuple(items)
+
+    def opt_strings(self, key: str) -> tuple[str, ...]:
+        return self.strings(key) if self.has(key) else ()
