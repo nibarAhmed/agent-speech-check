@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "cryptography>=50.0.2",
+    "tomlkit>=0.15.1",
 ]
 
 [project.scripts]

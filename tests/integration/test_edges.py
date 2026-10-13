@@ -115,6 +115,16 @@ def test_daemon_hangs_up() -> None:
     assert "closed the connection without a reply" in result.stderr
 
 
+@pytest.mark.parametrize("daemon_reply", [b"not json\n"], indirect=True)
+@pytest.mark.usefixtures("daemon_reply")
+def test_config_set_looks_for_the_daemon_before_saving(env: Env) -> None:
+    path = env.root / "agent-speech-check" / "config.toml"
+    before = path.read_text(encoding="utf-8")
+    result = run_asc("config", "set", "port", "7000", "--target", "w")
+    assert result.returncode == 6
+    assert path.read_text(encoding="utf-8") == before
+
+
 def _ipc_port(env: Env) -> int:
     state = json.loads((env.folder("w") / "state.json").read_text(encoding="utf-8"))
     port: int = state["port"]

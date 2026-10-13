@@ -5,7 +5,7 @@ from agent_speech_check.validate import Fields
 
 
 def fields(raw: object, allowed: tuple[str, ...] | None = None) -> Fields:
-    return Fields(raw, "targets.toml [targets.app]", UsageError, allowed)
+    return Fields(raw, "config.toml [targets.app]", UsageError, allowed)
 
 
 def test_not_an_object() -> None:

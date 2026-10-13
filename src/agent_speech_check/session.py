@@ -36,6 +36,24 @@ def status(folder: Path, target: str) -> dict[str, Any]:
     return ipc.call(folder, target, ipc.Request("status", ipc.NoArgs()), STATUS_TIMEOUT_S)
 
 
+def is_running(folder: Path, target: str) -> bool:
+    """A daemon answers for the target. A stale state file is removed on the way."""
+    if not state.exists(folder):
+        return False
+    try:
+        status(folder, target)
+    except NotConnected:
+        return False
+    return True
+
+
+def running_targets(root: Path) -> list[str]:
+    """Every target whose daemon answers, by name."""
+    return sorted(
+        f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent, f.parent.name)
+    )
+
+
 def log_tail(folder: Path) -> str:
     lines: list[str] = []
     for name in (LOG_FILE, ERR_FILE):

@@ -12,36 +12,44 @@ import os
 import sys
 import traceback
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from agent_speech_check import (
     __version__,
+    config,
     daemon,
     firewall,
     ipc,
     keyref,
     nvda,
     nvda_config,
+    prefs,
     sandbox,
     session,
+    setup,
 )
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
     BadSetting,
     InternalError,
+    NeedsTerminal,
     NoCommand,
+    TargetsRunning,
 )
 from agent_speech_check.nvda_config import Setting
-from agent_speech_check.paths import state_root, target_dir, targets_file
-from agent_speech_check.targets import MODES, WINDOWS, Target, resolve
+from agent_speech_check.paths import config_file, state_root, target_dir
+from agent_speech_check.prefs import MODES, WINDOWS
+from agent_speech_check.targets import DEFAULT_TARGET, SANDBOX_PORT, Config, Target, load
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
 NVDA says as text, and check it.
 
 typical use:
+  asc setup                    choose your settings (once)
   asc start                    start recording (watch mode: your own NVDA)
   asc status                   how NVDA should connect, and whether it is
   asc mark                     remember where the speech log is now
@@ -69,8 +77,8 @@ HELP: dict[str, tuple[str, str]] = {
     "start": (
         "start recording for a target",
         """\
-Start the background daemon for a target. Targets come from targets.toml in
-the state folder, or default to --mode (watch if left out).
+Start the background daemon for a target. Targets come from config.toml (see
+asc config), or default to --mode (watch if left out).
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
 keys. Connect once in NVDA (Tools, Remote Access, Connect): allow this computer
@@ -173,6 +181,30 @@ examples:
   asc get-nvda
   asc get-nvda --installer nvda_2026.2.exe""",
     ),
+    "setup": (
+        "choose your settings, by answering questions",
+        """Ask a few questions and save the answers in config.toml, for the default
+target. Running it again replaces all your settings. It needs a terminal;
+scripts and agents use asc config instead. Press Enter to keep a default, and
+Ctrl+C to stop without saving.
+
+examples:
+  asc setup
+  asc setup --yes          replace existing settings without asking""",
+    ),
+    "config": (
+        "show or change one setting",
+        """Show or change the settings in config.toml. Target settings go to --target,
+or to the default target. Command defaults (settle_ms, timeout_ms, ...) go to
+[defaults], or to one target with --target. A flag on a command beats both.
+
+examples:
+  asc config list
+  asc config set settle_ms 800 --target app
+  asc config set mode sandbox --target app      makes target app
+  asc config set share C:\\src\\app C:\\data --target app
+  asc config unset settle_ms --target app""",
+    ),
     "sandbox-setup": (
         "allow the sandbox's NVDA to reach asc (asks for admin once)",
         """Sandbox mode runs NVDA in Windows Sandbox, which connects to asc on this
@@ -193,19 +225,17 @@ def _add_target(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--target", metavar="NAME", help="target name (default: default)")
 
 
-def _timeout(parser: argparse.ArgumentParser, default: int = ipc.DEFAULT_TIMEOUT_MS) -> None:
-    parser.add_argument(
-        "--timeout", type=int, default=default, metavar="MS", help=f"default {default}"
-    )
+def _default(name: str) -> str:
+    return f"default: the {name} setting, {config.show(prefs.BY_NAME[name].default)} unless set"
+
+
+def _timeout(parser: argparse.ArgumentParser, name: str = "timeout_ms") -> None:
+    parser.add_argument("--timeout", type=int, metavar="MS", help=_default(name))
 
 
 def _settle(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--settle",
-        type=int,
-        default=ipc.DEFAULT_SETTLE_MS,
-        metavar="MS",
-        help=f"quiet period (default {ipc.DEFAULT_SETTLE_MS})",
+        "--settle", type=int, metavar="MS", help=f"quiet period ({_default('settle_ms')})"
     )
 
 
@@ -258,25 +288,59 @@ def _type_args(parser: argparse.ArgumentParser) -> None:
 
 def _keys_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("words", nargs="*", metavar="SEARCH")
-    parser.add_argument("--layout", choices=("desktop", "laptop"), default="desktop")
+    parser.add_argument(
+        "--layout", choices=prefs.BY_NAME["keys_layout"].choices, help=_default("keys_layout")
+    )
     parser.add_argument("--nvda-dir", metavar="DIR", help="read this NVDA's reference")
-    parser.add_argument("--lang", default="en", help="reference language (default en)")
-    parser.add_argument("--braille", action="store_true", help="include braille displays")
+    parser.add_argument("--lang", help=f"reference language ({_default('keys_lang')})")
+    parser.add_argument(
+        "--braille",
+        action=argparse.BooleanOptionalAction,
+        help=f"include braille displays ({_default('keys_braille')})",
+    )
 
 
 def _launch_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("app", metavar="CMD")
     parser.add_argument("--title", metavar="REGEX", help="wait until NVDA says this")
-    _timeout(parser, ipc.DEFAULT_LAUNCH_TIMEOUT_MS)
+    _timeout(parser, "launch_timeout_ms")
 
 
 def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--version", default=nvda.VERSION, dest="nvda_version")
+    parser.add_argument("--version", dest="nvda_version", help=_default("nvda_version"))
     parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
 
 
 def _sandbox_setup_args(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(mode="sandbox")
+
+
+def _setup_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--yes", action="store_true", help="replace settings without asking")
+
+
+CONFIG_HELP = {
+    "list": "show every setting, and where its value comes from",
+    "get": "print one setting's value",
+    "set": "change a setting (a list takes several values)",
+    "unset": "go back to the inherited value",
+    "remove-target": "delete a target's settings",
+    "path": "print where config.toml is",
+}
+
+
+def _config_args(parser: argparse.ArgumentParser) -> None:
+    actions = parser.add_subparsers(dest="action", metavar="ACTION", required=True)
+    for action, summary in CONFIG_HELP.items():
+        sub = actions.add_parser(action, help=summary, description=summary)
+        if action in ("get", "set", "unset"):
+            sub.add_argument("name", metavar="NAME")
+        if action == "set":
+            sub.add_argument("values", nargs="+", metavar="VALUE")
+        if action == "remove-target":
+            sub.add_argument("name", metavar="TARGET")
+        elif action != "path":
+            _add_target(sub)
 
 
 ARGS: dict[str, Callable[[argparse.ArgumentParser], None]] = {
@@ -289,7 +353,11 @@ ARGS: dict[str, Callable[[argparse.ArgumentParser], None]] = {
     "launch": _launch_args,
     "get-nvda": _get_nvda_args,
     "sandbox-setup": _sandbox_setup_args,
+    "setup": _setup_args,
+    "config": _config_args,
 }
+# These pick their own target, or none.
+NO_TARGET = ("setup", "config")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -310,7 +378,8 @@ def build_parser() -> argparse.ArgumentParser:
             epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
-        _add_target(sub[name])
+        if name not in NO_TARGET:
+            _add_target(sub[name])
         if name in ARGS:
             ARGS[name](sub[name])
     return parser
@@ -355,8 +424,19 @@ def _show_said(lines: list[str]) -> None:
 # ---------------------------------------------------------------- commands
 
 
-def _target(args: argparse.Namespace) -> Target:
-    return resolve(targets_file(), args.target, getattr(args, "mode", None))
+def _target(args: argparse.Namespace, settings: Config | None = None) -> Target:
+    settings = settings or load(config_file())
+    return settings.resolve(args.target, getattr(args, "mode", None))
+
+
+def _with_defaults(args: argparse.Namespace, flags: dict[str, str]) -> Target:
+    """The target. Each flag in `flags` left out is filled in from its setting."""
+    settings = load(config_file())
+    target = _target(args, settings)
+    for flag, name in flags.items():
+        if getattr(args, flag) is None:
+            setattr(args, flag, settings.value(name, target.name)[0])
+    return target
 
 
 def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) -> dict[str, Any]:
@@ -367,9 +447,10 @@ def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) ->
 
 def cmd_start(args: argparse.Namespace) -> int:
     target = _target(args).with_nvda_dir(args.nvda_dir).with_window(args.window)
-    settings = tuple(Setting.parse(text) for text in args.nvda_setting)
-    if settings and not target.launches_nvda:
+    given = tuple(Setting.parse(text) for text in args.nvda_setting)
+    if given and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
+    settings = nvda_config.merge(target.settings, given)
     nvda_config.check(settings)
     target = target.with_settings(settings).with_consent(args.i_understand)
     status = session.start(target, target_dir(target.name))
@@ -399,9 +480,13 @@ def cmd_speech(args: argparse.Namespace) -> int:
     return 0
 
 
+_TIMINGS = {"settle": "settle_ms", "timeout": "timeout_ms"}
+
+
 def cmd_wait(args: argparse.Namespace) -> int:
+    target = _with_defaults(args, {"timeout": "timeout_ms"})
     raw = {"pattern": args.regex, "timeout_ms": args.timeout, "since": args.since}
-    n, text = _call(_target(args), "wait", raw, args.timeout)["line"]
+    n, text = _call(target, "wait", raw, args.timeout)["line"]
     print(f"{n} {text}")
     return 0
 
@@ -418,33 +503,36 @@ def cmd_clear(args: argparse.Namespace) -> int:
 
 
 def cmd_press(args: argparse.Namespace) -> int:
+    target = _with_defaults(args, _TIMINGS)
     raw = {
         "gestures": args.gestures,
         "expect": args.expect,
         "settle_ms": args.settle,
         "timeout_ms": args.timeout,
     }
-    _show_said(_call(_target(args), "press", raw, args.timeout)["lines"])
+    _show_said(_call(target, "press", raw, args.timeout)["lines"])
     return 0
 
 
 def cmd_type(args: argparse.Namespace) -> int:
+    target = _with_defaults(args, _TIMINGS)
     raw = {"text": args.text, "settle_ms": args.settle, "timeout_ms": args.timeout}
-    _show_said(_call(_target(args), "type", raw, args.timeout)["lines"])
+    _show_said(_call(target, "type", raw, args.timeout)["lines"])
     return 0
 
 
-def _nvda_dirs(args: argparse.Namespace) -> list[tuple[str, Path]]:
+def _nvda_dirs(args: argparse.Namespace, target: Target) -> list[tuple[str, Path]]:
     if args.nvda_dir:
         return [("--nvda-dir", Path(args.nvda_dir))]
-    target = _target(args)
     if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
         return [("the portable NVDA", nvda.folder_for(target.nvda_dir))]
     return keyref.candidates()
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
-    path = keyref.reference(_nvda_dirs(args), args.lang)
+    flags = {"layout": "keys_layout", "lang": "keys_lang", "braille": "keys_braille"}
+    target = _with_defaults(args, flags)
+    path = keyref.reference(_nvda_dirs(args, target), args.lang)
     commands = keyref.parse(path.read_text(encoding="utf-8"))
     found = keyref.search(commands, args.words, args.layout, braille=args.braille)
     _show_lines([c.line(args.layout) for c in found], "(no match)")
@@ -452,8 +540,9 @@ def cmd_keys(args: argparse.Namespace) -> int:
 
 
 def cmd_launch(args: argparse.Namespace) -> int:
+    target = _with_defaults(args, {"timeout": "launch_timeout_ms"})
     raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
-    _show_said(_call(_target(args), "launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
+    _show_said(_call(target, "launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
     return 0
 
 
@@ -464,23 +553,221 @@ def cmd_sandbox_setup(args: argparse.Namespace) -> int:
     if firewall.rule_ok(target.port, program):
         print(f"firewall rule already in place for port {target.port}")
         return 0
-    print("asking Windows for admin rights to add one firewall rule")
-    firewall.create_rule(target.port, program)
-    print(f"firewall rule added: {firewall.RULE_NAME}, TCP {target.port}, {firewall.INTERFACE}")
+    _add_firewall_rule(target.port, program)
     return 0
+
+
+def _add_firewall_rule(port: int, program: str) -> None:
+    print("asking Windows for admin rights to add one firewall rule")
+    firewall.create_rule(port, program)
+    print(f"firewall rule added: {firewall.RULE_NAME}, TCP {port}, {firewall.INTERFACE}")
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
-    nvda.refuse_if_running()
-    folder = nvda.managed_dir()
-    if args.installer:
-        installer = Path(args.installer)
-    else:
-        print(f"downloading {nvda.installer_url(args.nvda_version)}")
-        installer = nvda.download(args.nvda_version)
-    exe = nvda.create_portable(installer, folder)
-    print(f"portable NVDA ready: {exe}")
+    version = args.nvda_version or str(load(config_file()).value("nvda_version")[0])
+    _make_portable(version, Path(args.installer) if args.installer else None)
     return 0
+
+
+def _make_portable(version: str, installer: Path | None = None) -> None:
+    """asc's own portable NVDA, from `installer` or a download of `version`."""
+    nvda.refuse_if_running()
+    if installer is None:
+        print(f"downloading {nvda.installer_url(version)}")
+        installer = nvda.download(version)
+    exe = nvda.create_portable(installer, nvda.managed_dir())
+    print(f"portable NVDA ready: {exe}")
+
+
+def _running(target: str) -> bool:
+    return session.is_running(target_dir(target), target)
+
+
+def _config_change(settings: Config, args: argparse.Namespace) -> int:
+    pref = prefs.find(args.name)
+    where = config.owner(settings, pref, args.target)
+    if args.action == "set":
+        data, value = config.set_value(settings, pref, args.values, args.target)
+        done = f"{pref.name} = {config.show(value)} ({config.label(where)})"
+    else:
+        data = config.unset_value(settings, pref, args.target)
+        done = f"{pref.name} unset ({config.label(where)})"
+    # Command defaults are read by each command, so only target settings wait.
+    # Asked before saving, so a failed look leaves the file as it was.
+    waits = where is not None and pref.scope == prefs.TARGET and _running(where)
+    config.save(config_file(), data)
+    print(done)
+    if waits:
+        print(f"applies at the next asc start of {where}")
+    return 0
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    if args.action == "path":
+        # Not read, so it works on a file too broken to load.
+        print(config_file())
+        return 0
+    settings = load(config_file())
+    if args.action == "list":
+        for name, value, source in config.entries(settings, args.target):
+            print(f"{name} = {config.show(value)} ({source})")
+    elif args.action == "get":
+        pref = prefs.find(args.name)
+        values = {name: value for name, value, _ in config.entries(settings, args.target)}
+        print(config.show(values[pref.name]))
+    elif args.action == "remove-target":
+        data = config.remove_target(settings, args.name)
+        if _running(args.name):
+            raise TargetsRunning([args.name])
+        config.save(config_file(), data)
+        print(f"removed: {args.name}")
+    else:
+        return _config_change(settings, args)
+    return 0
+
+
+# ---------------------------------------------------------------- setup
+
+
+type Ask = Callable[[str], str]
+
+
+def _ask_choice(ask: Ask, label: str, choices: tuple[setup.Choice, ...]) -> str:
+    for number, choice in enumerate(choices, 1):
+        print(f"{number} {choice.name}: {choice.about}")
+    while True:
+        picked = setup.pick(ask(setup.choice_prompt(label, choices)), choices)
+        if picked is not None:
+            return picked
+        print(f"answer 1 to {len(choices)}, or a name")
+
+
+def _ask_yes(ask: Ask, question: str, *, default: bool) -> bool:
+    while True:
+        answer = setup.yes_no(ask(setup.yes_no_prompt(question, default=default)), default=default)
+        if answer is not None:
+            return answer
+        print("answer y or n")
+
+
+def _ask_folder(ask: Ask, prompt: str, *, holding: str | None = None) -> str | None:
+    """A full path to an existing folder (with the file `holding` in it), or None on Enter."""
+    while True:
+        text = ask(prompt).strip().strip('"')
+        if not text:
+            return None
+        folder = Path(text).absolute()
+        if not folder.is_dir():
+            print(f"no such folder: {folder}")
+        elif holding and not (folder / holding).is_file():
+            print(f"no {holding} in {folder}")
+        else:
+            return str(folder)
+
+
+def _get_nvda_now(ask: Ask) -> None:
+    if (nvda.managed_dir() / "nvda.exe").is_file():
+        return
+    if not _ask_yes(ask, "asc has no portable NVDA yet. Download it now?", default=True):
+        print("later: asc get-nvda")
+        return
+    try:
+        _make_portable(nvda.VERSION)
+    except AscError as error:
+        print(f"not done: {error.message}")
+        print("later: asc get-nvda")
+
+
+def _firewall_now(ask: Ask) -> None:
+    program = firewall.daemon_program()
+    if firewall.rule_ok(SANDBOX_PORT, program):
+        return
+    print("sandbox mode needs one firewall rule, so the sandbox's NVDA can reach asc")
+    if not _ask_yes(ask, "Add it now? Windows asks for admin rights.", default=True):
+        print("later: asc sandbox-setup")
+        return
+    try:
+        _add_firewall_rule(SANDBOX_PORT, program)
+    except AscError as error:
+        print(f"not done: {error.message}")
+        print("later: asc sandbox-setup")
+
+
+def _ask_mode(ask: Ask) -> str:
+    while True:
+        mode = _ask_choice(ask, "Mode", setup.MODES)
+        if mode != "sandbox":
+            return mode
+        try:
+            sandbox.require_available()
+        except AscError as error:
+            print(f"{error.message}; pick another mode")
+        else:
+            return mode
+
+
+def _answers(ask: Ask) -> setup.Answers:
+    mode = _ask_mode(ask)
+    answers = setup.Answers(mode)
+    if mode in ("desktop", "sandbox"):
+        nvda_dir = None
+        if _ask_choice(ask, "Which NVDA", setup.NVDA_SOURCES) == "folder":
+            nvda_dir = _ask_folder(ask, "Your portable NVDA folder: ", holding="nvda.exe")
+        if nvda_dir is None and mode == "desktop":
+            _get_nvda_now(ask)
+        punctuation = _ask_choice(ask, "Punctuation NVDA speaks", setup.PUNCTUATION)
+        answers = replace(answers, nvda_dir=nvda_dir, punctuation=punctuation)
+    if mode == "desktop" and nvda.running():
+        print("note: desktop mode won't start while another NVDA runs")
+    if mode == "sandbox":
+        share: list[str] = []
+        while folder := _ask_folder(ask, "Folder to share with the sandbox, or Enter when done: "):
+            share.append(folder)
+        window = _ask_choice(ask, "Sandbox window", setup.WINDOWS)
+        answers = replace(answers, share=tuple(share), window=window)
+        _firewall_now(ask)
+    if mode in ("watch", "shared"):
+        layout = _ask_choice(ask, "Your NVDA keyboard layout", setup.LAYOUTS)
+        answers = replace(answers, keys_layout=layout)
+    if mode == "shared":
+        print("shared mode needs --i-understand at every asc start.")
+        print(f"While it runs, {daemon.PANIC_KEY} stops asc and releases keys.")
+    return answers
+
+
+def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
+    """Ask the questions, then write config.toml once. `ask` reads one answer."""
+    running = session.running_targets(state_root())
+    if running:
+        raise TargetsRunning(running)
+    path = config_file()
+    if path.exists() and not replace_without_asking:
+        question = f"This replaces your settings in {path}. Continue?"
+        if not _ask_yes(ask, question, default=False):
+            print("nothing changed")
+            return 0
+    print("Press Enter to keep a default. Ctrl+C stops without saving.")
+    data = setup.to_data(_answers(ask))
+    print("your settings:")
+    for name, value in {**data.get("defaults", {}), **data["targets"][DEFAULT_TARGET]}.items():
+        print(f"{name} = {config.show(value)}")
+    if not _ask_yes(ask, "Save?", default=True):
+        print("nothing saved")
+        return 0
+    config.save(path, data)
+    print(f"saved: {path}")
+    print("next: asc start")
+    return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise NeedsTerminal
+    try:
+        return run_setup(input, replace_without_asking=args.yes)
+    except (KeyboardInterrupt, EOFError):
+        print("\nstopped, nothing saved")
+        return EXIT_INTERRUPTED
 
 
 COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
@@ -497,6 +784,8 @@ COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "launch": cmd_launch,
     "get-nvda": cmd_get_nvda,
     "sandbox-setup": cmd_sandbox_setup,
+    "setup": cmd_setup,
+    "config": cmd_config,
 }
 
 

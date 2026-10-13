@@ -5,17 +5,21 @@ import pytest
 
 from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError
 from agent_speech_check.nvda_config import Setting
-from agent_speech_check.targets import Target, defaults, resolve
+from agent_speech_check.targets import Target, defaults, load
+
+
+def resolve(path: Path, name: str | None, mode: str | None) -> Target:
+    return load(path).resolve(name, mode)
 
 
 def write(tmp_path: Path, text: str) -> Path:
-    path = tmp_path / "targets.toml"
+    path = tmp_path / "config.toml"
     path.write_text(text, encoding="utf-8")
     return path
 
 
 def test_no_file_gives_watch_default(tmp_path: Path) -> None:
-    target = resolve(tmp_path / "targets.toml", None, None)
+    target = resolve(tmp_path / "config.toml", None, None)
     assert target == Target("default", "watch", 6837, keys=False, launch=False)
 
 
@@ -37,7 +41,7 @@ def test_listed_target_and_default_name(tmp_path: Path) -> None:
 
 def test_mode_mismatch(tmp_path: Path) -> None:
     path = write(tmp_path, '[targets.app]\nmode = "watch"\n')
-    with pytest.raises(ModeMismatch, match=r'target "app" is watch mode in targets\.toml'):
+    with pytest.raises(ModeMismatch, match=r'target "app" is watch mode in config.toml'):
         resolve(path, "app", "desktop")
 
 
@@ -57,7 +61,7 @@ def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
 
 
 def test_toml_syntax_error(tmp_path: Path) -> None:
-    with pytest.raises(TargetsFileError, match=r"targets.toml: "):
+    with pytest.raises(TargetsFileError, match=r"config.toml: "):
         resolve(write(tmp_path, "[targets\n"), None, None)
 
 
@@ -134,7 +138,7 @@ def test_with_nvda_dir() -> None:
 
 def test_relative_nvda_dir_in_file_is_refused(tmp_path: Path) -> None:
     path = write(tmp_path, "[targets.app]\nmode = 'desktop'\nnvda_dir = 'nvda'\n")
-    with pytest.raises(UsageError, match="a full path") as exc:
+    with pytest.raises(UsageError, match=r"a full path, like C:\\nvda, got") as exc:
         resolve(path, "app", None)
     assert exc.value.exit_code == 2
 
@@ -177,3 +181,19 @@ def test_with_window() -> None:
     assert target.with_window("taskbar").sandbox_window == "taskbar"
     with pytest.raises(UsageError, match="--window window: expected only in sandbox mode"):
         defaults("x", "desktop").with_window("show")
+
+
+def test_file_not_in_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_bytes(b'[targets.app]\nmode = "watch" # caf\xe9\n')
+    with pytest.raises(TargetsFileError, match=r"config.toml: "):
+        resolve(path, None, None)
+
+
+def test_clash_in_kept_settings_names_the_file(tmp_path: Path) -> None:
+    text = (
+        '[targets.app]\nmode = "desktop"\n'
+        'nvda_settings = ["speech.symbolLevel=1", "speech.symbolLevel.x=2"]\n'
+    )
+    with pytest.raises(UsageError, match=r"^config.toml: \[targets.app\] nvda_settings "):
+        resolve(write(tmp_path, text), "app", None)

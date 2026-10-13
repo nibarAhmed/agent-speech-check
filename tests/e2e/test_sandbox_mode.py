@@ -46,7 +46,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     app = tmp_path / "app"
     app.mkdir()
     (app / "app.html").write_text(APP, encoding="utf-8")
-    (root / "targets.toml").write_text(
+    (root / "config.toml").write_text(
         f"[targets.sb]\nmode = 'sandbox'\nshare = ['{app.as_posix()}']\n", encoding="utf-8"
     )
     users_nvda = sorted(winapi.process_ids("nvda.exe"))
@@ -87,7 +87,7 @@ def test_sandbox_goes_when_its_daemon_is_killed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _with_installer(tmp_path, monkeypatch)
-    (root / "targets.toml").write_text("[targets.k]\nmode = 'sandbox'\n", encoding="utf-8")
+    (root / "config.toml").write_text("[targets.k]\nmode = 'sandbox'\n", encoding="utf-8")
 
     started = run_asc("start", "--target", "k", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr

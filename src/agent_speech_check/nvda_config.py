@@ -24,7 +24,7 @@ from __future__ import annotations
 import copy
 import re
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from agent_speech_check.errors import BadSetting, UserConfigUnreadable
@@ -50,32 +50,49 @@ _NOT_COPIED = frozenset({"nvda.ini", "profileTriggers.ini"})
 class Setting:
     path: tuple[str, ...]  # sections, then the key
     value: str
+    # Where it came from, for errors: the flag, or the config.toml table.
+    where: str = field(default="--nvda-setting", compare=False)
 
     @classmethod
-    def parse(cls, text: str) -> Setting:
+    def parse(cls, text: str, where: str = "--nvda-setting") -> Setting:
         name, sep, value = text.partition("=")
         name, value = name.strip(), value.strip()
         if not sep:
-            raise BadSetting(text, "expected section.key=value")
+            raise BadSetting(text, "expected section.key=value", where)
         path = tuple(name.split("."))
         if len(path) < 2 or not all(_NAME.fullmatch(part) for part in path):  # noqa: PLR2004 - section and key
-            raise BadSetting(text, "names are letters, digits and _, joined by dots")
+            raise BadSetting(text, "names are letters, digits and _, joined by dots", where)
         if any(c in value for c in _FORBIDDEN) or value.startswith("["):
-            raise BadSetting(text, "the value can't contain line breaks or start with [")
+            raise BadSetting(text, "the value can't contain line breaks or start with [", where)
         if '"' in value and "'" in value:
-            raise BadSetting(text, "the value can't contain both kinds of quote")
-        setting = cls(path, value)
+            raise BadSetting(text, "the value can't contain both kinds of quote", where)
+        setting = cls(path, value, where)
         if setting.owned:
-            raise BadSetting(text, "asc sets this itself")
+            raise BadSetting(text, "asc sets this itself", where)
         return setting
 
     @property
+    def key(self) -> tuple[str, ...]:
+        """The path as NVDA compares it: ignoring case."""
+        return tuple(part.lower() for part in self.path)
+
+    @property
+    def text(self) -> str:
+        return f"{'.'.join(self.path)}={self.value}"
+
+    @property
     def owned(self) -> bool:
-        lowered = tuple(p.lower() for p in self.path)
-        if lowered[0] == "remote":
+        if self.key[0] == "remote":
             return True
         owned = _flatten(base_config(_ANY_RELAY))
-        return any(lowered == tuple(p.lower() for p in key) for key in owned)
+        return any(self.key == tuple(p.lower() for p in key) for key in owned)
+
+
+def merge(kept: tuple[Setting, ...], given: tuple[Setting, ...]) -> tuple[Setting, ...]:
+    """A target's kept settings, then the ones given at start. A given setting
+    replaces a kept one with the same key."""
+    replaced = {setting.key for setting in given}
+    return tuple(s for s in kept if s.key not in replaced) + given
 
 
 def _flatten(section: Section, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...]]:
@@ -232,10 +249,14 @@ def _merged(
         for name in sections:
             child = section.setdefault(name, {})
             if not isinstance(child, dict):
-                raise BadSetting(".".join(setting.path), f"{name} is a key, not a section")
+                raise BadSetting(
+                    ".".join(setting.path), f"{name} is a key, not a section", setting.where
+                )
             section = child
         if isinstance(section.get(key), dict):
-            raise BadSetting(".".join(setting.path), f"{key} is a section, not a key")
+            raise BadSetting(
+                ".".join(setting.path), f"{key} is a section, not a key", setting.where
+            )
         section[key] = setting.value
     return config
 

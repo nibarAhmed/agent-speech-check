@@ -54,7 +54,7 @@ def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
     port = free_port()
     root = tmp_path / "agent-speech-check"
     root.mkdir()
-    (root / "targets.toml").write_text(
+    (root / "config.toml").write_text(
         f'[targets.e]\nmode = "desktop"\nport = {port}\nlaunch = false\n', encoding="utf-8"
     )
     started = run_asc("start", "--target", "e")

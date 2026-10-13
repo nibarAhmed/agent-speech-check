@@ -93,7 +93,7 @@ def test_keys_from_a_given_nvda(tmp_path: Path) -> None:
 
 def test_keys_for_desktop_target_reads_the_portable_copy(env: Env, tmp_path: Path) -> None:
     portable = tmp_path / "portable"
-    (env.root / "agent-speech-check" / "targets.toml").write_text(
+    (env.root / "agent-speech-check" / "config.toml").write_text(
         f"[targets.p]\nmode = 'desktop'\nnvda_dir = '{portable.as_posix()}'\n",
         encoding="utf-8",
     )
@@ -116,7 +116,7 @@ def test_settings_only_for_a_launched_nvda() -> None:
 @pytest.mark.usefixtures("env")
 def test_desktop_and_get_nvda_refuse_while_nvda_runs(tmp_path: Path) -> None:
     (tmp_path / "nvda.exe").write_bytes(b"")
-    (tmp_path / "agent-speech-check" / "targets.toml").write_text(
+    (tmp_path / "agent-speech-check" / "config.toml").write_text(
         f"[targets.x]\nmode = 'desktop'\nnvda_dir = '{tmp_path.as_posix()}'\n",
         encoding="utf-8",
     )
@@ -138,7 +138,7 @@ def test_desktop_without_portable_nvda(tmp_path: Path) -> None:
 
 def test_sandbox_needs_the_firewall_rule(env: Env) -> None:
     # A port no rule covers, so this never starts a real sandbox.
-    (env.root / "agent-speech-check" / "targets.toml").write_text(
+    (env.root / "agent-speech-check" / "config.toml").write_text(
         f"[targets.s]\nmode = 'sandbox'\nport = {env.port}\n", encoding="utf-8"
     )
     result = run_asc("start", "--target", "s")
@@ -149,7 +149,7 @@ def test_sandbox_needs_the_firewall_rule(env: Env) -> None:
 
 def test_keys_for_sandbox_target_reads_your_own_nvda(env: Env) -> None:
     # Sandbox mode makes its portable NVDA inside the sandbox, never on the host.
-    (env.root / "agent-speech-check" / "targets.toml").write_text(
+    (env.root / "agent-speech-check" / "config.toml").write_text(
         "[targets.s]\nmode = 'sandbox'\n", encoding="utf-8"
     )
     found = run_asc("keys", "x", "--target", "s")

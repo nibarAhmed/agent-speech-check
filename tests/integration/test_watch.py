@@ -117,7 +117,7 @@ def test_stale_state_file_is_removed(env: Env) -> None:
 def test_daemon_that_cannot_bind_reports_its_log(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
     # Same relay port, another target: the second daemon can't listen.
-    (env.root / "agent-speech-check" / "targets.toml").write_text(
+    (env.root / "agent-speech-check" / "config.toml").write_text(
         f'[targets.w]\nmode = "watch"\nport = {env.port}\n'
         f'[targets.w2]\nmode = "watch"\nport = {env.port}\n',
         encoding="utf-8",
@@ -138,7 +138,7 @@ def test_shared_mode_needs_consent() -> None:
 
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_the_panic_key_taken_exits_4(env: Env) -> None:
-    (env.root / "agent-speech-check" / "targets.toml").write_text(
+    (env.root / "agent-speech-check" / "config.toml").write_text(
         f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n", encoding="utf-8"
     )
     holder = winapi.GlobalHotkey(daemon.PANIC_MODIFIERS, daemon.PANIC_VK, lambda: None)

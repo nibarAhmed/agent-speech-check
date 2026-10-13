@@ -16,3 +16,4 @@ Contributions come in under the project's MIT license. There's no CLA.
 - No em dashes (U+2014) anywhere. `scripts/check_dashes.py` enforces it.
 - Never copy NVDA source code (it's GPL). Work from `docs/protocol.md`.
 - Conventional commits, small pull requests, and update `docs/cli.md` with every command change.
+- A new dependency is fine when it saves code. Say why in the commit message.

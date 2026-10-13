@@ -30,6 +30,24 @@ this file.
 - The sandbox window sits in the system tray by default. If the user wants it
   on the taskbar or shown, pass `--window taskbar` or `--window show`.
 
+## Settings
+
+The user's choices live in `config.toml`, made by `asc setup`. Never run
+`asc setup` yourself: it asks questions (and exits 2 without a terminal), and
+it replaces all their settings. Use `asc config` instead:
+
+```
+asc config list                                # every setting and its source
+asc config set settle_ms 800 --target app      # one target, or [defaults] without --target
+asc config set mode sandbox --target app       # makes a new target
+asc config set share C:\src\app --target app
+```
+
+- If presses keep missing speech, or a slow app times out, raise `settle_ms`,
+  `timeout_ms` or `launch_timeout_ms` for that target rather than passing the
+  flag every time. Tell the user what you changed.
+- A setting for a running target applies at its next `asc start` (it says so).
+
 ## Workflow
 
 ```
@@ -42,7 +60,7 @@ asc stop                  # when done
 ```
 
 - `wait` takes a Python regex, searched, `(?i)` for case. Default timeout 5000
-  ms (`--timeout`). On timeout it prints what NVDA did say: read it before
+  ms (`--timeout`, or the `timeout_ms` setting). On timeout it prints what NVDA did say: read it before
   retrying.
 - Mark before each step, so old speech can't satisfy the next `wait`.
 - `asc status` shows the connection, the browse/focus mode (`unknown` until NVDA
@@ -77,8 +95,8 @@ asc launch "C:\share\app\run.cmd" --title "My App"
   field); add Shift to go back.
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute. The
   app must come from a folder listed in the target's `share`
-  (`targets.toml`), seen inside as `C:\share\<folder name>`. The sandbox has no
-  Edge and no Notepad. `asc sandbox-setup` must have been run once (exit 7 says
+  (`asc config set share DIR --target NAME`), seen inside as
+  `C:\share\<folder name>`. The sandbox has no Edge and no Notepad. `asc sandbox-setup` must have been run once (exit 7 says
   so).
 - Shared mode needs `asc start --mode shared --i-understand` every time. Tell
   the user the panic key, Control+Shift+Alt+F12, before sending anything.

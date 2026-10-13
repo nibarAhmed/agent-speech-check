@@ -1,6 +1,6 @@
 """Shared checks for every edge where data enters `asc`.
 
-Each edge (CLI arguments, IPC requests, wire messages, `targets.toml`, the state
+Each edge (CLI arguments, IPC requests, wire messages, `config.toml`, the state
 file) parses raw input into frozen dataclasses through `Fields`, so every edge
 reports a bad field the same way: `<where> <field>: expected ..., got ...`.
 

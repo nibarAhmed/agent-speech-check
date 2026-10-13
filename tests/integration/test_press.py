@@ -140,7 +140,7 @@ def test_press_without_nvda() -> None:
 
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_consent_sends_keys_and_has_a_panic_key(env: Env) -> None:
-    (env.root / "agent-speech-check" / "targets.toml").write_text(
+    (env.root / "agent-speech-check" / "config.toml").write_text(
         f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n", encoding="utf-8"
     )
     started = run_asc("start", "--target", "sh", "--i-understand")
