@@ -2,7 +2,7 @@
 
 Never runs any NVDA binary on this machine: NVDA's command line acts on the
 copy that is already running (your screen reader). Everything NVDA happens
-inside the sandbox. This script only downloads the pinned installer.
+inside the sandbox. This script only downloads the installer.
 
 Prepares `.e2e/` (git-ignored):
   in/py/       uv-managed CPython (relocatable, unlike the Store Python)
@@ -22,11 +22,13 @@ on the host. The icon shows and hides it; pass --show to keep it visible.
 Usage: uv run python scripts/e2e_sandbox.py [--show] [--nvda-version V] [pytest args...]
 
 --nvda-version tests another NVDA than the pinned one, for example 2025.1,
-the oldest asc supports.
+the oldest with Remote Access (see docs/protocol.md for how it fares).
 """
 
 from __future__ import annotations
 
+import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -145,23 +147,21 @@ def mapped() -> list[sandbox.Mapped]:
 
 
 def main() -> int:
-    args = sys.argv[1:]
-    show = "--show" in args
-    args = [a for a in args if a != "--show"]
-    nvda_version = nvda.VERSION
-    if "--nvda-version" in args:
-        at = args.index("--nvda-version")
-        nvda_version = args[at + 1]
-        del args[at : at + 2]
+    parser = argparse.ArgumentParser(allow_abbrev=False)
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--nvda-version", default=nvda.VERSION)
+    ours, pytest_args = parser.parse_known_args()
+    if not re.fullmatch(nvda.VERSION_PATTERN, ours.nvda_version):
+        parser.error(f"--nvda-version: not an NVDA version: {ours.nvda_version}")
     sandbox.require_available()
     if sandbox.running():
         print("a Windows Sandbox is already running; stop it first")
         return 3
-    print(f"NVDA {nvda_version}")
-    prepare(nvda_version)
-    cmd = write_cmd(nvda_version, args)
+    print(f"NVDA {ours.nvda_version}")
+    prepare(ours.nvda_version)
+    cmd = write_cmd(ours.nvda_version, pytest_args)
     tooltip = "asc e2e sandbox: show or hide"
-    with sandbox.SandboxWindow("show" if show else "tray", tooltip) as window:
+    with sandbox.SandboxWindow("show" if ours.show else "tray", tooltip) as window:
         return run_tests(window, cmd)
 
 

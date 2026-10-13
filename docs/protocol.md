@@ -282,9 +282,10 @@ Windows Sandbox, with Windows Audio stopped as usual: all 6 tests failed.
   (`nvwave.WavePlayer.open`). That exception ends `handleChannelJoined`
   early, and speech is never forwarded.
 - NVDA 2026.2 in the same setup, the same day: all 6 passed.
-- Sandbox mode also stops Windows Audio, so it hits the same failure with
-  2025.1. Not tested: 2025.1 with an audio device, and versions between 2025.1
-  and 2026.2.
+- Sandbox mode also stops Windows Audio, so with 2025.1 it should hit the
+  same failure (not observed: sandbox mode with 2025.1 was not run).
+- Not tested: 2025.1 with an audio device, and versions between 2025.1 and
+  2026.2.
 
 ## Open questions (not answered by the spike)
 

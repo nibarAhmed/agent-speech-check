@@ -30,6 +30,8 @@ from agent_speech_check.paths import state_root
 log = logging.getLogger(__name__)
 
 VERSION = "2026.2"
+# What an NVDA release version looks like: 2026.2, 2025.1.1.
+VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
 # Remote Access is built in from 2025.1.
 MIN_VERSION = (2025, 1)
 # Per blocking read, not for the whole file: a stalled connection fails.

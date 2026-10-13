@@ -103,7 +103,7 @@ class Pref:
 
 PREFS: tuple[Pref, ...] = (
     Pref("default", GLOBAL, "text", "default", pattern=NAME_PATTERN),
-    Pref("nvda_version", GLOBAL, "text", nvda.VERSION, pattern=r"\d{4}\.\d+(\.\d+)?"),
+    Pref("nvda_version", GLOBAL, "text", nvda.VERSION, pattern=nvda.VERSION_PATTERN),
     Pref("mode", TARGET, "choice", choices=MODES),
     Pref("port", TARGET, "int", low=1, high=65535),
     Pref("keys", TARGET, "bool"),
