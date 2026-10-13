@@ -22,7 +22,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import firewall, ipc, nvda, nvda_config, relay, state, winapi
+from agent_speech_check import firewall, ipc, mouse, nvda, nvda_config, relay, state, winapi
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
@@ -216,6 +216,9 @@ class Daemon:
         if self.sandbox is not None:
             await self.sandbox.launch(args.command)
         else:
+            # Input only where the agent may send it: in watch mode the user drives.
+            if self.target.keys and not mouse.nudge():
+                log.info("launch: Windows may keep the app behind")
             start_app(args.command)
         # One deadline for the title and the quiet after it, so the CLI's
         # timeout (--timeout plus ipc.LAUNCH_START_MS) always covers both.

@@ -269,6 +269,42 @@ _user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.B
 _user32.BringWindowToTop.argtypes = [wintypes.HWND]
 
 
+INPUT_MOUSE = 0
+ASFW_ANY = -1
+
+
+class _MouseInput(ctypes.Structure):
+    _fields_ = (
+        ("dx", wintypes.LONG),
+        ("dy", wintypes.LONG),
+        ("mouseData", wintypes.DWORD),
+        ("dwFlags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    )
+
+
+class _Input(ctypes.Structure):
+    # The mouse member is the largest in INPUT's union, so this has its size.
+    _fields_ = (("type", wintypes.DWORD), ("mi", _MouseInput))
+
+
+_user32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(_Input), ctypes.c_int]
+_user32.SendInput.restype = wintypes.UINT
+_user32.AllowSetForegroundWindow.argtypes = [wintypes.DWORD]
+
+
+def send_still_mouse() -> bool:
+    """Send one mouse input that moves nothing and presses nothing."""
+    still = _Input(type=INPUT_MOUSE)
+    return int(_user32.SendInput(1, ctypes.byref(still), ctypes.sizeof(_Input))) == 1
+
+
+def allow_foreground() -> bool:
+    """Let any process take the foreground, if this one may. False if it may not."""
+    return bool(_user32.AllowSetForegroundWindow(wintypes.DWORD(ASFW_ANY).value))
+
+
 def foreground() -> int:
     return _user32.GetForegroundWindow() or 0
 

@@ -202,7 +202,12 @@ def test_stored_punctuation_level(
         wait_connected("p")
         page = tmp_path / "field.html"
         page.write_text(FIELD, encoding="utf-8")
-        launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc field", "--target", "p")
+        launched = run_asc(
+            "launch", f'mshta.exe "{page}"', "--title", "asc field", "--timeout", "10000",
+            "--target", "p",
+        )  # fmt: skip
+        # After earlier tests' keys Windows limits who takes the focus: launch
+        # must still bring the app to the front, or NVDA hears nothing.
         assert launched.returncode == 0, launched.stderr
         field = run_asc("press", "Tab", "--expect", "Wow", "--settle", "800", "--target", "p")
         assert field.returncode == 0, field.stdout + field.stderr
