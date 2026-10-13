@@ -74,6 +74,7 @@ def test_launch_errors(nvda: FakeNvda) -> None:
     silent = run_asc("launch", app, "--title", "Never", "--timeout", "300", "--target", "d")
     assert silent.returncode == 1
     assert 'no speech matched "Never" within 300 ms' in silent.stderr
+    assert "New windows: (none)" in silent.stderr
     assert nvda.held == set()
 
 

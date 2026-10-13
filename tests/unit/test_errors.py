@@ -96,3 +96,12 @@ def test_busy_keyboard_is_refused_not_a_failed_expectation() -> None:
 def test_failed_download_exits_3_so_agents_retry() -> None:
     # Usually the network; a retry often fixes it, so it is not a setup gap.
     assert errors.DownloadFailed.exit_code == errors.NotConnected.exit_code
+
+
+def test_no_match_after_launch_says_which_windows_opened() -> None:
+    # The agent can then tell a failed start from a window Windows kept behind.
+    plain = errors.NoMatch("x", 5, [])
+    assert plain.message.endswith("NVDA said:\n(nothing said)")
+    opened = errors.NoMatch("x", 5, [], windows=["asc field"])
+    assert opened.message.endswith('(nothing said)\nNew windows: "asc field"')
+    assert errors.NoMatch("x", 5, [], windows=[]).message.endswith("\nNew windows: (none)")

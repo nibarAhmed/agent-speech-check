@@ -343,6 +343,10 @@ Default timeout 30000 ms (the `launch_timeout_ms` setting); on timeout it exits 
 command that can't start exits 2. NVDA disconnecting or breaking the protocol
 meanwhile is handled as in `wait` (exit 3 or 5). Works in watch, desktop and sandbox mode; in
 sandbox mode `CMD` runs inside the sandbox, so use paths under `C:\share\`.
+Outside sandbox mode the timeout message ends with `New windows:`, the titles
+of windows that opened meanwhile, or `(none)`. A window listed there
+started, but Windows may have kept it behind the one in front (it limits which
+programs may take the focus), and then NVDA doesn't hear of it.
 
 ### `asc sandbox-setup [--target NAME]`
 

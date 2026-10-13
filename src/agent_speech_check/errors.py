@@ -429,11 +429,20 @@ class KeysBusy(Refused):
 
 
 class NoMatch(ExpectationFailed):
-    def __init__(self, pattern: str, timeout_ms: int, said: Sequence[str]) -> None:
-        super().__init__(
-            f"no speech matched {_show(pattern)} within {timeout_ms} ms. "
-            f"NVDA said:\n{said_lines(said)}"
-        )
+    def __init__(
+        self,
+        pattern: str,
+        timeout_ms: int,
+        said: Sequence[str],
+        windows: Sequence[str] | None = None,
+    ) -> None:
+        """`windows`: titles of the windows that opened during a launch, when known."""
+        message = f"no speech matched {_show(pattern)} within {timeout_ms} ms. "
+        message += f"NVDA said:\n{said_lines(said)}"
+        if windows is not None:
+            shown = ", ".join(_show(title) for title in windows) or "(none)"
+            message += f"\nNew windows: {shown}"
+        super().__init__(message)
 
 
 class LineTooLong(ProtocolError):

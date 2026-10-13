@@ -215,16 +215,19 @@ _user32.IsWindowVisible.argtypes = [wintypes.HWND]
 _user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 
 
+def window_title(hwnd: int) -> str:
+    buffer = ctypes.create_unicode_buffer(512)
+    _user32.GetWindowTextW(hwnd, buffer, 512)
+    return buffer.value
+
+
 def windows_titled(prefix: str) -> list[int]:
     """Visible top-level windows whose title starts with `prefix`."""
     found: list[int] = []
 
     def visit(hwnd: int, _param: int) -> bool:
-        if _user32.IsWindowVisible(hwnd):
-            buffer = ctypes.create_unicode_buffer(512)
-            _user32.GetWindowTextW(hwnd, buffer, 512)
-            if buffer.value.startswith(prefix):
-                found.append(hwnd)
+        if _user32.IsWindowVisible(hwnd) and window_title(hwnd).startswith(prefix):
+            found.append(hwnd)
         return True
 
     _user32.EnumWindows(_WNDENUMPROC(visit), 0)

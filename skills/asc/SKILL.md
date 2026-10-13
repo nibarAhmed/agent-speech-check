@@ -98,6 +98,8 @@ asc launch "C:\share\app\run.cmd" --title "My App"
   (`asc config set share DIR --target NAME`), seen inside as
   `C:\share\<folder name>`. The sandbox has no Edge and no Notepad. `asc sandbox-setup` must have been run once (exit 7 says
   so).
+- `launch` exiting 1 ends with `New windows:`. A title there means the app
+  started, but its window may be behind another one, so NVDA said nothing.
 - Shared mode needs `asc start --mode shared --i-understand` every time. Tell
   the user the panic key, Control+Shift+Alt+F12, before sending anything.
 
