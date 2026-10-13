@@ -277,11 +277,14 @@ def test_file_version(tmp_path: Path) -> None:
 
 def test_nvda_version_check() -> None:
     nvda.check_version("C:/nvda", None)
-    nvda.check_version("C:/nvda", (2025, 1))
     nvda.check_version("C:/nvda", (2026, 2))
-    with pytest.raises(NvdaTooOld, match=r"C:/nvda is version 2024\.4") as exc:
-        nvda.check_version("C:/nvda", (2024, 4))
-    assert exc.value.exit_code == 7
+    nvda.check_version("C:/nvda", (2027, 1))
+    # 2025.1 has Remote Access but forwards no speech without an audio device.
+    for old in ((2024, 4), (2025, 1), (2026, 1)):
+        with pytest.raises(NvdaTooOld, match=r"C:/nvda is version \d+\.\d") as exc:
+            nvda.check_version("C:/nvda", old)
+        assert exc.value.exit_code == 7
+        assert "needs 2026.2 or later" in exc.value.message
 
 
 def test_tray_icon_selects_and_goes_away() -> None:
