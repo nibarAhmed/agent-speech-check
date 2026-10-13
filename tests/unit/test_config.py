@@ -83,7 +83,10 @@ def _config(data: dict[str, Any]) -> Config:
 
 def test_set_target_setting_goes_to_the_default_target() -> None:
     settings = _config({"default": "app", "targets": {"app": {"mode": "desktop"}}})
-    data, value = config.set_value(settings, prefs.find("launch"), ["False"], None)
+    pref = prefs.find("launch")
+    where = config.owner(settings, pref, None)
+    assert where == "app"
+    data, value = config.set_value(settings, pref, ["False"], where)
     assert value is False
     assert data["targets"]["app"] == {"mode": "desktop", "launch": False}
     assert settings.data["targets"]["app"] == {"mode": "desktop"}  # a copy was changed
@@ -111,7 +114,7 @@ def test_command_default_global_or_per_target() -> None:
 
 def test_global_setting_takes_no_target() -> None:
     with pytest.raises(BadPreference, match="is global, so it takes no --target"):
-        config.set_value(_config({}), prefs.find("nvda_version"), ["2025.1"], "app")
+        config.owner(_config({}), prefs.find("nvda_version"), "app")
 
 
 def test_values_are_converted_by_type() -> None:

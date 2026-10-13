@@ -121,20 +121,21 @@ def _holder(data: dict[str, Any], pref: Pref, where: str | None) -> dict[str, An
 
 
 def set_value(
-    config: Config, pref: Pref, values: list[str], target: str | None
+    config: Config, pref: Pref, values: list[str], where: str | None
 ) -> tuple[dict[str, Any], Value]:
-    """The new data, and the value as it will be kept."""
+    """The new data, and the value as it will be kept. `where` is from `owner`."""
     data = copy.deepcopy(dict(config.data))
     value = pref.parse(values)
-    _holder(data, pref, owner(config, pref, target))[pref.name] = value
+    _holder(data, pref, where)[pref.name] = value
     return data, value
 
 
-def unset_value(config: Config, pref: Pref, target: str | None) -> dict[str, Any]:
+def unset_value(config: Config, pref: Pref, where: str | None) -> dict[str, Any]:
+    """The new data. `where` is from `owner`."""
     if pref.name == "mode":
         raise BadPreference("mode", "every target needs one", hint="asc config remove-target NAME")
     data = copy.deepcopy(dict(config.data))
-    _holder(data, pref, owner(config, pref, target)).pop(pref.name, None)
+    _holder(data, pref, where).pop(pref.name, None)
     if not data.get("defaults", True):
         del data["defaults"]
     return data
