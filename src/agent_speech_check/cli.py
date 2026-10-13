@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import io
 import os
+import re
 import sys
 import traceback
 from collections.abc import Callable, Sequence
@@ -38,6 +39,8 @@ from agent_speech_check.errors import (
     NeedsTerminal,
     NoCommand,
     TargetsRunning,
+    UsageError,
+    bad_field,
 )
 from agent_speech_check.nvda_config import Setting
 from agent_speech_check.paths import config_file, state_root, target_dir
@@ -567,6 +570,9 @@ def _add_firewall_rule(port: int, program: str) -> None:
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
+    # It goes into the download URL and a file name.
+    if args.nvda_version is not None and not re.fullmatch(nvda.VERSION_PATTERN, args.nvda_version):
+        raise bad_field(UsageError, "--version", "an NVDA version like 2026.2", args.nvda_version)
     version = args.nvda_version or str(load(config_file()).value("nvda_version")[0])
     _make_portable(version, Path(args.installer) if args.installer else None)
     return 0
