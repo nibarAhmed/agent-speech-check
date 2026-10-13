@@ -29,14 +29,14 @@ class AscError(Exception):
 
 
 class ExpectationFailed(AscError):
-    """A `wait` or `--expect` timed out. The message says what was actually said."""
+    """A `wait` or `--expect` timed out. Report what the app said; the message has it."""
 
     exit_code = 1
     kind = "expectation"
 
 
 class UsageError(AscError):
-    """Bad argument, bad `targets.toml` or bad `--nvda-setting`."""
+    """The input is wrong: fix the arguments, `targets.toml` or `--nvda-setting`."""
 
     exit_code = 2
     kind = "usage"
@@ -50,21 +50,25 @@ class NoCommand(UsageError):
 
 
 class NotConnected(AscError):
-    """No daemon, or NVDA not connected. Retrying or `asc start` can fix it."""
+    """No daemon, or NVDA not connected. Retrying or `asc start` can fix it.
+
+    Only for failures a retry usually fixes; if the cause is unknown, pick one
+    that stops the caller.
+    """
 
     exit_code = 3
     kind = "not_connected"
 
 
 class Refused(AscError):
-    """Policy forbids it, or something is busy. The message says which."""
+    """`asc` won't do it as asked (policy, or something busy); the hint says what to do."""
 
     exit_code = 4
     kind = "refused"
 
 
 class ProtocolError(AscError):
-    """Malformed or invalid wire data, or an error message from the server."""
+    """NVDA sent something `asc` can't accept. Retrying rarely helps; report it."""
 
     exit_code = 5
     kind = "protocol"
