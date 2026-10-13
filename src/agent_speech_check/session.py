@@ -35,7 +35,8 @@ from agent_speech_check.errors import (
 from agent_speech_check.targets import Target
 
 START_TIMEOUT_S = 15.0
-STOP_TIMEOUT_S = 10.0
+# Past the daemon's own worst case: 10 s for NVDA, then its window threads.
+STOP_TIMEOUT_S = 30.0
 POLL_S = 0.1
 ERR_FILE = "daemon.err"
 TAIL_LINES = 10
@@ -72,7 +73,7 @@ def is_running(folder: Path, target: str) -> bool:
 
 
 def running_targets(root: Path) -> list[str]:
-    """Every target whose daemon answers, by name."""
+    """Every target whose daemon runs, answering or not, by name."""
     return sorted(
         f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent, f.parent.name)
     )

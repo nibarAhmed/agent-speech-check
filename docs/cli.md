@@ -232,7 +232,7 @@ Releases any held keys, stops the daemon and forgets the speech.
 A daemon that is there but doesn't answer (an older asc, or one that is stuck)
 still counts as running: `asc start`, `asc setup` and `asc config remove-target`
 refuse with exit 4. `asc stop` then ends its process, along with its NVDA or
-sandbox, and so it does for a daemon still there 10 s after agreeing to stop.
+sandbox, and so it does for a daemon still there 30 s after agreeing to stop.
 It can't release held keys that way. If Windows won't let it end the process,
 it exits 4 and keeps the state file.
 
