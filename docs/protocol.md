@@ -7,8 +7,8 @@ observed".
 `asc` implements from this file. It never copies or imports NVDA code (GPL).
 
 Observed with: portable NVDA 2026.2 inside Windows Sandbox, M0 spike
-(`scripts/spike_remote.py`), 2026-10-11. Three runs; the results below are from
-runs 2 and 3.
+(removed; read it with `git show bbe3f16:scripts/spike_remote.py`), 2026-10-11.
+Three runs; the results below are from runs 2 and 3.
 
 ## Decision: route B
 

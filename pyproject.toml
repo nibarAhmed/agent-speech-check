@@ -80,8 +80,6 @@ select = [
 # cli.py is the only module allowed to print.
 "src/agent_speech_check/cli.py" = ["T20"]
 "tests/**" = ["S101", "PLR2004", "TRY003"]
-# Throwaway M0 spike: prints results and drives subprocesses on purpose.
-"scripts/spike_remote.py" = ["PLR0915", "PLR2004", "BLE001"]
 # Dev scripts and hooks print and run tools on purpose.
 "scripts/**" = ["T20", "S603", "S607"]
 ".claude/**" = ["T20", "S603", "S607"]
