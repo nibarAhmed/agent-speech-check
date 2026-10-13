@@ -31,6 +31,11 @@ APP = """<!doctype html><html><head><title>asc app</title></head><body>
 </body></html>
 """
 
+SECOND = """<!doctype html><html><head><title>asc second</title></head><body>
+<label>Name <input type="text"></label>
+</body></html>
+"""
+
 
 def _with_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A state folder under `tmp_path` that already has the NVDA installer."""
@@ -75,6 +80,16 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         assert run_asc("type", "hi", "--target", "sb").returncode == 0
         line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "sb")
         assert line.returncode == 0, line.stdout + line.stderr
+
+        # After those keys Windows limits who takes the focus: a second app
+        # must still come to the front where NVDA hears it.
+        (app / "second.html").write_text(SECOND, encoding="utf-8")
+        second = sandbox.share_folder(str(app)) + "\\second.html"
+        again = run_asc(
+            "launch", f'mshta.exe "{second}"', "--title", "asc second", "--timeout", "10000",
+            "--target", "sb",
+        )  # fmt: skip
+        assert again.returncode == 0, again.stderr
     finally:
         stopped = run_asc("stop", "--target", "sb", timeout=120)
     assert stopped.returncode == 0
