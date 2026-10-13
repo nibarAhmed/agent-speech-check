@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from agent_speech_check import __version__, errors
@@ -68,3 +70,17 @@ class _PressesCtrlC:
 
 def test_ctrl_c_exits_130() -> None:
     assert main([_PressesCtrlC()]) == 130  # type: ignore[list-item]
+
+
+@pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])
+def test_get_nvda_refuses_a_bad_version_before_anything(
+    version: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The version goes into the download URL and a file name.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert main(["get-nvda", "--version", version]) == 2
+    assert "--version" in capsys.readouterr().err
+    assert not any(tmp_path.iterdir())
