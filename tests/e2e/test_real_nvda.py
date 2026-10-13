@@ -183,7 +183,8 @@ FIELD = """<!doctype html><html><head><title>asc field</title></head><body>
 """
 
 
-@pytest.mark.parametrize(("level", "bang"), [("all", True), ("none", False)])
+# keep: NVDA's own default (some), which doesn't say "!" either, so "all" is seen to change it.
+@pytest.mark.parametrize(("level", "bang"), [("keep", False), ("all", True), ("none", False)])
 def test_stored_punctuation_level(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, level: str, bang: bool
 ) -> None:
@@ -191,9 +192,10 @@ def test_stored_punctuation_level(
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     fetched = run_asc("get-nvda", "--installer", os.environ["ASC_E2E_INSTALLER"], timeout=300)
     assert fetched.returncode == 0, fetched.stderr
-    setting = f"speech.symbolLevel={SYMBOL_LEVELS[level]}"
-    for args in (("mode", "desktop"), ("nvda_settings", setting)):
-        assert run_asc("config", "set", *args, "--target", "p").returncode == 0
+    assert run_asc("config", "set", "mode", "desktop", "--target", "p").returncode == 0
+    if level != "keep":
+        setting = f"speech.symbolLevel={SYMBOL_LEVELS[level]}"
+        assert run_asc("config", "set", "nvda_settings", setting, "--target", "p").returncode == 0
     started = run_asc("start", "--target", "p")
     assert started.returncode == 0, started.stderr
     try:
