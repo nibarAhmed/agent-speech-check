@@ -191,6 +191,13 @@ def test_file_not_in_utf8(tmp_path: Path) -> None:
         resolve(path, None, None)
 
 
+def test_file_saved_with_a_bom(tmp_path: Path) -> None:
+    """Some Windows editors start a UTF-8 file with a byte order mark."""
+    path = tmp_path / "config.toml"
+    path.write_bytes(b'\xef\xbb\xbf[targets.app]\nmode = "desktop"\n')
+    assert resolve(path, "app", None).mode == "desktop"
+
+
 def test_clash_in_kept_settings_names_the_file(tmp_path: Path) -> None:
     text = (
         '[targets.app]\nmode = "desktop"\n'

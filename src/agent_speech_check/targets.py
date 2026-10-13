@@ -180,7 +180,8 @@ def _read(path: Path) -> dict[str, Any]:
     except FileNotFoundError:
         return {}
     try:
-        text = data.decode("utf-8")
+        # -sig: some Windows editors start the file with a byte order mark.
+        text = data.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         line = data[: error.start].count(b"\n") + 1
         raise TargetsFileError(str(path), f"not UTF-8 (line {line})") from None
