@@ -3,6 +3,7 @@
 Covers watch, desktop, sandbox and shared mode. This file is updated with every
 command change.
 
+`asc --help` lists the commands and `asc --version` prints the version.
 Results go to stdout and errors to stderr. An error prints `error: <message>`
 and, when there is one, `hint: <what to do>`.
 
@@ -50,8 +51,8 @@ Paths are TOML literal strings (`'C:\nvda'`). Unknown keys are errors (exit 2),
 and so is anything below that doesn't fit, for every command, not only the one
 that uses the target.
 
-Every command takes `--target NAME` (default: `default`, or the `default`
-setting). A target that isn't listed gets the defaults for `--mode` (watch if
+Every command except `asc setup` takes `--target NAME` (default: `default`,
+or the `default` setting). A target that isn't listed gets the defaults for `--mode` (watch if
 left out).
 
 **Global settings**

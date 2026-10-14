@@ -5,8 +5,8 @@ and `asc` can press keys on a computer.
 
 ## Reporting a problem
 
-Please report security issues privately, not in a public issue. Once the repository is on GitHub,
-use its private vulnerability reporting (the Security tab). Include what you found, how to
+Please report security issues privately, not in a public issue: use this repository's private
+vulnerability reporting (the Security tab, Report a vulnerability). Include what you found, how to
 reproduce it and what an attacker could do with it.
 
 ## What `asc` promises

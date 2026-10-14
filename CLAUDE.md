@@ -9,7 +9,8 @@ evidence, is in `docs/protocol.md`.
 - `uv sync`
 - `uv run poe check` (everything: dashes, spelling, format, lint, types, dead code, deps, tests)
 - `uv run pytest tests/unit -q`
-- `uv run pytest -m e2e` (needs a portable NVDA)
+- `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox; never run
+  `pytest -m e2e` on the host, it would start a second NVDA)
 
 ## Testing policy
 
@@ -22,8 +23,8 @@ evidence, is in `docs/protocol.md`.
   evidence from real NVDA.
 - Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
   fakes. Its low coverage outside e2e is expected; never lower the coverage floor for it.
-- For changes that touch the protocol or NVDA config, run `pytest -m e2e` against real NVDA, or
-  state clearly that it wasn't run.
+- For changes that touch the protocol or NVDA config, run the e2e tests against real NVDA
+  (`scripts/e2e_sandbox.py`), or state clearly that they weren't run.
 
 ## Code
 

@@ -7,6 +7,10 @@ Contributions come in under the project's MIT license. There's no CLA.
 1. Install [uv](https://docs.astral.sh/uv/).
 2. `uv sync`
 3. `uv run poe check` must pass before you open a pull request.
+4. For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
+   NVDA: `uv run python scripts/e2e_sandbox.py`. They run inside Windows Sandbox (Windows 11
+   24H2 or later, Pro, Enterprise or Education), so your own NVDA is never touched. If you can't run them, say so in
+   the pull request.
 
 ## Rules
 

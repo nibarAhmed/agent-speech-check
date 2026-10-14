@@ -82,9 +82,8 @@ All observed unless marked otherwise.
 | `tone` | `{"type":"tone","hz":...,"length":...,"left":...,"right":...}` | Not observed. |
 | `display` | `{"type":"display","cells":[...]}` | Braille. Sent only after a leader reports a braille display, which `asc` never does. Not observed. |
 
-When `asc` connects as a leader to NVDA's own relay (route A, and watch mode if
-the user runs the relay themselves), every forwarded message also carries
-`"origin": <sender id>`.
+When a leader connects to NVDA's own relay (route A, which `asc` doesn't use),
+every forwarded message also carries `"origin": <sender id>`.
 
 ### Mode switches (browse and focus)
 
@@ -93,8 +92,8 @@ With `[virtualBuffers] passThroughAudioIndication = True` (NVDA's default):
   field, and on NVDA+Space.
 - **Into browse mode:** a `wave` with `browseMode.wav`. Seen on Escape out of the
   field, and on NVDA+Space.
-- **Page load:** no wave. Loading a page in browse mode sent no sound, which
-  confirms the plan: the mode is `unknown` until the first switch.
+- **Page load:** no wave. Loading a page in browse mode sent no sound, so
+  `asc` reports the mode as `unknown` until the first switch.
 
 When that setting is off, NVDA speaks "focus mode" or "browse mode" instead (not
 observed).
@@ -128,8 +127,8 @@ observed).
 - After Shift down, dropping the TCP connection left Shift **held**. It stayed
   held after NVDA reconnected, until we sent `pressed: false`.
 
-So `asc` must release keys itself, which the plan's guaranteed-release design
-already does. After a reconnect, the daemon should first send a release for
+So `asc` must release keys itself: every press goes through one function that
+guarantees the release. After a reconnect, the daemon first sends a release for
 every key it may have left down.
 
 ## NVDA config for the follower (`nvda.ini`)
@@ -180,9 +179,9 @@ passThroughAudioIndication = True
 ```
 NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
 
-## Route A facts (kept for watch mode)
+## Route A facts (not used)
 
-If a user hosts the relay in their own NVDA:
+`asc` always hosts the relay. Kept in case that changes. If NVDA hosts the relay:
 - Its certificate is in `<configDir>\remoteAccess\localRelay\`, as
   `NvdaRemoteRelay.pem`, `.key` and `.fingerprint`. The `.fingerprint` file
   matched the SHA-256 of the cert the relay served.
@@ -192,7 +191,7 @@ If a user hosts the relay in their own NVDA:
   `{"type":"error","message":"incorrect_password"}` and closes. Not observed: our
   test connection failed with a TLS error first.
 
-## Running in Windows Sandbox (for M3)
+## Running in Windows Sandbox
 
 - Windows Sandbox on this build has **no Edge** and **no `notepad.exe`**.
   `mshta.exe` exists, and NVDA reads an `.html` file opened in it in browse mode.
@@ -269,8 +268,8 @@ Observed on Windows 11 Pro 26200 with the `wsb` CLI:
   can't run next to the user's NVDA anyway. So `asc` uses an installed NVDA only
   as it runs, through watch or shared mode.
 - `nvda.exe`'s version resource holds the NVDA version (`FileVersion`
-  `2026.2.0.57664`). `asc` reads it to refuse an NVDA older than 2025.1, which
-  has no Remote Access.
+  `2026.2.0.57664`). `asc` reads it to refuse an NVDA older than 2026.2 (see
+  the next section).
 - A portable NVDA keeps its config in `<portable>\userConfig`. `asc` copies it
   and rewrites `nvda.ini` on top; see `nvda_config.py`.
 
