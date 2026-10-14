@@ -1,16 +1,16 @@
 """Windows Sandbox through the `wsb` CLI, its window kept out of the way.
 
-Observed on Windows 11 Pro 26200 (2026-10-11):
+Observed on Windows 11 Pro 26200:
 - `wsb start` runs a sandbox with no window, but with no user session either:
   the LogonCommand doesn't run and `wsb exec --run-as ExistingLogin` fails.
 - `wsb connect` logs the user in and opens a window.
 - If the connect client is then closed, the session lives on, disconnected,
   and commands still run in it. But NVDA goes silent there: it connects, yet
   injected keys and focus changes produce no speech. So the client stays.
-- Minimised or hidden, the connected sandbox works normally (hidden: seen
-  2026-10-11, both sandbox e2e tests pass). A visible sandbox window takes
-  focus and catches keys typed on the host, so it is hidden (behind a tray
-  icon) or minimised the moment it appears, and kept so (`SandboxWindow`).
+- Minimised or hidden, the connected sandbox works normally. A visible
+  sandbox window takes focus and catches keys typed on the host, so it is
+  hidden (behind a tray icon) or minimised the moment it appears, and kept so
+  (`SandboxWindow`).
 - A sandbox runs on when the process that started it dies. So a guard process
   starts with each one and stops it once its owner is gone (`guard`).
 
@@ -144,8 +144,7 @@ def nvda_script(installer: str | None) -> str:
 
     With `installer`, NVDA_IN holds that installer, which makes the portable
     copy. Without, NVDA_IN is your own portable NVDA, copied because the mapped
-    folder is read-only. Stopping Windows Audio silences the sandbox completely
-    (proven in M0).
+    folder is read-only. Stopping Windows Audio silences the sandbox completely.
     """
     if installer is None:
         make = f"robocopy {NVDA_IN} {PORTABLE} /e /njh /njs /nfl /ndl /np > nul"
@@ -303,7 +302,7 @@ def running() -> list[str]:
 
 def wait_gone(timeout_s: float) -> bool:
     """Wait for the last sandbox VM to exit. Starting a new one before that
-    attaches to the session that is logging off (seen in M0)."""
+    attaches to the session that is logging off."""
     return poll_until(lambda: not winapi.process_ids(VM_IMAGE), timeout_s, GONE_POLL_S)
 
 
@@ -407,8 +406,7 @@ class SandboxWindow:
                 self._client_pids.add(winapi.window_pid(hwnd))
             if action == "hide":
                 # Hidden straight from the foreground, the sandbox client kept
-                # every key and click on the host (seen 2026-10-11). Minimising
-                # first makes it let go.
+                # every key and click on the host. Minimising first makes it let go.
                 if not minimized:
                     winapi.minimize(hwnd)
                 winapi.hide(hwnd)
@@ -419,8 +417,7 @@ class SandboxWindow:
 
     def _give_focus_back(self, *, acted: bool) -> None:
         """The opening sandbox window takes focus, and the client keeps it even
-        once its window is hidden or minimised (the user's NVDA said "Windows
-        Sandbox pane", 2026-10-11). Give focus back to the window that had it,
+        once its window is hidden or minimised. Give focus back to the window that had it,
         but only while an out-of-sight sandbox client window has it, or nothing
         has it just after a window was put away."""
         if not self._return_to or not (acted or self._client_pids):

@@ -1,4 +1,4 @@
-"""Sandbox pure parts. The JSON samples are real `wsb --raw` output (2026-10-11)."""
+"""Sandbox pure parts. The JSON samples are real `wsb --raw` output."""
 
 import base64
 

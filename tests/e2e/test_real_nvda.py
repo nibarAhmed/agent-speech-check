@@ -131,7 +131,7 @@ APP = """<!doctype html><html><head><title>asc app</title></head><body>
 
 
 def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The M2 check: asc gets, launches and stops its own NVDA, and drives an app."""
+    """asc gets, launches and stops its own NVDA, and drives an app."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     fetched = run_asc("get-nvda", "--installer", os.environ["ASC_E2E_INSTALLER"], timeout=300)
     assert fetched.returncode == 0, fetched.stderr

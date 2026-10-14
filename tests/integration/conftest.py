@@ -122,7 +122,7 @@ def _kill_if_ours(pid: int) -> None:
 
     A dead daemon's pid can be reused, maybe by the user's own NVDA.
     """
-    # Denied, like taskkill was: a process we can't read or end isn't ours.
+    # Denied: a process we can't read or end isn't ours.
     with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
         process = psutil.Process(pid)
         if process.name().lower().startswith("python"):

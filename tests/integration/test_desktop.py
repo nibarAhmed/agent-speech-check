@@ -1,4 +1,4 @@
-"""M2 commands through the real CLI: type, launch, keys, and desktop-mode refusals.
+"""Desktop-mode commands through the real CLI: type, launch, keys, and desktop-mode refusals.
 
 Nothing here starts a real NVDA. Tests that need "no NVDA running" or "NVDA
 running" check the machine and skip otherwise, so a developer's own NVDA is
