@@ -459,7 +459,7 @@ def _config_change(settings: Config, args: argparse.Namespace) -> int:
 def cmd_config(args: argparse.Namespace) -> int:
     if args.action == "path":
         # Not read, so it works on a file too broken to load.
-        print(config_file())
+        print(os.path.realpath(config_file()))
         return 0
     settings = load(config_file())
     if args.action == "list":
@@ -845,7 +845,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_INTERRUPTED
     except Exception as error:  # noqa: BLE001 - last resort: turn any bug into exit 6
         print(f"internal error: {type(error).__name__}: {error}", file=sys.stderr)
-        print(f"logs: {state_root()}", file=sys.stderr)
+        # Real, not Store Python's redirected view, so other programs find it.
+        print(f"logs: {os.path.realpath(state_root())}", file=sys.stderr)
         if os.environ.get("ASC_DEBUG") == "1":
             traceback.print_exc()
         return InternalError.exit_code

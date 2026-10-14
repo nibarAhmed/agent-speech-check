@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -180,6 +181,26 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
     ini = (folder / "config" / "nvda.ini").read_text(encoding="utf-8").splitlines()
     assert "rate = 40" in ini
     assert "synth = silence" in ini
+
+
+def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Store Python redirects writes under %LOCALAPPDATA% to its package's
+    LocalCache, and wsb, outside the package, can't see the redirected path.
+    Without Store Python the paths are already real and this passes trivially."""
+    root = Path(os.environ["LOCALAPPDATA"]) / f"asc-test-{os.getpid()}"
+    monkeypatch.setenv("LOCALAPPDATA", str(root))
+    try:
+        state = root / "agent-speech-check"
+        nvda.installer_path(nvda.VERSION).parent.mkdir(parents=True)
+        session = SandboxSession(
+            state / "x", defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f")
+        )
+        config = session._prepare()
+        hosts = [part.split("</HostFolder>")[0] for part in config.split("<HostFolder>")[1:]]
+        assert len(hosts) == 3
+        assert all(host == os.path.realpath(host) for host in hosts)
+    finally:
+        shutil.rmtree(os.path.realpath(root), ignore_errors=True)
 
 
 def test_sandbox_session_before_start() -> None:

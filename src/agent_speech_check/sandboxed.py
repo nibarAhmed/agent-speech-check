@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -56,6 +57,11 @@ class SandboxSession:
         (in_dir / sandbox.SCRIPT).write_text(script, encoding="utf-8")
         (in_dir / sandbox.LAUNCH_SCRIPT).write_text(sandbox.LAUNCH_PS1, encoding="utf-8")
         nvda_config.write(config_dir, self.relay, self.settings, source)
+        # Store Python redirects %LOCALAPPDATA% for itself only; wsb needs the
+        # real folders. realpath finds them, but only once they exist.
+        in_dir, mapped, config_dir = (
+            Path(os.path.realpath(p)) for p in (in_dir, mapped, config_dir)
+        )
         folders = sandbox.session_folders(str(in_dir), str(mapped), str(config_dir), self.shares)
         return sandbox.config_xml(folders, networking=True)
 

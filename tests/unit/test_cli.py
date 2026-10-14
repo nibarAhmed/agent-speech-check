@@ -1,3 +1,5 @@
+import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -84,3 +86,24 @@ def test_get_nvda_refuses_a_bad_version_before_anything(
     assert main(["get-nvda", "--version", version]) == 2
     assert "--version" in capsys.readouterr().err
     assert not any(tmp_path.iterdir())
+
+
+def test_printed_paths_are_real(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Store Python redirects %LOCALAPPDATA% for itself only, so a printed path
+    must be the real one, or other programs won't find it. Without Store
+    Python the paths are already real and this passes trivially."""
+    root = Path(os.environ["LOCALAPPDATA"]) / f"asc-test-{os.getpid()}"
+    monkeypatch.setenv("LOCALAPPDATA", str(root))
+    monkeypatch.delenv("ASC_DEBUG", raising=False)
+    try:
+        (root / "agent-speech-check").mkdir(parents=True)
+        assert main(["config", "path"]) == 0
+        printed = capsys.readouterr().out.strip()
+        assert printed == os.path.realpath(printed)
+        assert main([123]) == 6  # type: ignore[list-item]
+        logs = capsys.readouterr().err.split("logs: ")[1].strip()
+        assert logs == os.path.realpath(logs)
+    finally:
+        shutil.rmtree(os.path.realpath(root), ignore_errors=True)
