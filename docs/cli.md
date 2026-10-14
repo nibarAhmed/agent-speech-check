@@ -149,6 +149,9 @@ desktop and your own NVDA keeps running undisturbed.
 - Needs Windows Pro, Enterprise or Education (exit 7 on Home), and
   `asc sandbox-setup` done once (exit 7 with that hint otherwise).
 - Only one sandbox can run at a time (exit 4 if one already runs).
+- If the sandbox fails to start, a retry may help when wsb timed out or the
+  last sandbox was still shutting down (exit 3). An error from wsb itself, or
+  NVDA's start script failing inside, exits 7: retrying won't help.
 - `asc start` downloads the NVDA installer if needed (only a file download),
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
   NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
@@ -346,8 +349,10 @@ command that can't start exits 2. NVDA disconnecting or breaking the protocol
 meanwhile is handled as in `wait` (exit 3 or 5). Works in watch, desktop and sandbox mode; in
 sandbox mode `CMD` runs inside the sandbox, so use paths under `C:\share\`.
 Windows keeps a program started in the background behind the window in front,
-and then NVDA doesn't hear of it. So in desktop and shared mode `launch` first
+and then NVDA doesn't hear of it. So in desktop, shared and sandbox mode `launch` first
 sends one mouse input that moves nothing, which lets the program come forward.
+In sandbox mode a `.cmd` or `.bat` `CMD` runs in a hidden console, so NVDA
+hears the app it starts, not the batch file's console.
 A target with `keys = false` (always so in watch mode) sends no input, so there
 the window may stay behind.
 Outside sandbox mode the timeout message ends with `New windows:`, the titles
@@ -371,4 +376,5 @@ portable copy in `%LOCALAPPDATA%\agent-speech-check\nvda\portable` for
 desktop mode. A `--version` not shaped like `2026.2` exits 2. `--installer`
 uses a local installer instead of downloading. It
 refuses with exit 4 while any `nvda.exe` runs, because the installer would
-restart it. A failed download exits 3.
+restart it. A failed download exits 3. A finished download deletes the installers of
+other versions it kept.

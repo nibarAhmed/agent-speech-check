@@ -5,7 +5,7 @@ import base64
 import pytest
 
 from agent_speech_check import sandbox
-from agent_speech_check.errors import NotConnected, SandboxFailed
+from agent_speech_check.errors import NotConnected, SandboxBroken
 
 
 def test_config_xml_escapes_and_maps() -> None:
@@ -42,8 +42,10 @@ def test_parse_real_outputs() -> None:
 
 
 def test_parse_bad_output() -> None:
-    with pytest.raises(SandboxFailed, match="wsb start failed: Failed to start"):
+    # Output asc can't read has an unknown cause, so retrying won't help: exit 7.
+    with pytest.raises(SandboxBroken, match="wsb start failed: Failed to start") as broken:
         sandbox.parse_start("Failed to start process")
+    assert broken.value.exit_code == 7
     with pytest.raises(NotConnected, match="wsb exec output ExitCode"):
         sandbox.parse_exec('{"ExitCode": "zero"}')
 
@@ -93,6 +95,21 @@ def test_launch_command_encodes_the_command() -> None:
     assert script.endswith("-Command 'mshta.exe \"C:/share/it''s here/app.html\"'")
     assert "launch.ps1" in script
     assert "exit 3" in sandbox.LAUNCH_PS1
+
+
+def test_a_batch_file_launches_in_the_hidden_console() -> None:
+    """`start` would give a .cmd its own console, which NVDA reads and which
+    takes the focus from the app (observed)."""
+    prefix = "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand "
+
+    def script(command: str) -> str:
+        line = sandbox.launch_command(command)
+        return base64.b64decode(line.removeprefix(prefix)).decode("utf-16-le")
+
+    for batch in (r"C:\share\app\start.cmd", r'"C:\share\my app\RUN.BAT" --fast'):
+        assert script(batch).endswith(" -Batch")
+    for other in ("mshta.exe app.html", r'"C:\share\a.cmd dir\app.exe"', "notepad x.cmd"):
+        assert not script(other).endswith(" -Batch")
 
 
 def test_nvda_script_from_a_portable() -> None:

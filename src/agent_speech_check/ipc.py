@@ -274,8 +274,17 @@ def _parse_response(data: bytes) -> dict[str, Any]:
             Fields(f.raw.get("result"), "daemon result", InternalError).raw
         )
         return result
-    error = Fields(f.raw.get("error"), "daemon error", InternalError)
-    raise from_kind(error.text("kind"), error.text("message"), error.opt_text("hint"))
+    raise error_from(f.raw.get("error"), "daemon error")
+
+
+def error_detail(error: AscError) -> dict[str, Any]:
+    """An error as the daemon sends it, so `error_from` can rebuild it."""
+    return {"kind": error.kind, "message": error.message, "hint": error.hint}
+
+
+def error_from(raw: object, where: str) -> AscError:
+    error = Fields(raw, where, InternalError)
+    return from_kind(error.text("kind"), error.text("message"), error.opt_text("hint"))
 
 
 # ---------------------------------------------------------------- server
@@ -288,8 +297,7 @@ def _reply(body: dict[str, Any]) -> bytes:
 
 
 def _error_reply(error: AscError) -> bytes:
-    detail = {"kind": error.kind, "message": error.message, "hint": error.hint}
-    return _reply({"ok": False, "error": detail})
+    return _reply({"ok": False, "error": error_detail(error)})
 
 
 async def serve_one(

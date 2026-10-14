@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import shutil
 from pathlib import Path
 
 from agent_speech_check import nvda, nvda_config, sandbox
-from agent_speech_check.errors import AscError, LaunchFailed, SandboxFailed
+from agent_speech_check.errors import AscError, LaunchFailed, SandboxBroken, SandboxFailed
 from agent_speech_check.nvda_config import RelayAddress
 from agent_speech_check.targets import Target
 
@@ -34,7 +35,7 @@ class SandboxSession:
         self.settings = target.settings
         self.nvda_dir = Path(target.nvda_dir) if target.nvda_dir else None
         self.state = "starting"
-        self.failure: str | None = None
+        self.failure: AscError | None = None
         self.sandbox_id: str | None = None
         self.window = sandbox.SandboxWindow(
             target.sandbox_window, f"asc sandbox {target.name}: show or hide"
@@ -56,6 +57,11 @@ class SandboxSession:
         (in_dir / sandbox.SCRIPT).write_text(script, encoding="utf-8")
         (in_dir / sandbox.LAUNCH_SCRIPT).write_text(sandbox.LAUNCH_PS1, encoding="utf-8")
         nvda_config.write(config_dir, self.relay, self.settings, source)
+        # Store Python redirects %LOCALAPPDATA% for itself only; wsb needs the
+        # real folders. realpath finds them, but only once they exist.
+        in_dir, mapped, config_dir = (
+            Path(os.path.realpath(p)) for p in (in_dir, mapped, config_dir)
+        )
         folders = sandbox.session_folders(str(in_dir), str(mapped), str(config_dir), self.shares)
         return sandbox.config_xml(folders, networking=True)
 
@@ -67,7 +73,7 @@ class SandboxSession:
         log.info("sandbox %s started", self.sandbox_id)
         code = sandbox.exec_as_user(self.sandbox_id, sandbox.script_command())
         if code:
-            raise SandboxFailed("exec", f"the NVDA start script exited with {code}")
+            raise SandboxBroken("exec", f"the NVDA start script exited with {code}")
 
     async def run(self) -> None:
         """Start the sandbox. Its window is kept in place until `stop`."""
@@ -76,7 +82,7 @@ class SandboxSession:
         try:
             await asyncio.to_thread(self._start)
         except AscError as error:
-            self.failure = error.message
+            self.failure = error
             self.state = f"failed: {error.message}"
             log.warning("sandbox did not start: %s", error.message)
             await asyncio.to_thread(self.window.stop)
@@ -98,7 +104,7 @@ class SandboxSession:
         if self.sandbox_id is not None:
             try:
                 await asyncio.to_thread(sandbox.stop, self.sandbox_id)
-            except SandboxFailed as error:
+            except sandbox.FAILURES as error:
                 log.warning("sandbox stop: %s", error.message)
             self.sandbox_id = None
         # Only now: the client shows its window again as the sandbox stops.

@@ -157,9 +157,13 @@ class Daemon:
             "last_error": self.relay.last_error,
             "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
-            "sandbox_failure": None if self.sandbox is None else self.sandbox.failure,
+            "sandbox_failure": self._sandbox_failure(),
             "panic_key": None if self.panic is None else PANIC_KEY,
         }
+
+    def _sandbox_failure(self) -> dict[str, Any] | None:
+        failure = None if self.sandbox is None else self.sandbox.failure
+        return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
         if not self.relay.connected:

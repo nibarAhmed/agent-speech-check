@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -18,19 +19,21 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check import firewall, nvda, sandbox, winapi
+from agent_speech_check import firewall, ipc, nvda, sandbox, winapi
 from agent_speech_check.errors import (
     DownloadFailed,
     NoDefaultSwitch,
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
+    SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
     WsbMissing,
 )
 from agent_speech_check.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandboxed import SandboxSession
+from agent_speech_check.session import sandbox_failure
 from agent_speech_check.targets import defaults
 
 
@@ -182,6 +185,39 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
     assert "synth = silence" in ini
 
 
+def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Store Python redirects writes under %LOCALAPPDATA% to its package's
+    LocalCache, and wsb, outside the package, can't see the redirected path.
+    Without Store Python the paths are already real and this passes trivially."""
+    root = Path(os.environ["LOCALAPPDATA"]) / f"asc-test-{os.getpid()}"
+    monkeypatch.setenv("LOCALAPPDATA", str(root))
+    try:
+        state = root / "agent-speech-check"
+        nvda.installer_path(nvda.VERSION).parent.mkdir(parents=True)
+        session = SandboxSession(
+            state / "x", defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f")
+        )
+        config = session._prepare()
+        hosts = [part.split("</HostFolder>")[0] for part in config.split("<HostFolder>")[1:]]
+        assert len(hosts) == 3
+        assert all(host == os.path.realpath(host) for host in hosts)
+    finally:
+        shutil.rmtree(os.path.realpath(root), ignore_errors=True)
+
+
+def test_sandbox_failure_keeps_its_message_and_category() -> None:
+    """The daemon reports why its sandbox failed; `asc start` raises that, unwrapped."""
+    for error in (SandboxFailed("start", "file not found"), SandboxNeedsPro()):
+        got = sandbox_failure({"sandbox_failure": ipc.error_detail(error)})
+        assert got is not None
+        assert (got.message, got.hint, got.exit_code) == (
+            error.message,
+            error.hint,
+            error.exit_code,
+        )
+    assert sandbox_failure({"sandbox_failure": None}) is None
+
+
 def test_sandbox_session_before_start() -> None:
     session = SandboxSession(Path("x"), defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f"))
     with pytest.raises(SandboxFailed, match="not running yet"):
@@ -196,11 +232,13 @@ def test_wsb_errors_for_an_unknown_sandbox() -> None:
     except (SandboxNeedsPro, WsbMissing):
         pytest.skip("needs Windows Sandbox")
     unknown = "00000000-0000-0000-0000-000000000000"
-    with pytest.raises(SandboxFailed, match="wsb exec failed"):
+    # wsb's own errors have an unknown cause, so retrying won't help: exit 7.
+    with pytest.raises(SandboxBroken, match="wsb exec failed") as broken:
         sandbox.exec_as_user(unknown, "cmd /c exit 0")
-    with pytest.raises(SandboxFailed, match="wsb stop failed"):
+    assert broken.value.exit_code == 7
+    with pytest.raises(SandboxBroken, match="wsb stop failed"):
         sandbox.stop(unknown)
-    with pytest.raises(SandboxFailed, match="wsb ip failed"):
+    with pytest.raises(SandboxBroken, match="wsb ip failed"):
         sandbox.ip_address(unknown)
     assert sandbox.wait_gone(0) in (True, False)
 
@@ -244,6 +282,19 @@ def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.Monkey
     assert installer.read_bytes() == b"already here"
 
 
+def test_a_new_installer_replaces_the_old_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    new = nvda.installer_path("2026.2")
+    new.parent.mkdir(parents=True)
+    for path in (new, nvda.installer_path("2025.1"), new.parent / "notes.txt"):
+        path.write_bytes(b"")
+    (new.parent / "portable").mkdir()
+    nvda.drop_other_installers(new)
+    assert sorted(p.name for p in new.parent.iterdir()) == ["notes.txt", new.name, "portable"]
+
+
 def test_global_hotkey_fires_and_is_exclusive() -> None:
     pressed = threading.Event()
     f23 = 0x86  # a key no keyboard has, so the test never steals a real shortcut
@@ -266,9 +317,13 @@ def test_global_hotkey_fires_and_is_exclusive() -> None:
 def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # No such release: NV Access answers 404, or there is no network at all.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    old = nvda.installer_path("2026.2")
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"")
     with pytest.raises(DownloadFailed, match="cannot download NVDA"):
         nvda.download("0.0-asc-no-such-version")
     assert not nvda.installer_path("0.0-asc-no-such-version").exists()
+    assert old.exists()  # only a finished download replaces the old installers
 
 
 def test_file_version(tmp_path: Path) -> None:

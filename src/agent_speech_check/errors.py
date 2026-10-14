@@ -297,8 +297,20 @@ class LaunchFailed(UsageError):
 
 
 class SandboxFailed(NotConnected):
+    """A sandbox step that a retry can fix: a timeout, or a sandbox still starting or stopping."""
+
     def __init__(self, what: str, detail: str) -> None:
         super().__init__(f"wsb {what} failed: {detail or 'no detail'}")
+
+
+class SandboxBroken(SetupNeeded):
+    """wsb reported an error, or the sandbox's NVDA script failed: the cause is unknown."""
+
+    def __init__(self, what: str, detail: str) -> None:
+        super().__init__(
+            f"wsb {what} failed: {detail or 'no detail'}",
+            hint="check that Windows Sandbox starts on its own",
+        )
 
 
 class NoDefaultSwitch(SetupNeeded):
