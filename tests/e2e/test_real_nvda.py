@@ -14,7 +14,6 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-import psutil
 import pytest
 from tests.integration.conftest import free_port, run_asc
 
@@ -22,6 +21,7 @@ from agent_speech_check import winapi
 from agent_speech_check.nvda_config import RelayAddress, render
 from agent_speech_check.relay import fingerprint
 from agent_speech_check.setup import SYMBOL_LEVELS
+from agent_speech_check.wait import poll_until
 
 pytestmark = [
     pytest.mark.e2e,
@@ -171,10 +171,7 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
         stopped = run_asc("stop", "--target", "x")
     assert stopped.returncode == 0
-    nvdas = [p for p in psutil.process_iter(["name"]) if p.info["name"] == "nvda.exe"]
-    _, alive = psutil.wait_procs(nvdas, timeout=15)
-    assert alive == []
-    assert winapi.process_ids("nvda.exe") == []
+    assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()
 
 

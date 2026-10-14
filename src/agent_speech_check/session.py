@@ -176,9 +176,12 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     if running:
         raise AlreadyRunning(target.name)
     process = _spawn(target, folder)
-    poll_until(lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S)
+    if not poll_until(
+        lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S
+    ):
+        raise DaemonStartFailed(None, START_TIMEOUT_S, log_tail(folder))
     code = process.poll()
-    if code is not None or not state.exists(folder):
+    if code is not None:
         raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
     if target.launches_nvda:
         return _wait_connected(target, folder)
