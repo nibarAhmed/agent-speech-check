@@ -46,7 +46,7 @@ class NoCommand(UsageError):
     """`asc` was run without a command."""
 
     def __init__(self) -> None:
-        super().__init__("no command given", hint="run asc --help")
+        super().__init__("no command given", hint="asc --help")
 
 
 class NotConnected(AscError):

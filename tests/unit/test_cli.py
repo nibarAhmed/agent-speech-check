@@ -29,7 +29,7 @@ def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert captured.err == "error: no command given\nhint: run asc --help\n"
+    assert captured.err == "error: no command given\nhint: asc --help\n"
 
 
 def test_bad_arguments_are_a_short_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
