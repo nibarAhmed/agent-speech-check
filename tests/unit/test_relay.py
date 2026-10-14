@@ -26,6 +26,7 @@ async def test_connection_that_never_joins_is_dropped(tmp_path: Path) -> None:
         assert await asyncio.wait_for(reader.read(), 5) == b""
         assert 0.4 < time.monotonic() - started < 3
         writer.close()
+        await writer.wait_closed()
     assert r.last_error == "the connection sent no join within 0.5 s"
     assert not r.connected
     assert r.losses == []
