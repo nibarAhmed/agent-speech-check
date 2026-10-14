@@ -16,6 +16,11 @@
          one version install side by side and uninstalling one leaves the files. -->
     <MajorUpgrade AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer Agent Speech Check is already installed." />
+    <!-- perUserOrMachine is only there for the Program Files redirect above. PATH is set for
+         the installing user alone, so a per-machine install would leave everyone else
+         without asc: refuse it. -->
+    <Launch Condition="Installed OR (MSIINSTALLPERUSER = 1 AND ALLUSERS &lt;&gt; 1)"
+            Message="Agent Speech Check installs per user only. Run it without ALLUSERS=1 or MSIINSTALLPERUSER=&quot;&quot;." />
     <MediaTemplate EmbedCab="yes" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"

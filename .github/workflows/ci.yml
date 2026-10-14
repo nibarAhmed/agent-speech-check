@@ -41,6 +41,9 @@ jobs:
             $p = Start-Process msiexec $arguments -Wait -PassThru
             if ($p.ExitCode -ne 0) { throw "msiexec $arguments exit $($p.ExitCode)" }
           }
+          $p = Start-Process msiexec "/i `"$msi`" ALLUSERS=1 /qn" -Wait -PassThru
+          if ($p.ExitCode -ne 1603) { throw "per-machine install exit $($p.ExitCode), expected 1603" }
+          if ((Products) -ne 0) { throw "per-machine install was not refused" }
           $pathBefore = UserPath
           Msiexec "/i `"$first`" /qn"
           Msiexec "/i `"$msi`" /qn"
