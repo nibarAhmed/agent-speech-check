@@ -279,6 +279,19 @@ def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.Monkey
     assert installer.read_bytes() == b"already here"
 
 
+def test_a_new_installer_replaces_the_old_ones(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    new = nvda.installer_path("2026.2")
+    new.parent.mkdir(parents=True)
+    for path in (new, nvda.installer_path("2025.1"), new.parent / "notes.txt"):
+        path.write_bytes(b"")
+    (new.parent / "portable").mkdir()
+    nvda.drop_other_installers(new)
+    assert sorted(p.name for p in new.parent.iterdir()) == ["notes.txt", new.name, "portable"]
+
+
 def test_global_hotkey_fires_and_is_exclusive() -> None:
     pressed = threading.Event()
     f23 = 0x86  # a key no keyboard has, so the test never steals a real shortcut
@@ -301,9 +314,13 @@ def test_global_hotkey_fires_and_is_exclusive() -> None:
 def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # No such release: NV Access answers 404, or there is no network at all.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    old = nvda.installer_path("2026.2")
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"")
     with pytest.raises(DownloadFailed, match="cannot download NVDA"):
         nvda.download("0.0-asc-no-such-version")
     assert not nvda.installer_path("0.0-asc-no-such-version").exists()
+    assert old.exists()  # only a finished download replaces the old installers
 
 
 def test_file_version(tmp_path: Path) -> None:

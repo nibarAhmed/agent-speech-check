@@ -102,7 +102,15 @@ def download(version: str) -> Path:
             partial.unlink(missing_ok=True)
             raise DownloadFailed(url, str(getattr(error, "reason", error))) from None
         partial.replace(installer)
+        drop_other_installers(installer)
     return installer
+
+
+def drop_other_installers(installer: Path) -> None:
+    """Delete the installers of other NVDA versions next to `installer`."""
+    for other in installer.parent.glob("nvda_*.exe"):
+        if other != installer:
+            other.unlink(missing_ok=True)
 
 
 def create_portable(installer: Path, dest: Path) -> Path:
