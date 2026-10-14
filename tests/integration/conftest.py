@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import socket
@@ -57,11 +58,26 @@ def wait_until(condition: Callable[[], bool], timeout_s: float = 10) -> bool:
     return True
 
 
+# Port 0 hands out a port from Windows' dynamic range (49152 up), where every outgoing
+# connection also takes its source port: another worker could grab it before the daemon
+# binds it. So ports come from below that range, one block per xdist worker.
+PORT_BASE = 20000
+PORTS_PER_WORKER = 500
+_next_port = itertools.count()
+
+
 def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port: int = sock.getsockname()[1]
+    worker = int(os.environ.get("PYTEST_XDIST_WORKER", "gw0").removeprefix("gw"))
+    block = PORT_BASE + worker * PORTS_PER_WORKER
+    for _ in range(PORTS_PER_WORKER):
+        port = block + next(_next_port) % PORTS_PER_WORKER
+        with socket.socket() as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                continue
         return port
+    pytest.fail(f"no free port in {block}-{block + PORTS_PER_WORKER - 1}")
 
 
 @dataclass
