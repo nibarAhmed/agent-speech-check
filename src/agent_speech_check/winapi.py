@@ -416,7 +416,54 @@ _user32.PostThreadMessageW.argtypes = [
 _kernel32.GetCurrentThreadId.restype = wintypes.DWORD
 
 
-class GlobalHotkey:
+class _MessageThread:
+    """A thread with its own Windows message loop.
+
+    `_setup` runs first on the thread and sets `_ok`, which `start` returns. If
+    it returns False the thread ends there; otherwise each message goes to
+    `_on_message` until `stop`, and then `_teardown` runs.
+    """
+
+    def __init__(self, name: str) -> None:
+        self._thread_id = 0
+        self._ok = False
+        self._ready = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name=name, daemon=True)
+
+    def start(self) -> bool:
+        self._thread.start()
+        self._ready.wait(5)
+        return self._ok
+
+    def _setup(self) -> bool:
+        raise NotImplementedError
+
+    def _on_message(self, message: wintypes.MSG) -> None:
+        raise NotImplementedError
+
+    def _teardown(self) -> None:
+        raise NotImplementedError
+
+    def _loop(self) -> None:
+        self._thread_id = int(_kernel32.GetCurrentThreadId())
+        running = self._setup()
+        self._ready.set()
+        if not running:
+            return
+        message = wintypes.MSG()
+        try:
+            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
+                self._on_message(message)
+        finally:
+            self._teardown()
+
+    def stop(self) -> None:
+        if self._thread_id:
+            _user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+        self._thread.join(5)
+
+
+class GlobalHotkey(_MessageThread):
     """A system-wide hotkey on its own thread with a message loop.
 
     `start` returns False if another program already owns the combination.
@@ -424,41 +471,26 @@ class GlobalHotkey:
     """
 
     def __init__(self, modifiers: int, vk: int, on_press: Callable[[], None]) -> None:
+        super().__init__("panic-hotkey")
         self._modifiers = modifiers | MOD_NOREPEAT
         self._vk = vk
         self._on_press = on_press
-        self._thread_id = 0
-        self._registered = threading.Event()
-        self._ok = False
-        self._thread = threading.Thread(target=self._loop, name="panic-hotkey", daemon=True)
 
-    def start(self) -> bool:
-        self._thread.start()
-        self._registered.wait(5)
+    def _setup(self) -> bool:
+        self._ok = bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
         return self._ok
 
-    def _loop(self) -> None:
-        self._thread_id = int(_kernel32.GetCurrentThreadId())
-        self._ok = bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
-        self._registered.set()
-        if not self._ok:
-            return
-        message = wintypes.MSG()
-        try:
-            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
-                if message.message == WM_HOTKEY:
-                    self._on_press()
-        finally:
-            _user32.UnregisterHotKey(None, _HOTKEY_ID)
+    def _on_message(self, message: wintypes.MSG) -> None:
+        if message.message == WM_HOTKEY:
+            self._on_press()
+
+    def _teardown(self) -> None:
+        _user32.UnregisterHotKey(None, _HOTKEY_ID)
 
     def post(self, message: int) -> None:
         """Post a message to the hotkey thread (WM_QUIT stops it)."""
         if self._thread_id:
             _user32.PostThreadMessageW(self._thread_id, message, 0, 0)
-
-    def stop(self) -> None:
-        self.post(WM_QUIT)
-        self._thread.join(5)
 
 
 # ---------------------------------------------------------------- tray icon
@@ -576,7 +608,7 @@ def _register_tray_class(instance: int) -> bool:
         return ctypes.get_last_error() == _ERROR_CLASS_ALREADY_EXISTS
 
 
-class TrayIcon:
+class TrayIcon(_MessageThread):
     """A notification area icon on its own thread with a message loop.
 
     `start` returns False if the icon couldn't be added (no taskbar, say).
@@ -585,19 +617,11 @@ class TrayIcon:
     """
 
     def __init__(self, tooltip: str, on_select: Callable[[], None]) -> None:
+        super().__init__("tray-icon")
         self._tooltip = tooltip[:127]
         self._on_select = on_select
-        self._thread_id = 0
         self._taskbar_created = 0
         self.hwnd = 0
-        self._added = threading.Event()
-        self._ok = False
-        self._thread = threading.Thread(target=self._loop, name="tray-icon", daemon=True)
-
-    def start(self) -> bool:
-        self._thread.start()
-        self._added.wait(5)
-        return self._ok
 
     def _data(self) -> _NotifyIconData:
         data = _NotifyIconData()
@@ -628,8 +652,9 @@ class TrayIcon:
             return True
         return False
 
-    def _loop(self) -> None:
-        self._thread_id = int(_kernel32.GetCurrentThreadId())
+    def _setup(self) -> bool:
+        """Make the icon's window, then the icon. With a window but no icon, the
+        loop still runs, so the window is destroyed at `stop`."""
         self._taskbar_created = int(_user32.RegisterWindowMessageW("TaskbarCreated"))
         instance = _kernel32.GetModuleHandleW(None)
         if _register_tray_class(instance):
@@ -640,27 +665,21 @@ class TrayIcon:
                 or 0
             )
         if not self.hwnd:
-            self._added.set()
-            return
+            return False
         _tray_icons[self.hwnd] = self
         self._ok = self._add()
-        self._added.set()
-        message = wintypes.MSG()
-        try:
-            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
-                _user32.DispatchMessageW(ctypes.byref(message))
-        finally:
-            if self._ok:
-                _shell32.Shell_NotifyIconW(_NIM_DELETE, ctypes.byref(self._data()))
-            _user32.DestroyWindow(self.hwnd)
-            _tray_icons.pop(self.hwnd, None)
+        return True
+
+    def _on_message(self, message: wintypes.MSG) -> None:
+        _user32.DispatchMessageW(ctypes.byref(message))
+
+    def _teardown(self) -> None:
+        if self._ok:
+            _shell32.Shell_NotifyIconW(_NIM_DELETE, ctypes.byref(self._data()))
+        _user32.DestroyWindow(self.hwnd)
+        _tray_icons.pop(self.hwnd, None)
 
     def post(self, lparam: int) -> None:
         """Post a tray event to the icon's window, as Windows does on a click."""
         if self.hwnd:
             _user32.PostMessageW(self.hwnd, WM_TRAY, 0, lparam)
-
-    def stop(self) -> None:
-        if self._thread_id:
-            _user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
-        self._thread.join(5)
