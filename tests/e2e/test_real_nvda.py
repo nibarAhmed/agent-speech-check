@@ -14,6 +14,7 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
+import psutil
 import pytest
 from tests.integration.conftest import free_port, run_asc
 
@@ -170,9 +171,9 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
         stopped = run_asc("stop", "--target", "x")
     assert stopped.returncode == 0
-    deadline = time.monotonic() + 15
-    while winapi.process_ids("nvda.exe") and time.monotonic() < deadline:
-        time.sleep(0.5)
+    nvdas = [p for p in psutil.process_iter(["name"]) if p.info["name"] == "nvda.exe"]
+    _, alive = psutil.wait_procs(nvdas, timeout=15)
+    assert alive == []
     assert winapi.process_ids("nvda.exe") == []
     assert not insert_held()
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import os
@@ -14,6 +15,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+import psutil
 import pytest
 from tests.fake_nvda import FakeNvda, Reply
 
@@ -125,11 +127,7 @@ def _kill_if_ours(pid: int) -> None:
 
     A dead daemon's pid can be reused, maybe by the user's own NVDA.
     """
-    listing = subprocess.run(  # noqa: S603 - fixed command
-        ["tasklist", "/fi", f"PID eq {pid}", "/FO", "csv", "/nh"],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout.lower()
-    if listing.startswith('"python'):
-        subprocess.run(["taskkill", "/f", "/pid", str(pid)], check=False)  # noqa: S603, S607
+    with contextlib.suppress(psutil.NoSuchProcess):
+        process = psutil.Process(pid)
+        if process.name().lower().startswith("python"):
+            process.kill()

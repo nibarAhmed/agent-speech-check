@@ -1,4 +1,5 @@
-"""Thin ctypes wrappers for the few Win32 calls `asc` needs. Keep logic elsewhere."""
+"""Thin wrappers (ctypes, and psutil for processes) for the few Win32 calls `asc`
+needs. Keep logic elsewhere."""
 
 from __future__ import annotations
 
@@ -8,6 +9,8 @@ import threading
 from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
+
+import psutil
 
 ERROR_ALREADY_EXISTS = 183
 
@@ -38,153 +41,63 @@ def take_mutex(name: str) -> int | None:
 
 # ---------------------------------------------------------------- processes
 
-TH32CS_SNAPPROCESS = 0x00000002
-PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 PROCESS_TERMINATE = 0x0001
-ERROR_INVALID_PARAMETER = 87  # from OpenProcess: no process has that pid
-INVALID_HANDLE = wintypes.HANDLE(-1).value
-MAX_PATH = 32768
-
-
-class _ProcessEntry(ctypes.Structure):
-    _fields_ = (
-        ("dwSize", wintypes.DWORD),
-        ("cntUsage", wintypes.DWORD),
-        ("th32ProcessID", wintypes.DWORD),
-        ("th32DefaultHeapID", ctypes.c_size_t),
-        ("th32ModuleID", wintypes.DWORD),
-        ("cntThreads", wintypes.DWORD),
-        ("th32ParentProcessID", wintypes.DWORD),
-        ("pcPriClassBase", wintypes.LONG),
-        ("dwFlags", wintypes.DWORD),
-        ("szExeFile", wintypes.WCHAR * 260),
-    )
-
-
-_kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
-_kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-_kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ProcessEntry)]
-_kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ProcessEntry)]
 _kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 _kernel32.OpenProcess.restype = wintypes.HANDLE
-_kernel32.QueryFullProcessImageNameW.argtypes = [
-    wintypes.HANDLE,
-    wintypes.DWORD,
-    wintypes.LPWSTR,
-    ctypes.POINTER(wintypes.DWORD),
-]
 _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
 
 def process_ids(image: str) -> list[int]:
     """Pids of running processes whose exe file name is `image` (case-insensitive)."""
-    snapshot = _kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if snapshot == INVALID_HANDLE:
-        raise ctypes.WinError(ctypes.get_last_error())
-    pids: list[int] = []
-    try:
-        entry = _ProcessEntry()
-        entry.dwSize = ctypes.sizeof(_ProcessEntry)
-        more = _kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
-        while more:
-            if entry.szExeFile.lower() == image.lower():
-                pids.append(int(entry.th32ProcessID))
-            more = _kernel32.Process32NextW(snapshot, ctypes.byref(entry))
-    finally:
-        _kernel32.CloseHandle(snapshot)
-    return pids
+    image = image.lower()
+    return [
+        process.pid
+        for process in psutil.process_iter(["name"])
+        if (process.info["name"] or "").lower() == image
+    ]
 
 
 def image_path(pid: int) -> Path | None:
-    """The full exe path of a process, needing only limited query access."""
-    handle = _kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
-    if not handle:
-        return None
+    """The full exe path of a process. None if it's gone or won't say."""
     try:
-        buffer = ctypes.create_unicode_buffer(MAX_PATH)
-        size = wintypes.DWORD(MAX_PATH)
-        if not _kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
-            return None
-        return Path(buffer.value)
-    finally:
-        _kernel32.CloseHandle(handle)
-
-
-SYNCHRONIZE = 0x00100000
-INFINITE = 0xFFFFFFFF
-WAIT_OBJECT_0 = 0
-WAIT_TIMEOUT = 258  # also the Win32 error code for a wait that timed out
-_kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-_kernel32.WaitForSingleObject.restype = wintypes.DWORD
+        exe = psutil.Process(pid).exe()
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return None
+    return Path(exe) if exe else None
 
 
 def wait_exit(pid: int) -> None:
     """Block until a process exits, however it ends. Returns at once if it's gone."""
-    handle = _kernel32.OpenProcess(SYNCHRONIZE, False, pid)
-    if not handle:
-        return
     try:
-        _kernel32.WaitForSingleObject(handle, INFINITE)
-    finally:
-        _kernel32.CloseHandle(handle)
-
-
-_kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE, *[ctypes.POINTER(wintypes.FILETIME)] * 4]
-# FILETIME counts 100 ns steps from 1601; Unix time counts seconds from 1970.
-_FILETIME_UNIX_START = 116444736000000000
-
-
-def _open_live(access: int, pid: int) -> int | None:
-    """A handle to the process, or None if it's gone. Raises if it runs but
-    can't be opened (access denied, say): that is not the same as gone."""
-    handle = _kernel32.OpenProcess(access, False, pid)
-    if handle:
-        return int(handle)
-    error = ctypes.get_last_error()
-    if error == ERROR_INVALID_PARAMETER:
-        return None
-    raise ctypes.WinError(error)
+        psutil.Process(pid).wait()
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return
 
 
 def created_at(pid: int) -> float | None:
-    """When a running process started, in Unix seconds. None if it's gone."""
-    handle = _open_live(PROCESS_QUERY_LIMITED_INFORMATION, pid)
-    if handle is None:
-        return None
+    """When a running process started, in Unix seconds. None if it's gone.
+    Raises if it runs but won't say (access denied): that is not the same as gone."""
     try:
-        times = [wintypes.FILETIME() for _ in range(4)]
-        if not _kernel32.GetProcessTimes(handle, *map(ctypes.byref, times)):
-            raise ctypes.WinError(ctypes.get_last_error())
-        created = times[0].dwHighDateTime << 32 | times[0].dwLowDateTime
-        return (created - _FILETIME_UNIX_START) / 10_000_000
-    finally:
-        _kernel32.CloseHandle(handle)
-
-
-_kernel32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+        return psutil.Process(pid).create_time()
+    except psutil.NoSuchProcess:
+        return None
+    except psutil.AccessDenied as error:
+        raise PermissionError from error
 
 
 def terminate(pid: int, timeout_s: float) -> None:
     """End a process and wait up to `timeout_s` for it to go. Nothing if it's
     gone; raises if it can't be ended or is still there after the wait."""
-    handle = _open_live(PROCESS_TERMINATE | SYNCHRONIZE, pid)
-    if handle is None:
-        return
     try:
-        # An ended process stays openable while anyone holds a handle to it,
-        # and Windows refuses to terminate it: it is gone all the same.
-        if not _kernel32.TerminateProcess(handle, 1):
-            error = ctypes.get_last_error()
-            if _kernel32.WaitForSingleObject(handle, 0) == WAIT_OBJECT_0:
-                return
-            raise ctypes.WinError(error)
-        waited = _kernel32.WaitForSingleObject(handle, int(timeout_s * 1000))
-        if waited == WAIT_TIMEOUT:
-            raise ctypes.WinError(WAIT_TIMEOUT)
-        if waited != WAIT_OBJECT_0:
-            raise ctypes.WinError(ctypes.get_last_error())
-    finally:
-        _kernel32.CloseHandle(handle)
+        process = psutil.Process(pid)
+        process.terminate()
+        process.wait(timeout_s)
+    except psutil.NoSuchProcess:
+        return
+    except psutil.AccessDenied as error:
+        raise PermissionError from error
+    except psutil.TimeoutExpired as error:
+        raise TimeoutError from error
 
 
 def process_image(image: str) -> Path | None:
