@@ -10,7 +10,6 @@ import socket
 import ssl
 import subprocess
 import sys
-import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +19,7 @@ import pytest
 from tests.fake_nvda import FakeNvda, Reply
 
 from agent_speech_check.relay import fingerprint
+from agent_speech_check.wait import poll_until
 
 
 def run_asc(*args: str, timeout: float = 60) -> subprocess.CompletedProcess[str]:
@@ -52,12 +52,7 @@ def tls_client(port: int) -> ssl.SSLSocket:
 
 def wait_until(condition: Callable[[], bool], timeout_s: float = 10) -> bool:
     """Poll until condition holds or timeout_s passes, and say which happened."""
-    deadline = time.monotonic() + timeout_s
-    while not condition():
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(0.05)
-    return True
+    return poll_until(condition, timeout_s, 0.05)
 
 
 # Port 0 hands out a port from Windows' dynamic range (49152 up), where every outgoing

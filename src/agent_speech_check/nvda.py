@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +25,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda_config import RelayAddress, Setting
 from agent_speech_check.paths import state_root
+from agent_speech_check.wait import poll_until
 
 log = logging.getLogger(__name__)
 
@@ -115,12 +115,10 @@ def create_portable(installer: Path, dest: Path) -> Path:
         check=False,
         timeout=CREATE_TIMEOUT_S,
     )
-    deadline = time.monotonic() + CREATE_TIMEOUT_S
-    while not (dest / "nvda.exe").is_file():
-        if time.monotonic() > deadline:
-            raise PortableFailed(str(dest))
-        time.sleep(1)
-    return dest / "nvda.exe"
+    exe = dest / "nvda.exe"
+    if not poll_until(exe.is_file, CREATE_TIMEOUT_S, 1):
+        raise PortableFailed(str(dest))
+    return exe
 
 
 @dataclass

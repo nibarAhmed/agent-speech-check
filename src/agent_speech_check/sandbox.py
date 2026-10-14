@@ -27,7 +27,6 @@ import os
 import shutil
 import subprocess
 import threading
-import time
 import winreg
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +35,7 @@ from xml.sax.saxutils import escape
 from agent_speech_check import powershell, spawn, winapi
 from agent_speech_check.errors import NotConnected, SandboxFailed, SandboxNeedsPro, WsbMissing
 from agent_speech_check.validate import Fields
+from agent_speech_check.wait import poll_until
 
 log = logging.getLogger(__name__)
 
@@ -304,12 +304,7 @@ def running() -> list[str]:
 def wait_gone(timeout_s: float) -> bool:
     """Wait for the last sandbox VM to exit. Starting a new one before that
     attaches to the session that is logging off (seen in M0)."""
-    deadline = time.monotonic() + timeout_s
-    while winapi.process_ids(VM_IMAGE):
-        if time.monotonic() > deadline:
-            return False
-        time.sleep(GONE_POLL_S)
-    return True
+    return poll_until(lambda: not winapi.process_ids(VM_IMAGE), timeout_s, GONE_POLL_S)
 
 
 def exec_as_user(sandbox_id: str, command: str) -> int:
@@ -442,11 +437,8 @@ class SandboxWindow:
 
 
 def _wait_session(sandbox_id: str) -> None:
-    deadline = time.monotonic() + SESSION_TIMEOUT_S
-    while not _has_session(sandbox_id):
-        if time.monotonic() > deadline:
-            raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
-        time.sleep(POLL_S)
+    if not poll_until(lambda: _has_session(sandbox_id), SESSION_TIMEOUT_S, POLL_S):
+        raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
 
 
 def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:

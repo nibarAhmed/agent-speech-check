@@ -33,6 +33,7 @@ from agent_speech_check.errors import (
     SharedNeedsConsent,
 )
 from agent_speech_check.targets import Target
+from agent_speech_check.wait import poll_until
 
 START_TIMEOUT_S = 15.0
 # Past the daemon's own worst case: 10 s for NVDA, then its window threads.
@@ -175,17 +176,13 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     if running:
         raise AlreadyRunning(target.name)
     process = _spawn(target, folder)
-    deadline = time.monotonic() + START_TIMEOUT_S
-    while time.monotonic() < deadline:
-        code = process.poll()
-        if code is not None:
-            raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
-        if state.exists(folder):
-            if target.launches_nvda:
-                return _wait_connected(target, folder)
-            return status(folder, target.name)
-        time.sleep(POLL_S)
-    raise DaemonStartFailed(None, START_TIMEOUT_S, log_tail(folder))
+    poll_until(lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S)
+    code = process.poll()
+    if code is not None or not state.exists(folder):
+        raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
+    if target.launches_nvda:
+        return _wait_connected(target, folder)
+    return status(folder, target.name)
 
 
 def stop(folder: Path, target: str, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
@@ -196,9 +193,6 @@ def stop(folder: Path, target: str, *, timeout_s: float = STOP_TIMEOUT_S) -> Non
     except NotConnected:
         _end(folder, target)
         return
-    deadline = time.monotonic() + timeout_s
-    while state.exists(folder) and time.monotonic() < deadline:
-        time.sleep(POLL_S)
-    if state.exists(folder):
+    if not poll_until(lambda: not state.exists(folder), timeout_s, POLL_S):
         # It said yes but is still there: end it.
         _end(folder, target)
