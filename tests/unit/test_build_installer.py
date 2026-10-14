@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from scripts.build_installer import msi_version
+from scripts.build_installer import msi_version, require_x64
 
 
 @pytest.mark.parametrize("version", ["0.0.1", "1.2.3", "255.255.65535"])
@@ -16,3 +16,13 @@ def test_msi_version_keeps_a_version_windows_installer_accepts(version: str) -> 
 def test_msi_version_refuses_what_windows_installer_cannot_use(version: str) -> None:
     with pytest.raises(SystemExit, match="An MSI needs a version like"):
         msi_version(version)
+
+
+def test_require_x64_accepts_64_bit_intel_python() -> None:
+    require_x64("win-amd64")
+
+
+@pytest.mark.parametrize("platform", ["win32", "win-arm64"])
+def test_require_x64_refuses_python_that_would_freeze_other_binaries(platform: str) -> None:
+    with pytest.raises(SystemExit, match="needs 64-bit x86 Python"):
+        require_x64(platform)

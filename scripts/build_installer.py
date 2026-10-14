@@ -12,6 +12,7 @@ import json
 import re
 import subprocess
 import sys
+import sysconfig
 import tomllib
 from pathlib import Path
 
@@ -29,6 +30,12 @@ def wix_ui() -> str:
     return f"WixToolset.UI.wixext/{tools['tools']['wix']['version']}"
 
 
+def require_x64(platform: str) -> None:
+    """PyInstaller freezes the running Python, and the MSI is x64."""
+    if platform != "win-amd64":
+        sys.exit(f"The MSI needs 64-bit x86 Python, this one is {platform}")
+
+
 def msi_version(version: str) -> str:
     """The pyproject version, if Windows Installer can use it as is."""
     match = re.fullmatch(r"([0-9]+)\.([0-9]+)\.([0-9]+)", version)
@@ -40,6 +47,7 @@ def msi_version(version: str) -> str:
 
 
 def main() -> None:
+    require_x64(sysconfig.get_platform())
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     version = msi_version(pyproject["project"]["version"])
     subprocess.run(
