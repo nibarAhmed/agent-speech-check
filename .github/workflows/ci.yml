@@ -17,9 +17,28 @@ jobs:
         run: uv sync --locked
       - name: Check (lint, types, dead code, deps, tests)
         run: uv run poe check
-      - name: PyInstaller smoke build
-        shell: bash
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build the MSI
+        run: uv run python scripts/build_installer.py
+      - name: Install, run and uninstall the MSI
+        shell: pwsh
         run: |
-          uv run --with pyinstaller pyinstaller --onefile --name asc --copy-metadata agent-speech-check --paths src src/agent_speech_check/__main__.py
-          ./dist/asc.exe --help
-          ./dist/asc.exe --version
+          $msi = (Get-Item dist\agent-speech-check-*.msi).FullName
+          $dir = "$env:LOCALAPPDATA\Programs\agent-speech-check"
+          function UserPath { [Environment]::GetEnvironmentVariable('Path', 'User') }
+          $p = Start-Process msiexec "/i `"$msi`" /qn" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "install exit $($p.ExitCode)" }
+          if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
+          & "$dir\asc.exe" --help
+          & "$dir\asc.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "asc --version exit $LASTEXITCODE" }
+          $p = Start-Process msiexec "/x `"$msi`" /qn" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "uninstall exit $($p.ExitCode)" }
+          if ((UserPath) -like "*$dir*") { throw "still on the user PATH" }
+          if (Test-Path $dir) { throw "$dir left behind" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: dist/*.msi

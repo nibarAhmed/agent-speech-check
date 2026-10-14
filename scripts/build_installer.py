@@ -1,0 +1,62 @@
+"""Build the asc MSI: PyInstaller (one folder), then WiX.
+
+Run `uv run python scripts/build_installer.py`. Needs the .NET SDK for WiX, which
+`dotnet-tools.json` pins. Prints the path of dist/agent-speech-check-VERSION.msi.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BUILD = ROOT / "build"
+DIST = ROOT / "dist"
+
+# MSI versions are three numbers: at most 255, 255 and 65535.
+MSI_LIMITS = (255, 255, 65535)
+
+
+def msi_version(version: str) -> str:
+    """The pyproject version, if Windows Installer can use it as is."""
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+    if match is None or any(
+        int(part) > limit for part, limit in zip(match.groups(), MSI_LIMITS, strict=True)
+    ):
+        sys.exit(f"An MSI needs a version like 1.2.3, pyproject.toml has {version!r}")
+    return version
+
+
+def main() -> None:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    version = msi_version(pyproject["project"]["version"])
+    subprocess.run(
+        [
+            "uv", "run", "--group", "build", "pyinstaller", "--noconfirm", "--onedir",
+            "--name", "asc", "--copy-metadata", "agent-speech-check",
+            "--paths", str(ROOT / "src"),
+            "--distpath", str(DIST), "--workpath", str(BUILD), "--specpath", str(BUILD),
+            str(ROOT / "src" / "agent_speech_check" / "__main__.py"),
+        ],
+        check=True,
+        cwd=ROOT,
+    )  # fmt: skip
+    subprocess.run(["dotnet", "tool", "restore"], check=True, cwd=ROOT)
+    msi = DIST / f"agent-speech-check-{version}.msi"
+    subprocess.run(
+        [
+            "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),
+            "-d", f"Version={version}", "-d", f"AppDir={DIST / 'asc'}",
+            "-arch", "x64", "-wx", "-o", str(msi),
+        ],
+        check=True,
+        cwd=ROOT,
+    )  # fmt: skip
+    print(msi)
+
+
+if __name__ == "__main__":
+    main()

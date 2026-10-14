@@ -33,6 +33,9 @@ build-backend = "hatchling.build"
 packages = ["src/agent_speech_check"]
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.22.3",
+]
 dev = [
     "codespell",
     "deptry",
@@ -92,7 +95,7 @@ select = [
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "scripts/check_dashes.py"]
+files = ["src", "tests", "scripts/check_dashes.py", "scripts/build_installer.py"]
 mypy_path = ["src", ".", "stubs"]
 explicit_package_bases = true
 

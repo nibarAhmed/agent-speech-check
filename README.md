@@ -32,14 +32,24 @@ nothing is installed inside NVDA.
 
 ## Getting started
 
-Install [uv](https://docs.astral.sh/uv/), then in a clone of this repository:
+Install `asc` one of two ways:
 
-```
-uv tool install .
-```
+- **Installer (no Python needed, works offline):** run
+  `agent-speech-check-VERSION.msi`. It installs for you only, without admin, to
+  `%LOCALAPPDATA%\Programs\agent-speech-check` and puts that folder on your PATH.
+  Unattended: `msiexec /i agent-speech-check-VERSION.msi /qn`. Uninstall from Installed
+  apps, or `msiexec /x agent-speech-check-VERSION.msi /qn`. Your settings in
+  `%LOCALAPPDATA%\agent-speech-check` are kept.
+- **From source:** install [uv](https://docs.astral.sh/uv/), then in a clone of this
+  repository run `uv tool install .` (`uv tool install --reinstall .` to update).
 
-That puts `asc` on your PATH. After pulling changes, run
-`uv tool install --reinstall .` to update it.
+Notes:
+
+- Run `asc stop` before you upgrade or uninstall, so no `asc` is running.
+- Open a new terminal afterwards. Terminals and agents already running don't see the new
+  PATH.
+- Install one way only. With both, the one earlier on PATH wins.
+- `asc start` still downloads NVDA on first use.
 
 ```
 asc setup      # a few questions; saves your settings
@@ -61,6 +71,9 @@ the workflow and the gotchas. Install it for all your projects by copying the `s
 uv sync
 uv run poe check
 ```
+
+`uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the
+[.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see
 [SECURITY.md](SECURITY.md).

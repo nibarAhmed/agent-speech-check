@@ -1,0 +1,33 @@
+<!--
+  The asc MSI. Built by scripts/build_installer.py, which passes Version and AppDir.
+  Per user by default, no admin. Program Files is the target because Windows Installer
+  redirects it to %LOCALAPPDATA%\Programs for a per-user install (a profile folder as
+  target fails validation, ICE38). So asc lands in %LOCALAPPDATA%\Programs\agent-speech-check
+  and that folder goes on the user PATH. Uninstall removes both. State in
+  %LOCALAPPDATA%\agent-speech-check is the user's and is kept.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Agent Speech Check"
+           Manufacturer="nibarAhmed"
+           Version="$(Version)"
+           UpgradeCode="45024D39-B418-4A36-B773-3A035735ECD7"
+           Scope="perUserOrMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer Agent Speech Check is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="agent-speech-check" />
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <Files Directory="INSTALLFOLDER" Include="$(AppDir)\**" />
+      <Component Id="UserPath" Directory="INSTALLFOLDER">
+        <Environment Id="PATH" Name="PATH" Value="[INSTALLFOLDER]"
+                     Action="set" Part="last" System="no" Permanent="no" />
+        <RegistryValue Root="HKCU" Key="Software\agent-speech-check" Name="UserPath"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>
