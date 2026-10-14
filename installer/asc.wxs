@@ -1,0 +1,73 @@
+<!--
+  The asc MSI. Built by scripts/build_installer.py, which passes Version and AppDir.
+  Per user by default, no admin. Program Files is the target because Windows Installer
+  redirects it to %LOCALAPPDATA%\Programs for a per-user install (a profile folder as
+  target fails validation, ICE38). So asc lands in %LOCALAPPDATA%\Programs\agent-speech-check
+  and that folder goes on the user PATH. Uninstall removes both. State in
+  %LOCALAPPDATA%\agent-speech-check is the user's and is kept.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Agent Speech Check"
+           Manufacturer="nibarAhmed"
+           Version="$(Version)"
+           UpgradeCode="45024D39-B418-4A36-B773-3A035735ECD7"
+           Scope="perUserOrMachine">
+    <!-- Every build gets a new ProductCode. Without AllowSameVersionUpgrades, two builds of
+         one version install side by side and uninstalling one leaves the files. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer Agent Speech Check is already installed." />
+    <!-- perUserOrMachine is only there for the Program Files redirect above. PATH is set for
+         the installing user alone, so a per-machine install would leave everyone else
+         without asc: refuse it. -->
+    <Launch Condition="Installed OR (MSIINSTALLPERUSER = 1 AND ALLUSERS &lt;&gt; 1)"
+            Message="Agent Speech Check installs per user only. Run it without ALLUSERS=1 or MSIINSTALLPERUSER=&quot;&quot;." />
+    <MediaTemplate EmbedCab="yes" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
+              Value="Open a new terminal, then run asc setup. Terminals that were already open don't see the new PATH." />
+
+    <!-- A short wizard: Welcome, then Next installs, then Finish. No licence page (MIT
+         needs no click-through) and no folder choice. Repair and remove use WiX's standard
+         maintenance dialogs. Silent installs (/qn) show none of this. -->
+    <UI Id="AscUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="EndDialog" Value="Return" Order="2" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" />
+    </UI>
+    <UIRef Id="WixUI_Common" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="agent-speech-check" />
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <Files Directory="INSTALLFOLDER" Include="$(AppDir)\**" />
+      <Component Id="UserPath" Directory="INSTALLFOLDER">
+        <Environment Id="PATH" Name="PATH" Value="[INSTALLFOLDER]"
+                     Action="set" Part="last" System="no" Permanent="no" />
+        <RegistryValue Root="HKCU" Key="Software\agent-speech-check" Name="UserPath"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

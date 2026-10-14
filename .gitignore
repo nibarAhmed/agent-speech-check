@@ -9,6 +9,8 @@ htmlcov/
 .ruff_cache/
 build/
 dist/
+# WiX extension cache (scripts/build_installer.py)
+.wix/
 *.spec
 .claude/settings.local.json
 # e2e harness: portable Python, downloaded NVDA, sandbox outputs

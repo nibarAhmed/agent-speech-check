@@ -17,9 +17,47 @@ jobs:
         run: uv sync --locked
       - name: Check (lint, types, dead code, deps, tests)
         run: uv run poe check
-      - name: PyInstaller smoke build
-        shell: bash
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      # Two builds of one version, as during development: the second must replace the first.
+      - name: Build the MSI twice
+        shell: pwsh
         run: |
-          uv run --with pyinstaller pyinstaller --onefile --name asc --copy-metadata agent-speech-check --paths src src/agent_speech_check/__main__.py
-          ./dist/asc.exe --help
-          ./dist/asc.exe --version
+          uv run python scripts/build_installer.py
+          Copy-Item (Get-Item dist\agent-speech-check-*.msi).FullName "$env:RUNNER_TEMP\first.msi"
+          uv run python scripts/build_installer.py
+      - name: Install, upgrade, run and uninstall the MSI
+        shell: pwsh
+        run: |
+          $first = "$env:RUNNER_TEMP\first.msi"
+          $msi = (Get-Item dist\agent-speech-check-*.msi).FullName
+          $dir = "$env:LOCALAPPDATA\Programs\agent-speech-check"
+          $upgradeCode = '{45024D39-B418-4A36-B773-3A035735ECD7}'
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          function UserPath { [Environment]::GetEnvironmentVariable('Path', 'User') }
+          function Products { @($installer.RelatedProducts($upgradeCode)).Count }
+          function Msiexec($arguments) {
+            $p = Start-Process msiexec $arguments -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "msiexec $arguments exit $($p.ExitCode)" }
+          }
+          $p = Start-Process msiexec "/i `"$msi`" ALLUSERS=1 /qn" -Wait -PassThru
+          if ($p.ExitCode -ne 1603) { throw "per-machine install exit $($p.ExitCode), expected 1603" }
+          if ((Products) -ne 0) { throw "per-machine install was not refused" }
+          $pathBefore = UserPath
+          Msiexec "/i `"$first`" /qn"
+          Msiexec "/i `"$msi`" /qn"
+          if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
+          if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
+          foreach ($flag in '--help', '--version') {
+            & "$dir\asc.exe" $flag
+            if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
+          }
+          Msiexec "/x `"$msi`" /qn"
+          if ((Products) -ne 0) { throw "$(Products) products left" }
+          if ((UserPath) -cne $pathBefore) { throw "user PATH changed: $(UserPath)" }
+          if (Test-Path $dir) { throw "$dir left behind" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: dist/*.msi
