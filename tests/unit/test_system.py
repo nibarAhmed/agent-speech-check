@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check import firewall, nvda, sandbox, winapi
+from agent_speech_check import firewall, ipc, nvda, sandbox, winapi
 from agent_speech_check.errors import (
     DownloadFailed,
     NoDefaultSwitch,
@@ -32,6 +32,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandboxed import SandboxSession
+from agent_speech_check.session import sandbox_failure
 from agent_speech_check.targets import defaults
 
 
@@ -201,6 +202,19 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
         assert all(host == os.path.realpath(host) for host in hosts)
     finally:
         shutil.rmtree(os.path.realpath(root), ignore_errors=True)
+
+
+def test_sandbox_failure_keeps_its_message_and_category() -> None:
+    """The daemon reports why its sandbox failed; `asc start` raises that, unwrapped."""
+    for error in (SandboxFailed("start", "file not found"), SandboxNeedsPro()):
+        got = sandbox_failure({"sandbox_failure": ipc.error_detail(error)})
+        assert got is not None
+        assert (got.message, got.hint, got.exit_code) == (
+            error.message,
+            error.hint,
+            error.exit_code,
+        )
+    assert sandbox_failure({"sandbox_failure": None}) is None
 
 
 def test_sandbox_session_before_start() -> None:

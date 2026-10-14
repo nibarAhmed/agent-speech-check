@@ -35,7 +35,7 @@ class SandboxSession:
         self.settings = target.settings
         self.nvda_dir = Path(target.nvda_dir) if target.nvda_dir else None
         self.state = "starting"
-        self.failure: str | None = None
+        self.failure: AscError | None = None
         self.sandbox_id: str | None = None
         self.window = sandbox.SandboxWindow(
             target.sandbox_window, f"asc sandbox {target.name}: show or hide"
@@ -82,7 +82,7 @@ class SandboxSession:
         try:
             await asyncio.to_thread(self._start)
         except AscError as error:
-            self.failure = error.message
+            self.failure = error
             self.state = f"failed: {error.message}"
             log.warning("sandbox did not start: %s", error.message)
             await asyncio.to_thread(self.window.stop)

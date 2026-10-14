@@ -21,6 +21,7 @@ from agent_speech_check import (
 from agent_speech_check.daemon import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
+    AscError,
     DaemonNotAnswering,
     DaemonStartFailed,
     DaemonUnstoppable,
@@ -29,7 +30,6 @@ from agent_speech_check.errors import (
     NotRunning,
     NvdaDidNotConnect,
     SandboxBusy,
-    SandboxFailed,
     SharedNeedsConsent,
 )
 from agent_speech_check.targets import Target
@@ -149,6 +149,12 @@ def precheck(target: Target) -> None:
         _check_sandbox(target)
 
 
+def sandbox_failure(current: dict[str, Any]) -> AscError | None:
+    """Why the daemon's sandbox failed, as it was raised there, or None."""
+    raw = current.get("sandbox_failure")
+    return None if raw is None else ipc.error_from(raw, "sandbox_failure")
+
+
 def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
     """For an NVDA that asc launches, wait until it has joined the relay."""
     timeout_s = CONNECT_TIMEOUT_S[target.mode]
@@ -157,11 +163,11 @@ def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
         current = status(folder, target.name)
         if current["connected"]:
             return current
-        failure = current.get("sandbox_failure")
+        failure = sandbox_failure(current)
         if failure or time.monotonic() > deadline:
             stop(folder, target.name)
             if failure:
-                raise SandboxFailed("start", str(failure))
+                raise failure
             raise NvdaDidNotConnect(timeout_s, log_tail(folder))
         time.sleep(CONNECT_POLL_S)
 
