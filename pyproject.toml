@@ -16,6 +16,7 @@ classifiers = [
     "Topic :: Adaptive Technologies",
 ]
 dependencies = [
+    "configobj>=5.0.9",
     "cryptography>=50.0.2",
     "psutil>=7.2.2",
     "tomlkit>=0.15.1",
@@ -92,7 +93,7 @@ select = [
 [tool.mypy]
 strict = true
 files = ["src", "tests", "scripts/check_dashes.py"]
-mypy_path = ["src", "."]
+mypy_path = ["src", ".", "stubs"]
 explicit_package_bases = true
 
 # ---------------------------------------------------------------- vulture

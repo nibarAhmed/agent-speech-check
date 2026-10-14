@@ -28,8 +28,9 @@ evidence, is in `docs/protocol.md`.
 ## Code
 
 - Runtime dependencies: `cryptography` (the stdlib can't create the relay cert), `tomlkit`
-  (the stdlib can read TOML but not write it) and `psutil` (finding, waiting for and ending
-  processes). Add a library when it saves code; say why in the commit.
+  (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
+  processes) and `configobj` (`nvda.ini`, read and written by the same library NVDA uses). Add
+  a library when it saves code; say why in the commit.
 - No `print` outside `cli.py`.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - The rule that watch mode refuses keys lives in the daemon.

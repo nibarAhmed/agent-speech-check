@@ -11,6 +11,7 @@ name = "agent-speech-check"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [
+    { name = "configobj" },
     { name = "cryptography" },
     { name = "psutil" },
     { name = "tomlkit" },
@@ -33,6 +34,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "configobj", specifier = ">=5.0.9" },
     { name = "cryptography", specifier = ">=50.0.2" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "tomlkit", specifier = ">=0.15.1" },
@@ -227,6 +229,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697, upload-time = "2022-10-25T02:36:22.414Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
+]
+
+[[package]]
+name = "configobj"
+version = "5.0.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/c4/c7f9e41bc2e5f8eeae4a08a01c91b2aea3dfab40a3e14b25e87e7db8d501/configobj-5.0.9.tar.gz", hash = "sha256:03c881bbf23aa07bccf1b837005975993c4ab4427ba57f959afdd9d1a2386848", size = 101518, upload-time = "2024-09-21T12:47:46.315Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a6/c4/0679472c60052c27efa612b4cd3ddd2a23e885dcdc73461781d2c802d39e/configobj-5.0.9-py2.py3-none-any.whl", hash = "sha256:1ba10c5b6ee16229c79a05047aeda2b55eb4e80d7c7d8ecf17ec1ca600c79882", size = 35615, upload-time = "2024-11-26T14:03:32.972Z" },
 ]
 
 [[package]]

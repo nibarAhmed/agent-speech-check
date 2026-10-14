@@ -10,7 +10,8 @@ follower (see `docs/protocol.md`):
 
 `--nvda-setting section.key=value` adds anything else (verbosity, punctuation).
 Keys `asc` writes itself are refused, so a setting can never break the above.
-The ini is built as data and rendered; `--nvda-setting` text is never pasted in raw.
+The ini is built as data and written by configobj, which NVDA reads it with, so
+`--nvda-setting` text is never pasted in raw and every value is quoted as NVDA needs.
 
 A portable NVDA's own config (`userConfig`) is copied into the private config
 folder first, add-ons and all, so it speaks with the user's settings. Its
@@ -27,21 +28,15 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import configobj
+
 from agent_speech_check.errors import BadSetting, UserConfigUnreadable
 
-
-@dataclass(frozen=True)
-class Raw:
-    """A value from the user's own `nvda.ini`, written back exactly as it was."""
-
-    text: str
-
-
-type Section = dict[str, "str | Raw | Section"]
+# configobj reads `a, b` as a list.
+type Section = dict[str, "str | list[str] | Section"]
 
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 _FORBIDDEN = ("\r", "\n", "\0")
-_HEADER = re.compile(r"(\[+)([^\[\]]+)(\]+)\s*(?:#.*)?")
 USER_CONFIG = "userConfig"
 _NOT_COPIED = frozenset({"nvda.ini", "profileTriggers.ini"})
 
@@ -142,72 +137,22 @@ def base_config(relay: RelayAddress) -> Section:
                 "port": str(relay.port),
                 "key": relay.channel,
             },
-            "trustedCertificates": {f'"{host}"': relay.fingerprint},
+            "trustedCertificates": {host: relay.fingerprint},
         },
     }
-
-
-def _quote(value: str) -> str:
-    """configobj reads an unquoted comma as a list, and # as a comment."""
-    if value and not any(c in value for c in ",#\"'") and value == value.strip():
-        return value
-    return f"'{value}'" if '"' in value else f'"{value}"'
-
-
-def _render(section: Section, depth: int, lines: list[str]) -> None:
-    for name, value in section.items():
-        if isinstance(value, Raw):
-            lines.append(f"{name} = {value.text}")
-        elif isinstance(value, str):
-            quoted = value if name.startswith('"') else _quote(value)
-            lines.append(f"{name} = {quoted}")
-    for name, value in section.items():
-        if isinstance(value, dict):
-            lines.append(f"{'[' * depth}{name}{']' * depth}")
-            _render(value, depth + 1, lines)
 
 
 # ---------------------------------------------------------------- the user's own config
 
 
-def _split_key(line: str) -> tuple[str, str] | None:
-    """`key = value` at the first `=` outside quotes, or None."""
-    quote = None
-    for i, char in enumerate(line):
-        if quote:
-            if char == quote:
-                quote = None
-        elif char in "\"'":
-            quote = char
-        elif char == "=":
-            key = line[:i].strip()
-            return (key, line[i + 1 :].strip()) if key else None
-    return None
-
-
 def parse_ini(text: str, where: str) -> Section:
-    """Read configobj ini as NVDA writes it, keeping every value's raw text."""
-    root: Section = {}
-    stack = [root]
-    for number, raw_line in enumerate(text.splitlines(), 1):
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        header = _HEADER.fullmatch(line)
-        if header:
-            depth = len(header[1])
-            if depth != len(header[3]) or depth > len(stack):
-                raise UserConfigUnreadable(where, number)
-            del stack[depth:]
-            child: Section = {}
-            stack[-1][header[2].strip()] = child
-            stack.append(child)
-            continue
-        pair = _split_key(line)
-        if pair is None or pair[1].startswith(("'''", '"""')):
-            raise UserConfigUnreadable(where, number)
-        stack[-1][pair[0]] = Raw(pair[1])
-    return root
+    """Read ini text the way NVDA reads `nvda.ini`."""
+    try:
+        config = configobj.ConfigObj(text.splitlines(), interpolation=False, raise_errors=True)
+    except configobj.ConfigObjError as error:
+        raise UserConfigUnreadable(where, error.line_number) from None
+    section: Section = config.dict()
+    return section
 
 
 def source_config(nvda_folder: Path) -> Path:
@@ -270,9 +215,11 @@ def check(settings: tuple[Setting, ...], user: Section | None = None) -> None:
 def render(
     relay: RelayAddress, settings: tuple[Setting, ...] = (), user: Section | None = None
 ) -> str:
-    lines: list[str] = []
-    _render(_merged(relay, settings, user), 1, lines)
-    return "\n".join(lines) + "\n"
+    # Unindented, as NVDA writes it. configobj puts a section's keys before its subsections.
+    config = configobj.ConfigObj(
+        _merged(relay, settings, user), interpolation=False, indent_type=""
+    )
+    return "\n".join(config.write()) + "\n"
 
 
 def write(

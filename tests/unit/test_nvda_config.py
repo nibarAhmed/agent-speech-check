@@ -4,7 +4,6 @@ import pytest
 
 from agent_speech_check.errors import BadSetting, UserConfigUnreadable
 from agent_speech_check.nvda_config import (
-    Raw,
     RelayAddress,
     Setting,
     check,
@@ -36,9 +35,12 @@ def test_base_config_matches_protocol_doc() -> None:
         "port = 16837",
         "key = k1",
         "[[trustedCertificates]]",
-        f'"127.0.0.1:16837" = {"ab" * 32}',
+        f"127.0.0.1:16837 = {'ab' * 32}",
     ]:
         assert expected in lines
+    remote = parse_ini(ini, "nvda.ini")["remote"]
+    assert isinstance(remote, dict)
+    assert remote["trustedCertificates"] == {"127.0.0.1:16837": "ab" * 32}
     # configobj needs a section's keys before its subsections.
     assert lines.index("enabled = True") < lines.index("[[controlServer]]")
 
@@ -50,7 +52,8 @@ def test_user_settings_are_added_and_quoted() -> None:
         Setting.parse("speech.symbolLevel=300"),
         Setting.parse('documentFormatting.note=a, b # "c"'),
     )
-    lines = render(RelayAddress("127.0.0.1", 1, "k", "f"), settings).splitlines()
+    ini = render(RelayAddress("127.0.0.1", 1, "k", "f"), settings)
+    lines = ini.splitlines()
     assert "[[espeak]]" in lines
     assert "rate = 50" in lines
     assert "[presentation]" in lines
@@ -58,6 +61,7 @@ def test_user_settings_are_added_and_quoted() -> None:
     assert "symbolLevel = 300" in lines
     assert "note = 'a, b # \"c\"'" in lines
     assert lines.index("symbolLevel = 300") < lines.index("[[espeak]]")
+    assert parse_ini(ini, "nvda.ini")["documentFormatting"] == {"note": 'a, b # "c"'}
 
 
 @pytest.mark.parametrize(
@@ -91,7 +95,7 @@ def test_key_used_as_section() -> None:
 def test_sandbox_relay_address_and_pinned_key() -> None:
     lines = render(RelayAddress("172.24.80.1", 16837, "k", "f")).splitlines()
     assert "host = 172.24.80.1:16837" in lines
-    assert '"172.24.80.1:16837" = f' in lines
+    assert "172.24.80.1:16837 = f" in lines
 
 
 USER_INI = """schemaVersion = 24
@@ -118,26 +122,34 @@ key = secret
 "my.server:6837" = cafe
 [documentFormatting]
 note = 'a, b'
+voices = a, b
 """
 
 
-def test_parse_ini_keeps_raw_values() -> None:
+def test_parse_ini_reads_values_as_nvda_does() -> None:
     parsed = parse_ini(USER_INI, "nvda.ini")
-    assert parsed["schemaVersion"] == Raw("24")
+    assert parsed["schemaVersion"] == "24"
     speech = parsed["speech"]
     assert isinstance(speech, dict)
-    assert speech["espeak"] == {"voice": Raw("de"), "rate": Raw("70  # fast")}
+    assert speech["espeak"] == {"voice": "de", "rate": "70"}
     remote = parsed["remote"]
     assert isinstance(remote, dict)
-    assert remote["trustedCertificates"] == {'"my.server:6837"': Raw("cafe")}
-    assert parsed["documentFormatting"] == {"note": Raw("'a, b'")}
+    assert remote["trustedCertificates"] == {"my.server:6837": "cafe"}
+    assert parsed["documentFormatting"] == {"note": "a, b", "voices": ["a", "b"]}
+
+
+def test_a_multi_line_user_value_is_kept() -> None:
+    user = parse_ini("[a]\nnote = '''x\ny'''\n", "nvda.ini")
+    assert user == {"a": {"note": "x\ny"}}
+    ini = render(RelayAddress("h", 1, "k", "f"), (), user)
+    assert parse_ini(ini, "nvda.ini")["a"] == {"note": "x\ny"}
 
 
 @pytest.mark.parametrize(
     ("text", "line"),
     [
-        ("[a]\nnote = '''x\ny'''\n", 2),
         ("[a]\njust words\n", 2),
+        ("[a]\nx = 1\nx = 2\n", 3),
         ("[a]\n[[[c]]]\n", 2),
         ("[a]]\n", 1),
         ("= x\n", 1),
@@ -157,8 +169,9 @@ def test_user_config_merge() -> None:
     # Kept from the user's config.
     assert "language = de" in lines
     assert "voice = de" in lines
-    assert "rate = 70  # fast" in lines
-    assert "note = 'a, b'" in lines
+    assert "rate = 70" in lines
+    assert 'note = "a, b"' in lines
+    assert "voices = a, b" in lines
     assert "schemaVersion = 24" in lines
     # asc's own settings win.
     assert "showWelcomeDialogAtStartup = False" in lines
@@ -175,7 +188,7 @@ def test_user_config_merge() -> None:
 
 
 def test_user_key_where_asc_needs_a_section() -> None:
-    lines = render(RelayAddress("h", 1, "k", "f"), (), {"remote": Raw("x"), "speech": Raw("y")})
+    lines = render(RelayAddress("h", 1, "k", "f"), (), {"remote": "x", "speech": "y"})
     assert "[speech]" in lines.splitlines()
     assert "synth = silence" in lines.splitlines()
 

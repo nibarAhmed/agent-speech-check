@@ -152,6 +152,9 @@ key = <random key>
   (from reading NVDA's source; not tested here).
 - `host` carries the port. The `trustedCertificates` key is `host:port`, or just
   `host` when the port is 6837.
+- `asc` writes the file with configobj, which leaves that key unquoted
+  (`127.0.0.1:16837 = ...`). configobj reads the key the same with or without
+  the quotes.
 - **Pinning is silent on 2026.2**, which already has the fix for
   GHSA-m268-mc77-j2cr (fixed in 2026.1.1). A pre-seeded matching fingerprint
   connected with no dialog. Since the fix, NVDA checks the pinned fingerprint on
