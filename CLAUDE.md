@@ -41,6 +41,12 @@ evidence, is in `docs/protocol.md`.
 - Pick an error's category by the caller's next step, which each category's docstring in
   `errors.py` states, not by what broke.
 - Catch broad exceptions only in `cli.main` and the daemon's request handler.
+- `AscError` classes never also subclass a built-in exception: the existing `except ValueError`,
+  `except OSError` and similar handlers would then catch them by accident.
+- Turn stdlib and third-party exceptions into `AscError`s where the code touches the outside world
+  (`raise X from None`). Built-ins may stay inside low-level modules like `winapi.py`.
+- An error from the daemon reaches the CLI as its bare category (`errors.from_kind`). Around
+  `ipc.call`, catch a concrete class only if the client raises it itself (like `NotRunning`).
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.
 - Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
