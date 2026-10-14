@@ -47,6 +47,7 @@ jobs:
           if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
           if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
           & "$dir\asc.exe" --help
+          if ($LASTEXITCODE -ne 0) { throw "asc --help exit $LASTEXITCODE" }
           & "$dir\asc.exe" --version
           if ($LASTEXITCODE -ne 0) { throw "asc --version exit $LASTEXITCODE" }
           Msiexec "/x `"$msi`" /qn"
