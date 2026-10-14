@@ -146,11 +146,19 @@ def base_config(relay: RelayAddress) -> Section:
 
 
 def parse_ini(text: str, where: str) -> Section:
-    """Read ini text the way NVDA reads `nvda.ini`."""
+    """Read ini text the way NVDA reads `nvda.ini`, refusing what asc couldn't write back."""
+    lines = text.splitlines()
     try:
-        config = configobj.ConfigObj(text.splitlines(), interpolation=False, raise_errors=True)
+        config = configobj.ConfigObj(lines, interpolation=False, raise_errors=True)
     except configobj.ConfigObjError as error:
         raise UserConfigUnreadable(where, error.line_number) from None
+    try:
+        config.write()
+    except configobj.ConfigObjError:
+        # Only a value holding both ''' and """ can't be quoted, and only a
+        # one-line unquoted value can hold both, so its line holds both.
+        number = next(n for n, line in enumerate(lines, 1) if "'''" in line and '"""' in line)
+        raise UserConfigUnreadable(where, number) from None
     section: Section = config.dict()
     return section
 

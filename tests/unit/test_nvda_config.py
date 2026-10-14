@@ -150,6 +150,8 @@ def test_a_multi_line_user_value_is_kept() -> None:
     [
         ("[a]\njust words\n", 2),
         ("[a]\nx = 1\nx = 2\n", 3),
+        # Read, but configobj can't quote it to write it back.
+        ("[a]\ny = 1\nx = a ''' \"\"\" b\n", 3),
         ("[a]\n[[[c]]]\n", 2),
         ("[a]]\n", 1),
         ("= x\n", 1),
