@@ -167,6 +167,21 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         assert run_asc("type", "hi", "--target", "x").returncode == 0
         line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "x")
         assert line.returncode == 0, line.stdout + line.stderr
+
+        # Batch launchers, starting the app or running it: NVDA hears the
+        # app, not the batch file's console.
+        for name, runs in (("start", 'start "" mshta.exe'), ("run", "mshta.exe")):
+            app_title = f"asc {name}"
+            (tmp_path / f"{name}.html").write_text(APP.replace("asc app", app_title), "utf-8")
+            launcher = tmp_path / f"{name}.cmd"
+            launcher.write_text(f'{runs} "%~dp0{name}.html"\n', "utf-8")
+            out = run_asc(
+                "launch", str(launcher), "--title", app_title, "--timeout", "10000", "--target", "x"
+            )
+            assert out.returncode == 0, out.stdout + out.stderr
+            assert "terminal" not in out.stdout.lower(), out.stdout
+            said = run_asc("press", "NVDA+t", "--target", "x")
+            assert app_title in said.stdout, said.stdout
     finally:
         subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
         stopped = run_asc("stop", "--target", "x")
