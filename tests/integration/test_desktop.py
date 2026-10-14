@@ -55,6 +55,7 @@ def test_type_refused_in_watch_mode() -> None:
     assert refused.returncode == 4
 
 
+@pytest.mark.xdist_group("desktop")
 def test_launch_waits_for_the_title(nvda: FakeNvda) -> None:
     app = f'"{sys.executable}" -c "import time; time.sleep(3)"'
     launching = start_asc("launch", app, "--title", "My App", "--target", "d")
@@ -66,6 +67,7 @@ def test_launch_waits_for_the_title(nvda: FakeNvda) -> None:
     assert out.splitlines() == ['said: "Loading"', 'said: "My App window"']
 
 
+@pytest.mark.xdist_group("desktop")
 def test_launch_errors(nvda: FakeNvda) -> None:
     missing = run_asc("launch", "no-such-program-asc.exe", "--target", "d")
     assert missing.returncode == 2

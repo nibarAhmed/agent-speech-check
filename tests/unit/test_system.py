@@ -64,6 +64,7 @@ def test_process_lookups() -> None:
     assert winapi.image_path(0) is None
 
 
+@pytest.mark.xdist_group("desktop")
 def test_window_helpers_without_a_sandbox() -> None:
     assert winapi.windows_titled("no window has this title, asc") == []
     for window in ("tray", "taskbar", "show"):
@@ -287,6 +288,7 @@ def test_nvda_version_check() -> None:
         assert "needs 2026.2 or later" in exc.value.message
 
 
+@pytest.mark.xdist_group("desktop")
 def test_tray_icon_selects_and_goes_away() -> None:
     selected = threading.Event()
     icon = winapi.TrayIcon("asc test icon", selected.set)
@@ -305,6 +307,7 @@ def test_tray_icon_selects_and_goes_away() -> None:
     assert not selected.wait(0.2)
 
 
+@pytest.mark.xdist_group("desktop")
 def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
     relay = RelayAddress("h", 1, "k", "f")
     tray = SandboxSession(tmp_path, defaults("x", "sandbox"), relay)
@@ -337,6 +340,7 @@ def _plain_window(title: str) -> int:
     return int(hwnd)
 
 
+@pytest.mark.xdist_group("desktop")
 def test_sandbox_window_puts_a_real_window_away() -> None:
     if winapi.process_ids("WindowsSandboxRemoteSession.exe"):
         pytest.skip("a real sandbox window is open")

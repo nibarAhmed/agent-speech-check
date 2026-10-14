@@ -138,6 +138,7 @@ def test_press_without_nvda() -> None:
     assert 'NVDA is not connected to target "d"' in result.stderr
 
 
+@pytest.mark.xdist_group("desktop")
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_consent_sends_keys_and_has_a_panic_key(env: Env) -> None:
     (env.root / "agent-speech-check" / "config.toml").write_text(

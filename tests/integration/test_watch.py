@@ -136,6 +136,7 @@ def test_shared_mode_needs_consent() -> None:
     assert "--i-understand" in result.stderr
 
 
+@pytest.mark.xdist_group("desktop")
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_the_panic_key_taken_exits_4(env: Env) -> None:
     (env.root / "agent-speech-check" / "config.toml").write_text(

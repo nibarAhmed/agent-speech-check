@@ -39,6 +39,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov",
+    "pytest-xdist>=3.8.0",
     "ruff",
     "vulture",
 ]
@@ -53,8 +54,8 @@ lint = "ruff check ."
 types = "mypy"
 dead = "vulture"
 deps = "deptry src"
-test = "pytest -m 'not e2e' --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
-unit = "pytest tests/unit -q --no-cov -p no:cacheprovider"
+test = "pytest -m 'not e2e' -n 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
+unit = "pytest tests/unit -q -n 4 --dist loadgroup --no-cov -p no:cacheprovider"
 check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems

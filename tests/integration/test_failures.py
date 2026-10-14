@@ -38,6 +38,7 @@ def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvd
     assert "last error: NVDA sent a line that is not a JSON object" in status
 
 
+@pytest.mark.xdist_group("desktop")
 @pytest.mark.parametrize("command", [("wait", "never"), ("launch", f'"{sys.executable}" -c pass')])
 def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
     nvda: FakeNvda, command: tuple[str, str]
