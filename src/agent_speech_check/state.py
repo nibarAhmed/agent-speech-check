@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from agent_speech_check.errors import NotConnected, NotRunning
+from agent_speech_check.paths import write_atomic
 from agent_speech_check.validate import Fields
 
 FILE = "state.json"
@@ -24,9 +25,7 @@ class State:
     started: float
 
     def write(self, folder: Path) -> None:
-        tmp = folder / (FILE + ".tmp")
-        tmp.write_text(json.dumps(asdict(self)), encoding="utf-8")
-        tmp.replace(folder / FILE)
+        write_atomic(folder / FILE, json.dumps(asdict(self)))
 
 
 def read(folder: Path, target: str) -> State:

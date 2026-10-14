@@ -15,8 +15,6 @@ A change is made to a copy of the data, checked by reading it back into a
 from __future__ import annotations
 
 import copy
-import os
-import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -25,6 +23,7 @@ import tomlkit
 from tomlkit.items import Array, Table
 
 from agent_speech_check.errors import BadPreference, TargetNotConfigured
+from agent_speech_check.paths import write_atomic
 from agent_speech_check.prefs import GLOBAL, PREFS, TARGET, Pref, Value
 from agent_speech_check.targets import Config, Target, check_name
 
@@ -77,15 +76,7 @@ def save(path: Path, data: dict[str, Any]) -> Config:
     """Check `data`, then write it as `path` in one step."""
     config = Config.from_data(data, path.name)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Its own temporary name, so two writers at once never share one.
-    handle, name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
-    tmp = Path(name)
-    try:
-        with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as file:
-            file.write(render(data))
-        tmp.replace(path)
-    finally:
-        tmp.unlink(missing_ok=True)
+    write_atomic(path, render(data))
     return config
 
 

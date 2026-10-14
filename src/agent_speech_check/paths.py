@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 APP_DIR_NAME = "agent-speech-check"
@@ -21,3 +22,23 @@ def config_file() -> Path:
 def target_dir(name: str) -> Path:
     """One folder per target: state file, daemon log, relay cert and credentials."""
     return state_root() / name
+
+
+def write_atomic(path: Path, data: str | bytes) -> None:
+    """Write `path` in one step: readers see the old file or the new one, never half.
+
+    Text is written as UTF-8 with Unix line ends.
+    """
+    # Its own temporary name, so two writers at once never share one.
+    handle, name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    tmp = Path(name)
+    try:
+        if isinstance(data, bytes):
+            with os.fdopen(handle, "wb") as file:
+                file.write(data)
+        else:
+            with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as file:
+                file.write(data)
+        tmp.replace(path)
+    finally:
+        tmp.unlink(missing_ok=True)

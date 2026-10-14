@@ -40,6 +40,7 @@ from agent_speech_check.errors import (
     UsageError,
 )
 from agent_speech_check.keys import Key
+from agent_speech_check.paths import write_atomic
 from agent_speech_check.speech_log import SpeechLog
 from agent_speech_check.validate import Fields
 
@@ -81,14 +82,15 @@ def _new_cert(cert_path: Path, key_path: Path) -> None:
         )
         .sign(private, hashes.SHA256())
     )
-    key_path.write_bytes(
+    write_atomic(
+        key_path,
         private.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,
             serialization.NoEncryption(),
-        )
+        ),
     )
-    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    write_atomic(cert_path, cert.public_bytes(serialization.Encoding.PEM))
 
 
 def fingerprint(cert_path: Path) -> str:
@@ -112,7 +114,7 @@ def load_or_create(folder: Path) -> Credentials:
         channel = Fields(raw, str(info), UsageError).text("channel", max_len=200)
     if channel is None:
         channel = secrets.token_urlsafe(12)
-        info.write_text(json.dumps({"channel": channel}), encoding="utf-8")
+        write_atomic(info, json.dumps({"channel": channel}))
     return Credentials(cert, key, fingerprint(cert), channel)
 
 
