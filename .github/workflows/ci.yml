@@ -46,10 +46,10 @@ jobs:
           Msiexec "/i `"$msi`" /qn"
           if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
           if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
-          & "$dir\asc.exe" --help
-          if ($LASTEXITCODE -ne 0) { throw "asc --help exit $LASTEXITCODE" }
-          & "$dir\asc.exe" --version
-          if ($LASTEXITCODE -ne 0) { throw "asc --version exit $LASTEXITCODE" }
+          foreach ($flag in '--help', '--version') {
+            & "$dir\asc.exe" $flag
+            if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
+          }
           Msiexec "/x `"$msi`" /qn"
           if ((Products) -ne 0) { throw "$(Products) products left" }
           if ((UserPath) -cne $pathBefore) { throw "user PATH changed: $(UserPath)" }
