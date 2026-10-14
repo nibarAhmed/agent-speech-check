@@ -124,8 +124,16 @@ class Relay:
     have left down. It must not await, or a press could get in first.
     """
 
-    def __init__(self, target: str, credentials: Credentials, speech: SpeechLog) -> None:
+    def __init__(
+        self,
+        target: str,
+        credentials: Credentials,
+        speech: SpeechLog,
+        *,
+        join_timeout_s: float = JOIN_TIMEOUT_S,
+    ) -> None:
         self.target = target
+        self.join_timeout_s = join_timeout_s
         self.credentials = credentials
         self.speech = speech
         self.on_join: Callable[[], None] = lambda: None
@@ -154,7 +162,7 @@ class Relay:
             host,
             port,
             ssl=self._ssl,
-            ssl_handshake_timeout=JOIN_TIMEOUT_S,
+            ssl_handshake_timeout=self.join_timeout_s,
             limit=protocol.MAX_LINE + 1,
         )
         self.host, self.port = host, server.sockets[0].getsockname()[1]
@@ -163,11 +171,11 @@ class Relay:
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         reason: ProtocolError | None = None
         try:
-            joined = await asyncio.wait_for(self._join(reader, writer), JOIN_TIMEOUT_S)
+            joined = await asyncio.wait_for(self._join(reader, writer), self.join_timeout_s)
             if joined:
                 await self._follow(reader, writer)
         except TimeoutError:
-            self._failed(NoJoin(JOIN_TIMEOUT_S))
+            self._failed(NoJoin(self.join_timeout_s))
         except ProtocolError as error:
             reason = error
             self._failed(error)

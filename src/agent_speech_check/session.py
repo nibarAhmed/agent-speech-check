@@ -188,7 +188,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     raise DaemonStartFailed(None, START_TIMEOUT_S, log_tail(folder))
 
 
-def stop(folder: Path, target: str) -> None:
+def stop(folder: Path, target: str, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
     try:
         ipc.call(folder, target, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
     except NotRunning:
@@ -196,7 +196,7 @@ def stop(folder: Path, target: str) -> None:
     except NotConnected:
         _end(folder, target)
         return
-    deadline = time.monotonic() + STOP_TIMEOUT_S
+    deadline = time.monotonic() + timeout_s
     while state.exists(folder) and time.monotonic() < deadline:
         time.sleep(POLL_S)
     if state.exists(folder):

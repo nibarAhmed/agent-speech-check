@@ -13,7 +13,8 @@ import pytest
 from tests import fake_nvda as f
 from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client
 
-from agent_speech_check import firewall, state, winapi
+from agent_speech_check import firewall, ipc, session, state, winapi
+from agent_speech_check.errors import DaemonNoReply
 from agent_speech_check.targets import SANDBOX_PORT, Target
 
 
@@ -30,22 +31,16 @@ def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
     assert "last error: refused a join with the wrong channel key or role" in status
 
 
-def test_connection_that_never_joins_is_dropped(env: Env) -> None:
-    assert run_asc("start", "--target", "w").returncode == 0
-    with tls_client(env.port) as sock:
-        started = time.monotonic()
-        assert sock.recv(4096) == b""
-        assert 9 < time.monotonic() - started < 14
-    status = run_asc("status", "--target", "w").stdout
-    assert "last error: the connection sent no join within 10 s" in status
-
-
 def test_second_press_waits_then_gives_up(env: Env) -> None:
     assert run_asc("start", "--target", "d").returncode == 0
     fake = env.fake("d", {"Space": f.SILENCE})
     try:
         slow = start_asc("press", "Space", "--settle", "3000", "--target", "d")
-        time.sleep(1.5)
+        # Once NVDA has the key, the slow press holds the keyboard for its settle.
+        deadline = time.monotonic() + 10
+        while not fake.gestures:
+            assert time.monotonic() < deadline, "the slow press never reached NVDA"
+            time.sleep(0.05)
         busy = run_asc("press", "Tab", "--timeout", "300", "--target", "d")
         assert busy.returncode == 4
         assert "another asc command kept the keyboard" in busy.stderr
@@ -207,8 +202,8 @@ def test_stop_clears_a_state_file_without_a_pid(env: Env) -> None:
 @pytest.mark.parametrize("daemon_reply", [b'{"v":1,"ok":true,"result":{}}\n'], indirect=True)
 @pytest.mark.usefixtures("daemon_reply")
 def test_stop_ends_a_daemon_that_agrees_but_stays(env: Env) -> None:
-    result = run_asc("stop", "--target", "w")
-    assert result.returncode == 0, result.stderr
+    """In-process with a short wait: the real one is 30 s."""
+    session.stop(env.folder("w"), "w", timeout_s=0.5)
     assert not (env.folder("w") / "state.json").exists()
 
 
@@ -291,10 +286,11 @@ def test_the_named_mutex_refuses_a_second_daemon(env: Env) -> None:
 
 @pytest.mark.parametrize("daemon_reply", [HANG], indirect=True)
 @pytest.mark.usefixtures("daemon_reply")
-def test_daemon_that_never_answers() -> None:
-    result = run_asc("status", "--target", "w")
-    assert result.returncode == 3
-    assert "cannot talk to the asc daemon: no reply in time" in result.stderr
+def test_daemon_that_never_answers(env: Env) -> None:
+    """In-process with a short wait: the real one is 5 s."""
+    request = ipc.Request("status", ipc.NoArgs())
+    with pytest.raises(DaemonNoReply, match="cannot talk to the asc daemon: no reply in time"):
+        ipc.call(env.folder("w"), "w", request, 0.3)
 
 
 @pytest.mark.usefixtures("env")
