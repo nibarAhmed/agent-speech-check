@@ -11,7 +11,7 @@ from collections.abc import Iterator
 
 import pytest
 from tests import fake_nvda as f
-from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client
+from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client, wait_until
 
 from agent_speech_check import firewall, ipc, session, state, winapi
 from agent_speech_check.errors import DaemonNoReply
@@ -37,10 +37,7 @@ def test_second_press_waits_then_gives_up(env: Env) -> None:
     try:
         slow = start_asc("press", "Space", "--settle", "3000", "--target", "d")
         # Once NVDA has the key, the slow press holds the keyboard for its settle.
-        deadline = time.monotonic() + 10
-        while not fake.gestures:
-            assert time.monotonic() < deadline, "the slow press never reached NVDA"
-            time.sleep(0.05)
+        assert wait_until(lambda: bool(fake.gestures)), "the slow press never reached NVDA"
         busy = run_asc("press", "Tab", "--timeout", "300", "--target", "d")
         assert busy.returncode == 4
         assert "another asc command kept the keyboard" in busy.stderr
@@ -267,10 +264,7 @@ def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
     try:
         assert run_asc("press", "Tab", "--target", "d").returncode == 0
         assert run_asc("stop", "--target", "d").returncode == 0
-        deadline = time.monotonic() + 10
-        while fake.connected and time.monotonic() < deadline:
-            time.sleep(0.05)
-        assert not fake.connected
+        assert wait_until(lambda: not fake.connected)
         assert fake.held == set()
     finally:
         fake.close()
@@ -289,8 +283,11 @@ def test_the_named_mutex_refuses_a_second_daemon(env: Env) -> None:
 def test_daemon_that_never_answers(env: Env) -> None:
     """In-process with a short wait: the real one is 5 s."""
     request = ipc.Request("status", ipc.NoArgs())
-    with pytest.raises(DaemonNoReply, match="cannot talk to the asc daemon: no reply in time"):
+    with pytest.raises(
+        DaemonNoReply, match="cannot talk to the asc daemon: no reply in time"
+    ) as exc:
         ipc.call(env.folder("w"), "w", request, 0.3)
+    assert exc.value.exit_code == 3
 
 
 @pytest.mark.usefixtures("env")

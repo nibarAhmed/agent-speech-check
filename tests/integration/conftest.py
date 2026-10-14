@@ -8,7 +8,8 @@ import socket
 import ssl
 import subprocess
 import sys
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +45,16 @@ def tls_client(port: int) -> ssl.SSLSocket:
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     return context.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=15))
+
+
+def wait_until(condition: Callable[[], bool], timeout_s: float = 10) -> bool:
+    """Poll until condition holds or timeout_s passes, and say which happened."""
+    deadline = time.monotonic() + timeout_s
+    while not condition():
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+    return True
 
 
 def free_port() -> int:

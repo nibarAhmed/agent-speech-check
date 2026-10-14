@@ -12,7 +12,7 @@ from collections.abc import Iterator
 import pytest
 from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
-from tests.integration.conftest import Env, run_asc
+from tests.integration.conftest import Env, run_asc, wait_until
 
 
 @pytest.fixture
@@ -26,10 +26,7 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
 
 
 def wait_rejoined(fake: FakeNvda, joins: int) -> None:
-    deadline = time.monotonic() + 10
-    while fake.joins <= joins and time.monotonic() < deadline:
-        time.sleep(0.05)
-    assert fake.joins > joins, fake.failure
+    assert wait_until(lambda: fake.joins > joins), fake.failure
     # Give the relay a moment to send its releases after channel_joined.
     time.sleep(0.2)
 
