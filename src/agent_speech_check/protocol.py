@@ -11,6 +11,7 @@ Anything else that doesn't fit raises `ProtocolError`.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -98,7 +99,7 @@ def _error(f: Fields) -> Message:
     raise ServerSentError(f.opt_text("message") or "(no message)")
 
 
-_PARSERS: dict[str, Any] = {
+_PARSERS: dict[str, Callable[[Fields], Message]] = {
     "protocol_version": lambda f: ProtocolVersion(f.number("version", low=0, high=1000)),
     "join": lambda f: Join(f.text("channel", max_len=1024), f.text("connection_type")),
     "speak": _speak,

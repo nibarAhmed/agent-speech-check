@@ -191,16 +191,16 @@ class LaunchArgs:
 
 type Args = NoArgs | SpeechArgs | WaitArgs | PressArgs | TypeArgs | LaunchArgs
 
-COMMANDS: dict[str, Any] = {
-    "status": NoArgs,
-    "stop": NoArgs,
-    "mark": NoArgs,
-    "clear": NoArgs,
-    "speech": SpeechArgs,
-    "wait": WaitArgs,
-    "press": PressArgs,
-    "type": TypeArgs,
-    "launch": LaunchArgs,
+COMMANDS: dict[str, Callable[[Fields], Args]] = {
+    "status": NoArgs.parse,
+    "stop": NoArgs.parse,
+    "mark": NoArgs.parse,
+    "clear": NoArgs.parse,
+    "speech": SpeechArgs.parse,
+    "wait": WaitArgs.parse,
+    "press": PressArgs.parse,
+    "type": TypeArgs.parse,
+    "launch": LaunchArgs.parse,
 }
 
 
@@ -213,7 +213,7 @@ class Request:
 def parse_request(cmd: str, raw_args: object) -> Request:
     f = Fields({"cmd": cmd}, "request", UsageError)
     name = f.choice("cmd", COMMANDS)
-    args: Args = COMMANDS[name].parse(Fields(raw_args, f"{name} request", UsageError))
+    args = COMMANDS[name](Fields(raw_args, f"{name} request", UsageError))
     return Request(name, args)
 
 
