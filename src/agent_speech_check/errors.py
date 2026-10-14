@@ -165,9 +165,10 @@ class BadSetting(UsageError):
 
 
 class UserConfigUnreadable(UsageError):
-    def __init__(self, where: str, line: int) -> None:
+    def __init__(self, where: str, line: int | None) -> None:
+        at = "" if line is None else f" line {line}"
         super().__init__(
-            f"cannot read your NVDA config: {where} line {line}",
+            f"cannot read your NVDA config: {where}{at}",
             hint="fix that line, or point --nvda-dir at an NVDA with a fresh config",
         )
 

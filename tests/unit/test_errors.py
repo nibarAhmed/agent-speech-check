@@ -105,3 +105,8 @@ def test_no_match_after_launch_says_which_windows_opened() -> None:
     opened = errors.NoMatch("x", 5, [], windows=["asc field"])
     assert opened.message.endswith('(nothing said)\nNew windows: "asc field"')
     assert errors.NoMatch("x", 5, [], windows=[]).message.endswith("\nNew windows: (none)")
+
+
+def test_an_unreadable_user_config_names_the_line_when_known() -> None:
+    assert errors.UserConfigUnreadable("nvda.ini", 3).message.endswith("nvda.ini line 3")
+    assert errors.UserConfigUnreadable("nvda.ini", None).message.endswith("config: nvda.ini")

@@ -6,6 +6,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import threading
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
@@ -416,12 +417,13 @@ _user32.PostThreadMessageW.argtypes = [
 _kernel32.GetCurrentThreadId.restype = wintypes.DWORD
 
 
-class _MessageThread:
+class _MessageThread(ABC):
     """A thread with its own Windows message loop.
 
-    `_setup` runs first on the thread and sets `_ok`, which `start` returns. If
-    it returns False the thread ends there; otherwise each message goes to
-    `_on_message` until `stop`, and then `_teardown` runs.
+    `_setup` runs first on the thread, and what it returns is what `start`
+    returns. If that is False, the thread ends there and `_setup` has undone
+    what it did. Otherwise each message goes to `_on_message` until `stop`, and
+    then `_teardown` runs.
     """
 
     def __init__(self, name: str) -> None:
@@ -435,20 +437,20 @@ class _MessageThread:
         self._ready.wait(5)
         return self._ok
 
-    def _setup(self) -> bool:
-        raise NotImplementedError
+    @abstractmethod
+    def _setup(self) -> bool: ...
+
+    @abstractmethod
+    def _teardown(self) -> None: ...
 
     def _on_message(self, message: wintypes.MSG) -> None:
-        raise NotImplementedError
-
-    def _teardown(self) -> None:
-        raise NotImplementedError
+        _user32.DispatchMessageW(ctypes.byref(message))
 
     def _loop(self) -> None:
         self._thread_id = int(_kernel32.GetCurrentThreadId())
-        running = self._setup()
+        self._ok = self._setup()
         self._ready.set()
-        if not running:
+        if not self._ok:
             return
         message = wintypes.MSG()
         try:
@@ -477,8 +479,7 @@ class GlobalHotkey(_MessageThread):
         self._on_press = on_press
 
     def _setup(self) -> bool:
-        self._ok = bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
-        return self._ok
+        return bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
 
     def _on_message(self, message: wintypes.MSG) -> None:
         if message.message == WM_HOTKEY:
@@ -653,8 +654,7 @@ class TrayIcon(_MessageThread):
         return False
 
     def _setup(self) -> bool:
-        """Make the icon's window, then the icon. With a window but no icon, the
-        loop still runs, so the window is destroyed at `stop`."""
+        """Make the icon's window, then the icon."""
         self._taskbar_created = int(_user32.RegisterWindowMessageW("TaskbarCreated"))
         instance = _kernel32.GetModuleHandleW(None)
         if _register_tray_class(instance):
@@ -667,15 +667,14 @@ class TrayIcon(_MessageThread):
         if not self.hwnd:
             return False
         _tray_icons[self.hwnd] = self
-        self._ok = self._add()
-        return True
-
-    def _on_message(self, message: wintypes.MSG) -> None:
-        _user32.DispatchMessageW(ctypes.byref(message))
+        if self._add():
+            return True
+        self._teardown()
+        return False
 
     def _teardown(self) -> None:
-        if self._ok:
-            _shell32.Shell_NotifyIconW(_NIM_DELETE, ctypes.byref(self._data()))
+        # Removing an icon that was never added fails, which is fine.
+        _shell32.Shell_NotifyIconW(_NIM_DELETE, ctypes.byref(self._data()))
         _user32.DestroyWindow(self.hwnd)
         _tray_icons.pop(self.hwnd, None)
 

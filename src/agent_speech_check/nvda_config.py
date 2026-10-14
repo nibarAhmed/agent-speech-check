@@ -155,10 +155,10 @@ def parse_ini(text: str, where: str) -> Section:
     try:
         config.write()
     except configobj.ConfigObjError:
-        # Only a value holding both ''' and """ can't be quoted, and only a
-        # one-line unquoted value can hold both, so its line holds both.
-        number = next(n for n, line in enumerate(lines, 1) if "'''" in line and '"""' in line)
-        raise UserConfigUnreadable(where, number) from None
+        # A value holding both ''' and """ can't be quoted. Only a one-line
+        # unquoted value can hold both, so its line is the one that does.
+        both = (n for n, line in enumerate(lines, 1) if "'''" in line and '"""' in line)
+        raise UserConfigUnreadable(where, next(both, None)) from None
     section: Section = config.dict()
     return section
 
