@@ -13,7 +13,7 @@ import re
 import sys
 import traceback
 from collections.abc import Callable, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -76,155 +76,18 @@ exit codes:
   130  interrupted (Ctrl+C)
 """
 
-HELP: dict[str, tuple[str, str]] = {
-    "start": (
-        "start recording for a target",
-        """\
-Start the background daemon for a target. Targets come from config.toml (see
-asc config), or default to --mode (watch if left out).
 
-watch mode: your own NVDA connects to asc and asc only listens. It never sends
-keys. Connect once in NVDA (Tools, Remote Access, Connect): allow this computer
-to be controlled, host and key as printed, and trust the certificate when asked.
-The host, key and certificate stay the same for the target.
+@dataclass(frozen=True)
+class Command:
+    """One subcommand: its help, the function that runs it, and its own arguments.
+    The table of them, `COMMANDS`, is at the end, after those functions."""
 
-examples:
-  asc start
-  asc start --target app""",
-    ),
-    "stop": (
-        "stop recording and forget the speech",
-        "Stop the daemon. Held keys are released. A daemon that doesn't answer is ended.",
-    ),
-    "status": (
-        "show whether asc is recording and NVDA is connected",
-        "Show the target, whether NVDA is connected, how to connect it, and the\n"
-        "browse/focus mode (unknown until NVDA first switches).",
-    ),
-    "speech": (
-        "print what NVDA said since the mark",
-        """\
-Print what NVDA said, one numbered line per utterance, plus mode changes.
-By default, lines after the last asc mark.
-
-examples:
-  asc speech
-  asc speech --since 0       everything still kept
-  asc speech --since 41      lines after 41""",
-    ),
-    "wait": (
-        "wait until NVDA says something matching REGEX",
-        """\
-Return as soon as an utterance after the mark (or --since) matches REGEX
-(Python syntax, searched anywhere in the line; use (?i) to ignore case).
-Exits 1 with what NVDA did say if nothing matched in time.
-
-examples:
-  asc wait "OK button"
-  asc wait "(?i)saved" --timeout 10000""",
-    ),
-    "mark": ("remember the current end of the speech log", "Print and set the mark."),
-    "clear": ("drop all kept speech", "Drop all kept speech. Line numbers keep counting."),
-    "press": (
-        "press keys and print what NVDA said",
-        """\
-Send each gesture, wait until NVDA is quiet for --settle ms, and print only
-the new speech: said: "..." lines, mode: lines, or (nothing said).
-Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
-Watch mode refuses keys (exit 4).
-
-examples:
-  asc press Tab
-  asc press NVDA+Tab
-  asc press H H --expect "level 2"
-  asc press Control+Home NVDA+Down""",
-    ),
-    "type": (
-        "type text and print what NVDA said",
-        """\
-Type TEXT one character at a time, using this computer's keyboard layout.
-Every character is checked first; if any can't be typed, nothing is (exit 2).
-NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
-
-examples:
-  asc type "hello world"
-  asc type "x@example.com" --settle 800""",
-    ),
-    "keys": (
-        "look up NVDA commands in NVDA's own reference",
-        """\
-Print commands from NVDA's Commands Quick Reference whose name, keys,
-description or section contain every SEARCH word, one per line:
-KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
-NVDA the target uses: for desktop mode the portable copy, otherwise your own
-NVDA (the running nvda.exe, the uninstall registry entry, Program Files).
-In browse mode, single letters jump to elements; add Shift to go back.
-
-examples:
-  asc keys heading
-  asc keys report title
-  asc keys --layout laptop current line""",
-    ),
-    "launch": (
-        "start an app and wait until NVDA speaks",
-        """\
-Start CMD and wait until NVDA says something matching --title (a regex), or
-anything at all if --title is left out. Prints what NVDA said.
-Default timeout 30000 ms.
-
-examples:
-  asc launch "notepad.exe" --title Notepad
-  asc launch "py -m myapp" --title "My App" --timeout 60000""",
-    ),
-    "get-nvda": (
-        "make the portable NVDA that desktop mode launches",
-        """\
-Download NVDA from NV Access and make a portable copy for desktop mode, in
-%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Refuses (exit 4) while any
-NVDA runs, because the NVDA installer would restart it.
-
-examples:
-  asc get-nvda
-  asc get-nvda --installer nvda_2026.2.exe""",
-    ),
-    "setup": (
-        "choose your settings, by answering questions",
-        """Ask a few questions and save the answers in config.toml, for the default
-target. Running it again replaces all your settings. It needs a terminal;
-scripts and agents use asc config instead. Press Enter to keep a default, and
-Ctrl+C to stop without saving.
-
-examples:
-  asc setup
-  asc setup --yes          replace existing settings without asking""",
-    ),
-    "config": (
-        "show or change one setting",
-        """Show or change the settings in config.toml. Target settings go to --target,
-or to the default target. Command defaults (settle_ms, timeout_ms, ...) go to
-[defaults], or to one target with --target. A flag on a command beats both.
-
-examples:
-  asc config list
-  asc config set settle_ms 800 --target app
-  asc config set mode sandbox --target app      makes target app
-  asc config set share C:\\src\\app C:\\data --target app
-  asc config unset settle_ms --target app""",
-    ),
-    "sandbox-setup": (
-        "allow the sandbox's NVDA to reach asc (asks for admin once)",
-        """Sandbox mode runs NVDA in Windows Sandbox, which connects to asc on this
-computer's Hyper-V Default Switch address. Windows Firewall blocks that until
-one rule allows it. This command creates that rule after a Windows admin
-prompt: inbound TCP only, only on the Default Switch, only the relay port
-(16837 unless the target sets another), only for the program running asc.
-Run it again after updating Python or asc, since the rule names the program.
-
-examples:
-  asc sandbox-setup
-  asc sandbox-setup --target app""",
-    ),
-}
+    summary: str
+    details: str
+    run: Callable[[argparse.Namespace], int]
+    add_args: Callable[[argparse.ArgumentParser], None] | None = None
+    # False for a command that picks its own target, or none.
+    takes_target: bool = True
 
 
 def _add_target(parser: argparse.ArgumentParser) -> None:
@@ -349,23 +212,6 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
             _add_target(sub)
 
 
-ARGS: dict[str, Callable[[argparse.ArgumentParser], None]] = {
-    "start": _start_args,
-    "speech": _speech_args,
-    "wait": _wait_args,
-    "press": _press_args,
-    "type": _type_args,
-    "keys": _keys_args,
-    "launch": _launch_args,
-    "get-nvda": _get_nvda_args,
-    "sandbox-setup": _sandbox_setup_args,
-    "setup": _setup_args,
-    "config": _config_args,
-}
-# These pick their own target, or none.
-NO_TARGET = ("setup", "config")
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="asc",
@@ -375,19 +221,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"asc {__version__}")
     commands = parser.add_subparsers(dest="command", metavar="COMMAND")
-    sub: dict[str, argparse.ArgumentParser] = {}
-    for name, (summary, details) in HELP.items():
-        sub[name] = commands.add_parser(
+    for name, command in COMMANDS.items():
+        sub = commands.add_parser(
             name,
-            help=summary,
-            description=details,
+            help=command.summary,
+            description=command.details,
             epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
-        if name not in NO_TARGET:
-            _add_target(sub[name])
-        if name in ARGS:
-            ARGS[name](sub[name])
+        if command.takes_target:
+            _add_target(sub)
+        if command.add_args is not None:
+            command.add_args(sub)
     return parser
 
 
@@ -779,22 +624,188 @@ def cmd_setup(args: argparse.Namespace) -> int:
         return EXIT_INTERRUPTED
 
 
-COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
-    "start": cmd_start,
-    "stop": cmd_stop,
-    "status": cmd_status,
-    "speech": cmd_speech,
-    "wait": cmd_wait,
-    "mark": cmd_mark,
-    "clear": cmd_clear,
-    "press": cmd_press,
-    "type": cmd_type,
-    "keys": cmd_keys,
-    "launch": cmd_launch,
-    "get-nvda": cmd_get_nvda,
-    "sandbox-setup": cmd_sandbox_setup,
-    "setup": cmd_setup,
-    "config": cmd_config,
+COMMANDS: dict[str, Command] = {
+    "start": Command(
+        "start recording for a target",
+        """\
+Start the background daemon for a target. Targets come from config.toml (see
+asc config), or default to --mode (watch if left out).
+
+watch mode: your own NVDA connects to asc and asc only listens. It never sends
+keys. Connect once in NVDA (Tools, Remote Access, Connect): allow this computer
+to be controlled, host and key as printed, and trust the certificate when asked.
+The host, key and certificate stay the same for the target.
+
+examples:
+  asc start
+  asc start --target app""",
+        cmd_start,
+        _start_args,
+    ),
+    "stop": Command(
+        "stop recording and forget the speech",
+        "Stop the daemon. Held keys are released. A daemon that doesn't answer is ended.",
+        cmd_stop,
+    ),
+    "status": Command(
+        "show whether asc is recording and NVDA is connected",
+        "Show the target, whether NVDA is connected, how to connect it, and the\n"
+        "browse/focus mode (unknown until NVDA first switches).",
+        cmd_status,
+    ),
+    "speech": Command(
+        "print what NVDA said since the mark",
+        """\
+Print what NVDA said, one numbered line per utterance, plus mode changes.
+By default, lines after the last asc mark.
+
+examples:
+  asc speech
+  asc speech --since 0       everything still kept
+  asc speech --since 41      lines after 41""",
+        cmd_speech,
+        _speech_args,
+    ),
+    "wait": Command(
+        "wait until NVDA says something matching REGEX",
+        """\
+Return as soon as an utterance after the mark (or --since) matches REGEX
+(Python syntax, searched anywhere in the line; use (?i) to ignore case).
+Exits 1 with what NVDA did say if nothing matched in time.
+
+examples:
+  asc wait "OK button"
+  asc wait "(?i)saved" --timeout 10000""",
+        cmd_wait,
+        _wait_args,
+    ),
+    "mark": Command(
+        "remember the current end of the speech log",
+        "Print and set the mark.",
+        cmd_mark,
+    ),
+    "clear": Command(
+        "drop all kept speech",
+        "Drop all kept speech. Line numbers keep counting.",
+        cmd_clear,
+    ),
+    "press": Command(
+        "press keys and print what NVDA said",
+        """\
+Send each gesture, wait until NVDA is quiet for --settle ms, and print only
+the new speech: said: "..." lines, mode: lines, or (nothing said).
+Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
+Watch mode refuses keys (exit 4).
+
+examples:
+  asc press Tab
+  asc press NVDA+Tab
+  asc press H H --expect "level 2"
+  asc press Control+Home NVDA+Down""",
+        cmd_press,
+        _press_args,
+    ),
+    "type": Command(
+        "type text and print what NVDA said",
+        """\
+Type TEXT one character at a time, using this computer's keyboard layout.
+Every character is checked first; if any can't be typed, nothing is (exit 2).
+NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
+
+examples:
+  asc type "hello world"
+  asc type "x@example.com" --settle 800""",
+        cmd_type,
+        _type_args,
+    ),
+    "keys": Command(
+        "look up NVDA commands in NVDA's own reference",
+        """\
+Print commands from NVDA's Commands Quick Reference whose name, keys,
+description or section contain every SEARCH word, one per line:
+KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
+NVDA the target uses: for desktop mode the portable copy, otherwise your own
+NVDA (the running nvda.exe, the uninstall registry entry, Program Files).
+In browse mode, single letters jump to elements; add Shift to go back.
+
+examples:
+  asc keys heading
+  asc keys report title
+  asc keys --layout laptop current line""",
+        cmd_keys,
+        _keys_args,
+    ),
+    "launch": Command(
+        "start an app and wait until NVDA speaks",
+        """\
+Start CMD and wait until NVDA says something matching --title (a regex), or
+anything at all if --title is left out. Prints what NVDA said.
+Default timeout 30000 ms.
+
+examples:
+  asc launch "notepad.exe" --title Notepad
+  asc launch "py -m myapp" --title "My App" --timeout 60000""",
+        cmd_launch,
+        _launch_args,
+    ),
+    "get-nvda": Command(
+        "make the portable NVDA that desktop mode launches",
+        """\
+Download NVDA from NV Access and make a portable copy for desktop mode, in
+%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Refuses (exit 4) while any
+NVDA runs, because the NVDA installer would restart it.
+
+examples:
+  asc get-nvda
+  asc get-nvda --installer nvda_2026.2.exe""",
+        cmd_get_nvda,
+        _get_nvda_args,
+    ),
+    "setup": Command(
+        "choose your settings, by answering questions",
+        """Ask a few questions and save the answers in config.toml, for the default
+target. Running it again replaces all your settings. It needs a terminal;
+scripts and agents use asc config instead. Press Enter to keep a default, and
+Ctrl+C to stop without saving.
+
+examples:
+  asc setup
+  asc setup --yes          replace existing settings without asking""",
+        cmd_setup,
+        _setup_args,
+        takes_target=False,
+    ),
+    "config": Command(
+        "show or change one setting",
+        """Show or change the settings in config.toml. Target settings go to --target,
+or to the default target. Command defaults (settle_ms, timeout_ms, ...) go to
+[defaults], or to one target with --target. A flag on a command beats both.
+
+examples:
+  asc config list
+  asc config set settle_ms 800 --target app
+  asc config set mode sandbox --target app      makes target app
+  asc config set share C:\\src\\app C:\\data --target app
+  asc config unset settle_ms --target app""",
+        cmd_config,
+        _config_args,
+        takes_target=False,
+    ),
+    "sandbox-setup": Command(
+        "allow the sandbox's NVDA to reach asc (asks for admin once)",
+        """Sandbox mode runs NVDA in Windows Sandbox, which connects to asc on this
+computer's Hyper-V Default Switch address. Windows Firewall blocks that until
+one rule allows it. This command creates that rule after a Windows admin
+prompt: inbound TCP only, only on the Default Switch, only the relay port
+(16837 unless the target sets another), only for the program running asc.
+Run it again after updating Python or asc, since the rule names the program.
+
+examples:
+  asc sandbox-setup
+  asc sandbox-setup --target app""",
+        cmd_sandbox_setup,
+        _sandbox_setup_args,
+    ),
 }
 
 
@@ -810,7 +821,7 @@ def run(argv: Sequence[str] | None) -> int:
     args = build_parser().parse_args(args_list)
     if args.command is None:
         raise NoCommand
-    return COMMANDS[args.command](args)
+    return COMMANDS[args.command].run(args)
 
 
 def _utf8_streams() -> None:
