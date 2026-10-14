@@ -5,7 +5,7 @@ import base64
 import pytest
 
 from agent_speech_check import sandbox
-from agent_speech_check.errors import NotConnected, SandboxFailed
+from agent_speech_check.errors import NotConnected, SandboxBroken
 
 
 def test_config_xml_escapes_and_maps() -> None:
@@ -42,8 +42,10 @@ def test_parse_real_outputs() -> None:
 
 
 def test_parse_bad_output() -> None:
-    with pytest.raises(SandboxFailed, match="wsb start failed: Failed to start"):
+    # Output asc can't read has an unknown cause, so retrying won't help: exit 7.
+    with pytest.raises(SandboxBroken, match="wsb start failed: Failed to start") as broken:
         sandbox.parse_start("Failed to start process")
+    assert broken.value.exit_code == 7
     with pytest.raises(NotConnected, match="wsb exec output ExitCode"):
         sandbox.parse_exec('{"ExitCode": "zero"}')
 

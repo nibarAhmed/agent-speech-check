@@ -26,6 +26,7 @@ from agent_speech_check.errors import (
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
+    SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
     WsbMissing,
@@ -231,11 +232,13 @@ def test_wsb_errors_for_an_unknown_sandbox() -> None:
     except (SandboxNeedsPro, WsbMissing):
         pytest.skip("needs Windows Sandbox")
     unknown = "00000000-0000-0000-0000-000000000000"
-    with pytest.raises(SandboxFailed, match="wsb exec failed"):
+    # wsb's own errors have an unknown cause, so retrying won't help: exit 7.
+    with pytest.raises(SandboxBroken, match="wsb exec failed") as broken:
         sandbox.exec_as_user(unknown, "cmd /c exit 0")
-    with pytest.raises(SandboxFailed, match="wsb stop failed"):
+    assert broken.value.exit_code == 7
+    with pytest.raises(SandboxBroken, match="wsb stop failed"):
         sandbox.stop(unknown)
-    with pytest.raises(SandboxFailed, match="wsb ip failed"):
+    with pytest.raises(SandboxBroken, match="wsb ip failed"):
         sandbox.ip_address(unknown)
     assert sandbox.wait_gone(0) in (True, False)
 

@@ -17,7 +17,7 @@ import shutil
 from pathlib import Path
 
 from agent_speech_check import nvda, nvda_config, sandbox
-from agent_speech_check.errors import AscError, LaunchFailed, SandboxFailed
+from agent_speech_check.errors import AscError, LaunchFailed, SandboxBroken, SandboxFailed
 from agent_speech_check.nvda_config import RelayAddress
 from agent_speech_check.targets import Target
 
@@ -73,7 +73,7 @@ class SandboxSession:
         log.info("sandbox %s started", self.sandbox_id)
         code = sandbox.exec_as_user(self.sandbox_id, sandbox.script_command())
         if code:
-            raise SandboxFailed("exec", f"the NVDA start script exited with {code}")
+            raise SandboxBroken("exec", f"the NVDA start script exited with {code}")
 
     async def run(self) -> None:
         """Start the sandbox. Its window is kept in place until `stop`."""
@@ -104,7 +104,7 @@ class SandboxSession:
         if self.sandbox_id is not None:
             try:
                 await asyncio.to_thread(sandbox.stop, self.sandbox_id)
-            except SandboxFailed as error:
+            except sandbox.FAILURES as error:
                 log.warning("sandbox stop: %s", error.message)
             self.sandbox_id = None
         # Only now: the client shows its window again as the sandbox stops.

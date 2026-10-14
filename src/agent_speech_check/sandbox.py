@@ -33,7 +33,13 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 from agent_speech_check import powershell, spawn, winapi
-from agent_speech_check.errors import NotConnected, SandboxFailed, SandboxNeedsPro, WsbMissing
+from agent_speech_check.errors import (
+    NotConnected,
+    SandboxBroken,
+    SandboxFailed,
+    SandboxNeedsPro,
+    WsbMissing,
+)
 from agent_speech_check.validate import Fields
 from agent_speech_check.wait import poll_until
 
@@ -85,7 +91,7 @@ def _json(text: str, what: str) -> Fields:
     try:
         raw = json.loads(text)
     except ValueError:
-        raise SandboxFailed(what, text.strip()[:200]) from None
+        raise SandboxBroken(what, text.strip()[:200]) from None
     return Fields(raw, f"wsb {what} output", NotConnected)
 
 
@@ -304,6 +310,10 @@ def require_available() -> None:
         raise WsbMissing
 
 
+# Every error a wsb call raises.
+FAILURES = (SandboxFailed, SandboxBroken)
+
+
 def wsb(*args: str, what: str) -> str:
     try:
         result = subprocess.run(  # noqa: S603 - the Windows Sandbox CLI
@@ -317,7 +327,7 @@ def wsb(*args: str, what: str) -> str:
     except subprocess.TimeoutExpired:
         raise SandboxFailed(what, f"no answer within {WSB_TIMEOUT_S} s") from None
     if result.returncode:
-        raise SandboxFailed(what, (result.stderr or result.stdout).strip()[:300])
+        raise SandboxBroken(what, (result.stderr or result.stdout).strip()[:300])
     return result.stdout
 
 
@@ -339,7 +349,7 @@ def exec_as_user(sandbox_id: str, command: str) -> int:
 def _has_session(sandbox_id: str) -> bool:
     try:
         return exec_as_user(sandbox_id, "cmd /c exit 0") == 0
-    except SandboxFailed:
+    except FAILURES:
         return False
 
 
@@ -477,7 +487,7 @@ def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:
     except BaseException:
         # The caller never learns this id, and this process lives on, so its
         # guard won't stop the sandbox: stop it here.
-        with contextlib.suppress(SandboxFailed):
+        with contextlib.suppress(*FAILURES):
             stop(sandbox_id)
         raise
     return sandbox_id

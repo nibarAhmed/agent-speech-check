@@ -149,6 +149,9 @@ desktop and your own NVDA keeps running undisturbed.
 - Needs Windows Pro, Enterprise or Education (exit 7 on Home), and
   `asc sandbox-setup` done once (exit 7 with that hint otherwise).
 - Only one sandbox can run at a time (exit 4 if one already runs).
+- If the sandbox fails to start, a retry may help when wsb timed out or the
+  last sandbox was still shutting down (exit 3). An error from wsb itself, or
+  NVDA's start script failing inside, exits 7: retrying won't help.
 - `asc start` downloads the NVDA installer if needed (only a file download),
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
   NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
