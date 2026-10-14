@@ -64,11 +64,17 @@ def test_process_lookups() -> None:
     assert winapi.image_path(0) is None
 
 
+# Tests keep windows by this title, never the real one: a sandbox that another
+# asc has open must not be moved by a test, nor make it skip.
+TEST_WINDOW_TITLE = "asc test sandbox window"
+
+
 @pytest.mark.xdist_group("desktop")
 def test_window_helpers_without_a_sandbox() -> None:
     assert winapi.windows_titled("no window has this title, asc") == []
+    assert sandbox.SandboxWindow("tray").title == sandbox.WINDOW_TITLE
     for window in ("tray", "taskbar", "show"):
-        keeper = sandbox.SandboxWindow(window)
+        keeper = sandbox.SandboxWindow(window, title=TEST_WINDOW_TITLE)
         keeper.toggle()
         keeper.keep()  # nothing to do, and it must not fail
         assert keeper.shown
@@ -342,15 +348,13 @@ def _plain_window(title: str) -> int:
 
 @pytest.mark.xdist_group("desktop")
 def test_sandbox_window_puts_a_real_window_away() -> None:
-    if winapi.process_ids("WindowsSandboxRemoteSession.exe"):
-        pytest.skip("a real sandbox window is open")
     user32 = ctypes.WinDLL("user32")
     user32.DestroyWindow.argtypes = [ctypes.c_void_p]
     for window, hidden in (("taskbar", False), ("tray", True)):
-        hwnd = _plain_window(f"{sandbox.WINDOW_TITLE} (asc test)")
+        hwnd = _plain_window(f"{TEST_WINDOW_TITLE} (asc test)")
         try:
-            assert hwnd in winapi.windows_titled(sandbox.WINDOW_TITLE)
-            keeper = sandbox.SandboxWindow(window)
+            assert hwnd in winapi.windows_titled(TEST_WINDOW_TITLE)
+            keeper = sandbox.SandboxWindow(window, title=TEST_WINDOW_TITLE)
             keeper.remember_focus()  # someone else's window: focus stays there
             keeper.keep()
             assert winapi.is_visible(hwnd) is not hidden

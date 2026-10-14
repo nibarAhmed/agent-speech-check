@@ -331,8 +331,17 @@ class SandboxWindow:
     runs on its own thread every KEEP_WINDOW_EVERY_S in between. `toggle` may
     run on the tray icon's thread."""
 
-    def __init__(self, window: str, tooltip: str = "asc sandbox: show or hide") -> None:
+    def __init__(
+        self,
+        window: str,
+        tooltip: str = "asc sandbox: show or hide",
+        *,
+        title: str = WINDOW_TITLE,
+    ) -> None:
         self.window = window
+        # The start of the windows to keep. Tests pass their own, so they never
+        # touch a real sandbox that another asc has open.
+        self.title = title
         self._tooltip = tooltip
         self._icon: winapi.TrayIcon | None = None
         self.shown = False
@@ -395,7 +404,7 @@ class SandboxWindow:
                 winapi.restore(hwnd)
             self._hidden.clear()
         acted = False
-        for hwnd in winapi.windows_titled(WINDOW_TITLE):
+        for hwnd in winapi.windows_titled(self.title):
             minimized = winapi.is_minimized(hwnd)
             action, self.shown = window_step(self.window, shown=self.shown, minimized=minimized)
             if action:
