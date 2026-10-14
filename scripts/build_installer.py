@@ -21,6 +21,9 @@ DIST = ROOT / "dist"
 # MSI versions are three numbers: at most 255, 255 and 65535.
 MSI_LIMITS = (255, 255, 65535)
 
+# The wizard's dialogs. Keep its version equal to the WiX pin in dotnet-tools.json.
+WIX_UI = "WixToolset.UI.wixext/7.0.0"
+
 
 def msi_version(version: str) -> str:
     """The pyproject version, if Windows Installer can use it as is."""
@@ -47,11 +50,15 @@ def main() -> None:
         cwd=ROOT,
     )  # fmt: skip
     subprocess.run(["dotnet", "tool", "restore"], check=True, cwd=ROOT)
+    subprocess.run(
+        ["dotnet", "wix", "extension", "add", "-acceptEula", "wix7", WIX_UI], check=True, cwd=ROOT
+    )
     msi = DIST / f"agent-speech-check-{version}.msi"
     subprocess.run(
         [
             "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),
             "-d", f"Version={version}", "-d", f"AppDir={DIST / 'asc'}",
+            "-ext", WIX_UI, "-loc", str(ROOT / "installer" / "asc.wxl"),
             "-arch", "x64", "-wx", "-acceptEula", "wix7", "-o", str(msi),
         ],
         check=True,

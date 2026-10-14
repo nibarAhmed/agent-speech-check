@@ -1,0 +1,5 @@
+<!-- The wizard's own text, replacing WiX's defaults. -->
+<WixLocalization Culture="en-US" xmlns="http://wixtoolset.org/schemas/v4/wxl">
+  <String Id="WelcomeDlgDescription"
+          Value="Setup will install [ProductName] in [INSTALLFOLDER] and add that folder to your PATH. Click Next to install, or Cancel to exit." />
+</WixLocalization>
