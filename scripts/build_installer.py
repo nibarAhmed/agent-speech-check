@@ -1,7 +1,9 @@
 """Build the asc MSI: PyInstaller (one folder), then WiX.
 
 Run `uv run python scripts/build_installer.py`. Needs the .NET SDK for WiX, which
-`dotnet-tools.json` pins. Prints the path of dist/agent-speech-check-VERSION.msi.
+`dotnet-tools.json` pins. WiX 7 asks to accept its EULA (the Open Source Maintenance
+Fee, owed only by organizations with over $10,000 a year in revenue); the build accepts
+it for this project. Prints the path of dist/agent-speech-check-VERSION.msi.
 """
 
 from __future__ import annotations
@@ -50,7 +52,7 @@ def main() -> None:
         [
             "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),
             "-d", f"Version={version}", "-d", f"AppDir={DIST / 'asc'}",
-            "-arch", "x64", "-wx", "-o", str(msi),
+            "-arch", "x64", "-wx", "-acceptEula", "wix7", "-o", str(msi),
         ],
         check=True,
         cwd=ROOT,

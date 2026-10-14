@@ -12,7 +12,10 @@
            Version="$(Version)"
            UpgradeCode="45024D39-B418-4A36-B773-3A035735ECD7"
            Scope="perUserOrMachine">
-    <MajorUpgrade DowngradeErrorMessage="A newer Agent Speech Check is already installed." />
+    <!-- Every build gets a new ProductCode. Without AllowSameVersionUpgrades, two builds of
+         one version install side by side and uninstalling one leaves the files. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer Agent Speech Check is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Property Id="ARPNOMODIFY" Value="1" />
 

@@ -50,6 +50,9 @@ Notes:
   PATH.
 - Install one way only. With both, the one earlier on PATH wins.
 - `asc start` still downloads NVDA on first use.
+- Uninstalling doesn't remove the firewall rule `asc sandbox-setup` adds, since that rule
+  needed admin. Remove it as shown under
+  [`asc sandbox-setup`](docs/cli.md#asc-sandbox-setup---target-name).
 
 ```
 asc setup      # a few questions; saves your settings
@@ -74,6 +77,9 @@ uv run poe check
 
 `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the
 [.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
+Running it accepts the WiX 7
+[Open Source Maintenance Fee EULA](https://wixtoolset.org/osmf/) for you: organizations with
+over $10,000 a year in revenue owe the fee.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see
 [SECURITY.md](SECURITY.md).
