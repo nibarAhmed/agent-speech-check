@@ -38,7 +38,6 @@ from agent_speech_check.errors import (
     NvdaNotConnected,
     ProtocolError,
     RelayFileBroken,
-    SetupNeeded,
 )
 from agent_speech_check.keys import Key
 from agent_speech_check.paths import write_atomic
@@ -112,10 +111,7 @@ def load_or_create(folder: Path) -> Credentials:
             raw = json.loads(info.read_text(encoding="utf-8"))
         except ValueError:
             raw = None
-        try:
-            channel = Fields(raw, str(info), SetupNeeded).text("channel", max_len=200)
-        except SetupNeeded as error:
-            raise RelayFileBroken(error.message) from None
+        channel = Fields(raw, str(info), RelayFileBroken).text("channel", max_len=200)
     if channel is None:
         channel = secrets.token_urlsafe(12)
         write_atomic(info, json.dumps({"channel": channel}))

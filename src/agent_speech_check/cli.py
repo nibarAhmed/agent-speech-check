@@ -216,10 +216,19 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
 
 class _Parser(argparse.ArgumentParser):
     """Bad arguments raise `BadArguments`, so they print like every other error,
-    without argparse's usage block. Subparsers are made of this class too."""
+    without argparse's usage block. Subparsers are made of this class too, and
+    each refuses its own leftovers, so the hint names the help that lists them."""
 
     def error(self, message: str) -> NoReturn:
         raise BadArguments(message, self.prog)
+
+    def parse_known_args(  # type: ignore[override]
+        self, args: Sequence[str] | None = None, namespace: argparse.Namespace | None = None
+    ) -> tuple[argparse.Namespace, list[str]]:
+        parsed, extra = super().parse_known_args(args, namespace)
+        if extra:
+            raise UnrecognizedArguments(extra, self.prog)
+        return parsed, extra
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -828,11 +837,7 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: stops a sandbox once the process that started it is gone.
         sandbox.guard(int(args_list[1]), args_list[2])
         return 0
-    args, extra = build_parser().parse_known_args(args_list)
-    if extra:
-        # Raised here, not by argparse, so the hint names the command's help.
-        prog = "asc" if args.command is None else f"asc {args.command}"
-        raise UnrecognizedArguments(extra, prog)
+    args = build_parser().parse_args(args_list)
     if args.command is None:
         raise NoCommand
     return COMMANDS[args.command].run(args)

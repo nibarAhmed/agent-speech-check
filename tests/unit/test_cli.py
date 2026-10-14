@@ -47,6 +47,20 @@ def test_bad_arguments_without_a_command_point_at_asc_help(
     assert err == "error: unrecognized arguments: --no-such-flag\nhint: asc --help\n"
 
 
+@pytest.mark.parametrize(
+    ("argv", "hint"),
+    [
+        (["config", "path", "--no-such-flag"], "asc config path --help"),
+        (["--no-such-flag", "status"], "asc --help"),
+    ],
+)
+def test_bad_arguments_hint_names_the_parser_that_refused_them(
+    capsys: pytest.CaptureFixture[str], argv: list[str], hint: str
+) -> None:
+    assert main(argv) == 2
+    assert capsys.readouterr().err.endswith(f"\nhint: {hint}\n")
+
+
 def test_bad_config_action_arguments_are_a_short_usage_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
