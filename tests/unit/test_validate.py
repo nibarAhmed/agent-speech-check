@@ -30,6 +30,8 @@ def test_text() -> None:
         f.text("missing")
     with pytest.raises(UsageError, match="1 to 1 characters"):
         f.text("a", max_len=1)
+    with pytest.raises(UsageError, match="expected a string of 0 to 1 characters"):
+        f.text("a", max_len=1, allow_empty=True)
     assert f.opt_text("missing") is None
     assert f.opt_text("a") == "hi"
 

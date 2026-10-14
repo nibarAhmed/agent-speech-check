@@ -4,8 +4,10 @@ Each edge (CLI arguments, IPC requests, wire messages, `config.toml`, the state
 file) parses raw input into frozen dataclasses through `Fields`, so every edge
 reports a bad field the same way: `<where> <field>: expected ..., got ...`.
 
-The caller picks the error class: `UsageError` for user input, `ProtocolError`
-for wire data, `NotConnected` for a state file that `asc` wrote itself.
+The caller picks the error class by the reader's next step: `UsageError` for
+user input, `ProtocolError` for wire data. For a file `asc` wrote itself, it
+depends on the fix: the state file is `NotConnected` (`asc start` replaces it),
+`relay.json` is `SetupNeeded` (only deleting it helps).
 """
 
 from __future__ import annotations
@@ -47,7 +49,7 @@ class Fields:
     def text(self, key: str, *, max_len: int = 4096, allow_empty: bool = False) -> str:
         value = self.raw.get(key)
         if not isinstance(value, str) or (not value and not allow_empty) or len(value) > max_len:
-            raise self._bad(key, f"a string of 1 to {max_len} characters")
+            raise self._bad(key, f"a string of {0 if allow_empty else 1} to {max_len} characters")
         return value
 
     def opt_text(self, key: str, *, max_len: int = 4096) -> str | None:

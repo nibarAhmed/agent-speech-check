@@ -9,7 +9,7 @@ from types import TracebackType
 import pytest
 
 from agent_speech_check import relay
-from agent_speech_check.errors import ProtocolError, ServerSentError
+from agent_speech_check.errors import ProtocolError, ServerSentError, SetupNeeded
 from agent_speech_check.speech_log import SpeechLog
 
 
@@ -49,3 +49,15 @@ def test_a_kept_protocol_error_does_not_grow_each_time_it_is_raised(tmp_path: Pa
             r.check(0, drop_fails=False)
         depths.append(_depth(caught.value.__traceback__))
     assert depths[0] == depths[1] == depths[2]
+
+
+@pytest.mark.parametrize("content", ["not json", '{"channel": ""}', "[]"])
+def test_a_broken_relay_file_needs_deleting_not_new_arguments(tmp_path: Path, content: str) -> None:
+    # asc wrote relay.json itself, so no argument fixes it; deleting it does.
+    relay.load_or_create(tmp_path)
+    (tmp_path / "relay.json").write_text(content, encoding="utf-8")
+    with pytest.raises(SetupNeeded) as exc:
+        relay.load_or_create(tmp_path)
+    assert str(tmp_path / "relay.json") in exc.value.message
+    assert exc.value.hint is not None
+    assert "delete" in exc.value.hint

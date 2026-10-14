@@ -15,7 +15,7 @@ import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from agent_speech_check import (
     __version__,
@@ -34,11 +34,13 @@ from agent_speech_check import (
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
+    BadArguments,
     BadSetting,
     InternalError,
     NeedsTerminal,
     NoCommand,
     TargetsRunning,
+    UnrecognizedArguments,
     UsageError,
     bad_field,
 )
@@ -212,8 +214,16 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
             _add_target(sub)
 
 
+class _Parser(argparse.ArgumentParser):
+    """Bad arguments raise `BadArguments`, so they print like every other error,
+    without argparse's usage block. Subparsers are made of this class too."""
+
+    def error(self, message: str) -> NoReturn:
+        raise BadArguments(message, self.prog)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _Parser(
         prog="asc",
         description=DESCRIPTION,
         epilog=EPILOG,
@@ -818,7 +828,11 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: stops a sandbox once the process that started it is gone.
         sandbox.guard(int(args_list[1]), args_list[2])
         return 0
-    args = build_parser().parse_args(args_list)
+    args, extra = build_parser().parse_known_args(args_list)
+    if extra:
+        # Raised here, not by argparse, so the hint names the command's help.
+        prog = "asc" if args.command is None else f"asc {args.command}"
+        raise UnrecognizedArguments(extra, prog)
     if args.command is None:
         raise NoCommand
     return COMMANDS[args.command].run(args)
@@ -830,6 +844,13 @@ def _utf8_streams() -> None:
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, io.TextIOWrapper):
             stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
+def _causes(error: BaseException) -> list[BaseException]:
+    """The errors an ExceptionGroup (as a failed TaskGroup raises) wraps, or the error itself."""
+    if isinstance(error, BaseExceptionGroup):
+        return [cause for inner in error.exceptions for cause in _causes(inner)]
+    return [error]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -844,7 +865,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return EXIT_INTERRUPTED
     except Exception as error:  # noqa: BLE001 - last resort: turn any bug into exit 6
-        print(f"internal error: {type(error).__name__}: {error}", file=sys.stderr)
+        for cause in _causes(error):
+            print(f"internal error: {type(cause).__name__}: {cause}", file=sys.stderr)
         # Real, not Store Python's redirected view, so other programs find it.
         print(f"logs: {os.path.realpath(state_root())}", file=sys.stderr)
         if os.environ.get("ASC_DEBUG") == "1":

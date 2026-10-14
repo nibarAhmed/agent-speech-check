@@ -32,10 +32,20 @@ def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert captured.err == "error: no command given\nhint: run asc --help\n"
 
 
-def test_argparse_usage_error_passes_through() -> None:
-    with pytest.raises(SystemExit) as exc:
-        main(["--no-such-flag"])
-    assert exc.value.code == 2
+def test_bad_arguments_are_a_short_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    # Like every other error: exit 2, one error line and a hint, no usage block.
+    assert main(["press", "Tab", "--no-such-flag"]) == 2
+    err = capsys.readouterr().err
+    assert err == "error: unrecognized arguments: --no-such-flag\nhint: asc press --help\n"
+
+
+def test_bad_config_action_arguments_are_a_short_usage_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["config"]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error: the following arguments are required: ACTION\n")
+    assert err.endswith("hint: asc config --help\n")
 
 
 def test_unexpected_exception_is_internal_error(
@@ -72,6 +82,26 @@ class _PressesCtrlC:
 
 def test_ctrl_c_exits_130() -> None:
     assert main([_PressesCtrlC()]) == 130  # type: ignore[list-item]
+
+
+class _FailsInATaskGroup:
+    """An argv item that raises what a failed asyncio.TaskGroup raises."""
+
+    def _fail(self, *_: object) -> bool:
+        raise ExceptionGroup("unhandled errors in a TaskGroup", [ValueError("tray icon")])
+
+    __eq__ = _fail
+    __getitem__ = _fail
+    __hash__ = None  # type: ignore[assignment]
+
+
+def test_internal_error_in_a_group_names_the_inner_error(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The daemon's err file is all a user sees, so the real cause must be in it.
+    monkeypatch.delenv("ASC_DEBUG", raising=False)
+    assert main([_FailsInATaskGroup()]) == 6  # type: ignore[list-item]
+    assert "internal error: ValueError: tray icon\n" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])

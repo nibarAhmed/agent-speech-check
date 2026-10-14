@@ -125,6 +125,16 @@ def said_line(text: str) -> str:
     return f"said: {json.dumps(text, ensure_ascii=False)}"
 
 
+class BadArguments(UsageError):
+    def __init__(self, reason: str, prog: str) -> None:
+        super().__init__(reason, hint=f"{prog} --help")
+
+
+class UnrecognizedArguments(BadArguments):
+    def __init__(self, extra: Sequence[str], prog: str) -> None:
+        super().__init__(f"unrecognized arguments: {' '.join(extra)}", prog)
+
+
 class BadRegex(UsageError):
     def __init__(self, pattern: str, reason: str, position: int | None) -> None:
         at = f" at position {position}" if position is not None else ""
@@ -310,6 +320,16 @@ class SandboxBroken(SetupNeeded):
         super().__init__(
             f"wsb {what} failed: {detail or 'no detail'}",
             hint="check that Windows Sandbox starts on its own",
+        )
+
+
+class RelayFileBroken(SetupNeeded):
+    """`relay.json`, which asc wrote itself, is broken; no argument can fix it."""
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(
+            detail,
+            hint="delete it; asc makes a new one, and NVDA needs the new key once",
         )
 
 

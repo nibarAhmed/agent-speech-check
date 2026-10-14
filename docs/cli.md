@@ -5,7 +5,8 @@ command change.
 
 `asc --help` lists the commands and `asc --version` prints the version.
 Results go to stdout and errors to stderr. An error prints `error: <message>`
-and, when there is one, `hint: <what to do>`.
+and, when there is one, `hint: <what to do>`. Bad arguments do too, with the
+command's `--help` as the hint, and exit 2.
 
 ## Exit codes
 
