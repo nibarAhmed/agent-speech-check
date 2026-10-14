@@ -95,6 +95,21 @@ def test_launch_command_encodes_the_command() -> None:
     assert "exit 3" in sandbox.LAUNCH_PS1
 
 
+def test_a_batch_file_launches_in_the_hidden_console() -> None:
+    """`start` would give a .cmd its own console, which NVDA reads and which
+    takes the focus from the app (observed)."""
+    prefix = "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand "
+
+    def script(command: str) -> str:
+        line = sandbox.launch_command(command)
+        return base64.b64decode(line.removeprefix(prefix)).decode("utf-16-le")
+
+    for batch in (r"C:\share\app\start.cmd", r'"C:\share\my app\RUN.BAT" --fast'):
+        assert script(batch).endswith(" -Batch")
+    for other in ("mshta.exe app.html", r'"C:\share\a.cmd dir\app.exe"', "notepad x.cmd"):
+        assert not script(other).endswith(" -Batch")
+
+
 def test_nvda_script_from_a_portable() -> None:
     lines = sandbox.nvda_script(None).split("\r\n")
     assert r"robocopy C:\asc\nvda C:\nvda /e /njh /njs /nfl /ndl /np > nul" in lines

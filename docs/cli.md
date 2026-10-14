@@ -346,8 +346,10 @@ command that can't start exits 2. NVDA disconnecting or breaking the protocol
 meanwhile is handled as in `wait` (exit 3 or 5). Works in watch, desktop and sandbox mode; in
 sandbox mode `CMD` runs inside the sandbox, so use paths under `C:\share\`.
 Windows keeps a program started in the background behind the window in front,
-and then NVDA doesn't hear of it. So in desktop and shared mode `launch` first
+and then NVDA doesn't hear of it. So in desktop, shared and sandbox mode `launch` first
 sends one mouse input that moves nothing, which lets the program come forward.
+In sandbox mode a `.cmd` or `.bat` `CMD` runs in a hidden console, so NVDA
+hears the app it starts, not the batch file's console.
 A target with `keys = false` (always so in watch mode) sends no input, so there
 the window may stay behind.
 Outside sandbox mode the timeout message ends with `New windows:`, the titles

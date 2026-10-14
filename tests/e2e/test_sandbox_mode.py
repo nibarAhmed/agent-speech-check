@@ -80,6 +80,10 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         assert run_asc("type", "hi", "--target", "sb").returncode == 0
         line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "sb")
         assert line.returncode == 0, line.stdout + line.stderr
+        # A Ctrl+letter shortcut must not also type its letter.
+        assert run_asc("press", "Control+b", "--target", "sb").returncode == 0
+        line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "sb")
+        assert '"hi"' in line.stdout, line.stdout
 
         # After those keys Windows limits who takes the focus: a second app
         # must still come to the front where NVDA hears it.
@@ -90,6 +94,21 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
             "--target", "sb",
         )  # fmt: skip
         assert again.returncode == 0, again.stderr
+
+        # Batch launchers, starting the app or running it: NVDA hears the
+        # app, not the batch file's console.
+        for name, runs in (("start", 'start "" mshta.exe'), ("run", "mshta.exe")):
+            app_title = f"asc {name}"
+            (app / f"{name}.html").write_text(SECOND.replace("asc second", app_title), "utf-8")
+            (app / f"{name}.cmd").write_text(f'{runs} "%~dp0{name}.html"\n', "utf-8")
+            launcher = sandbox.share_folder(str(app)) + f"\\{name}.cmd"
+            out = run_asc(
+                "launch", launcher, "--title", app_title, "--timeout", "10000", "--target", "sb"
+            )
+            assert out.returncode == 0, out.stdout + out.stderr
+            assert "terminal" not in out.stdout.lower(), out.stdout
+            said = run_asc("press", "NVDA+t", "--target", "sb")
+            assert app_title in said.stdout, said.stdout
     finally:
         stopped = run_asc("stop", "--target", "sb", timeout=120)
     assert stopped.returncode == 0

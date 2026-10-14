@@ -201,7 +201,12 @@ NO_WINDOW_EXIT = 3
 # a hidden "Internet Explorer_Hidden" window, which NVDA reads as "unknown"
 # (observed). So it leaves the focus alone when the app already has it, and
 # otherwise picks the app's topmost visible window with a title.
-LAUNCH_PS1 = r"""param([string]$Command)
+# A batch file runs with `call` in the script's hidden console: `start` would
+# open a console for it, which NVDA reads and which takes the focus (observed).
+# After recent input that forced switch is silent: Windows tells NVDA nothing
+# (observed). So first, as `mouse.nudge` does on the host, it sends a mouse
+# input that moves nothing and lets any process take the foreground.
+LAUNCH_PS1 = r"""param([string]$Command, [switch]$Batch)
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
@@ -216,6 +221,14 @@ public static class AscFocus {
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);
+    // One all-zero INPUT: a mouse input that moves nothing. 40 bytes on x64.
+    [StructLayout(LayoutKind.Sequential, Size = 40)] struct StillMouse { public uint type; }
+    [DllImport("user32.dll")] static extern uint SendInput(uint n, StillMouse[] i, int size);
+    [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int pid);
+    public static void Unlock() {
+        SendInput(1, new StillMouse[1], Marshal.SizeOf(typeof(StillMouse)));
+        AllowSetForegroundWindow(-1);
+    }
     delegate bool EnumProc(IntPtr h, IntPtr p);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr p);
     static uint Owner(IntPtr h) { uint pid; GetWindowThreadProcessId(h, out pid); return pid; }
@@ -244,7 +257,9 @@ public static class AscFocus {
 "@
 $before = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } |
     ForEach-Object { $_.MainWindowHandle })
-Start-Process cmd.exe -ArgumentList '/c', "start `"`" $Command" -WindowStyle Hidden
+[AscFocus]::Unlock()
+$run = if ($Batch) { "call $Command" } else { "start `"`" $Command" }
+Start-Process cmd.exe -ArgumentList '/c', $run -WindowStyle Hidden
 for ($i = 0; $i -lt 150; $i++) {
     Start-Sleep -Milliseconds 200
     $new = Get-Process |
@@ -256,10 +271,20 @@ exit 3
 """
 
 
+def is_batch(command: str) -> bool:
+    """Whether the program `command` runs (its first word, maybe quoted) is a batch file."""
+    if command.startswith('"'):
+        program = command[1:].partition('"')[0]
+    else:
+        program = command.split(maxsplit=1)[0] if command.strip() else ""
+    return program.lower().endswith((".cmd", ".bat"))
+
+
 def launch_command(command: str) -> str:
     """Run the launch script on `command`."""
     quote = powershell.quote
-    return powershell.command_line(f"& {quote(LAUNCH_PATH)} -Command {quote(command)}")
+    batch = " -Batch" if is_batch(command) else ""
+    return powershell.command_line(f"& {quote(LAUNCH_PATH)} -Command {quote(command)}{batch}")
 
 
 # ---------------------------------------------------------------- the thin shell
