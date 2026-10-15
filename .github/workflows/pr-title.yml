@@ -1,0 +1,23 @@
+name: PR title
+
+# The PR title becomes the squash commit on main, so it must be a conventional commit.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title is a conventional commit
+        # The title goes through env, never into the script, so it can't inject shell.
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          types='feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert'
+          if ! printf '%s' "$TITLE" | grep -Eq "^($types)(\([a-z0-9-]+\))?!?: [^ ]"; then
+            echo "::error::PR title '$TITLE' is not a conventional commit, like 'fix(setup): say where the settings were saved'. Types: ${types//|/, }."
+            exit 1
+          fi
