@@ -634,7 +634,7 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
         print("Nothing saved.")
         return 0
     edit.save(path, setup.to_data(answers))
-    print("Settings saved.")
+    print(f"Settings saved: {os.path.realpath(path)}")
     return 0
 
 

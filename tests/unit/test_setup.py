@@ -1,5 +1,6 @@
 """`asc setup` and `asc config`, run in this process with their own state folder."""
 
+import os
 import shutil
 from pathlib import Path
 
@@ -118,7 +119,7 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
     assert "Your settings:\n  Mode:             watch\n  Keyboard layout:  laptop\n" in out
-    assert out.endswith("\nSettings saved.\n")
+    assert out.endswith(f"\nSettings saved: {os.path.realpath(root / 'config.toml')}\n")
     assert "[" not in out
     assert not any("[" in prompt for prompt in ask.prompts)
 
