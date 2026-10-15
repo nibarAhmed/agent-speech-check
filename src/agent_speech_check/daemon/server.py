@@ -22,7 +22,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import firewall, ipc, mouse, nvda, nvda_config, relay, state, winapi
+from agent_speech_check.config.targets import Target
+from agent_speech_check.daemon import ipc, state
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
@@ -32,12 +33,16 @@ from agent_speech_check.errors import (
     PanicKeyTaken,
     SharedNeedsConsent,
 )
-from agent_speech_check.keyboard import Keyboard
-from agent_speech_check.paths import state_root, target_dir
-from agent_speech_check.relay import Relay
-from agent_speech_check.sandboxed import SandboxSession
-from agent_speech_check.speech_log import Entry, SpeechLog
-from agent_speech_check.targets import Target
+from agent_speech_check.inputs import mouse
+from agent_speech_check.inputs.keyboard import Keyboard
+from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.remote import relay
+from agent_speech_check.remote.relay import Relay
+from agent_speech_check.remote.speech_log import Entry, SpeechLog
+from agent_speech_check.sandbox import firewall
+from agent_speech_check.sandbox.sandboxed import SandboxSession
+from agent_speech_check.windows import winapi
+from agent_speech_check.windows.paths import state_root, target_dir
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +110,7 @@ class Daemon:
         self.relay = Relay(target.name, relay.load_or_create(folder), self.speech)
         self.keyboard = Keyboard(target, self.relay, self.speech)
         self.stopping = asyncio.Event()
-        self.nvda: nvda.Running | None = None
+        self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
         self.handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
@@ -247,8 +252,8 @@ class Daemon:
 
     def _start_nvda(self) -> None:
         if self.target.launches_portable:
-            self.nvda = nvda.launch(
-                nvda.folder_for(self.target.nvda_dir),
+            self.nvda = launcher.launch(
+                launcher.folder_for(self.target.nvda_dir),
                 self.folder / "nvda_config",
                 self._relay_info(),
                 self.target.settings,

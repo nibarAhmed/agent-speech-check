@@ -1,7 +1,7 @@
 import pytest
 
 from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
-from agent_speech_check.keys import parse_gesture, parse_gestures, parse_key, text_gestures
+from agent_speech_check.inputs.keys import parse_gesture, parse_gestures, parse_key, text_gestures
 
 
 def test_nvda_key_is_extended_insert() -> None:

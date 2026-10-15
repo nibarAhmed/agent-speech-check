@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
+from agent_speech_check.config.targets import Target, defaults, load
 from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError
-from agent_speech_check.nvda_config import Setting
-from agent_speech_check.targets import Target, defaults, load
+from agent_speech_check.nvda.nvda_config import Setting
 
 
 def resolve(path: Path, name: str | None, mode: str | None) -> Target:

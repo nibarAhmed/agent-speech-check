@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from agent_speech_check import protocol as p
 from agent_speech_check.errors import LineTooLong, MalformedLine, ProtocolError, ServerSentError
+from agent_speech_check.remote import protocol as p
 
 
 def test_join_sequence_from_nvda() -> None:

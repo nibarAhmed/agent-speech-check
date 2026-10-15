@@ -20,11 +20,11 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
+from agent_speech_check.config.targets import Target
 from agent_speech_check.errors import KeysBusy, KeysRefused, NvdaNotConnected
-from agent_speech_check.keys import Gesture, Key
-from agent_speech_check.relay import Relay
-from agent_speech_check.speech_log import Entry, SpeechLog
-from agent_speech_check.targets import Target
+from agent_speech_check.inputs.keys import Gesture, Key
+from agent_speech_check.remote.relay import Relay
+from agent_speech_check.remote.speech_log import Entry, SpeechLog
 
 
 @dataclass(frozen=True)

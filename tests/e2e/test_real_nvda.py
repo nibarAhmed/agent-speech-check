@@ -17,11 +17,11 @@ from pathlib import Path
 import pytest
 from tests.integration.conftest import free_port, run_asc
 
-from agent_speech_check import winapi
-from agent_speech_check.nvda_config import RelayAddress, render
-from agent_speech_check.relay import fingerprint
-from agent_speech_check.setup import SYMBOL_LEVELS
-from agent_speech_check.wait import poll_until
+from agent_speech_check.config.setup import SYMBOL_LEVELS
+from agent_speech_check.nvda.nvda_config import RelayAddress, render
+from agent_speech_check.remote.relay import fingerprint
+from agent_speech_check.windows import winapi
+from agent_speech_check.windows.wait import poll_until
 
 pytestmark = [
     pytest.mark.e2e,

@@ -10,8 +10,8 @@ from __future__ import annotations
 import difflib
 from dataclasses import dataclass
 
-from agent_speech_check import winapi
 from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
+from agent_speech_check.windows import winapi
 
 
 @dataclass(frozen=True)

@@ -18,8 +18,8 @@ import psutil
 import pytest
 from tests.fake_nvda import FakeNvda, Reply
 
-from agent_speech_check.relay import fingerprint
-from agent_speech_check.wait import poll_until
+from agent_speech_check.remote.relay import fingerprint
+from agent_speech_check.windows.wait import poll_until
 
 
 def run_asc(*args: str, timeout: float = 60) -> subprocess.CompletedProcess[str]:

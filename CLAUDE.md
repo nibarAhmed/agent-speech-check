@@ -28,6 +28,9 @@ evidence, is in `docs/protocol.md`.
 
 ## Code
 
+- Layout: `cli.py`, `errors.py` and `validate.py` at the top, the rest in one folder per area
+  (`config`, `daemon`, `inputs`, `nvda`, `remote`, `sandbox`, `windows`). Put a new module in its
+  area, and keep the folders' `__init__.py` files empty of imports.
 - Runtime dependencies: `cryptography` (the stdlib can't create the relay cert), `tomlkit`
   (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
   processes) and `configobj` (`nvda.ini`, read and written by the same library NVDA uses). Add

@@ -22,10 +22,10 @@ from typing import Any
 import tomlkit
 from tomlkit.items import Array, Table
 
+from agent_speech_check.config.prefs import GLOBAL, PREFS, TARGET, Pref, Value
+from agent_speech_check.config.targets import Config, Target, check_name
 from agent_speech_check.errors import BadPreference, TargetNotConfigured
-from agent_speech_check.paths import write_atomic
-from agent_speech_check.prefs import GLOBAL, PREFS, TARGET, Pref, Value
-from agent_speech_check.targets import Config, Target, check_name
+from agent_speech_check.windows.paths import write_atomic
 
 HEADER = "asc settings. Change them with asc config set, or start over with asc setup."
 _LINE = 100

@@ -29,7 +29,6 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
-from agent_speech_check import protocol
 from agent_speech_check.errors import (
     AscError,
     JoinRefused,
@@ -39,10 +38,11 @@ from agent_speech_check.errors import (
     ProtocolError,
     RelayFileBroken,
 )
-from agent_speech_check.keys import Key
-from agent_speech_check.paths import write_atomic
-from agent_speech_check.speech_log import SpeechLog
+from agent_speech_check.inputs.keys import Key
+from agent_speech_check.remote import protocol
+from agent_speech_check.remote.speech_log import SpeechLog
 from agent_speech_check.validate import Fields
+from agent_speech_check.windows.paths import write_atomic
 
 log = logging.getLogger(__name__)
 

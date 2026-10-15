@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check import setup
 from agent_speech_check.cli import main, run_setup
-from agent_speech_check.targets import load
+from agent_speech_check.config import setup
+from agent_speech_check.config.targets import load
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 

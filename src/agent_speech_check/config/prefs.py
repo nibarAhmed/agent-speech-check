@@ -17,8 +17,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_speech_check import ipc, nvda
+from agent_speech_check.daemon import ipc
 from agent_speech_check.errors import BadPreference, UnknownPreference, UsageError, bad_field
+from agent_speech_check.nvda import launcher
 from agent_speech_check.validate import Fields
 
 GLOBAL = "global"
@@ -103,7 +104,7 @@ class Pref:
 
 PREFS: tuple[Pref, ...] = (
     Pref("default", GLOBAL, "text", "default", pattern=NAME_PATTERN),
-    Pref("nvda_version", GLOBAL, "text", nvda.VERSION, pattern=nvda.VERSION_PATTERN),
+    Pref("nvda_version", GLOBAL, "text", launcher.VERSION, pattern=launcher.VERSION_PATTERN),
     Pref("mode", TARGET, "choice", choices=MODES),
     Pref("port", TARGET, "int", low=1, high=65535),
     Pref("keys", TARGET, "bool"),

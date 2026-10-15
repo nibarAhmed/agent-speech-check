@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from agent_speech_check.speech_log import SpeechLog
+from agent_speech_check.remote.speech_log import SpeechLog
 
 pytestmark = pytest.mark.asyncio
 

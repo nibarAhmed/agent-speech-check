@@ -22,7 +22,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import state
+from agent_speech_check.daemon import state
 from agent_speech_check.errors import (
     IPC_VERSION,
     AscError,
@@ -37,7 +37,7 @@ from agent_speech_check.errors import (
     bad_field,
     from_kind,
 )
-from agent_speech_check.keys import Gesture, parse_gestures, text_gestures
+from agent_speech_check.inputs.keys import Gesture, parse_gestures, text_gestures
 from agent_speech_check.validate import Fields
 
 log = logging.getLogger(__name__)

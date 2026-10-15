@@ -15,7 +15,6 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_speech_check import nvda_config, winapi
 from agent_speech_check.errors import (
     DownloadFailed,
     NvdaAlreadyRunning,
@@ -23,9 +22,11 @@ from agent_speech_check.errors import (
     NvdaTooOld,
     PortableFailed,
 )
-from agent_speech_check.nvda_config import RelayAddress, Setting
-from agent_speech_check.paths import state_root
-from agent_speech_check.wait import poll_until
+from agent_speech_check.nvda import nvda_config
+from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
+from agent_speech_check.windows import winapi
+from agent_speech_check.windows.paths import state_root
+from agent_speech_check.windows.wait import poll_until
 
 log = logging.getLogger(__name__)
 

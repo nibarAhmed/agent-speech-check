@@ -13,9 +13,11 @@ import pytest
 from tests import fake_nvda as f
 from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client, wait_until
 
-from agent_speech_check import firewall, ipc, session, state, winapi
+from agent_speech_check.config.targets import SANDBOX_PORT, Target
+from agent_speech_check.daemon import ipc, session, state
 from agent_speech_check.errors import DaemonNoReply
-from agent_speech_check.targets import SANDBOX_PORT, Target
+from agent_speech_check.sandbox import firewall
+from agent_speech_check.windows import winapi
 
 
 def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:

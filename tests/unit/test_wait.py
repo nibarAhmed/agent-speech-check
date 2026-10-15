@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import time
 
-from agent_speech_check.wait import poll_until
+from agent_speech_check.windows.wait import poll_until
 
 
 def test_a_condition_that_holds_returns_at_once() -> None:

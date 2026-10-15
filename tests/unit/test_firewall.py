@@ -1,6 +1,7 @@
 import base64
 
-from agent_speech_check import firewall, powershell
+from agent_speech_check.sandbox import firewall
+from agent_speech_check.windows import powershell
 
 
 def test_create_script_is_narrow() -> None:

@@ -18,7 +18,7 @@ from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
 from tests.integration.conftest import Env, run_asc, start_asc
 
-from agent_speech_check import winapi
+from agent_speech_check.windows import winapi
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 NVDA_RUNNING = bool(winapi.process_ids("nvda.exe"))

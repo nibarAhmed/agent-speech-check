@@ -15,9 +15,9 @@ import ipaddress
 import os
 import sys
 
-from agent_speech_check import winapi
 from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch
-from agent_speech_check.powershell import encoded, quote, run
+from agent_speech_check.windows import winapi
+from agent_speech_check.windows.powershell import encoded, quote, run
 
 RULE_NAME = "agent-speech-check sandbox relay"
 INTERFACE = "vEthernet (Default Switch)"

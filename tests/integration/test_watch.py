@@ -7,7 +7,8 @@ import json
 import pytest
 from tests.integration.conftest import Env, run_asc
 
-from agent_speech_check import daemon, winapi
+from agent_speech_check.daemon import server
+from agent_speech_check.windows import winapi
 
 
 def test_watch_session(env: Env) -> None:
@@ -142,7 +143,7 @@ def test_shared_mode_with_the_panic_key_taken_exits_4(env: Env) -> None:
     (env.root / "agent-speech-check" / "config.toml").write_text(
         f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n", encoding="utf-8"
     )
-    holder = winapi.GlobalHotkey(daemon.PANIC_MODIFIERS, daemon.PANIC_VK, lambda: None)
+    holder = winapi.GlobalHotkey(server.PANIC_MODIFIERS, server.PANIC_VK, lambda: None)
     if not holder.start():
         pytest.skip("another program owns the panic hotkey")
     try:

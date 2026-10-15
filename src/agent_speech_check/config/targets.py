@@ -31,10 +31,11 @@ from typing import Any
 import tomlkit
 import tomlkit.exceptions
 
-from agent_speech_check import nvda_config, prefs
+from agent_speech_check.config import prefs
+from agent_speech_check.config.prefs import MODES, NAME_PATTERN, WINDOWS
 from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError, bad_field
-from agent_speech_check.nvda_config import Setting
-from agent_speech_check.prefs import MODES, NAME_PATTERN, WINDOWS
+from agent_speech_check.nvda import nvda_config
+from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.validate import Fields
 
 DEFAULT_TARGET = "default"

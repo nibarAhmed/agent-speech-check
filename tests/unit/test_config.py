@@ -5,7 +5,8 @@ from typing import Any
 
 import pytest
 
-from agent_speech_check import config, prefs
+from agent_speech_check.config import edit, prefs
+from agent_speech_check.config.targets import Config, load, parse
 from agent_speech_check.errors import (
     BadPreference,
     BadSetting,
@@ -13,8 +14,7 @@ from agent_speech_check.errors import (
     UnknownPreference,
     UsageError,
 )
-from agent_speech_check.nvda_config import Setting, merge
-from agent_speech_check.targets import Config, load, parse
+from agent_speech_check.nvda.nvda_config import Setting, merge
 
 EXAMPLE: dict[str, Any] = {
     "targets": {
@@ -51,17 +51,17 @@ settle_ms = 800
 def test_render_follows_the_conventions() -> None:
     # Header, top-level keys, [defaults], then targets by name, keys in PREFS order,
     # Windows paths as literal strings, LF line endings.
-    assert config.render(EXAMPLE) == EXAMPLE_TEXT
+    assert edit.render(EXAMPLE) == EXAMPLE_TEXT
 
 
 def test_render_reads_back() -> None:
-    assert parse(config.render(EXAMPLE), "x") == EXAMPLE
+    assert parse(edit.render(EXAMPLE), "x") == EXAMPLE
 
 
 def test_path_with_a_quote_and_a_long_list_read_back() -> None:
     share = [f"C:\\it's here\\{'x' * 40}{n}" for n in range(3)]
     data = {"targets": {"s": {"mode": "sandbox", "share": share, "nvda_dir": "D:\\n v'da"}}}
-    text = config.render(data)
+    text = edit.render(data)
     assert "share = [\n" in text  # too long for one line: one item per line
     assert parse(text, "x") == data
 
@@ -69,9 +69,9 @@ def test_path_with_a_quote_and_a_long_list_read_back() -> None:
 def test_save_checks_before_writing(tmp_path: Path) -> None:
     path = tmp_path / "sub" / "config.toml"
     with pytest.raises(UsageError, match="settle_ms: expected a whole number from 50"):
-        config.save(path, {"defaults": {"settle_ms": 5}})
+        edit.save(path, {"defaults": {"settle_ms": 5}})
     assert not path.exists()
-    config.save(path, EXAMPLE)
+    edit.save(path, EXAMPLE)
     assert path.read_bytes() == EXAMPLE_TEXT.encode()
     assert load(path).targets["default"].share == ("C:\\src\\app",)
     assert not list(path.parent.glob("*.tmp"))
@@ -84,9 +84,9 @@ def _config(data: dict[str, Any]) -> Config:
 def test_set_target_setting_goes_to_the_default_target() -> None:
     settings = _config({"default": "app", "targets": {"app": {"mode": "desktop"}}})
     pref = prefs.find("launch")
-    where = config.owner(settings, pref, None)
+    where = edit.owner(settings, pref, None)
     assert where == "app"
-    data, value = config.set_value(settings, pref, ["False"], where)
+    data, value = edit.set_value(settings, pref, ["False"], where)
     assert value is False
     assert data["targets"]["app"] == {"mode": "desktop", "launch": False}
     assert settings.data["targets"]["app"] == {"mode": "desktop"}  # a copy was changed
@@ -95,17 +95,17 @@ def test_set_target_setting_goes_to_the_default_target() -> None:
 def test_mode_makes_a_target_and_nothing_else_does() -> None:
     settings = _config({})
     with pytest.raises(TargetNotConfigured, match=r'target "app" is not in config.toml') as exc:
-        config.set_value(settings, prefs.find("port"), ["1"], "app")
+        edit.set_value(settings, prefs.find("port"), ["1"], "app")
     assert exc.value.hint == "asc config set mode MODE --target app"
-    data, _ = config.set_value(settings, prefs.find("mode"), ["sandbox"], "app")
+    data, _ = edit.set_value(settings, prefs.find("mode"), ["sandbox"], "app")
     assert _config(data).targets["app"].mode == "sandbox"
 
 
 def test_command_default_global_or_per_target() -> None:
     settings = _config({"targets": {"app": {"mode": "watch"}}})
-    data, _ = config.set_value(settings, prefs.find("settle_ms"), ["600"], None)
+    data, _ = edit.set_value(settings, prefs.find("settle_ms"), ["600"], None)
     assert data["defaults"] == {"settle_ms": 600}
-    data, _ = config.set_value(_config(data), prefs.find("settle_ms"), ["900"], "app")
+    data, _ = edit.set_value(_config(data), prefs.find("settle_ms"), ["900"], "app")
     both = _config(data)
     assert both.value("settle_ms", "app") == (900, "target")
     assert both.value("settle_ms", "other") == (600, "global")
@@ -114,7 +114,7 @@ def test_command_default_global_or_per_target() -> None:
 
 def test_global_setting_takes_no_target() -> None:
     with pytest.raises(BadPreference, match="is global, so it takes no --target"):
-        config.owner(_config({}), prefs.find("nvda_version"), "app")
+        edit.owner(_config({}), prefs.find("nvda_version"), "app")
 
 
 def test_values_are_converted_by_type() -> None:
@@ -145,29 +145,29 @@ def test_unknown_setting_suggests() -> None:
 
 def test_clashes_are_refused_when_checked() -> None:
     settings = _config({"targets": {"app": {"mode": "desktop", "keys": True}}})
-    data, _ = config.set_value(settings, prefs.find("mode"), ["watch"], "app")
+    data, _ = edit.set_value(settings, prefs.find("mode"), ["watch"], "app")
     with pytest.raises(UsageError, match="keys: expected false in watch mode"):
         _config(data)
 
 
 def test_unset() -> None:
     settings = _config({"defaults": {"settle_ms": 600}, "targets": {"a": {"mode": "watch"}}})
-    data = config.unset_value(settings, prefs.find("settle_ms"), None)
+    data = edit.unset_value(settings, prefs.find("settle_ms"), None)
     assert data == {"targets": {"a": {"mode": "watch"}}}  # no empty [defaults] left
     with pytest.raises(BadPreference, match="every target needs one"):
-        config.unset_value(settings, prefs.find("mode"), "a")
+        edit.unset_value(settings, prefs.find("mode"), "a")
 
 
 def test_remove_target() -> None:
     settings = _config({"targets": {"a": {"mode": "watch"}}})
-    assert config.remove_target(settings, "a") == {}
+    assert edit.remove_target(settings, "a") == {}
     with pytest.raises(TargetNotConfigured):
-        config.remove_target(settings, "b")
+        edit.remove_target(settings, "b")
 
 
 def test_entries_say_where_each_value_comes_from() -> None:
     settings = _config(EXAMPLE)
-    rows = {name: (value, source) for name, value, source in config.entries(settings, None)}
+    rows = {name: (value, source) for name, value, source in edit.entries(settings, None)}
     assert rows["default"] == ("default", "global")
     assert rows["mode"] == ("sandbox", "target")
     assert rows["port"] == (16837, "default")
@@ -175,7 +175,7 @@ def test_entries_say_where_each_value_comes_from() -> None:
     assert rows["settle_ms"] == (800, "target")
     assert rows["timeout_ms"] == (8000, "global")
     assert rows["keys_braille"] == (False, "default")
-    assert [name for name, _, _ in config.entries(settings, "x")] == [p.name for p in prefs.PREFS]
+    assert [name for name, _, _ in edit.entries(settings, "x")] == [p.name for p in prefs.PREFS]
 
 
 @pytest.mark.parametrize(
@@ -183,7 +183,7 @@ def test_entries_say_where_each_value_comes_from() -> None:
     [(None, "none"), (True, "true"), ([], "none"), (["a", "b"], "a, b"), (5, "5")],
 )
 def test_show(value: prefs.Value | None, shown: str) -> None:
-    assert config.show(value) == shown
+    assert edit.show(value) == shown
 
 
 @pytest.mark.parametrize(
@@ -219,5 +219,5 @@ def test_given_setting_replaces_a_kept_one() -> None:
 def test_save_does_not_trip_over_another_writers_temp_file(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     (tmp_path / "config.toml.tmp").mkdir()
-    config.save(path, {"defaults": {"timeout_ms": 8000}})
+    edit.save(path, {"defaults": {"timeout_ms": 8000}})
     assert load(path).defaults == {"timeout_ms": 8000}

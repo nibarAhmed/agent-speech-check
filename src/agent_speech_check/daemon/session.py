@@ -7,18 +7,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check import (
-    daemon,
-    firewall,
-    ipc,
-    nvda,
-    nvda_config,
-    sandbox,
-    spawn,
-    state,
-    winapi,
-)
-from agent_speech_check.daemon import LOG_FILE
+from agent_speech_check.config.targets import Target
+from agent_speech_check.daemon import ipc, server, spawn, state
+from agent_speech_check.daemon.server import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
@@ -32,8 +23,10 @@ from agent_speech_check.errors import (
     SandboxBusy,
     SharedNeedsConsent,
 )
-from agent_speech_check.targets import Target
-from agent_speech_check.wait import poll_until
+from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.sandbox import firewall, wsb
+from agent_speech_check.windows import winapi
+from agent_speech_check.windows.wait import poll_until
 
 START_TIMEOUT_S = 15.0
 # Past the daemon's own worst case: 10 s for NVDA, then its window threads.
@@ -118,22 +111,22 @@ def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
 def _check_nvda(target: Target) -> None:
     """The NVDA asc will launch exists, is new enough, and its own config reads
     and takes the target's settings."""
-    folder = nvda.folder_for(target.nvda_dir)
-    nvda.require_exe(folder)
+    folder = launcher.folder_for(target.nvda_dir)
+    launcher.require_exe(folder)
     nvda_config.check(target.settings, nvda_config.user_ini(nvda_config.source_config(folder)))
 
 
 def _check_sandbox(target: Target) -> None:
     if target.nvda_dir:
         _check_nvda(target)
-    sandbox.require_available()
+    wsb.require_available()
     if not firewall.rule_ok(target.port, firewall.daemon_program()):
         raise FirewallRuleMissing
-    if sandbox.running():
+    if wsb.running():
         raise SandboxBusy
     if target.nvda_dir is None:
         # Only a file download; the installer runs inside the sandbox.
-        nvda.download(nvda.VERSION)
+        launcher.download(launcher.VERSION)
 
 
 def precheck(target: Target) -> None:
@@ -141,10 +134,10 @@ def precheck(target: Target) -> None:
     if target.mode == "shared":
         if not target.consent:
             raise SharedNeedsConsent
-        daemon.check_panic_key()
+        server.check_panic_key()
     if target.launches_portable:
         _check_nvda(target)
-        nvda.refuse_if_running()
+        launcher.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)
 

@@ -5,7 +5,7 @@ from ctypes import wintypes
 
 import pytest
 
-from agent_speech_check import mouse
+from agent_speech_check.inputs import mouse
 
 
 def pointer() -> tuple[int, int]:

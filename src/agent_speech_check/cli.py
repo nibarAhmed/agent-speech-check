@@ -17,20 +17,11 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, NoReturn
 
-from agent_speech_check import (
-    __version__,
-    config,
-    daemon,
-    firewall,
-    ipc,
-    keyref,
-    nvda,
-    nvda_config,
-    prefs,
-    sandbox,
-    session,
-    setup,
-)
+from agent_speech_check import __version__
+from agent_speech_check.config import edit, prefs, setup
+from agent_speech_check.config.prefs import MODES, WINDOWS
+from agent_speech_check.config.targets import DEFAULT_TARGET, SANDBOX_PORT, Config, Target, load
+from agent_speech_check.daemon import ipc, server, session
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
@@ -44,10 +35,10 @@ from agent_speech_check.errors import (
     UsageError,
     bad_field,
 )
-from agent_speech_check.nvda_config import Setting
-from agent_speech_check.paths import config_file, state_root, target_dir
-from agent_speech_check.prefs import MODES, WINDOWS
-from agent_speech_check.targets import DEFAULT_TARGET, SANDBOX_PORT, Config, Target, load
+from agent_speech_check.nvda import keyref, launcher, nvda_config
+from agent_speech_check.nvda.nvda_config import Setting
+from agent_speech_check.sandbox import firewall, wsb
+from agent_speech_check.windows.paths import config_file, state_root, target_dir
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
@@ -97,7 +88,7 @@ def _add_target(parser: argparse.ArgumentParser) -> None:
 
 
 def _default(name: str) -> str:
-    return f"default: the {name} setting, {config.show(prefs.BY_NAME[name].default)} unless set"
+    return f"default: the {name} setting, {edit.show(prefs.BY_NAME[name].default)} unless set"
 
 
 def _timeout(parser: argparse.ArgumentParser, name: str = "timeout_ms") -> None:
@@ -395,7 +386,7 @@ def _nvda_dirs(args: argparse.Namespace, target: Target) -> list[tuple[str, Path
     if args.nvda_dir:
         return [("--nvda-dir", Path(args.nvda_dir))]
     if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
-        return [("the portable NVDA", nvda.folder_for(target.nvda_dir))]
+        return [("the portable NVDA", launcher.folder_for(target.nvda_dir))]
     return keyref.candidates()
 
 
@@ -417,7 +408,7 @@ def cmd_launch(args: argparse.Namespace) -> int:
 
 
 def cmd_sandbox_setup(args: argparse.Namespace) -> int:
-    sandbox.require_available()
+    wsb.require_available()
     target = _target(args)
     program = firewall.daemon_program()
     if firewall.rule_ok(target.port, program):
@@ -435,7 +426,9 @@ def _add_firewall_rule(port: int, program: str) -> None:
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
     # It goes into the download URL and a file name.
-    if args.nvda_version is not None and not re.fullmatch(nvda.VERSION_PATTERN, args.nvda_version):
+    if args.nvda_version is not None and not re.fullmatch(
+        launcher.VERSION_PATTERN, args.nvda_version
+    ):
         raise bad_field(UsageError, "--version", "an NVDA version like 2026.2", args.nvda_version)
     version = args.nvda_version or str(load(config_file()).value("nvda_version")[0])
     _make_portable(version, Path(args.installer) if args.installer else None)
@@ -444,11 +437,11 @@ def cmd_get_nvda(args: argparse.Namespace) -> int:
 
 def _make_portable(version: str, installer: Path | None = None) -> None:
     """asc's own portable NVDA, from `installer` or a download of `version`."""
-    nvda.refuse_if_running()
+    launcher.refuse_if_running()
     if installer is None:
-        print(f"downloading {nvda.installer_url(version)}")
-        installer = nvda.download(version)
-    exe = nvda.create_portable(installer, nvda.managed_dir())
+        print(f"downloading {launcher.installer_url(version)}")
+        installer = launcher.download(version)
+    exe = launcher.create_portable(installer, launcher.managed_dir())
     print(f"portable NVDA ready: {exe}")
 
 
@@ -458,17 +451,17 @@ def _running(target: str) -> bool:
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:
     pref = prefs.find(args.name)
-    where = config.owner(settings, pref, args.target)
+    where = edit.owner(settings, pref, args.target)
     if args.action == "set":
-        data, value = config.set_value(settings, pref, args.values, where)
-        done = f"{pref.name} = {config.show(value)} ({config.label(where)})"
+        data, value = edit.set_value(settings, pref, args.values, where)
+        done = f"{pref.name} = {edit.show(value)} ({edit.label(where)})"
     else:
-        data = config.unset_value(settings, pref, where)
-        done = f"{pref.name} unset ({config.label(where)})"
+        data = edit.unset_value(settings, pref, where)
+        done = f"{pref.name} unset ({edit.label(where)})"
     # Command defaults are read by each command, so only target settings wait.
     # Asked before saving, so a failed look leaves the file as it was.
     waits = where is not None and pref.scope == prefs.TARGET and _running(where)
-    config.save(config_file(), data)
+    edit.save(config_file(), data)
     print(done)
     if waits:
         print(f"applies at the next asc start of {where}")
@@ -482,17 +475,17 @@ def cmd_config(args: argparse.Namespace) -> int:
         return 0
     settings = load(config_file())
     if args.action == "list":
-        for name, value, source in config.entries(settings, args.target):
-            print(f"{name} = {config.show(value)} ({source})")
+        for name, value, source in edit.entries(settings, args.target):
+            print(f"{name} = {edit.show(value)} ({source})")
     elif args.action == "get":
         pref = prefs.find(args.name)
-        values = {name: value for name, value, _ in config.entries(settings, args.target)}
-        print(config.show(values[pref.name]))
+        values = {name: value for name, value, _ in edit.entries(settings, args.target)}
+        print(edit.show(values[pref.name]))
     elif args.action == "remove-target":
-        data = config.remove_target(settings, args.name)
+        data = edit.remove_target(settings, args.name)
         if _running(args.name):
             raise TargetsRunning([args.name])
-        config.save(config_file(), data)
+        edit.save(config_file(), data)
         print(f"removed: {args.name}")
     else:
         return _config_change(settings, args)
@@ -539,13 +532,13 @@ def _ask_folder(ask: Ask, prompt: str, *, holding: str | None = None) -> str | N
 
 
 def _get_nvda_now(ask: Ask) -> None:
-    if (nvda.managed_dir() / "nvda.exe").is_file():
+    if (launcher.managed_dir() / "nvda.exe").is_file():
         return
     if not _ask_yes(ask, "asc has no portable NVDA yet. Download it now?", default=True):
         print("later: asc get-nvda")
         return
     try:
-        _make_portable(nvda.VERSION)
+        _make_portable(launcher.VERSION)
     except AscError as error:
         print(f"not done: {error.message}")
         print("later: asc get-nvda")
@@ -572,7 +565,7 @@ def _ask_mode(ask: Ask) -> str:
         if mode != "sandbox":
             return mode
         try:
-            sandbox.require_available()
+            wsb.require_available()
         except AscError as error:
             print(f"{error.message}; pick another mode")
         else:
@@ -590,7 +583,7 @@ def _answers(ask: Ask) -> setup.Answers:
             _get_nvda_now(ask)
         punctuation = _ask_choice(ask, "Punctuation NVDA speaks", setup.PUNCTUATION)
         answers = replace(answers, nvda_dir=nvda_dir, punctuation=punctuation)
-    if mode == "desktop" and nvda.running():
+    if mode == "desktop" and launcher.running():
         print("note: desktop mode won't start while another NVDA runs")
     if mode == "sandbox":
         share: list[str] = []
@@ -604,7 +597,7 @@ def _answers(ask: Ask) -> setup.Answers:
         answers = replace(answers, keys_layout=layout)
     if mode == "shared":
         print("shared mode needs --i-understand at every asc start.")
-        print(f"While it runs, {daemon.PANIC_KEY} stops asc and releases keys.")
+        print(f"While it runs, {server.PANIC_KEY} stops asc and releases keys.")
     return answers
 
 
@@ -623,11 +616,11 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     data = setup.to_data(_answers(ask))
     print("your settings:")
     for name, value in {**data.get("defaults", {}), **data["targets"][DEFAULT_TARGET]}.items():
-        print(f"{name} = {config.show(value)}")
+        print(f"{name} = {edit.show(value)}")
     if not _ask_yes(ask, "Save?", default=True):
         print("nothing saved")
         return 0
-    config.save(path, data)
+    edit.save(path, data)
     print(f"saved: {path}")
     print("next: asc start")
     return 0
@@ -832,10 +825,10 @@ def run(argv: Sequence[str] | None) -> int:
     args_list = list(sys.argv[1:] if argv is None else argv)
     if args_list[:1] == ["_daemon"] and len(args_list) == 2:  # noqa: PLR2004 - _daemon JSON
         # Hidden: how `asc start` runs the daemon.
-        return daemon.run(args_list[1])
+        return server.run(args_list[1])
     if args_list[:1] == ["_sandbox_guard"] and len(args_list) == 3:  # noqa: PLR2004 - pid, id
         # Hidden: stops a sandbox once the process that started it is gone.
-        sandbox.guard(int(args_list[1]), args_list[2])
+        wsb.guard(int(args_list[1]), args_list[2])
         return 0
     args = build_parser().parse_args(args_list)
     if args.command is None:

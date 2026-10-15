@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
-from agent_speech_check import winapi
 from agent_speech_check.errors import NvdaNotFound
+from agent_speech_check.windows import winapi
 
 _HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 # Single letter navigation is a list, not a table: "h: heading".

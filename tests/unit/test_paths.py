@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.paths import write_atomic
+from agent_speech_check.windows.paths import write_atomic
 
 
 def test_write_atomic_writes_text_with_unix_newlines(tmp_path: Path) -> None:

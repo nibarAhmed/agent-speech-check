@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from agent_speech_check import prefs
-from agent_speech_check.targets import DEFAULT_TARGET
+from agent_speech_check.config import prefs
+from agent_speech_check.config.targets import DEFAULT_TARGET
 
 
 @dataclass(frozen=True)

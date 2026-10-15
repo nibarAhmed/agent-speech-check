@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.errors import BadSetting, UserConfigUnreadable
-from agent_speech_check.nvda_config import (
+from agent_speech_check.nvda.nvda_config import (
     RelayAddress,
     Setting,
     check,

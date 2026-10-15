@@ -11,8 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from agent_speech_check.errors import NotConnected, NotRunning
-from agent_speech_check.paths import write_atomic
 from agent_speech_check.validate import Fields
+from agent_speech_check.windows.paths import write_atomic
 
 FILE = "state.json"
 

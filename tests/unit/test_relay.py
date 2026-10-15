@@ -8,9 +8,9 @@ from types import TracebackType
 
 import pytest
 
-from agent_speech_check import relay
 from agent_speech_check.errors import ProtocolError, ServerSentError, SetupNeeded
-from agent_speech_check.speech_log import SpeechLog
+from agent_speech_check.remote import relay
+from agent_speech_check.remote.speech_log import SpeechLog
 
 
 @pytest.mark.asyncio

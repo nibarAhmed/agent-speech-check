@@ -17,7 +17,10 @@ from pathlib import Path
 import pytest
 from tests.integration.conftest import run_asc
 
-from agent_speech_check import nvda, sandbox, state, winapi
+from agent_speech_check.daemon import state
+from agent_speech_check.nvda import launcher
+from agent_speech_check.sandbox import wsb
+from agent_speech_check.windows import winapi
 
 pytestmark = [
     pytest.mark.e2e,
@@ -40,7 +43,7 @@ SECOND = """<!doctype html><html><head><title>asc second</title></head><body>
 def _with_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A state folder under `tmp_path` that already has the NVDA installer."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    installer = nvda.installer_path(nvda.VERSION)
+    installer = launcher.installer_path(launcher.VERSION)
     installer.parent.mkdir(parents=True)
     shutil.copy(os.environ["ASC_E2E_INSTALLER"], installer)
     return tmp_path / "agent-speech-check"
@@ -62,11 +65,11 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert "sandbox: running" in started.stdout
     try:
         # The default, tray: the window is hidden, so none is visible.
-        assert winapi.windows_titled(sandbox.WINDOW_TITLE) == []
+        assert winapi.windows_titled(wsb.WINDOW_TITLE) == []
         # And focus went back: the sandbox client doesn't keep it.
         client = winapi.process_ids("WindowsSandboxRemoteSession.exe")
         assert winapi.window_pid(winapi.foreground()) not in client
-        page = sandbox.share_folder(str(app)) + "\\app.html"
+        page = wsb.share_folder(str(app)) + "\\app.html"
         launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app", "--target", "sb")
         assert launched.returncode == 0, launched.stderr
         # The app's own window has focus, not a hidden helper window of it
@@ -88,7 +91,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         # After those keys Windows limits who takes the focus: a second app
         # must still come to the front where NVDA hears it.
         (app / "second.html").write_text(SECOND, encoding="utf-8")
-        second = sandbox.share_folder(str(app)) + "\\second.html"
+        second = wsb.share_folder(str(app)) + "\\second.html"
         again = run_asc(
             "launch", f'mshta.exe "{second}"', "--title", "asc second", "--timeout", "10000",
             "--target", "sb",
@@ -101,7 +104,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
             app_title = f"asc {name}"
             (app / f"{name}.html").write_text(SECOND.replace("asc second", app_title), "utf-8")
             (app / f"{name}.cmd").write_text(f'{runs} "%~dp0{name}.html"\n', "utf-8")
-            launcher = sandbox.share_folder(str(app)) + f"\\{name}.cmd"
+            launcher = wsb.share_folder(str(app)) + f"\\{name}.cmd"
             out = run_asc(
                 "launch", launcher, "--title", app_title, "--timeout", "10000", "--target", "sb"
             )
@@ -112,7 +115,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     finally:
         stopped = run_asc("stop", "--target", "sb", timeout=120)
     assert stopped.returncode == 0
-    assert sandbox.wait_gone(120)
+    assert wsb.wait_gone(120)
     assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
     time.sleep(1)
 
@@ -127,50 +130,48 @@ def test_sandbox_goes_when_its_daemon_is_killed(
     assert started.returncode == 0, started.stdout + started.stderr
     daemon_pid = state.read(root / "k", "k").pid
     try:
-        assert sandbox.running()
+        assert wsb.running()
         # A hard kill (TerminateProcess on Windows): the daemon gets no chance
         # to stop its sandbox.
         os.kill(daemon_pid, signal.SIGTERM)
         deadline = time.monotonic() + 120
-        while sandbox.running():
+        while wsb.running():
             assert time.monotonic() < deadline, "the sandbox outlived its daemon"
             time.sleep(2)
     finally:
-        for sandbox_id in sandbox.running():
-            sandbox.stop(sandbox_id)
-    assert sandbox.wait_gone(120)
+        for sandbox_id in wsb.running():
+            wsb.stop(sandbox_id)
+    assert wsb.wait_gone(120)
     time.sleep(1)
 
 
 def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
     """Make a portable NVDA with the real installer, inside a throwaway sandbox:
     on the host it would restart the user's NVDA."""
-    config = sandbox.config_xml(
+    config = wsb.config_xml(
         [
-            sandbox.Mapped(str(installer.parent), sandbox.NVDA_IN),
-            sandbox.Mapped(str(out), r"C:\out", read_only=False),
+            wsb.Mapped(str(installer.parent), wsb.NVDA_IN),
+            wsb.Mapped(str(out), r"C:\out", read_only=False),
         ],
         networking=False,
     )
     portable = out / "portable"
-    with sandbox.SandboxWindow("tray", "asc e2e sandbox: show or hide") as window:
+    with wsb.SandboxWindow("tray", "asc e2e sandbox: show or hide") as window:
         _make_portable(config, window, installer, portable)
-    assert sandbox.wait_gone(120)
+    assert wsb.wait_gone(120)
     return portable
 
 
-def _make_portable(
-    config: str, window: sandbox.SandboxWindow, installer: Path, portable: Path
-) -> None:
-    sandbox_id = sandbox.start_connected(config, window, portable.parent / "guard.err")
+def _make_portable(config: str, window: wsb.SandboxWindow, installer: Path, portable: Path) -> None:
+    sandbox_id = wsb.start_connected(config, window, portable.parent / "guard.err")
     try:
         # Mute the sandbox first, as the real start script does: the
         # installer's NVDA plays its start sound otherwise.
-        muted = sandbox.exec_as_user(sandbox_id, "cmd /c net stop audiosrv /y")
+        muted = wsb.exec_as_user(sandbox_id, "cmd /c net stop audiosrv /y")
         assert muted == 0, f"net stop audiosrv exited {muted}"
-        sandbox.exec_as_user(
+        wsb.exec_as_user(
             sandbox_id,
-            f"cmd /c {sandbox.NVDA_IN}\\{installer.name} --create-portable-silent "
+            f"cmd /c {wsb.NVDA_IN}\\{installer.name} --create-portable-silent "
             r"--portable-path=C:\out\portable",
         )
         deadline = time.monotonic() + 180
@@ -180,7 +181,7 @@ def _make_portable(
             count = len(list(portable.rglob("*"))) if portable.exists() else -1
             time.sleep(3)
     finally:
-        sandbox.stop(sandbox_id)
+        wsb.stop(sandbox_id)
 
 
 def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -211,7 +212,7 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
     assert started.returncode == 0, started.stdout + started.stderr
     assert "nvda: connected" in started.stdout
     try:
-        assert winapi.windows_titled(sandbox.WINDOW_TITLE) == []
+        assert winapi.windows_titled(wsb.WINDOW_TITLE) == []
         config = root / "own" / "sandbox" / "config"
         assert (config / "asc-marker.txt").is_file()
         # NVDA has rewritten the file by now, in its own layout.
@@ -226,7 +227,7 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
     finally:
         stopped = run_asc("stop", "--target", "own", timeout=120)
     assert stopped.returncode == 0
-    assert sandbox.wait_gone(120)
+    assert wsb.wait_gone(120)
     assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
     assert (
         (user_config / "nvda.ini").read_text(encoding="utf-8").startswith("[speech]\nsymbolLevel")

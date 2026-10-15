@@ -16,7 +16,7 @@ The sandbox stops Windows Audio first (silent on the host), creates the
 portable NVDA at C:\\nvda, runs the e2e tests, and shuts itself down.
 
 The sandbox window is kept hidden behind an "asc e2e sandbox" tray icon, as in
-sandbox mode (see `sandbox.py`), so it never takes focus or catches keys typed
+sandbox mode (see `sandbox/wsb.py`), so it never takes focus or catches keys typed
 on the host. The icon shows and hides it; pass --show to keep it visible.
 
 Usage: uv run python scripts/e2e_sandbox.py [--show] [--nvda-version V] [pytest args...]
@@ -35,7 +35,8 @@ import sys
 import time
 from pathlib import Path
 
-from agent_speech_check import nvda, sandbox
+from agent_speech_check.nvda import launcher
+from agent_speech_check.sandbox import wsb
 
 PYTHON = "3.13"
 REPO = Path(__file__).resolve().parents[1]
@@ -96,7 +97,7 @@ def prepare(nvda_version: str) -> None:
     )
     installer = IN / f"nvda_{nvda_version}.exe"
     if not installer.exists():
-        shutil.copy2(nvda.download(nvda_version), installer)
+        shutil.copy2(launcher.download(nvda_version), installer)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()
@@ -137,37 +138,37 @@ def write_cmd(nvda_version: str, pytest_args: list[str]) -> Path:
     return cmd
 
 
-def mapped() -> list[sandbox.Mapped]:
+def mapped() -> list[wsb.Mapped]:
     return [
-        sandbox.Mapped(str(REPO), SANDBOX_REPO),
-        sandbox.Mapped(str(IN), SANDBOX_IN),
-        sandbox.Mapped(str(OUT), SANDBOX_OUT, read_only=False),
-        sandbox.Mapped(str(WORK), SANDBOX_WORK),
+        wsb.Mapped(str(REPO), SANDBOX_REPO),
+        wsb.Mapped(str(IN), SANDBOX_IN),
+        wsb.Mapped(str(OUT), SANDBOX_OUT, read_only=False),
+        wsb.Mapped(str(WORK), SANDBOX_WORK),
     ]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--show", action="store_true")
-    parser.add_argument("--nvda-version", default=nvda.VERSION)
+    parser.add_argument("--nvda-version", default=launcher.VERSION)
     ours, pytest_args = parser.parse_known_args()
-    if not re.fullmatch(nvda.VERSION_PATTERN, ours.nvda_version):
+    if not re.fullmatch(launcher.VERSION_PATTERN, ours.nvda_version):
         parser.error(f"--nvda-version: not an NVDA version: {ours.nvda_version}")
-    sandbox.require_available()
-    if sandbox.running():
+    wsb.require_available()
+    if wsb.running():
         print("a Windows Sandbox is already running; stop it first")
         return 3
     print(f"NVDA {ours.nvda_version}")
     prepare(ours.nvda_version)
     cmd = write_cmd(ours.nvda_version, pytest_args)
     tooltip = "asc e2e sandbox: show or hide"
-    with sandbox.SandboxWindow("show" if ours.show else "tray", tooltip) as window:
+    with wsb.SandboxWindow("show" if ours.show else "tray", tooltip) as window:
         return run_tests(window, cmd)
 
 
-def run_tests(window: sandbox.SandboxWindow, cmd: Path) -> int:
-    config = sandbox.config_xml(mapped(), networking=False)
-    sandbox_id = sandbox.start_connected(config, window, WORK / "guard.err")
+def run_tests(window: wsb.SandboxWindow, cmd: Path) -> int:
+    config = wsb.config_xml(mapped(), networking=False)
+    sandbox_id = wsb.start_connected(config, window, WORK / "guard.err")
     # `window.window` is "taskbar" if the tray icon could not be added.
     where = {"tray": ", in the tray", "taskbar": ", minimised"}.get(window.window, "")
     print(f"sandbox {sandbox_id} started{where}")
@@ -192,9 +193,9 @@ def run_tests(window: sandbox.SandboxWindow, cmd: Path) -> int:
     runner.kill()
     report = OUT / "pytest.txt"
     print(report.read_text(encoding="utf-8", errors="replace") if report.exists() else "")
-    if sandbox_id in sandbox.running():
-        sandbox.stop(sandbox_id)
-    sandbox.wait_gone(120)
+    if sandbox_id in wsb.running():
+        wsb.stop(sandbox_id)
+    wsb.wait_gone(120)
     if not done.exists():
         print(f"no result after {TIMEOUT_S // 60} min; see {OUT / 'progress.txt'}")
         return 1

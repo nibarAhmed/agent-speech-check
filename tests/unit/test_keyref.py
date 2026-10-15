@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check import keyref
 from agent_speech_check.errors import NvdaNotFound
+from agent_speech_check.nvda import keyref
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 

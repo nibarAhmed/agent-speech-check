@@ -19,7 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check import firewall, ipc, nvda, sandbox, winapi
+from agent_speech_check.config.targets import defaults
+from agent_speech_check.daemon import ipc
+from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
     NoDefaultSwitch,
@@ -31,10 +33,11 @@ from agent_speech_check.errors import (
     SandboxNeedsPro,
     WsbMissing,
 )
-from agent_speech_check.nvda_config import RelayAddress, Setting
-from agent_speech_check.sandboxed import SandboxSession
-from agent_speech_check.session import sandbox_failure
-from agent_speech_check.targets import defaults
+from agent_speech_check.nvda import launcher
+from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
+from agent_speech_check.sandbox import firewall, wsb
+from agent_speech_check.sandbox.sandboxed import SandboxSession
+from agent_speech_check.windows import winapi
 
 
 def test_kill_on_close_job_kills_the_child() -> None:
@@ -75,15 +78,15 @@ TEST_WINDOW_TITLE = "asc test sandbox window"
 @pytest.mark.xdist_group("desktop")
 def test_window_helpers_without_a_sandbox() -> None:
     assert winapi.windows_titled("no window has this title, asc") == []
-    assert sandbox.SandboxWindow("tray").title == sandbox.WINDOW_TITLE
+    assert wsb.SandboxWindow("tray").title == wsb.WINDOW_TITLE
     for window in ("tray", "taskbar", "show"):
-        keeper = sandbox.SandboxWindow(window, title=TEST_WINDOW_TITLE)
+        keeper = wsb.SandboxWindow(window, title=TEST_WINDOW_TITLE)
         keeper.toggle()
         keeper.keep()  # nothing to do, and it must not fail
         assert keeper.shown
         keeper.remember_focus()
         with keeper:  # the keeping thread starts, runs and stops
-            time.sleep(sandbox.KEEP_WINDOW_EVERY_S * 3)
+            time.sleep(wsb.KEEP_WINDOW_EVERY_S * 3)
         assert keeper.shown
 
 
@@ -97,19 +100,19 @@ def test_mutex_is_exclusive(tmp_path: Path) -> None:
 
 def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert nvda.managed_dir() == tmp_path / "agent-speech-check" / "nvda" / "portable"
-    assert nvda.folder_for(None) == nvda.managed_dir()
-    assert nvda.folder_for("C:/x") == Path("C:/x")
-    assert nvda.installer_path("2026.2").name == "nvda_2026.2.exe"
-    assert nvda.installer_url("2026.2").startswith("https://download.nvaccess.org/releases/")
+    assert launcher.managed_dir() == tmp_path / "agent-speech-check" / "nvda" / "portable"
+    assert launcher.folder_for(None) == launcher.managed_dir()
+    assert launcher.folder_for("C:/x") == Path("C:/x")
+    assert launcher.installer_path("2026.2").name == "nvda_2026.2.exe"
+    assert launcher.installer_url("2026.2").startswith("https://download.nvaccess.org/releases/")
     with pytest.raises(NvdaNotFound) as exc:
-        nvda.require_exe(nvda.managed_dir())
+        launcher.require_exe(launcher.managed_dir())
     assert exc.value.hint == "asc get-nvda"
     with pytest.raises(NvdaNotFound) as exc:
-        nvda.require_exe(tmp_path)
+        launcher.require_exe(tmp_path)
     assert exc.value.hint == "check --nvda-dir or nvda_dir"
     (tmp_path / "nvda.exe").write_bytes(b"")
-    assert nvda.require_exe(tmp_path) == tmp_path / "nvda.exe"
+    assert launcher.require_exe(tmp_path) == tmp_path / "nvda.exe"
 
 
 def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
@@ -117,11 +120,11 @@ def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
     if not winapi.process_ids("nvda.exe"):
         pytest.skip("needs an NVDA running on this machine")
     with pytest.raises(NvdaAlreadyRunning):
-        nvda.refuse_if_running()
+        launcher.refuse_if_running()
     with pytest.raises(NvdaAlreadyRunning):
-        nvda.create_portable(tmp_path / "installer.exe", tmp_path / "portable")
+        launcher.create_portable(tmp_path / "installer.exe", tmp_path / "portable")
     with pytest.raises(NvdaAlreadyRunning):
-        nvda.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
+        launcher.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
 
 
 def test_firewall_reads_are_harmless() -> None:
@@ -136,12 +139,12 @@ def test_firewall_reads_are_harmless() -> None:
 
 
 def test_sandbox_availability() -> None:
-    assert sandbox.edition_id()
+    assert wsb.edition_id()
     try:
-        sandbox.require_available()
+        wsb.require_available()
     except (SandboxNeedsPro, WsbMissing):
         return
-    assert isinstance(sandbox.running(), list)
+    assert isinstance(wsb.running(), list)
 
 
 def test_sandbox_session_prepares_its_folders(
@@ -158,9 +161,9 @@ def test_sandbox_session_prepares_its_folders(
     )
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
-    script = (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
+    script = (folder / "in" / wsb.SCRIPT).read_text(encoding="utf-8")
     assert "nvda_2026.2.exe" in script
-    assert (folder / "in" / sandbox.LAUNCH_SCRIPT).read_text(encoding="utf-8") == sandbox.LAUNCH_PS1
+    assert (folder / "in" / wsb.LAUNCH_SCRIPT).read_text(encoding="utf-8") == wsb.LAUNCH_PS1
     ini = (folder / "config" / "nvda.ini").read_text(encoding="utf-8")
     assert "host = 172.24.80.1:16837" in ini
     assert "symbolLevel = 300" in ini
@@ -177,7 +180,7 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
     session = SandboxSession(tmp_path / "target", target, RelayAddress("h", 1, "k", "f"))
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
-    assert "robocopy" in (folder / "in" / sandbox.SCRIPT).read_text(encoding="utf-8")
+    assert "robocopy" in (folder / "in" / wsb.SCRIPT).read_text(encoding="utf-8")
     assert f"<HostFolder>{portable}</HostFolder>" in config
     assert (folder / "config" / "addons" / "a").is_dir()
     ini = (folder / "config" / "nvda.ini").read_text(encoding="utf-8").splitlines()
@@ -193,7 +196,7 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("LOCALAPPDATA", str(root))
     try:
         state = root / "agent-speech-check"
-        nvda.installer_path(nvda.VERSION).parent.mkdir(parents=True)
+        launcher.installer_path(launcher.VERSION).parent.mkdir(parents=True)
         session = SandboxSession(
             state / "x", defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f")
         )
@@ -228,19 +231,19 @@ def test_sandbox_session_before_start() -> None:
 
 def test_wsb_errors_for_an_unknown_sandbox() -> None:
     try:
-        sandbox.require_available()
+        wsb.require_available()
     except (SandboxNeedsPro, WsbMissing):
         pytest.skip("needs Windows Sandbox")
     unknown = "00000000-0000-0000-0000-000000000000"
     # wsb's own errors have an unknown cause, so retrying won't help: exit 7.
     with pytest.raises(SandboxBroken, match="wsb exec failed") as broken:
-        sandbox.exec_as_user(unknown, "cmd /c exit 0")
+        wsb.exec_as_user(unknown, "cmd /c exit 0")
     assert broken.value.exit_code == 7
     with pytest.raises(SandboxBroken, match="wsb stop failed"):
-        sandbox.stop(unknown)
+        wsb.stop(unknown)
     with pytest.raises(SandboxBroken, match="wsb ip failed"):
-        sandbox.ip_address(unknown)
-    assert sandbox.wait_gone(0) in (True, False)
+        wsb.ip_address(unknown)
+    assert wsb.wait_gone(0) in (True, False)
 
 
 def test_wait_exit_returns_once_the_process_ends() -> None:
@@ -252,15 +255,15 @@ def test_wait_exit_returns_once_the_process_ends() -> None:
 
 def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:
     try:
-        sandbox.require_available()
+        wsb.require_available()
     except (SandboxNeedsPro, WsbMissing):
         pytest.skip("needs Windows Sandbox")
     owner = subprocess.Popen([sys.executable, "-c", "pass"])
     owner.wait(10)
     unknown = "00000000-0000-0000-0000-000000000000"
-    sandbox.guard(owner.pid, unknown)  # no `wsb stop` of an unknown id, so no error
+    wsb.guard(owner.pid, unknown)  # no `wsb stop` of an unknown id, so no error
     err = tmp_path / "guard.err"
-    guard = sandbox.start_guard(owner.pid, unknown, err)
+    guard = wsb.start_guard(owner.pid, unknown, err)
     assert guard.wait(60) == 0, err.read_text(encoding="utf-8")
     assert err.read_bytes() == b""
 
@@ -268,17 +271,17 @@ def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:
 def test_running_nvda_stop_kills_its_job() -> None:
     # A stand-in child process: Running only needs a process and its job.
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-    running = nvda.Running(child, winapi.kill_on_close_job(child.pid))
+    running = launcher.Running(child, winapi.kill_on_close_job(child.pid))
     running.stop()
     assert child.poll() is not None
 
 
 def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    installer = nvda.installer_path("2026.2")
+    installer = launcher.installer_path("2026.2")
     installer.parent.mkdir(parents=True)
     installer.write_bytes(b"already here")
-    assert nvda.download("2026.2") == installer
+    assert launcher.download("2026.2") == installer
     assert installer.read_bytes() == b"already here"
 
 
@@ -286,12 +289,12 @@ def test_a_new_installer_replaces_the_old_ones(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    new = nvda.installer_path("2026.2")
+    new = launcher.installer_path("2026.2")
     new.parent.mkdir(parents=True)
-    for path in (new, nvda.installer_path("2025.1"), new.parent / "notes.txt"):
+    for path in (new, launcher.installer_path("2025.1"), new.parent / "notes.txt"):
         path.write_bytes(b"")
     (new.parent / "portable").mkdir()
-    nvda.drop_other_installers(new)
+    launcher.drop_other_installers(new)
     assert sorted(p.name for p in new.parent.iterdir()) == ["notes.txt", new.name, "portable"]
 
 
@@ -317,12 +320,12 @@ def test_global_hotkey_fires_and_is_exclusive() -> None:
 def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # No such release: NV Access answers 404, or there is no network at all.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    old = nvda.installer_path("2026.2")
+    old = launcher.installer_path("2026.2")
     old.parent.mkdir(parents=True)
     old.write_bytes(b"")
     with pytest.raises(DownloadFailed, match="cannot download NVDA"):
-        nvda.download("0.0-asc-no-such-version")
-    assert not nvda.installer_path("0.0-asc-no-such-version").exists()
+        launcher.download("0.0-asc-no-such-version")
+    assert not launcher.installer_path("0.0-asc-no-such-version").exists()
     assert old.exists()  # only a finished download replaces the old installers
 
 
@@ -338,13 +341,13 @@ def test_file_version(tmp_path: Path) -> None:
 
 
 def test_nvda_version_check() -> None:
-    nvda.check_version("C:/nvda", None)
-    nvda.check_version("C:/nvda", (2026, 2))
-    nvda.check_version("C:/nvda", (2027, 1))
+    launcher.check_version("C:/nvda", None)
+    launcher.check_version("C:/nvda", (2026, 2))
+    launcher.check_version("C:/nvda", (2027, 1))
     # 2025.1 has Remote Access but forwards no speech without an audio device.
     for old in ((2024, 4), (2025, 1), (2026, 1)):
         with pytest.raises(NvdaTooOld, match=r"C:/nvda is version \d+\.\d") as exc:
-            nvda.check_version("C:/nvda", old)
+            launcher.check_version("C:/nvda", old)
         assert exc.value.exit_code == 7
         assert "needs 2026.2 or later" in exc.value.message
 
@@ -409,7 +412,7 @@ def test_sandbox_window_puts_a_real_window_away() -> None:
         hwnd = _plain_window(f"{TEST_WINDOW_TITLE} (asc test)")
         try:
             assert hwnd in winapi.windows_titled(TEST_WINDOW_TITLE)
-            keeper = sandbox.SandboxWindow(window, title=TEST_WINDOW_TITLE)
+            keeper = wsb.SandboxWindow(window, title=TEST_WINDOW_TITLE)
             keeper.remember_focus()  # someone else's window: focus stays there
             keeper.keep()
             assert winapi.is_visible(hwnd) is not hidden
