@@ -4,23 +4,42 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 ## Setup
 
+You need Windows: `asc` and its tests drive Windows APIs, so they don't run on macOS or Linux.
+
 1. Install [uv](https://docs.astral.sh/uv/).
 2. `uv sync`
 3. `uv run poe check` must pass before you open a pull request.
 4. For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
    NVDA: `uv run python scripts/e2e_sandbox.py`. They run inside Windows Sandbox (Windows 11
-   24H2 or later, Pro, Enterprise or Education), so your own NVDA is never touched. If you can't run them, say so in
-   the pull request.
+   24H2 or later, Pro, Enterprise or Education), so your own NVDA is never touched. If you
+   can't run them, say so in the pull request.
+
+## Pull requests
+
+- Changes reach `main` only through a pull request. Direct pushes to `main` are refused.
+- Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
+  Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
+- CI must pass: `check (3.12)`, `check (3.13)` and `installer`. CI can't run the end-to-end
+  tests, because GitHub's runners have no Windows Sandbox, so the template asks whether you did.
+- Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
+  run again.
+- Resolve every review thread before merging.
 
 ## Rules
 
-- Testing policy, code rules and writing rules are in `CLAUDE.md`; they apply to people too.
+- The full testing policy, code rules and writing rules are in `CLAUDE.md`. It's written for
+  coding agents, but the Testing policy, Code and Writing sections apply to people too.
 - In short: tests first for new logic, a failing test first for a bug, no mocks of our own code,
   and never weaken a test to get green.
 - No em dashes (U+2014) anywhere. `scripts/check_dashes.py` enforces it.
 - Never copy NVDA source code (it's GPL). Work from `docs/protocol.md`.
 - Conventional commits, small pull requests, and update `docs/cli.md` with every command change.
 - A new dependency is fine when it saves code. Say why in the commit message.
+
+## Issues
+
+Use the bug report or feature request form. Report security problems privately, as
+[SECURITY.md](SECURITY.md) explains, never in an issue.
 
 ## Tests next to a real `asc`
 
