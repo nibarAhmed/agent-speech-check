@@ -5,19 +5,44 @@ on:
     branches: [main]
   pull_request:
 
+# PR code gets a read-only token.
+permissions:
+  contents: read
+
+# A new push to a PR cancels its older run. Runs on main all finish.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest supported version and the one used in development.
+        python: ["3.12", "3.13"]
+    name: check (${{ matrix.python }})
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - name: Install
         run: uv sync --locked
       - name: Check (lint, types, dead code, deps, tests)
         run: uv run poe check
-      - uses: actions/setup-dotnet@v4
+
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: uv sync --locked
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: "10.0.x"
       # Two builds of one version, as during development: the second must replace the first.
@@ -57,7 +82,7 @@ jobs:
           if ((Products) -ne 0) { throw "$(Products) products left" }
           if ((UserPath) -cne $pathBefore) { throw "user PATH changed: $(UserPath)" }
           if (Test-Path $dir) { throw "$dir left behind" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: msi
           path: dist/*.msi
