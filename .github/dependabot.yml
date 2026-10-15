@@ -1,0 +1,33 @@
+# Monthly, one grouped PR per ecosystem. Security updates come as soon as an advisory is out.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+    groups:
+      python:
+        patterns: ["*"]
+
+  # WiX, which builds the MSI (dotnet-tools.json).
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+    groups:
+      dotnet-tools:
+        patterns: ["*"]
