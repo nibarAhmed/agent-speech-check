@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.config.targets import Target, defaults, load
-from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError
+from agent_speech_check.errors import ModeMismatch, SetupNeeded, TargetsFileError, UsageError
 from agent_speech_check.nvda.nvda_config import Setting
 
 
@@ -189,6 +189,13 @@ def test_file_not_in_utf8(tmp_path: Path) -> None:
     path.write_bytes(b'[targets.app]\nmode = "watch" # caf\xe9\n')
     with pytest.raises(TargetsFileError, match=r"config.toml: "):
         resolve(path, None, None)
+
+
+def test_file_the_disk_refuses_needs_setup(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.mkdir()
+    with pytest.raises(SetupNeeded, match=r"^cannot use .*config\.toml: "):
+        load(path)
 
 
 def test_file_saved_with_a_bom(tmp_path: Path) -> None:

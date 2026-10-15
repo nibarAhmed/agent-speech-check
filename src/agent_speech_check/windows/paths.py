@@ -6,6 +6,8 @@ import os
 import tempfile
 from pathlib import Path
 
+from agent_speech_check.errors import FileUnusable
+
 APP_DIR_NAME = "agent-speech-check"
 
 
@@ -29,6 +31,14 @@ def write_atomic(path: Path, data: str | bytes) -> None:
 
     Text is written as UTF-8 with Unix line ends.
     """
+    try:
+        _write_atomic(path, data)
+    except OSError as error:
+        # Names `path`, not the temporary file the error may name.
+        raise FileUnusable.from_os(path, error) from None
+
+
+def _write_atomic(path: Path, data: str | bytes) -> None:
     # Its own temporary name, so two writers at once never share one.
     handle, name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
     tmp = Path(name)

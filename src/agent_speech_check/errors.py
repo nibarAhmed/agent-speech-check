@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from os import PathLike
 from typing import ClassVar
 
 
@@ -338,14 +339,18 @@ class RelayCertBroken(RelayFileBroken):
         super().__init__(f"{path} is not a PEM certificate")
 
 
-class RelayFileUnusable(SetupNeeded):
-    """The disk refused a relay file or its folder (locked, a folder, a full disk)."""
+class FileUnusable(SetupNeeded):
+    """The disk refused a file or its folder (locked, a folder, a full disk)."""
 
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(
             f"cannot use {path}: {reason}",
             hint="check that path's permissions and free space",
         )
+
+    @classmethod
+    def from_os(cls, path: str | PathLike[str], error: OSError) -> FileUnusable:
+        return cls(str(path), error.strerror or str(error))
 
 
 class NoDefaultSwitch(SetupNeeded):

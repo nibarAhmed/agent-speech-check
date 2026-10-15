@@ -33,7 +33,13 @@ import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
 from agent_speech_check.config.prefs import MODES, NAME_PATTERN, WINDOWS
-from agent_speech_check.errors import ModeMismatch, TargetsFileError, UsageError, bad_field
+from agent_speech_check.errors import (
+    FileUnusable,
+    ModeMismatch,
+    TargetsFileError,
+    UsageError,
+    bad_field,
+)
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.validate import Fields
@@ -180,6 +186,8 @@ def _read(path: Path) -> dict[str, Any]:
         data = path.read_bytes()
     except FileNotFoundError:
         return {}
+    except OSError as error:
+        raise FileUnusable.from_os(path, error) from None
     try:
         # -sig: some Windows editors start the file with a byte order mark.
         text = data.decode("utf-8-sig")

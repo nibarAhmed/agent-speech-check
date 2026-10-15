@@ -31,6 +31,7 @@ from cryptography.x509.oid import NameOID
 
 from agent_speech_check.errors import (
     AscError,
+    FileUnusable,
     JoinRefused,
     LineTooLong,
     NoJoin,
@@ -38,7 +39,6 @@ from agent_speech_check.errors import (
     ProtocolError,
     RelayCertBroken,
     RelayFileBroken,
-    RelayFileUnusable,
 )
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.remote import protocol
@@ -109,8 +109,8 @@ def load_or_create(folder: Path) -> Credentials:
     try:
         return _load_or_create(folder)
     except OSError as error:
-        path = str(error.filename or folder)
-        raise RelayFileUnusable(path, error.strerror or str(error)) from None
+        # The folder and the reads; write_atomic raises FileUnusable itself.
+        raise FileUnusable.from_os(error.filename or folder, error) from None
 
 
 def _load_or_create(folder: Path) -> Credentials:

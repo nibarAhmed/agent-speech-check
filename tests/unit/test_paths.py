@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from agent_speech_check.errors import SetupNeeded
 from agent_speech_check.windows.paths import write_atomic
 
 
@@ -34,3 +35,20 @@ def test_a_failed_write_keeps_the_old_file_and_leaves_no_temporary(tmp_path: Pat
         write_atomic(path, "new\udcff")
     assert path.read_text(encoding="utf-8") == "old"
     assert [p.name for p in tmp_path.iterdir()] == ["a.txt"]
+
+
+def test_a_target_the_disk_refuses_needs_setup_and_names_the_target(tmp_path: Path) -> None:
+    path = tmp_path / "a.txt"
+    path.mkdir()
+    with pytest.raises(SetupNeeded) as exc:
+        write_atomic(path, "new")
+    assert exc.value.message.startswith(f"cannot use {path}: ")
+    assert ".tmp" not in exc.value.message
+    assert [p.name for p in tmp_path.iterdir()] == ["a.txt"]
+
+
+def test_a_missing_folder_needs_setup_and_names_the_target(tmp_path: Path) -> None:
+    path = tmp_path / "gone" / "a.txt"
+    with pytest.raises(SetupNeeded) as exc:
+        write_atomic(path, "new")
+    assert exc.value.message.startswith(f"cannot use {path}: ")
