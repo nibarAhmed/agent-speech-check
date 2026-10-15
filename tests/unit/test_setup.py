@@ -8,6 +8,8 @@ import pytest
 from agent_speech_check.cli import main, run_setup
 from agent_speech_check.config import setup
 from agent_speech_check.config.targets import load
+from agent_speech_check.errors import AscError
+from agent_speech_check.sandbox import wsb
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 
@@ -33,7 +35,7 @@ class Asker:
 # ---------------------------------------------------------------- the questions
 
 
-def test_prompts_say_the_default_in_words() -> None:
+def test_prompts_are_plain_words() -> None:
     prompt = setup.choice_prompt(setup.MODES)
     assert prompt == "Choose 1 to 4: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
@@ -63,13 +65,12 @@ def test_summary_shows_every_answer_for_the_mode() -> None:
 
 
 def test_summary_says_none_and_your_folder() -> None:
-    answers = setup.Answers("desktop", "C:\\n")
     assert setup.summary_lines(setup.Answers("watch")) == [
         "Your settings:",
         "  Mode:             watch",
         "  Keyboard layout:  desktop",
     ]
-    assert setup.summary_lines(answers)[2] == "  NVDA:         C:\\n"
+    assert setup.summary_lines(setup.Answers("desktop", "C:\\n"))[2] == "  NVDA:         C:\\n"
     assert setup.summary_lines(setup.Answers("sandbox"))[4] == "  Shared folders:  none"
 
 
@@ -148,6 +149,18 @@ def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture
     # The warning comes with the choice of mode, before the next question.
     assert out.index("--i-understand at every asc start") < out.index("keyboard layout")
     assert load(root / "config.toml").resolve(None, None).mode == "shared"
+
+
+def test_setup_without_sandbox_says_how_to_get_it(
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", "")
+    with pytest.raises(AscError) as unavailable:
+        wsb.require_available()
+    run_setup(Asker("sandbox", "", "", "y"), replace_without_asking=False)
+    out = capsys.readouterr().out
+    assert f"({unavailable.value.hint}). Pick another mode." in out
+    assert load(root / "config.toml").resolve(None, None).mode == "watch"
 
 
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
