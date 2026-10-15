@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.cli import main, run_setup
-from agent_speech_check.config import setup
+from agent_speech_check.config import prefs, setup
 from agent_speech_check.config.targets import load
 from agent_speech_check.errors import AscError
 from agent_speech_check.sandbox import wsb
@@ -50,6 +50,21 @@ def test_choice_lines_put_the_question_first() -> None:
         "  1  asc:     the portable NVDA asc downloads and keeps (default)",
         "  2  folder:  a portable NVDA folder of your own",
     ]
+
+
+def test_the_default_need_not_be_first() -> None:
+    choices = (setup.Choice("a", "first"), setup.Choice("b", "second", default=True))
+    assert setup.pick("", choices) == "b"
+    lines = setup.choice_lines("Which?", choices)
+    assert lines[1].endswith(" first")
+    assert lines[2].endswith(" second (default)")
+
+
+def test_summary_follows_the_questions_each_mode_asks() -> None:
+    assert set(setup.QUESTIONS) == set(prefs.MODES)
+    for mode, fields in setup.QUESTIONS.items():
+        # The title, the mode, then one line per question.
+        assert len(setup.summary_lines(setup.Answers(mode))) == 2 + len(fields)
 
 
 def test_summary_shows_every_answer_for_the_mode() -> None:

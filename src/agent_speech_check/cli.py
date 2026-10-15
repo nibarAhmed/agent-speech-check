@@ -13,7 +13,7 @@ import re
 import sys
 import traceback
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -588,30 +588,46 @@ def _ask_mode(ask: Ask) -> str:
         return mode
 
 
+def _ask_nvda_dir(ask: Ask, mode: str) -> str | None:
+    nvda_dir = None
+    if _ask_choice(ask, "Which NVDA should asc run?", setup.NVDA_SOURCES) == "folder":
+        nvda_dir = _ask_folder(ask, "Your portable NVDA folder: ", holding="nvda.exe")
+    if nvda_dir is None and mode == "desktop":
+        _get_nvda_now(ask)
+    return nvda_dir
+
+
+def _ask_share(ask: Ask, _mode: str) -> tuple[str, ...]:
+    _section("Folders to share with the sandbox, one at a time.")
+    share: list[str] = []
+    while folder := _ask_folder(ask, "Folder, or Enter when done: "):
+        share.append(folder)
+    return tuple(share)
+
+
+def _asking(question: str, choices: tuple[setup.Choice, ...]) -> Callable[[Ask, str], str]:
+    return lambda ask, _mode: _ask_choice(ask, question, choices)
+
+
+# How each answer in setup.QUESTIONS is asked. One missing fails at import.
+_ASKERS: dict[str, Callable[[Ask, str], Any]] = {
+    field: {
+        "nvda_dir": _ask_nvda_dir,
+        "punctuation": _asking("How much punctuation should NVDA speak?", setup.PUNCTUATION),
+        "share": _ask_share,
+        "window": _asking("How should the sandbox window appear?", setup.WINDOWS),
+        "keys_layout": _asking("Which keyboard layout does your NVDA use?", setup.LAYOUTS),
+    }[field]
+    for field in setup.LABELS
+}
+
+
 def _answers(ask: Ask) -> setup.Answers:
     mode = _ask_mode(ask)
-    answers = setup.Answers(mode)
-    if mode in ("desktop", "sandbox"):
-        nvda_dir = None
-        if _ask_choice(ask, "Which NVDA should asc run?", setup.NVDA_SOURCES) == "folder":
-            nvda_dir = _ask_folder(ask, "Your portable NVDA folder: ", holding="nvda.exe")
-        if nvda_dir is None and mode == "desktop":
-            _get_nvda_now(ask)
-        question = "How much punctuation should NVDA speak?"
-        punctuation = _ask_choice(ask, question, setup.PUNCTUATION)
-        answers = replace(answers, nvda_dir=nvda_dir, punctuation=punctuation)
+    given = {field: _ASKERS[field](ask, mode) for field in setup.QUESTIONS[mode]}
     if mode == "sandbox":
-        _section("Folders to share with the sandbox, one at a time.")
-        share: list[str] = []
-        while folder := _ask_folder(ask, "Folder, or Enter when done: "):
-            share.append(folder)
-        window = _ask_choice(ask, "How should the sandbox window appear?", setup.WINDOWS)
-        answers = replace(answers, share=tuple(share), window=window)
         _firewall_now(ask)
-    if mode in ("watch", "shared"):
-        question = "Which keyboard layout does your NVDA use?"
-        answers = replace(answers, keys_layout=_ask_choice(ask, question, setup.LAYOUTS))
-    return answers
+    return setup.Answers(mode, **given)
 
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
