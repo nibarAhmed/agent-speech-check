@@ -2,9 +2,10 @@
 
 `cli.py` asks the questions, since only it prints. Everything here is pure.
 
-The questions are read by screen readers, so each is one plain line, and the
-default is said in words ("default watch"), never marked with brackets: NVDA
-reads a bracket aloud, or drops it at a low punctuation level.
+Each question comes first, then its numbered choices, then a short prompt, as
+in other CLI setups. The text is read by screen readers, so the default is said
+in words ("default watch"), never marked with brackets or arrows: NVDA reads a
+bracket aloud, or drops it at a low punctuation level.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from agent_speech_check.config import prefs
+from agent_speech_check.config.edit import show
 from agent_speech_check.config.targets import DEFAULT_TARGET
 
 
@@ -64,8 +66,21 @@ LAYOUTS = _choices(
 )
 
 
-def choice_prompt(label: str, choices: tuple[Choice, ...]) -> str:
-    return f"{label}, 1 to {len(choices)} or a name, default {choices[0].name}: "
+def _columns(rows: list[tuple[str, str]]) -> list[str]:
+    """Two columns, indented, the first padded so the second lines up. Screen
+    readers skip the spaces."""
+    width = max(len(left) for left, _ in rows)
+    return [f"  {left.ljust(width)}  {right}" for left, right in rows]
+
+
+def choice_lines(question: str, choices: tuple[Choice, ...]) -> list[str]:
+    """The question, then its numbered choices."""
+    rows = [(f"{number}  {choice.name}", choice.about) for number, choice in enumerate(choices, 1)]
+    return [question, *_columns(rows)]
+
+
+def choice_prompt(choices: tuple[Choice, ...]) -> str:
+    return f"Choose 1 to {len(choices)}, default {choices[0].name}: "
 
 
 def pick(answer: str, choices: tuple[Choice, ...]) -> str | None:
@@ -120,3 +135,9 @@ def to_data(answers: Answers) -> dict[str, Any]:
     if answers.keys_layout != LAYOUTS[0].name:
         data["defaults"] = {"keys_layout": answers.keys_layout}
     return data
+
+
+def settings_lines(data: dict[str, Any]) -> list[str]:
+    """What `to_data` made, one setting a line, for a last look before saving."""
+    chosen = {**data["targets"][DEFAULT_TARGET], **data.get("defaults", {})}
+    return ["Your settings:", *_columns([(name, show(value)) for name, value in chosen.items()])]

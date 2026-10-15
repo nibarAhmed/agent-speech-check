@@ -193,8 +193,11 @@ punctuation it speaks, for sandbox the shared folders and window, and for
 watch and shared your NVDA's keyboard layout. It offers to download NVDA for
 desktop mode and to add the sandbox firewall rule, when they are missing.
 
-- Each question is one line with numbered choices. The default is said in
-  words (`default watch`), and Enter keeps it. Answer with the number or name.
+- Each question comes first, then its numbered choices, then a prompt that
+  says the default in words (`Choose 1 to 4, default watch:`). Enter keeps
+  the default. Answer with the number or name.
+- Notes about a mode (shared mode's `--i-understand`, desktop mode with
+  another NVDA running) come right after it is picked.
 - Running it again replaces all settings, after asking (`--yes` skips that).
   Target folders, with the relay certificate NVDA trusts, are kept.
 - Nothing is written until the last question, `Save?`; Ctrl+C stops without

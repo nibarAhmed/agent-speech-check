@@ -34,10 +34,29 @@ class Asker:
 
 
 def test_prompts_say_the_default_in_words() -> None:
-    prompt = setup.choice_prompt("Mode", setup.MODES)
-    assert prompt == "Mode, 1 to 4 or a name, default watch: "
+    prompt = setup.choice_prompt(setup.MODES)
+    assert prompt == "Choose 1 to 4, default watch: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
+
+
+def test_choice_lines_put_the_question_first() -> None:
+    lines = setup.choice_lines("Which NVDA?", setup.NVDA_SOURCES)
+    assert lines == [
+        "Which NVDA?",
+        "  1  asc     the portable NVDA asc downloads and keeps",
+        "  2  folder  a portable NVDA folder of your own",
+    ]
+
+
+def test_settings_lines_line_up() -> None:
+    data = setup.to_data(setup.Answers("sandbox", window="show", keys_layout="laptop"))
+    assert setup.settings_lines(data) == [
+        "Your settings:",
+        "  mode         sandbox",
+        "  window       show",
+        "  keys_layout  laptop",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -82,8 +101,10 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert settings.resolve(None, None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
-    assert "your settings:\nkeys_layout = laptop\nmode = watch\n" in out
-    assert out.endswith("next: asc start\n")
+    assert out.index("How should asc work with NVDA?") < out.index("1  watch")
+    assert "Your settings:\n  mode         watch\n  keys_layout  laptop\n" in out
+    assert out.endswith("Next: asc start\n")
+    assert "[" not in out
     assert not any("[" in prompt for prompt in ask.prompts)
 
 
@@ -102,15 +123,16 @@ def test_setup_desktop_declines_the_download(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
-    assert "later: asc get-nvda" in capsys.readouterr().out
+    assert "Run asc get-nvda later." in capsys.readouterr().out
     assert load(root / "config.toml").resolve(None, None).launches_portable
 
 
 def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_setup(Asker("shared", "huh", "", "y"), replace_without_asking=False)
     out = capsys.readouterr().out
-    assert "answer 1 to 2, or a name" in out
-    assert "--i-understand at every asc start" in out
+    assert "Answer 1 to 2, or a name." in out
+    # The warning comes with the choice of mode, before the next question.
+    assert out.index("--i-understand at every asc start") < out.index("keyboard layout")
     assert load(root / "config.toml").resolve(None, None).mode == "shared"
 
 
@@ -120,7 +142,7 @@ def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFix
     ask = Asker("")
     assert run_setup(ask, replace_without_asking=False) == 0
     assert ask.prompts[0].endswith("Continue? y or n, default n: ")
-    assert "nothing changed" in capsys.readouterr().out
+    assert "Nothing changed." in capsys.readouterr().out
     assert (root / "config.toml").read_text(encoding="utf-8") == before
     run_setup(Asker("y", "", "", "y"), replace_without_asking=False)
     assert load(root / "config.toml").resolve(None, None).mode == "watch"
