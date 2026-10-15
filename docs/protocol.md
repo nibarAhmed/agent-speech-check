@@ -8,7 +8,7 @@ observed".
 
 Unless a section says otherwise, everything here was observed with portable NVDA
 2026.2 inside Windows Sandbox on Windows 11 Pro (build 26200), using a spike
-script (`git show bbe3f16:scripts/spike_remote.py`) and then the e2e suite.
+script (`git show c612585:scripts/spike_remote.py`) and then the e2e suite.
 
 ## Decision: route B
 
