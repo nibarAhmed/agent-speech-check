@@ -6,7 +6,6 @@ connects by itself, so keys are allowed without launching a real NVDA.
 
 from __future__ import annotations
 
-import time
 from collections.abc import Iterator
 
 import pytest
@@ -27,8 +26,9 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
 
 def wait_rejoined(fake: FakeNvda, joins: int) -> None:
     assert wait_until(lambda: fake.joins > joins), fake.failure
-    # Give the relay a moment to send its releases after channel_joined.
-    time.sleep(0.2)
+    # The relay sends its releases after channel_joined. Keys stay held across a drop,
+    # so only those releases empty `held`.
+    assert wait_until(lambda: not fake.held), fake.held
 
 
 def test_press_prints_new_speech_and_releases(nvda: FakeNvda) -> None:

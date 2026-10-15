@@ -113,6 +113,9 @@ class Daemon:
         self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
+        # Commands in progress, in no set order. Status shows them, so a client can tell a
+        # command has begun: each one takes its starting point before its first await.
+        self.running: list[str] = []
         self.handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
             "status": self._status,
             "stop": self._stop,
@@ -126,7 +129,14 @@ class Daemon:
         }
 
     async def handle(self, request: ipc.Request) -> dict[str, Any]:
-        return await self.handlers[request.cmd](request.args)
+        handler = self.handlers[request.cmd]
+        if request.cmd == "status":
+            return await handler(request.args)
+        self.running.append(request.cmd)
+        try:
+            return await handler(request.args)
+        finally:
+            self.running.remove(request.cmd)
 
     async def _status(self, _args: ipc.NoArgs) -> dict[str, Any]:
         return self.status()
@@ -164,6 +174,7 @@ class Daemon:
             "sandbox": None if self.sandbox is None else self.sandbox.state,
             "sandbox_failure": self._sandbox_failure(),
             "panic_key": None if self.panic is None else PANIC_KEY,
+            "running": list(self.running),
         }
 
     def _sandbox_failure(self) -> dict[str, Any] | None:

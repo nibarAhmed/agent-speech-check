@@ -18,6 +18,7 @@ import psutil
 import pytest
 from tests.fake_nvda import FakeNvda, Reply
 
+from agent_speech_check.daemon import session
 from agent_speech_check.remote.relay import fingerprint
 from agent_speech_check.windows.wait import poll_until
 
@@ -89,6 +90,15 @@ class Env:
         relay = (self.folder(target) / "relay.json").read_text(encoding="utf-8")
         channel: str = json.loads(relay)["channel"]
         return channel
+
+    def running(self, target: str) -> list[str]:
+        """The commands the target's daemon is running for other clients."""
+        running: list[str] = session.status(self.folder(target), target)["running"]
+        return running
+
+    def wait_running(self, target: str, command: str) -> None:
+        """Wait until the daemon runs `command`, so a test acts during it, not before."""
+        assert wait_until(lambda: command in self.running(target)), self.running(target)
 
     def fake(self, target: str, replies: dict[str, Reply | str] | None = None) -> FakeNvda:
         """A fake NVDA connected to the target's relay, using its stored key and cert."""
