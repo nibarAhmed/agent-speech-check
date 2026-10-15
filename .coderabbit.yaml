@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reviews every PR. The project rules live in CLAUDE.md, which CodeRabbit
+# reads by default, so they aren't repeated here.
+language: en-US
+
+reviews:
+  # Only the important findings inline; the rest go in the review summary.
+  profile: quiet
+  request_changes_workflow: false
+  high_level_summary: true
+  # In the walkthrough comment, not the PR description: the description becomes the squash commit.
+  high_level_summary_in_walkthrough: true
+  # One walkthrough and one review per PR, without the extras.
+  review_status: false
+  review_progress: false
+  in_progress_fortune: false
+  changed_files_summary: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  finishing_touches:
+    docstrings:
+      enabled: false
+    # Our tests follow CLAUDE.md's testing policy; generated ones wouldn't.
+    unit_tests:
+      enabled: false
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    # CI's pr-title job checks the title.
+    title:
+      mode: "off"
+    description:
+      mode: "off"
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!uv.lock"
+  path_instructions:
+    - path: "src/agent_speech_check/remote/**"
+      instructions: >-
+        This code speaks NVDA's Remote Access protocol. Check it against docs/protocol.md,
+        which records what real NVDA does, with evidence.
+    - path: "tests/**"
+      instructions: >-
+        No mocks of our own code. The only fake is tests/fake_nvda.py, at the system
+        boundary. Flag any test that is skipped, xfailed or weakened to get green.
+    - path: "tests/fake_nvda.py"
+      instructions: >-
+        Changes here must come with a matching change to docs/protocol.md that cites
+        evidence from real NVDA.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
