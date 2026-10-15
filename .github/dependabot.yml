@@ -1,33 +1,26 @@
-# Monthly, one grouped PR per ecosystem. Security updates come as soon as an advisory is out.
+# GitHub's standard setup: weekly, one PR per update. Security updates come as soon as an
+# advisory is out. The prefixes make Dependabot's PR titles conventional commits, which
+# the pr-title check requires.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     commit-message:
       prefix: ci
-    groups:
-      actions:
-        patterns: ["*"]
 
   - package-ecosystem: uv
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     commit-message:
       prefix: build
-    groups:
-      python:
-        patterns: ["*"]
 
   # WiX, which builds the MSI (dotnet-tools.json).
   - package-ecosystem: nuget
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
     commit-message:
       prefix: build
-    groups:
-      dotnet-tools:
-        patterns: ["*"]
