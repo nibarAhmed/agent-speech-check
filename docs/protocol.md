@@ -243,9 +243,41 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
 - **An app started through `wsb exec` doesn't get the foreground**, because of
   Windows' focus-stealing rules: `mshta` ran, but focus stayed on "Program
   Manager" and NVDA said nothing. `asc launch` therefore starts the app through
-  a PowerShell script in the session that waits for the new window and brings it
-  forward (`AttachThreadInput`, then `SetForegroundWindow`). With that, NVDA
-  announces the window and the page.
+  a PowerShell script in the session. It first sends the still mouse input (see
+  the next section), then waits for the new window and brings it forward
+  (`AttachThreadInput`, then `SetForegroundWindow`). With that, NVDA announces
+  the window and the page. Without the still mouse input, every launch after a
+  key press went unheard.
+
+## Starting an app: the foreground lock
+
+After recent input, Windows' foreground lock keeps a program started from a
+background process (the daemon) behind the window in front. This is the normal
+state on a real desktop. Observed in Windows Sandbox with the lock on, using
+NVDA's IO log and a `SetWinEventHook` listener:
+
+- The app (`mshta`) asks for the foreground. Windows refuses but still fires
+  `EVENT_SYSTEM_FOREGROUND` for its window. NVDA finds Program Manager still in
+  front, logs "Foreground took too long to change" and drops the event.
+- Forcing the window forward afterwards (`AttachThreadInput`, then
+  `SetForegroundWindow`) works, but Windows fires no second foreground event, so
+  NVDA never learns of it. Same with a stock NVDA config. A switch forced this
+  way fires no `EVENT_SYSTEM_FOREGROUND` at all, even to another window.
+- These didn't help: `WaitForInputIdle` before focusing; `SW_RESTORE`,
+  minimise and restore, or hide and show before focusing; starting with
+  `SW_SHOWNOACTIVATE` (`mshta` activates anyway); `SwitchToThisWindow` (refused
+  like the app's own attempt); `AllowSetForegroundWindow` from the daemon
+  (error 5 while the lock is on, even when attached to the foreground thread).
+- A real Alt+Tab after the refusal brought the window forward, but NVDA picked
+  it up only at the next key: NVDA+T still said "Program Manager" in 2 of 3
+  runs, and `--expect` heard nothing in 3 of 3. Not usable for recovery.
+- What works: `SendInput` of one all-zero mouse input (`INPUT` type 0, which
+  moves nothing; size 40 on x64, where 48 fails silently and returns 0), then
+  `AllowSetForegroundWindow(ASFW_ANY)`. The app then comes forward by itself
+  and NVDA says its title and focus. `mouse.nudge` does this before
+  `asc launch` when the target may send input.
+- To confirm the lock is on before trusting a run, check that
+  `AllowSetForegroundWindow` fails with error 5.
 
 **Network**
 - With networking on, the sandbox sits on the Hyper-V Default Switch subnet

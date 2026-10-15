@@ -5,7 +5,7 @@ After recent input Windows keeps a program started from a background process
 forward, NVDA finds it didn't and drops it, and no later switch reaches NVDA
 reliably. A process that sent the last input may hand on the right to come
 forward, so the daemon sends a mouse input that moves nothing just before it
-starts an app (observed in Windows Sandbox: docs/cli.md, asc launch).
+starts an app (observed in Windows Sandbox: docs/protocol.md, the foreground lock).
 """
 
 from __future__ import annotations

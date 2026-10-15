@@ -21,3 +21,11 @@ Contributions come in under the project's MIT license. There's no CLA.
 - Never copy NVDA source code (it's GPL). Work from `docs/protocol.md`.
 - Conventional commits, small pull requests, and update `docs/cli.md` with every command change.
 - A new dependency is fine when it saves code. Say why in the commit message.
+
+## Tests next to a real `asc`
+
+Some tests touch machine-wide state: window titles, the foreground window, the panic hotkey and
+Windows Sandbox. If you also use `asc` for real on the same machine (another project's sandbox
+or daemon), those tests can meet it and fail. Check for a running sandbox or `asc` daemon before
+blaming your change, and don't stop processes you didn't start. When a test clashes, give it its
+own names and titles instead of skipping it: skips can push coverage under the 90% floor.
