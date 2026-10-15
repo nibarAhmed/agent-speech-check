@@ -29,6 +29,9 @@ These can break the user's own machine or the project, so no task overrides them
 - You're not done until `uv run poe check` passes. Paste the command and its output as evidence.
 - For a bug: first write a test that reproduces it and see it fail, then fix it.
 - For new logic (parsing, waits, protocol): tests first.
+- Wait for a condition, never a fixed time: a sleep that guesses how long something takes fails
+  on a slow CI runner. Poll what you need (`wait_until`, `Env.wait_running`), with a timeout.
+  Sleeping is fine only when the sleep is the behavior under test, like a peer that hangs.
 - Never weaken, skip, delete or `xfail` a test to get green. If a test seems wrong, say why and ask.
 - No mocks of our own code. The one fake sits at the system boundary: `tests/fake_nvda.py`, which
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing

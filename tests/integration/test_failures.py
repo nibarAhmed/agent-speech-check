@@ -8,7 +8,6 @@ joins can't be told apart from a stranger's, so its failure shows only in
 from __future__ import annotations
 
 import sys
-import time
 from collections.abc import Iterator
 
 import pytest
@@ -24,9 +23,19 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
     fake.close()
 
 
+def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None:
+    assert env.running("d") == []
+    waiting = start_asc("wait", "later", "--timeout", "8000", "--target", "d")
+    env.wait_running("d", "wait")
+    assert env.running("d") == ["wait"]
+    nvda.say("later")
+    assert 'said: "later"' in waiting.communicate(timeout=30)[0]
+    assert env.running("d") == []
+
+
 def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvda) -> None:
     waiting = start_asc("wait", "later", "--timeout", "8000", "--target", "d")
-    time.sleep(1)
+    env.wait_running("d", "wait")
     with tls_client(env.port) as sock:
         sock.sendall(b"{not json\n")
         assert sock.recv(4096) == b""
@@ -41,19 +50,19 @@ def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvd
 @pytest.mark.xdist_group("desktop")
 @pytest.mark.parametrize("command", [("wait", "never"), ("launch", f'"{sys.executable}" -c pass')])
 def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
-    nvda: FakeNvda, command: tuple[str, str]
+    env: Env, nvda: FakeNvda, command: tuple[str, str]
 ) -> None:
     running = start_asc(*command, "--timeout", "8000", "--target", "d")
-    time.sleep(1)
+    env.wait_running("d", command[0])
     nvda.send_raw(b"{not json\n")
     _, err = running.communicate(timeout=30)
     assert running.returncode == 5, err
     assert "NVDA sent a line that is not a JSON object" in err
 
 
-def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(nvda: FakeNvda) -> None:
+def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeNvda) -> None:
     waiting = start_asc("wait", "never", "--timeout", "3000", "--target", "d")
-    time.sleep(1)
+    env.wait_running("d", "wait")
     nvda.close()
     _, err = waiting.communicate(timeout=30)
     assert waiting.returncode == 3, err

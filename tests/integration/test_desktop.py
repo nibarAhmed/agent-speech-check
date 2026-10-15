@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import shutil
 import sys
-import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -57,10 +56,10 @@ def test_type_refused_in_watch_mode() -> None:
 
 
 @pytest.mark.xdist_group("desktop")
-def test_launch_waits_for_the_title(nvda: FakeNvda) -> None:
+def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
     app = f'"{sys.executable}" -c "import time; time.sleep(3)"'
     launching = start_asc("launch", app, "--title", "My App", "--target", "d")
-    time.sleep(1)
+    env.wait_running("d", "launch")
     nvda.say("Loading")
     nvda.say("My App window")
     out, _ = launching.communicate(timeout=30)
