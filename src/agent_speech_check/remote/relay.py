@@ -109,8 +109,7 @@ def load_or_create(folder: Path) -> Credentials:
     try:
         return _load_or_create(folder)
     except OSError as error:
-        path = str(error.filename or folder)
-        raise FileUnusable(path, error.strerror or str(error)) from None
+        raise FileUnusable.from_os(error.filename or folder, error) from None
 
 
 def _load_or_create(folder: Path) -> Credentials:

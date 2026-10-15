@@ -78,7 +78,7 @@ def save(path: Path, data: dict[str, Any]) -> Config:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as error:
-        raise FileUnusable(str(path.parent), error.strerror or str(error)) from None
+        raise FileUnusable.from_os(path.parent, error) from None
     write_atomic(path, render(data))
     return config
 

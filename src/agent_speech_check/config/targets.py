@@ -187,7 +187,7 @@ def _read(path: Path) -> dict[str, Any]:
     except FileNotFoundError:
         return {}
     except OSError as error:
-        raise FileUnusable(str(path), error.strerror or str(error)) from None
+        raise FileUnusable.from_os(path, error) from None
     try:
         # -sig: some Windows editors start the file with a byte order mark.
         text = data.decode("utf-8-sig")

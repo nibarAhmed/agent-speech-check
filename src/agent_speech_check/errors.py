@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from os import PathLike
 from typing import ClassVar
 
 
@@ -346,6 +347,10 @@ class FileUnusable(SetupNeeded):
             f"cannot use {path}: {reason}",
             hint="check that path's permissions and free space",
         )
+
+    @classmethod
+    def from_os(cls, path: str | PathLike[str], error: OSError) -> FileUnusable:
+        return cls(str(path), error.strerror or str(error))
 
 
 class NoDefaultSwitch(SetupNeeded):

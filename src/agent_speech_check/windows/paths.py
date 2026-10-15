@@ -35,7 +35,7 @@ def write_atomic(path: Path, data: str | bytes) -> None:
         _write_atomic(path, data)
     except OSError as error:
         # Names `path`, not the temporary file the error may name.
-        raise FileUnusable(str(path), error.strerror or str(error)) from None
+        raise FileUnusable.from_os(path, error) from None
 
 
 def _write_atomic(path: Path, data: str | bytes) -> None:
