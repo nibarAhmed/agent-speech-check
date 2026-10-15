@@ -19,8 +19,9 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
 - Changes reach `main` only through a pull request. Direct pushes to `main` are refused.
 - Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
   Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
-- CI must pass: `check (3.12)`, `check (3.13)` and `installer`. CI can't run the end-to-end
-  tests, because GitHub's runners have no Windows Sandbox, so the template asks whether you did.
+- CI must pass: `check (3.12)`, `check (3.13)`, `installer` and `pr-title` (the title is a
+  conventional commit). CI can't run the end-to-end tests, because GitHub's runners have no
+  Windows Sandbox, so the template asks whether you did.
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
@@ -28,7 +29,8 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
 ## Rules
 
 - The full testing policy, code rules and writing rules are in `CLAUDE.md`. It's written for
-  coding agents, but the Testing policy, Code and Writing sections apply to people too.
+  coding agents, but the Never, Testing policy, Code, Security promises and Writing sections apply
+  to people too.
 - In short: tests first for new logic, a failing test first for a bug, no mocks of our own code,
   and never weaken a test to get green.
 - No em dashes (U+2014) anywhere. `scripts/check_dashes.py` enforces it.
