@@ -26,7 +26,7 @@ async def test_empty_speech_is_only_activity() -> None:
     before = log.last_activity
     # Wait for the clock to move, not a fixed time: on Python 3.12 it ticks every 15.6 ms.
     while time.monotonic() <= before:
-        await asyncio.sleep(0)
+        pass
     log.said("")
     assert log.latest == 0
     assert log.last_activity > before
