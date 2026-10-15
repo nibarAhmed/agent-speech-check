@@ -10,6 +10,7 @@ from agent_speech_check.config.targets import Config, load, parse
 from agent_speech_check.errors import (
     BadPreference,
     BadSetting,
+    SetupNeeded,
     TargetNotConfigured,
     UnknownPreference,
     UsageError,
@@ -214,6 +215,14 @@ def test_given_setting_replaces_a_kept_one() -> None:
     kept = (Setting.parse("speech.symbolLevel=300"), Setting.parse("speech.rate=5"))
     given = (Setting.parse("Speech.SymbolLevel=0"),)
     assert merge(kept, given) == (kept[1], given[0])
+
+
+def test_save_into_a_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
+    (tmp_path / "asc").write_text("", encoding="utf-8")
+    path = tmp_path / "asc" / "config.toml"
+    with pytest.raises(SetupNeeded) as exc:
+        edit.save(path, EXAMPLE)
+    assert str(tmp_path / "asc") in exc.value.message
 
 
 def test_save_does_not_trip_over_another_writers_temp_file(tmp_path: Path) -> None:

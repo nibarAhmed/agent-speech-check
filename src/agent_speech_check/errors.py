@@ -338,8 +338,8 @@ class RelayCertBroken(RelayFileBroken):
         super().__init__(f"{path} is not a PEM certificate")
 
 
-class RelayFileUnusable(SetupNeeded):
-    """The disk refused a relay file or its folder (locked, a folder, a full disk)."""
+class FileUnusable(SetupNeeded):
+    """The disk refused a file or its folder (locked, a folder, a full disk)."""
 
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(
