@@ -113,7 +113,7 @@ class Daemon:
         self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
-        # Commands in progress, oldest first. Status shows them, so a client can tell a
+        # Commands in progress, in no set order. Status shows them, so a client can tell a
         # command has begun: each one takes its starting point before its first await.
         self.running: list[str] = []
         self.handlers: dict[str, Callable[[Any], Awaitable[dict[str, Any]]]] = {
