@@ -80,7 +80,7 @@ jobs:
           }
           Msiexec "/x `"$msi`" /qn"
           if ((Products) -ne 0) { throw "$(Products) products left" }
-          if ((UserPath) -cne $pathBefore) { throw "user PATH changed: $(UserPath)" }
+          if ((UserPath) -cne $pathBefore) { throw "user PATH changed`nbefore: $pathBefore`nafter:  $(UserPath)" }
           if (Test-Path $dir) { throw "$dir left behind" }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
