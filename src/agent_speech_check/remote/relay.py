@@ -20,7 +20,7 @@ import json
 import logging
 import secrets
 import ssl
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,6 +37,7 @@ from agent_speech_check.errors import (
     NvdaNotConnected,
     ProtocolError,
     RelayFileBroken,
+    RelayFileUnusable,
 )
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.remote import protocol
@@ -99,23 +100,37 @@ def fingerprint(cert_path: Path) -> str:
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
+@contextlib.contextmanager
+def _disk(path: Path) -> Iterator[None]:
+    """Turn the disk refusing `path` into an error that names it."""
+    try:
+        yield
+    except OSError as error:
+        raise RelayFileUnusable(str(path), error.strerror or str(error)) from None
+
+
 def load_or_create(folder: Path) -> Credentials:
     """The target's relay cert and channel key, created on first use and then kept."""
-    folder.mkdir(parents=True, exist_ok=True)
     cert, key, info = folder / "relay_cert.pem", folder / "relay_key.pem", folder / "relay.json"
-    if not (cert.exists() and key.exists()):
-        _new_cert(cert, key)
+    with _disk(folder):
+        folder.mkdir(parents=True, exist_ok=True)
+        if not (cert.exists() and key.exists()):
+            _new_cert(cert, key)
     channel: str | None = None
     if info.exists():
+        with _disk(info):
+            data = info.read_bytes()
         try:
-            raw = json.loads(info.read_text(encoding="utf-8"))
+            raw = json.loads(data.decode("utf-8"))
         except ValueError:
             raw = None
         channel = Fields(raw, str(info), RelayFileBroken).text("channel", max_len=200)
     if channel is None:
         channel = secrets.token_urlsafe(12)
-        write_atomic(info, json.dumps({"channel": channel}))
-    return Credentials(cert, key, fingerprint(cert), channel)
+        with _disk(info):
+            write_atomic(info, json.dumps({"channel": channel}))
+    with _disk(cert):
+        return Credentials(cert, key, fingerprint(cert), channel)
 
 
 class Relay:

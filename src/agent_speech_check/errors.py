@@ -333,6 +333,16 @@ class RelayFileBroken(SetupNeeded):
         )
 
 
+class RelayFileUnusable(SetupNeeded):
+    """The disk refused a relay file or its folder (locked, a folder, a full disk)."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(
+            f"cannot use {path}: {reason}",
+            hint="check that folder's permissions, or delete relay.json",
+        )
+
+
 class NoDefaultSwitch(SetupNeeded):
     def __init__(self, interface: str) -> None:
         super().__init__(
