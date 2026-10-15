@@ -97,7 +97,10 @@ def _new_cert(cert_path: Path, key_path: Path) -> None:
 
 def fingerprint(cert_path: Path) -> str:
     """Lowercase hex SHA-256 of the DER cert, the form NVDA's trustedCertificates uses."""
-    cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+    try:
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+    except ValueError:
+        raise RelayCertBroken(str(cert_path)) from None
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
@@ -106,7 +109,7 @@ def load_or_create(folder: Path) -> Credentials:
     try:
         return _load_or_create(folder)
     except OSError as error:
-        path = str(error.filename) if error.filename else str(folder)
+        path = str(error.filename or folder)
         raise RelayFileUnusable(path, error.strerror or str(error)) from None
 
 
@@ -125,11 +128,7 @@ def _load_or_create(folder: Path) -> Credentials:
     if channel is None:
         channel = secrets.token_urlsafe(12)
         write_atomic(info, json.dumps({"channel": channel}))
-    try:
-        cert_fingerprint = fingerprint(cert)
-    except ValueError:
-        raise RelayCertBroken(str(cert)) from None
-    return Credentials(cert, key, cert_fingerprint, channel)
+    return Credentials(cert, key, fingerprint(cert), channel)
 
 
 class Relay:
