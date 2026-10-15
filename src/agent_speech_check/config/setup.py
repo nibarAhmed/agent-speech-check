@@ -11,7 +11,7 @@ low punctuation level. Around a word, the brackets can go and the word stays.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any
 
 from agent_speech_check.config import prefs
@@ -22,12 +22,19 @@ from agent_speech_check.config.targets import DEFAULT_TARGET
 class Choice:
     name: str
     about: str
+    default: bool = False  # what Enter picks; one per question
 
 
-def _choices(names: tuple[str, ...], about: dict[str, str]) -> tuple[Choice, ...]:
+def _choices(names: tuple[str, ...], about: dict[str, str], default: str) -> tuple[Choice, ...]:
     """Names from `prefs`, so a new mode or window can't be missed here: a name
     without a description fails at import."""
-    return tuple(Choice(name, about[name]) for name in names)
+    return tuple(Choice(name, about[name], name == default) for name in names)
+
+
+def default_of(choices: tuple[Choice, ...]) -> str:
+    """The name of the one default choice."""
+    (name,) = (choice.name for choice in choices if choice.default)
+    return name
 
 
 MODES = _choices(
@@ -38,13 +45,14 @@ MODES = _choices(
         "sandbox": "asc runs its own NVDA inside Windows Sandbox",
         "shared": "asc presses keys in your own NVDA, in your own session",
     },
+    default="watch",
 )
 NVDA_SOURCES = (
-    Choice("asc", "the portable NVDA asc downloads and keeps"),
+    Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
     Choice("folder", "a portable NVDA folder of your own"),
 )
 PUNCTUATION = (
-    Choice("keep", "what that NVDA's own config says"),
+    Choice("keep", "what that NVDA's own config says", default=True),
     Choice("none", "no punctuation"),
     Choice("some", "some punctuation"),
     Choice("most", "most punctuation"),
@@ -59,11 +67,16 @@ WINDOWS = _choices(
         "taskbar": "minimised on the taskbar",
         "show": "left open",
     },
+    default="tray",  # what targets.py uses when window isn't set
 )
 LAYOUTS = _choices(
     prefs.LAYOUTS,
     {"desktop": "NVDA's desktop keyboard layout", "laptop": "NVDA's laptop keyboard layout"},
+    default="desktop",  # keys_layout's default in prefs
 )
+# Fails at import unless each question has exactly one default.
+for _question in (MODES, NVDA_SOURCES, PUNCTUATION, WINDOWS, LAYOUTS):
+    default_of(_question)
 
 
 def _columns(rows: list[tuple[str, str]]) -> list[str]:
@@ -74,10 +87,13 @@ def _columns(rows: list[tuple[str, str]]) -> list[str]:
 
 
 def choice_lines(question: str, choices: tuple[Choice, ...]) -> list[str]:
-    """The question, then its numbered choices, the first marked as the default."""
+    """The question, then its numbered choices, the default marked."""
     # The colon gives a screen reader a pause between a name and what it means.
     rows = [
-        (f"{number}  {choice.name}:", f"{choice.about} (default)" if number == 1 else choice.about)
+        (
+            f"{number}  {choice.name}:",
+            f"{choice.about} (default)" if choice.default else choice.about,
+        )
         for number, choice in enumerate(choices, 1)
     ]
     return [question, *_columns(rows)]
@@ -88,10 +104,10 @@ def choice_prompt(choices: tuple[Choice, ...]) -> str:
 
 
 def pick(answer: str, choices: tuple[Choice, ...]) -> str | None:
-    """The chosen name: Enter picks the first, then a number or a name. None if neither."""
+    """The chosen name: Enter picks the default, then a number or a name. None if neither."""
     text = answer.strip().lower()
     if not text:
-        return choices[0].name
+        return default_of(choices)
     if text.isdigit() and 1 <= int(text) <= len(choices):
         return choices[int(text) - 1].name
     names = [choice.name for choice in choices]
@@ -117,10 +133,44 @@ def yes_no(answer: str, *, default: bool) -> bool | None:
 class Answers:
     mode: str
     nvda_dir: str | None = None
-    punctuation: str = "keep"
+    punctuation: str = default_of(PUNCTUATION)
     share: tuple[str, ...] = ()
-    window: str = "tray"
-    keys_layout: str = "desktop"
+    window: str = default_of(WINDOWS)
+    keys_layout: str = default_of(LAYOUTS)
+
+
+def _every_answer(labels: dict[str, str]) -> dict[str, str]:
+    """Each answer but the mode, with its name in the summary: an answer
+    without a name fails at import."""
+    return {field.name: labels[field.name] for field in fields(Answers) if field.name != "mode"}
+
+
+LABELS = _every_answer(
+    {
+        "nvda_dir": "NVDA",
+        "punctuation": "Punctuation",
+        "share": "Shared folders",
+        "window": "Window",
+        "keys_layout": "Keyboard layout",
+    }
+)
+
+
+def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...]]:
+    """Modes from `prefs`, so a new mode fails at import until it is listed."""
+    return {mode: questions[mode] for mode in prefs.MODES}
+
+
+# The answers each mode asks for, in order. Setup asks these, and the summary
+# shows them.
+QUESTIONS = _per_mode(
+    {
+        "watch": ("keys_layout",),
+        "desktop": ("nvda_dir", "punctuation"),
+        "sandbox": ("nvda_dir", "punctuation", "share", "window"),
+        "shared": ("keys_layout",),
+    }
+)
 
 
 def to_data(answers: Answers) -> dict[str, Any]:
@@ -131,12 +181,12 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["nvda_dir"] = answers.nvda_dir
     if answers.share:
         table["share"] = list(answers.share)
-    if answers.window != WINDOWS[0].name:
+    if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
     if answers.punctuation in SYMBOL_LEVELS:
         table["nvda_settings"] = [f"speech.symbolLevel={SYMBOL_LEVELS[answers.punctuation]}"]
     data: dict[str, Any] = {"targets": {DEFAULT_TARGET: table}}
-    if answers.keys_layout != LAYOUTS[0].name:
+    if answers.keys_layout != default_of(LAYOUTS):
         data["defaults"] = {"keys_layout": answers.keys_layout}
     return data
 
@@ -145,14 +195,18 @@ def summary_lines(answers: Answers) -> list[str]:
     """Every answer given, in the questions' words, for a last look before saving.
     Unlike `to_data`, defaults are shown too, so no answer seems lost."""
     rows = [("Mode:", answers.mode)]
-    if answers.mode in ("desktop", "sandbox"):
-        rows.append(("NVDA:", answers.nvda_dir or NVDA_SOURCES[0].name))
-        rows.append(("Punctuation:", answers.punctuation))
-    if answers.mode == "sandbox":
-        folders = answers.share or ("none",)
-        rows.append(("Shared folders:", folders[0]))
-        rows.extend(("", folder) for folder in folders[1:])
-        rows.append(("Window:", answers.window))
-    if answers.mode in ("watch", "shared"):
-        rows.append(("Keyboard layout:", answers.keys_layout))
+    for field in QUESTIONS[answers.mode]:
+        first, *more = _shown(getattr(answers, field))
+        rows.append((f"{LABELS[field]}:", first))
+        rows.extend(("", value) for value in more)
     return ["Your settings:", *_columns(rows)]
+
+
+def _shown(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
+    """An answer as the summary says it, one line per folder. No NVDA folder
+    means asc's own NVDA."""
+    if value is None:
+        return (default_of(NVDA_SOURCES),)
+    if isinstance(value, tuple):
+        return value or ("none",)
+    return (value,)
