@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reviews every PR. The project rules live in CLAUDE.md, which CodeRabbit
+# reads by default, so they aren't repeated here.
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!uv.lock"
+  path_instructions:
+    - path: "tests/**"
+      instructions: >-
+        No mocks of our own code. The only fake is tests/fake_nvda.py, at the system
+        boundary. Flag any test that is skipped, xfailed or weakened to get green.
+    - path: "tests/fake_nvda.py"
+      instructions: >-
+        Changes here must come with a matching change to docs/protocol.md that cites
+        evidence from real NVDA.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
