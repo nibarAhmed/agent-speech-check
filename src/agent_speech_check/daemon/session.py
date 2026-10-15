@@ -24,6 +24,7 @@ from agent_speech_check.errors import (
     SharedNeedsConsent,
 )
 from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.windows import winapi
 from agent_speech_check.windows.wait import poll_until
@@ -168,7 +169,8 @@ def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
 def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
-    folder.mkdir(parents=True, exist_ok=True)
+    # The daemon loads these too, but an error there reaches the CLI only as an exit code.
+    relay.load_or_create(folder)
     running, silent = _probe(folder, target.name)
     if silent is not None:
         raise DaemonNotAnswering(target.name, silent.message)

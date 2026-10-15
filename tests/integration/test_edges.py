@@ -224,7 +224,7 @@ def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     folder.mkdir(parents=True)
     (folder / "relay.json").write_text("{half", encoding="utf-8")
     result = run_asc("start", "--target", "w")
-    assert result.returncode == 3
+    assert result.returncode == 7
     assert "relay.json: expected an object" in result.stderr
 
 

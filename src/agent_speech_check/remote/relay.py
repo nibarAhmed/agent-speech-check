@@ -36,7 +36,9 @@ from agent_speech_check.errors import (
     NoJoin,
     NvdaNotConnected,
     ProtocolError,
+    RelayCertBroken,
     RelayFileBroken,
+    RelayFileUnusable,
 )
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.remote import protocol
@@ -95,14 +97,25 @@ def _new_cert(cert_path: Path, key_path: Path) -> None:
 
 def fingerprint(cert_path: Path) -> str:
     """Lowercase hex SHA-256 of the DER cert, the form NVDA's trustedCertificates uses."""
-    cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+    try:
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+    except ValueError:
+        raise RelayCertBroken(str(cert_path)) from None
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
 def load_or_create(folder: Path) -> Credentials:
     """The target's relay cert and channel key, created on first use and then kept."""
-    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        return _load_or_create(folder)
+    except OSError as error:
+        path = str(error.filename or folder)
+        raise RelayFileUnusable(path, error.strerror or str(error)) from None
+
+
+def _load_or_create(folder: Path) -> Credentials:
     cert, key, info = folder / "relay_cert.pem", folder / "relay_key.pem", folder / "relay.json"
+    folder.mkdir(parents=True, exist_ok=True)
     if not (cert.exists() and key.exists()):
         _new_cert(cert, key)
     channel: str | None = None

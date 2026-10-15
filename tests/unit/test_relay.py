@@ -8,7 +8,12 @@ from types import TracebackType
 
 import pytest
 
-from agent_speech_check.errors import ProtocolError, ServerSentError, SetupNeeded
+from agent_speech_check.errors import (
+    ProtocolError,
+    RelayFileBroken,
+    ServerSentError,
+    SetupNeeded,
+)
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.speech_log import SpeechLog
 
@@ -61,3 +66,34 @@ def test_a_broken_relay_file_needs_deleting_not_new_arguments(tmp_path: Path, co
     assert str(tmp_path / "relay.json") in exc.value.message
     assert exc.value.hint is not None
     assert "delete" in exc.value.hint
+
+
+def test_a_relay_file_that_cannot_be_read_needs_setup(tmp_path: Path) -> None:
+    (tmp_path / "relay.json").mkdir()
+    with pytest.raises(SetupNeeded) as exc:
+        relay.load_or_create(tmp_path)
+    assert str(tmp_path / "relay.json") in exc.value.message
+    assert exc.value.hint is not None
+    assert "permissions" in exc.value.hint
+
+
+def test_a_relay_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
+    folder = tmp_path / "target"
+    folder.write_text("", encoding="utf-8")
+    with pytest.raises(SetupNeeded) as exc:
+        relay.load_or_create(folder)
+    assert str(folder) in exc.value.message
+
+
+def test_a_relay_file_that_is_not_utf8_needs_deleting(tmp_path: Path) -> None:
+    (tmp_path / "relay.json").write_bytes(b'{"channel": "\xff"}')
+    with pytest.raises(RelayFileBroken):
+        relay.load_or_create(tmp_path)
+
+
+def test_a_broken_relay_cert_needs_deleting(tmp_path: Path) -> None:
+    relay.load_or_create(tmp_path)
+    (tmp_path / "relay_cert.pem").write_text("not a cert", encoding="utf-8")
+    with pytest.raises(RelayFileBroken) as exc:
+        relay.load_or_create(tmp_path)
+    assert str(tmp_path / "relay_cert.pem") in exc.value.message

@@ -324,12 +324,27 @@ class SandboxBroken(SetupNeeded):
 
 
 class RelayFileBroken(SetupNeeded):
-    """`relay.json`, which asc wrote itself, is broken; no argument can fix it."""
+    """A relay file, which asc wrote itself, is broken; no argument can fix it."""
 
     def __init__(self, detail: str) -> None:
         super().__init__(
             detail,
             hint="delete it; asc makes a new one, and NVDA needs the new key once",
+        )
+
+
+class RelayCertBroken(RelayFileBroken):
+    def __init__(self, path: str) -> None:
+        super().__init__(f"{path} is not a PEM certificate")
+
+
+class RelayFileUnusable(SetupNeeded):
+    """The disk refused a relay file or its folder (locked, a folder, a full disk)."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        super().__init__(
+            f"cannot use {path}: {reason}",
+            hint="check that path's permissions and free space",
         )
 
 
