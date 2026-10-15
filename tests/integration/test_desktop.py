@@ -7,6 +7,7 @@ never touched and a clean CI machine never launches one.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
 import time
@@ -139,7 +140,13 @@ def test_desktop_without_portable_nvda(tmp_path: Path) -> None:
     assert str(tmp_path) in result.stderr
 
 
-def test_sandbox_needs_the_firewall_rule(env: Env) -> None:
+def test_sandbox_needs_the_firewall_rule(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The wsb check only looks for the command, so an empty one stands in on machines
+    # without Windows Sandbox. It's never run: the firewall check fails first.
+    bin_dir = env.root / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "wsb.exe").write_bytes(b"")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     # A port no rule covers, so this never starts a real sandbox.
     (env.root / "agent-speech-check" / "config.toml").write_text(
         f"[targets.s]\nmode = 'sandbox'\nport = {env.port}\n", encoding="utf-8"
