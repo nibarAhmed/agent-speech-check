@@ -19,8 +19,9 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
 - Changes reach `main` only through a pull request. Direct pushes to `main` are refused.
 - Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
   Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
-- CI must pass: `check (3.12)`, `check (3.13)` and `installer`. CI can't run the end-to-end
-  tests, because GitHub's runners have no Windows Sandbox, so the template asks whether you did.
+- CI must pass: `check (3.12)`, `check (3.13)`, `installer` and `pr-title` (the title is a
+  conventional commit). CI can't run the end-to-end tests, because GitHub's runners have no
+  Windows Sandbox, so the template asks whether you did.
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
