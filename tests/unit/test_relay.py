@@ -89,3 +89,11 @@ def test_a_relay_file_that_is_not_utf8_needs_deleting(tmp_path: Path) -> None:
     (tmp_path / "relay.json").write_bytes(b'{"channel": "\xff"}')
     with pytest.raises(RelayFileBroken):
         relay.load_or_create(tmp_path)
+
+
+def test_a_broken_relay_cert_needs_deleting(tmp_path: Path) -> None:
+    relay.load_or_create(tmp_path)
+    (tmp_path / "relay_cert.pem").write_text("not a cert", encoding="utf-8")
+    with pytest.raises(RelayFileBroken) as exc:
+        relay.load_or_create(tmp_path)
+    assert str(tmp_path / "relay_cert.pem") in exc.value.message
