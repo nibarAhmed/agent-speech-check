@@ -619,16 +619,15 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
             return 0
     print("Answer with a number or a name. Enter keeps the default.")
     print("Ctrl+C stops without saving.")
-    data = setup.to_data(_answers(ask))
+    answers = _answers(ask)
     print()
-    print("\n".join(setup.settings_lines(data)))
+    print("\n".join(setup.summary_lines(answers)))
     print()
     if not _ask_yes(ask, "Save?", default=True):
         print("Nothing saved.")
         return 0
-    edit.save(path, data)
-    print(f"Saved: {path}")
-    print("Next: asc start")
+    edit.save(path, setup.to_data(answers))
+    print("Settings saved.")
     return 0
 
 

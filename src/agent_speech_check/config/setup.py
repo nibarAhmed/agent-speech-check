@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.edit import show
 from agent_speech_check.config.targets import DEFAULT_TARGET
 
 
@@ -140,7 +139,18 @@ def to_data(answers: Answers) -> dict[str, Any]:
     return data
 
 
-def settings_lines(data: dict[str, Any]) -> list[str]:
-    """What `to_data` made, one setting a line, for a last look before saving."""
-    chosen = {**data["targets"][DEFAULT_TARGET], **data.get("defaults", {})}
-    return ["Your settings:", *_columns([(name, show(value)) for name, value in chosen.items()])]
+def summary_lines(answers: Answers) -> list[str]:
+    """Every answer given, in the questions' words, for a last look before saving.
+    Unlike `to_data`, defaults are shown too, so no answer seems lost."""
+    rows = [("Mode:", answers.mode)]
+    if answers.mode in ("desktop", "sandbox"):
+        rows.append(("NVDA:", answers.nvda_dir or NVDA_SOURCES[0].name))
+        rows.append(("Punctuation:", answers.punctuation))
+    if answers.mode == "sandbox":
+        folders = answers.share or ("none",)
+        rows.append(("Shared folders:", folders[0]))
+        rows.extend(("", folder) for folder in folders[1:])
+        rows.append(("Window:", answers.window))
+    if answers.mode in ("watch", "shared"):
+        rows.append(("Keyboard layout:", answers.keys_layout))
+    return ["Your settings:", *_columns(rows)]

@@ -49,14 +49,28 @@ def test_choice_lines_put_the_question_first() -> None:
     ]
 
 
-def test_settings_lines_line_up() -> None:
-    data = setup.to_data(setup.Answers("sandbox", window="show", keys_layout="laptop"))
-    assert setup.settings_lines(data) == [
+def test_summary_shows_every_answer_for_the_mode() -> None:
+    answers = setup.Answers("sandbox", None, "all", ("C:\\a", "C:\\b"), "show")
+    assert setup.summary_lines(answers) == [
         "Your settings:",
-        "  mode         sandbox",
-        "  window       show",
-        "  keys_layout  laptop",
+        "  Mode:            sandbox",
+        "  NVDA:            asc",
+        "  Punctuation:     all",
+        "  Shared folders:  C:\\a",
+        "                   C:\\b",
+        "  Window:          show",
     ]
+
+
+def test_summary_says_none_and_your_folder() -> None:
+    answers = setup.Answers("desktop", "C:\\n")
+    assert setup.summary_lines(setup.Answers("watch")) == [
+        "Your settings:",
+        "  Mode:             watch",
+        "  Keyboard layout:  desktop",
+    ]
+    assert setup.summary_lines(answers)[2] == "  NVDA:         C:\\n"
+    assert setup.summary_lines(setup.Answers("sandbox"))[4] == "  Shared folders:  none"
 
 
 @pytest.mark.parametrize(
@@ -102,8 +116,8 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
     assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
-    assert "Your settings:\n  mode         watch\n  keys_layout  laptop\n" in out
-    assert out.endswith("Next: asc start\n")
+    assert "Your settings:\n  Mode:             watch\n  Keyboard layout:  laptop\n" in out
+    assert out.endswith("\nSettings saved.\n")
     assert "[" not in out
     assert not any("[" in prompt for prompt in ask.prompts)
 
