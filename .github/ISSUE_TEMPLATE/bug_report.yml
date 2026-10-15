@@ -1,0 +1,73 @@
+name: Bug report
+description: asc did something wrong or crashed.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Leave out anything private. NVDA's speech can contain passwords, messages or email,
+        so check pasted output and logs first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected and what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The asc commands, in order, and the app they ran against.
+      placeholder: |
+        1. asc start --target x
+        2. asc press tab --expect "OK button"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: asc's output, including any error, hint and exit code.
+      render: text
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - watch
+        - desktop
+        - sandbox
+        - shared
+        - not sure, or no target started
+    validations:
+      required: true
+  - type: input
+    id: asc-version
+    attributes:
+      label: asc version
+      description: The output of `asc --version`.
+      placeholder: asc 0.0.1
+    validations:
+      required: true
+  - type: input
+    id: nvda-version
+    attributes:
+      label: NVDA version
+      placeholder: "2026.2"
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version and edition
+      description: Run `winver`.
+      placeholder: Windows 11 Pro 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed from
+      options:
+        - MSI installer
+        - source (uv tool install)
+        - a clone, with uv run
