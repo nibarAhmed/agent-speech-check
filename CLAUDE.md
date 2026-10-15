@@ -4,13 +4,25 @@ A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVD
 Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
 evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive Windows APIs.
 
+## Never
+
+These can break the user's own machine or the project, so no task overrides them.
+
+- Never run `pytest -m e2e` on the host: it would start a second NVDA. Use
+  `scripts/e2e_sandbox.py`.
+- Never write the user's own NVDA configuration. `asc` writes only its own copies.
+- Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
+  you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox nothing is
+  the user's, so stopping by name is fine there.
+- Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
+- Never push to `main`: it's protected. Work on a branch and open a PR.
+
 ## Commands
 
 - `uv sync`
 - `uv run poe check` (everything: dashes, spelling, format, lint, types, dead code, deps, tests)
 - `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
-- `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox; never run
-  `pytest -m e2e` on the host, it would start a second NVDA)
+- `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox)
 
 ## Testing policy
 
@@ -27,8 +39,8 @@ evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive W
   (`scripts/e2e_sandbox.py`), or state clearly that they weren't run.
 - Some tests touch machine-wide state (window titles, the foreground window, the panic hotkey,
   Windows Sandbox), so a real `asc` sandbox or daemon on this machine can make them fail. Check for
-  one before blaming your change, and never stop processes you didn't start. When a test clashes,
-  give it its own names and titles instead of skipping it.
+  one before blaming your change. When a test clashes, give it its own names and titles instead of
+  skipping it.
 
 ## Code
 
@@ -38,7 +50,6 @@ evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive W
   (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
   processes) and `configobj` (`nvda.ini`, read and written by the same library NVDA uses). Add
   a library when it saves code; say why in the PR description.
-- Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - The rule that watch mode refuses keys lives in the daemon.
 - Raise only `AscError` subclasses from `errors.py` for expected failures (bad input, daemon down, NVDA
   unreachable). Exit codes are decided there and nowhere else. Don't wrap bugs or broken invariants:
@@ -56,6 +67,18 @@ evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive W
   side effect.
 - Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
   release; `Keyboard` alone tracks which keys may be held.
+- A one-way door is a bug: whatever `asc` starts, holds or changes, it can also stop, release or
+  undo, including after a crash or a timeout.
+
+## Security promises
+
+`SECURITY.md` makes these promises to users. Code and reviews must keep them.
+
+- Speech stays in memory unless the user passes `--log-file`. Logs, errors and exceptions never
+  contain speech text or tokens.
+- The daemon's control port listens on 127.0.0.1 only and needs its random token.
+- Watch mode never sends keys.
+- `asc` never writes the user's own NVDA configuration (also under Never, above).
 
 ## Writing
 
@@ -65,7 +88,6 @@ evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive W
 
 ## Etiquette
 
-- Never push to `main`: it's protected. Work on a branch and open a PR.
 - PRs are squash-merged: the PR title becomes the commit on `main` and the PR description its
   message. Write the title as a conventional commit. Small PRs.
 - Update `docs/cli.md` and `skills/asc/SKILL.md` with every command change.
