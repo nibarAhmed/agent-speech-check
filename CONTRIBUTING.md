@@ -33,8 +33,9 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
   and never weaken a test to get green.
 - No em dashes (U+2014) anywhere. `scripts/check_dashes.py` enforces it.
 - Never copy NVDA source code (it's GPL). Work from `docs/protocol.md`.
-- Conventional commits, small pull requests, and update `docs/cli.md` with every command change.
-- A new dependency is fine when it saves code. Say why in the commit message.
+- Conventional commits, small pull requests, and update `docs/cli.md` and `skills/asc/SKILL.md`
+  with every command change.
+- A new dependency is fine when it saves code. Say why in the pull request description.
 
 ## Issues
 

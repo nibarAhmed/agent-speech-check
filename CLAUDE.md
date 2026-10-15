@@ -2,13 +2,13 @@
 
 A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVDA
 Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
-evidence, is in `docs/protocol.md`.
+evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive Windows APIs.
 
 ## Commands
 
 - `uv sync`
 - `uv run poe check` (everything: dashes, spelling, format, lint, types, dead code, deps, tests)
-- `uv run pytest tests/unit -q`
+- `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
 - `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox; never run
   `pytest -m e2e` on the host, it would start a second NVDA)
 
@@ -22,20 +22,22 @@ evidence, is in `docs/protocol.md`.
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
   evidence from real NVDA.
 - Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
-  fakes. Its low coverage outside e2e is expected; never lower the coverage floor for it.
+  fakes. Its low coverage outside e2e is expected; never lower the 90% coverage floor for it.
 - For changes that touch the protocol or NVDA config, run the e2e tests against real NVDA
   (`scripts/e2e_sandbox.py`), or state clearly that they weren't run.
+- Some tests touch machine-wide state (window titles, the foreground window, the panic hotkey,
+  Windows Sandbox), so a real `asc` sandbox or daemon on this machine can make them fail. Check for
+  one before blaming your change, and never stop processes you didn't start. When a test clashes,
+  give it its own names and titles instead of skipping it.
 
 ## Code
 
-- Layout: `cli.py`, `errors.py` and `validate.py` at the top, the rest in one folder per area
-  (`config`, `daemon`, `inputs`, `nvda`, `remote`, `sandbox`, `windows`). Put a new module in its
-  area, and keep the folders' `__init__.py` files empty of imports.
+- Layout: `cli.py`, `errors.py` and `validate.py` at the top, the rest in one folder per area. Put
+  a new module in its area, and keep the folders' `__init__.py` files empty of imports.
 - Runtime dependencies: `cryptography` (the stdlib can't create the relay cert), `tomlkit`
   (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
   processes) and `configobj` (`nvda.ini`, read and written by the same library NVDA uses). Add
-  a library when it saves code; say why in the commit.
-- No `print` outside `cli.py`.
+  a library when it saves code; say why in the PR description.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - The rule that watch mode refuses keys lives in the daemon.
 - Raise only `AscError` subclasses from `errors.py` for expected failures (bad input, daemon down, NVDA
@@ -63,5 +65,7 @@ evidence, is in `docs/protocol.md`.
 
 ## Etiquette
 
-- Small PRs. Conventional commits.
-- Update `docs/cli.md` with every command change.
+- Never push to `main`: it's protected. Work on a branch and open a PR.
+- PRs are squash-merged: the PR title becomes the commit on `main` and the PR description its
+  message. Write the title as a conventional commit. Small PRs.
+- Update `docs/cli.md` and `skills/asc/SKILL.md` with every command change.
