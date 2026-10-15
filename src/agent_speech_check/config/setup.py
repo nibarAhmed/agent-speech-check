@@ -3,9 +3,10 @@
 `cli.py` asks the questions, since only it prints. Everything here is pure.
 
 Each question comes first, then its numbered choices, then a short prompt, as
-in other CLI setups. The text is read by screen readers, so the default is said
-in words ("default watch"), never marked with brackets or arrows: NVDA reads a
-bracket aloud, or drops it at a low punctuation level.
+in other CLI setups. The text is read by screen readers, so the default is
+marked with the word "(default)" on its choice, never by a symbol alone like
+`[Y/n]`, an arrow or a star: NVDA reads such a symbol aloud, or drops it at a
+low punctuation level. Around a word, the brackets can go and the word stays.
 """
 
 from __future__ import annotations
@@ -74,14 +75,15 @@ def _columns(rows: list[tuple[str, str]]) -> list[str]:
 
 
 def choice_lines(question: str, choices: tuple[Choice, ...]) -> list[str]:
-    """The question, then its numbered choices."""
+    """The question, then its numbered choices, the first marked as the default."""
     # The colon gives a screen reader a pause between a name and what it means.
     rows = [(f"{number}  {choice.name}:", choice.about) for number, choice in enumerate(choices, 1)]
+    rows[0] = (rows[0][0], f"{rows[0][1]} (default)")
     return [question, *_columns(rows)]
 
 
 def choice_prompt(choices: tuple[Choice, ...]) -> str:
-    return f"Choose 1 to {len(choices)}, default {choices[0].name}: "
+    return f"Choose 1 to {len(choices)}: "
 
 
 def pick(answer: str, choices: tuple[Choice, ...]) -> str | None:

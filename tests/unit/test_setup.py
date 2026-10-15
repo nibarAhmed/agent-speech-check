@@ -35,7 +35,7 @@ class Asker:
 
 def test_prompts_say_the_default_in_words() -> None:
     prompt = setup.choice_prompt(setup.MODES)
-    assert prompt == "Choose 1 to 4, default watch: "
+    assert prompt == "Choose 1 to 4: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
 
@@ -44,7 +44,7 @@ def test_choice_lines_put_the_question_first() -> None:
     lines = setup.choice_lines("Which NVDA?", setup.NVDA_SOURCES)
     assert lines == [
         "Which NVDA?",
-        "  1  asc:     the portable NVDA asc downloads and keeps",
+        "  1  asc:     the portable NVDA asc downloads and keeps (default)",
         "  2  folder:  a portable NVDA folder of your own",
     ]
 
