@@ -54,10 +54,6 @@ reviews:
         Changes here must come with a matching change to docs/protocol.md that cites
         evidence from real NVDA.
 
-# Reply only when mentioned.
-chat:
-  auto_reply: false
-
 knowledge_base:
   code_guidelines:
     enabled: true
