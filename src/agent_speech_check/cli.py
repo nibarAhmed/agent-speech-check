@@ -20,7 +20,7 @@ from typing import Any, NoReturn
 from agent_speech_check import __version__
 from agent_speech_check.config import edit, prefs, setup
 from agent_speech_check.config.prefs import MODES, WINDOWS
-from agent_speech_check.config.targets import DEFAULT_TARGET, SANDBOX_PORT, Config, Target, load
+from agent_speech_check.config.targets import SANDBOX_PORT, Config, Target, load
 from agent_speech_check.daemon import ipc, server, session
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
@@ -498,14 +498,18 @@ def cmd_config(args: argparse.Namespace) -> int:
 type Ask = Callable[[str], str]
 
 
-def _ask_choice(ask: Ask, label: str, choices: tuple[setup.Choice, ...]) -> str:
-    for number, choice in enumerate(choices, 1):
-        print(f"{number} {choice.name}: {choice.about}")
+def _section(*lines: str) -> None:
+    """A blank line, then the lines: one step of setup."""
+    print("", *lines, sep="\n")
+
+
+def _ask_choice(ask: Ask, question: str, choices: tuple[setup.Choice, ...]) -> str:
+    _section(*setup.choice_lines(question, choices))
     while True:
-        picked = setup.pick(ask(setup.choice_prompt(label, choices)), choices)
+        picked = setup.pick(ask(setup.choice_prompt(choices)), choices)
         if picked is not None:
             return picked
-        print(f"answer 1 to {len(choices)}, or a name")
+        print(f"Answer 1 to {len(choices)}, or a name.")
 
 
 def _ask_yes(ask: Ask, question: str, *, default: bool) -> bool:
@@ -513,7 +517,7 @@ def _ask_yes(ask: Ask, question: str, *, default: bool) -> bool:
         answer = setup.yes_no(ask(setup.yes_no_prompt(question, default=default)), default=default)
         if answer is not None:
             return answer
-        print("answer y or n")
+        print("Answer y or n.")
 
 
 def _ask_folder(ask: Ask, prompt: str, *, holding: str | None = None) -> str | None:
@@ -524,52 +528,64 @@ def _ask_folder(ask: Ask, prompt: str, *, holding: str | None = None) -> str | N
             return None
         folder = Path(text).absolute()
         if not folder.is_dir():
-            print(f"no such folder: {folder}")
+            print(f"No such folder: {folder}")
         elif holding and not (folder / holding).is_file():
-            print(f"no {holding} in {folder}")
+            print(f"No {holding} in {folder}")
         else:
             return str(folder)
+
+
+def _sentence(error: AscError) -> str:
+    """The error as setup says it, with its hint, since setup goes on after it."""
+    text = f"{error.message} ({error.hint})" if error.hint else error.message
+    return f"{text[:1].upper()}{text[1:]}."
+
+
+def _offer(ask: Ask, question: str, action: Callable[[], None], later: str) -> None:
+    """Do `action` now if the user agrees. Otherwise, or if it fails, name the
+    command `later` that does it."""
+    if _ask_yes(ask, question, default=True):
+        try:
+            action()
+        except AscError as error:
+            print(f"Not done. {_sentence(error)}")
+        else:
+            return
+    print(f"Run {later} later.")
 
 
 def _get_nvda_now(ask: Ask) -> None:
     if (launcher.managed_dir() / "nvda.exe").is_file():
         return
-    if not _ask_yes(ask, "asc has no portable NVDA yet. Download it now?", default=True):
-        print("later: asc get-nvda")
-        return
-    try:
-        _make_portable(launcher.VERSION)
-    except AscError as error:
-        print(f"not done: {error.message}")
-        print("later: asc get-nvda")
+    print()
+    question = "asc has no portable NVDA yet. Download it now?"
+    _offer(ask, question, lambda: _make_portable(launcher.VERSION), "asc get-nvda")
 
 
 def _firewall_now(ask: Ask) -> None:
     program = firewall.daemon_program()
     if firewall.rule_ok(SANDBOX_PORT, program):
         return
-    print("sandbox mode needs one firewall rule, so the sandbox's NVDA can reach asc")
-    if not _ask_yes(ask, "Add it now? Windows asks for admin rights.", default=True):
-        print("later: asc sandbox-setup")
-        return
-    try:
-        _add_firewall_rule(SANDBOX_PORT, program)
-    except AscError as error:
-        print(f"not done: {error.message}")
-        print("later: asc sandbox-setup")
+    _section("Sandbox mode needs one firewall rule, so the sandbox's NVDA can reach asc.")
+    question = "Add it now? Windows asks for admin rights."
+    _offer(ask, question, lambda: _add_firewall_rule(SANDBOX_PORT, program), "asc sandbox-setup")
 
 
 def _ask_mode(ask: Ask) -> str:
     while True:
-        mode = _ask_choice(ask, "Mode", setup.MODES)
-        if mode != "sandbox":
-            return mode
-        try:
-            wsb.require_available()
-        except AscError as error:
-            print(f"{error.message}; pick another mode")
-        else:
-            return mode
+        mode = _ask_choice(ask, "How should asc work with NVDA?", setup.MODES)
+        if mode == "sandbox":
+            try:
+                wsb.require_available()
+            except AscError as error:
+                print(f"{_sentence(error)} Pick another mode.")
+                continue
+        if mode == "desktop" and launcher.running():
+            print("Note: desktop mode won't start while another NVDA runs.")
+        if mode == "shared":
+            print("Note: shared mode needs --i-understand at every asc start.")
+            print(f"While it runs, {server.PANIC_KEY} stops asc and releases keys.")
+        return mode
 
 
 def _answers(ask: Ask) -> setup.Answers:
@@ -577,27 +593,24 @@ def _answers(ask: Ask) -> setup.Answers:
     answers = setup.Answers(mode)
     if mode in ("desktop", "sandbox"):
         nvda_dir = None
-        if _ask_choice(ask, "Which NVDA", setup.NVDA_SOURCES) == "folder":
+        if _ask_choice(ask, "Which NVDA should asc run?", setup.NVDA_SOURCES) == "folder":
             nvda_dir = _ask_folder(ask, "Your portable NVDA folder: ", holding="nvda.exe")
         if nvda_dir is None and mode == "desktop":
             _get_nvda_now(ask)
-        punctuation = _ask_choice(ask, "Punctuation NVDA speaks", setup.PUNCTUATION)
+        question = "How much punctuation should NVDA speak?"
+        punctuation = _ask_choice(ask, question, setup.PUNCTUATION)
         answers = replace(answers, nvda_dir=nvda_dir, punctuation=punctuation)
-    if mode == "desktop" and launcher.running():
-        print("note: desktop mode won't start while another NVDA runs")
     if mode == "sandbox":
+        _section("Folders to share with the sandbox, one at a time.")
         share: list[str] = []
-        while folder := _ask_folder(ask, "Folder to share with the sandbox, or Enter when done: "):
+        while folder := _ask_folder(ask, "Folder, or Enter when done: "):
             share.append(folder)
-        window = _ask_choice(ask, "Sandbox window", setup.WINDOWS)
+        window = _ask_choice(ask, "How should the sandbox window appear?", setup.WINDOWS)
         answers = replace(answers, share=tuple(share), window=window)
         _firewall_now(ask)
     if mode in ("watch", "shared"):
-        layout = _ask_choice(ask, "Your NVDA keyboard layout", setup.LAYOUTS)
-        answers = replace(answers, keys_layout=layout)
-    if mode == "shared":
-        print("shared mode needs --i-understand at every asc start.")
-        print(f"While it runs, {server.PANIC_KEY} stops asc and releases keys.")
+        question = "Which keyboard layout does your NVDA use?"
+        answers = replace(answers, keys_layout=_ask_choice(ask, question, setup.LAYOUTS))
     return answers
 
 
@@ -607,22 +620,21 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     if running:
         raise TargetsRunning(running)
     path = config_file()
+    print("asc setup")
     if path.exists() and not replace_without_asking:
         question = f"This replaces your settings in {path}. Continue?"
         if not _ask_yes(ask, question, default=False):
-            print("nothing changed")
+            print("Nothing changed.")
             return 0
-    print("Press Enter to keep a default. Ctrl+C stops without saving.")
-    data = setup.to_data(_answers(ask))
-    print("your settings:")
-    for name, value in {**data.get("defaults", {}), **data["targets"][DEFAULT_TARGET]}.items():
-        print(f"{name} = {edit.show(value)}")
+    print("Answer with a number or a name. Enter keeps the default.")
+    print("Ctrl+C stops without saving.")
+    answers = _answers(ask)
+    _section(*setup.summary_lines(answers), "")
     if not _ask_yes(ask, "Save?", default=True):
-        print("nothing saved")
+        print("Nothing saved.")
         return 0
-    edit.save(path, data)
-    print(f"saved: {path}")
-    print("next: asc start")
+    edit.save(path, setup.to_data(answers))
+    print(f"Settings saved: {os.path.realpath(path)}")
     return 0
 
 
@@ -632,7 +644,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     try:
         return run_setup(input, replace_without_asking=args.yes)
     except (KeyboardInterrupt, EOFError):
-        print("\nstopped, nothing saved")
+        print("\nStopped, nothing saved.")
         return EXIT_INTERRUPTED
 
 

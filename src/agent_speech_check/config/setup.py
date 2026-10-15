@@ -2,9 +2,11 @@
 
 `cli.py` asks the questions, since only it prints. Everything here is pure.
 
-The questions are read by screen readers, so each is one plain line, and the
-default is said in words ("default watch"), never marked with brackets: NVDA
-reads a bracket aloud, or drops it at a low punctuation level.
+Each question comes first, then its numbered choices, then a short prompt, as
+in other CLI setups. The text is read by screen readers, so the default is
+marked with the word "(default)" on its choice, never by a symbol alone like
+`[Y/n]`, an arrow or a star: NVDA reads such a symbol aloud, or drops it at a
+low punctuation level. Around a word, the brackets can go and the word stays.
 """
 
 from __future__ import annotations
@@ -64,8 +66,25 @@ LAYOUTS = _choices(
 )
 
 
-def choice_prompt(label: str, choices: tuple[Choice, ...]) -> str:
-    return f"{label}, 1 to {len(choices)} or a name, default {choices[0].name}: "
+def _columns(rows: list[tuple[str, str]]) -> list[str]:
+    """Two columns, indented, the first padded so the second lines up. Screen
+    readers skip the spaces."""
+    width = max(len(left) for left, _ in rows)
+    return [f"  {left.ljust(width)}  {right}" for left, right in rows]
+
+
+def choice_lines(question: str, choices: tuple[Choice, ...]) -> list[str]:
+    """The question, then its numbered choices, the first marked as the default."""
+    # The colon gives a screen reader a pause between a name and what it means.
+    rows = [
+        (f"{number}  {choice.name}:", f"{choice.about} (default)" if number == 1 else choice.about)
+        for number, choice in enumerate(choices, 1)
+    ]
+    return [question, *_columns(rows)]
+
+
+def choice_prompt(choices: tuple[Choice, ...]) -> str:
+    return f"Choose 1 to {len(choices)}: "
 
 
 def pick(answer: str, choices: tuple[Choice, ...]) -> str | None:
@@ -120,3 +139,20 @@ def to_data(answers: Answers) -> dict[str, Any]:
     if answers.keys_layout != LAYOUTS[0].name:
         data["defaults"] = {"keys_layout": answers.keys_layout}
     return data
+
+
+def summary_lines(answers: Answers) -> list[str]:
+    """Every answer given, in the questions' words, for a last look before saving.
+    Unlike `to_data`, defaults are shown too, so no answer seems lost."""
+    rows = [("Mode:", answers.mode)]
+    if answers.mode in ("desktop", "sandbox"):
+        rows.append(("NVDA:", answers.nvda_dir or NVDA_SOURCES[0].name))
+        rows.append(("Punctuation:", answers.punctuation))
+    if answers.mode == "sandbox":
+        folders = answers.share or ("none",)
+        rows.append(("Shared folders:", folders[0]))
+        rows.extend(("", folder) for folder in folders[1:])
+        rows.append(("Window:", answers.window))
+    if answers.mode in ("watch", "shared"):
+        rows.append(("Keyboard layout:", answers.keys_layout))
+    return ["Your settings:", *_columns(rows)]

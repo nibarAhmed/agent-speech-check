@@ -1,5 +1,6 @@
 """`asc setup` and `asc config`, run in this process with their own state folder."""
 
+import os
 import shutil
 from pathlib import Path
 
@@ -8,6 +9,8 @@ import pytest
 from agent_speech_check.cli import main, run_setup
 from agent_speech_check.config import setup
 from agent_speech_check.config.targets import load
+from agent_speech_check.errors import AscError
+from agent_speech_check.sandbox import wsb
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 
@@ -33,11 +36,43 @@ class Asker:
 # ---------------------------------------------------------------- the questions
 
 
-def test_prompts_say_the_default_in_words() -> None:
-    prompt = setup.choice_prompt("Mode", setup.MODES)
-    assert prompt == "Mode, 1 to 4 or a name, default watch: "
+def test_prompts_are_plain_words() -> None:
+    prompt = setup.choice_prompt(setup.MODES)
+    assert prompt == "Choose 1 to 4: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
+
+
+def test_choice_lines_put_the_question_first() -> None:
+    lines = setup.choice_lines("Which NVDA?", setup.NVDA_SOURCES)
+    assert lines == [
+        "Which NVDA?",
+        "  1  asc:     the portable NVDA asc downloads and keeps (default)",
+        "  2  folder:  a portable NVDA folder of your own",
+    ]
+
+
+def test_summary_shows_every_answer_for_the_mode() -> None:
+    answers = setup.Answers("sandbox", None, "all", ("C:\\a", "C:\\b"), "show")
+    assert setup.summary_lines(answers) == [
+        "Your settings:",
+        "  Mode:            sandbox",
+        "  NVDA:            asc",
+        "  Punctuation:     all",
+        "  Shared folders:  C:\\a",
+        "                   C:\\b",
+        "  Window:          show",
+    ]
+
+
+def test_summary_says_none_and_your_folder() -> None:
+    assert setup.summary_lines(setup.Answers("watch")) == [
+        "Your settings:",
+        "  Mode:             watch",
+        "  Keyboard layout:  desktop",
+    ]
+    assert setup.summary_lines(setup.Answers("desktop", "C:\\n"))[2] == "  NVDA:         C:\\n"
+    assert setup.summary_lines(setup.Answers("sandbox"))[4] == "  Shared folders:  none"
 
 
 @pytest.mark.parametrize(
@@ -82,8 +117,10 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert settings.resolve(None, None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
-    assert "your settings:\nkeys_layout = laptop\nmode = watch\n" in out
-    assert out.endswith("next: asc start\n")
+    assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
+    assert "Your settings:\n  Mode:             watch\n  Keyboard layout:  laptop\n" in out
+    assert out.endswith(f"\nSettings saved: {os.path.realpath(root / 'config.toml')}\n")
+    assert "[" not in out
     assert not any("[" in prompt for prompt in ask.prompts)
 
 
@@ -102,25 +139,39 @@ def test_setup_desktop_declines_the_download(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
-    assert "later: asc get-nvda" in capsys.readouterr().out
+    assert "Run asc get-nvda later." in capsys.readouterr().out
     assert load(root / "config.toml").resolve(None, None).launches_portable
 
 
 def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_setup(Asker("shared", "huh", "", "y"), replace_without_asking=False)
     out = capsys.readouterr().out
-    assert "answer 1 to 2, or a name" in out
-    assert "--i-understand at every asc start" in out
+    assert "Answer 1 to 2, or a name." in out
+    # The warning comes with the choice of mode, before the next question.
+    assert out.index("--i-understand at every asc start") < out.index("keyboard layout")
     assert load(root / "config.toml").resolve(None, None).mode == "shared"
+
+
+def test_setup_without_sandbox_says_how_to_get_it(
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", "")
+    with pytest.raises(AscError) as unavailable:
+        wsb.require_available()
+    run_setup(Asker("sandbox", "", "", "y"), replace_without_asking=False)
+    out = capsys.readouterr().out
+    assert f"({unavailable.value.hint}). Pick another mode." in out
+    assert load(root / "config.toml").resolve(None, None).mode == "watch"
 
 
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
     before = (root / "config.toml").read_text(encoding="utf-8")
+    capsys.readouterr()
     ask = Asker("")
     assert run_setup(ask, replace_without_asking=False) == 0
     assert ask.prompts[0].endswith("Continue? y or n, default n: ")
-    assert "nothing changed" in capsys.readouterr().out
+    assert capsys.readouterr().out == "asc setup\nNothing changed.\n"
     assert (root / "config.toml").read_text(encoding="utf-8") == before
     run_setup(Asker("y", "", "", "y"), replace_without_asking=False)
     assert load(root / "config.toml").resolve(None, None).mode == "watch"
