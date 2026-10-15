@@ -611,12 +611,12 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     if running:
         raise TargetsRunning(running)
     path = config_file()
+    print("asc setup")
     if path.exists() and not replace_without_asking:
         question = f"This replaces your settings in {path}. Continue?"
         if not _ask_yes(ask, question, default=False):
             print("Nothing changed.")
             return 0
-    print("asc setup")
     print("Answer with a number or a name. Enter keeps the default.")
     print("Ctrl+C stops without saving.")
     data = setup.to_data(_answers(ask))

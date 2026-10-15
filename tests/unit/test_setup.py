@@ -44,8 +44,8 @@ def test_choice_lines_put_the_question_first() -> None:
     lines = setup.choice_lines("Which NVDA?", setup.NVDA_SOURCES)
     assert lines == [
         "Which NVDA?",
-        "  1  asc     the portable NVDA asc downloads and keeps",
-        "  2  folder  a portable NVDA folder of your own",
+        "  1  asc:     the portable NVDA asc downloads and keeps",
+        "  2  folder:  a portable NVDA folder of your own",
     ]
 
 
@@ -101,7 +101,7 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert settings.resolve(None, None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
-    assert out.index("How should asc work with NVDA?") < out.index("1  watch")
+    assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
     assert "Your settings:\n  mode         watch\n  keys_layout  laptop\n" in out
     assert out.endswith("Next: asc start\n")
     assert "[" not in out
@@ -139,10 +139,11 @@ def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
     before = (root / "config.toml").read_text(encoding="utf-8")
+    capsys.readouterr()
     ask = Asker("")
     assert run_setup(ask, replace_without_asking=False) == 0
     assert ask.prompts[0].endswith("Continue? y or n, default n: ")
-    assert "Nothing changed." in capsys.readouterr().out
+    assert capsys.readouterr().out == "asc setup\nNothing changed.\n"
     assert (root / "config.toml").read_text(encoding="utf-8") == before
     run_setup(Asker("y", "", "", "y"), replace_without_asking=False)
     assert load(root / "config.toml").resolve(None, None).mode == "watch"

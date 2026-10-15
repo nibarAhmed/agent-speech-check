@@ -75,7 +75,8 @@ def _columns(rows: list[tuple[str, str]]) -> list[str]:
 
 def choice_lines(question: str, choices: tuple[Choice, ...]) -> list[str]:
     """The question, then its numbered choices."""
-    rows = [(f"{number}  {choice.name}", choice.about) for number, choice in enumerate(choices, 1)]
+    # The colon gives a screen reader a pause between a name and what it means.
+    rows = [(f"{number}  {choice.name}:", choice.about) for number, choice in enumerate(choices, 1)]
     return [question, *_columns(rows)]
 
 
