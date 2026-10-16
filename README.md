@@ -51,7 +51,7 @@ Notes:
 - Install one way only. With both, the one earlier on PATH wins.
 - NVDA isn't included. Desktop mode needs `asc get-nvda` once, and sandbox mode downloads the NVDA installer at its first `asc start`.
 - Uninstalling doesn't remove the firewall rule `asc sandbox-setup` adds, since that rule needs admin permissions. Remove it as shown under
-  [`asc sandbox-setup`](docs/cli.md#asc-sandbox-setup---target-name).
+  [`asc sandbox-setup`](docs/cli.md#asc-sandbox-setup).
 
 ## Getting started
 
