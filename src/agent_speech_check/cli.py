@@ -763,8 +763,9 @@ examples:
 Print commands from NVDA's Commands Quick Reference whose name, keys,
 description or section contain every SEARCH word, one per line:
 KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
-NVDA the target uses: for desktop mode the portable copy, otherwise your own
-NVDA (the running nvda.exe, the uninstall registry entry, Program Files).
+NVDA the target uses: its portable copy for a desktop target or a sandbox
+target with nvda_dir, otherwise your own NVDA (the running nvda.exe, the
+uninstall registry entry, Program Files).
 In browse mode, single letters jump to elements; add Shift to go back.
 
 examples:
@@ -779,10 +780,11 @@ examples:
         """\
 Start CMD and wait until NVDA says something matching --title (a regex), or
 anything at all if --title is left out. Prints what NVDA said.
-Default timeout 30000 ms.
+Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
+inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
 
 examples:
-  asc launch "notepad.exe" --title Notepad
+  asc launch "C:\\share\\app\\run.cmd" --title "My App"
   asc launch "py -m myapp" --title "My App" --timeout 60000""",
         cmd_launch,
         _launch_args,

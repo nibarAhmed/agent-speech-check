@@ -2,14 +2,16 @@
 
 A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVDA
 Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
-evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive Windows APIs.
+evidence, is in `docs/protocol.md`; how Windows and NVDA behaved around it is in
+`docs/findings.md`. Windows only: the code and its tests drive Windows APIs.
 
 ## Never
 
 These can break the user's own machine or the project, so no task overrides them.
 
-- Never run `pytest -m e2e` on the host: it would start a second NVDA. Use
-  `scripts/e2e_sandbox.py`.
+- Never set `ASC_E2E_NVDA` on the host: those e2e tests start that NVDA, which replaces the
+  user's running one, and nothing starts it again. Use `scripts/e2e_sandbox.py`. The
+  sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made for the host and leave it alone.
 - Never write the user's own NVDA configuration. `asc` writes only its own copies.
 - Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
   you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox nothing is
@@ -77,7 +79,7 @@ These can break the user's own machine or the project, so no task overrides them
 
 `SECURITY.md` makes these promises to users. Code and reviews must keep them.
 
-- Speech stays in memory unless the user passes `--log-file`. Logs never contain speech text or
+- Speech stays in memory: `asc` never writes it to a file. Logs never contain speech text or
   tokens: log a length or a type, never the text. Command output and error messages may show
   speech (`NoMatch` lists what NVDA said), because they go to the caller, not to a log.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
