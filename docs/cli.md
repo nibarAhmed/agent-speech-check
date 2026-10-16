@@ -2,8 +2,7 @@
 
 `asc` (Agent Speech Check) lets an agent, a person or CI use NVDA the way a
 blind user does: press keys, read what NVDA says as text, and check it. This
-file covers all four modes (watch, desktop, sandbox and shared) and is updated
-with every command change.
+file covers all four modes: watch, desktop, sandbox and shared.
 
 ## Synopsis
 
@@ -59,8 +58,6 @@ asc [--help] [--version] COMMAND [ARGS] [OPTIONS]
 | 7 | Setup needed: NVDA, Windows Sandbox or its firewall rule; the hint says how |
 | 130 | Interrupted (Ctrl+C) |
 
-A unit test checks this table against `src/agent_speech_check/errors.py`.
-
 ## Environment
 
 | Variable | Effect |
@@ -84,11 +81,9 @@ The target's `mode` (or `asc start --mode`) picks one of four.
 
 ### Watch mode
 
-Your own NVDA, installed or portable, as it runs now. `asc` listens and never
-sends keys.
+Your own NVDA, installed or portable, as it runs now. `asc` listens and never sends keys.
 
-- Connect once in NVDA: Tools, Remote Access, Connect; choose to allow this
-  computer to be controlled, enter the host and key `asc start` printed, and
+- Connect once in NVDA: Tools, Remote Access, Connect; choose to allow this computer to be controlled, enter the host and key `asc start` printed, and
   trust the certificate when NVDA asks. The host, key and certificate stay the
   same for the target.
 - `asc` never writes your NVDA config.
@@ -102,13 +97,10 @@ sends keys.
 target's `nvda_dir` or `--nvda-dir`) with its own config folder and
 `nvda.ini`. That NVDA starts unattended, uses the silent synth, mutes its own
 sounds, uses the desktop keyboard layout, and connects to the relay by itself.
-It runs in a Windows job, so it dies with the daemon even after a crash.
-`asc stop` ends it.
+`asc stop` ends it, and it always ends when `asc` stops, even after a crash.
 
 - **Your own portable NVDA** (`--nvda-dir DIR`, or `nvda_dir` in
-  `config.toml`) keeps your settings and add-ons: its `userConfig` folder is
-  copied into the private config folder, and `asc` writes its own settings on
-  top. Your `userConfig` is only read. `asc` replaces your `[remote]` section,
+  `config.toml`) keeps your settings and add-ons: its `userConfig` folder is copied into the private config folder, and `asc` writes its own settings on top. Your `userConfig` is only read. `asc` replaces your `[remote]` section,
   the synth, sound volume, keyboard layout, mode sounds and the welcome and
   update prompts. It leaves out `profileTriggers.ini`, so no profile switches
   on by itself. `--nvda-dir` is not kept; it holds for this start only.
@@ -144,15 +136,11 @@ and your own NVDA keeps running undisturbed.
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
   started with a copy of your config, as in desktop mode. Nothing is
   downloaded. Your NVDA on the host may keep running.
-- The sandbox window goes to the system tray: it is hidden, with no taskbar
-  button, and an "asc sandbox" tray icon shows or hides it (click it, or select
-  it and press Enter). Minimising the shown window sends it back to the tray.
-  `--window taskbar` (or `window = "taskbar"`) keeps it minimised on the
-  taskbar instead, and `--window show` leaves it alone. A visible sandbox
-  window takes focus and catches keys you type. NVDA needs the window's
-  session, so the window can't be closed altogether. If the tray icon can't be
-  added, the window is minimised instead. When the sandbox window opens, focus
-  goes back to the window you were in.
+- The sandbox window is hidden in the system tray; its "asc sandbox" icon
+  shows or hides it. `--window taskbar` (or `window = "taskbar"`) keeps it
+  minimised on the taskbar instead, and `--window show` leaves it open, but a
+  visible window takes focus and catches keys you type. Don't close it: NVDA
+  runs in it.
 - The relay listens only on this computer's Hyper-V Default Switch address
   (looked up at every start), on port 16837 unless the target sets `port`.
 - Folders listed in the target's `share` are mapped read-only into the sandbox
@@ -163,10 +151,8 @@ and your own NVDA keeps running undisturbed.
 `asc` drives your own NVDA, so keys go into your real Windows session. Connect
 your NVDA to `asc` as in watch mode.
 
-- It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every
-  time. It is never kept in `config.toml`.
-- While it runs, the global panic hotkey **Control+Shift+Alt+F12** releases any
-  held keys and stops `asc` at once. If another program owns that hotkey, shared
+- It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
+- While it runs, the global panic hotkey **Control+Shift+Alt+F12** releases any held keys and stops `asc` at once. If another program owns that hotkey, shared
   mode refuses to start (exit 4): it never runs without one.
 - `asc status` shows the panic key.
 
@@ -198,8 +184,7 @@ the one that uses that target.
 
 ### Targets
 
-A target is a named setup: a mode and its settings, with its own daemon and
-folder. Commands use the target named by `--target`, or the `default` setting,
+A target is a named setup: a mode and its settings, with its own daemon and folder. Commands use the target named by `--target`, or the `default` setting,
 or `default`. A target that isn't listed gets the defaults for `--mode` (watch
 if left out). For a listed target, `--mode` must match its `mode`, or
 `asc start` exits 2.
@@ -440,7 +425,7 @@ asc type [--target NAME] [--settle MS] [--timeout MS] TEXT
 ```
 
 Types `TEXT` one character at a time, mapped to keys with this computer's
-keyboard layout (`VkKeyScanW`), then waits for one quiet period at the end.
+keyboard layout, then waits for one quiet period at the end.
 Prints the new speech like `press`.
 
 | Argument or option | Default | Meaning |
@@ -522,11 +507,9 @@ said. Works in every mode.
   `C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
   shared folder. A `.cmd` or `.bat` `CMD` runs in a hidden console, so NVDA
   hears the app it starts, not the batch file's console.
-- Windows keeps a program started in the background behind the window in
-  front, and then NVDA doesn't hear of it. So in desktop, shared and sandbox
-  mode `launch` first sends one mouse input that moves nothing, which lets the
-  program come forward. A target with `keys = false` (always so in watch mode)
-  sends no input, so there the window may stay behind.
+- In desktop, shared and sandbox mode, `launch` brings the new window forward
+  so NVDA hears it. A target with `keys = false` (always so in watch mode)
+  can't, so there the window may stay behind.
 
 ```
 asc launch "C:\share\app\run.cmd" --title "My App"
