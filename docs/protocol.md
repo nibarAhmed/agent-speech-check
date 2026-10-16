@@ -1,14 +1,28 @@
-# NVDA Remote Access protocol, as `asc` uses it
+# NVDA Remote Access protocol as used by `asc`
 
-There are no official docs for this protocol. This file records what was
-**observed** against a real NVDA. Where something comes only from reading NVDA's
-source (facts only, no code copied) and was not seen on the wire, it says "not
-observed".
-`asc` implements from this file. It never copies or imports NVDA code (GPL).
+This is an implementation reference for the subset of NVDA Remote Access used by `asc`. There is no official protocol specification; the details below are based on observation and limited source inspection, not a complete or version-independent contract. `asc` does not copy or import NVDA code.
 
-Unless a section says otherwise, everything here was observed with portable NVDA
-2026.2 inside Windows Sandbox on Windows 11 Pro (build 26200), using a spike
-script (`git show c612585:scripts/spike_remote.py`) and then the e2e suite.
+## Evidence and test baseline
+
+Unless a section says otherwise, wire behavior was observed with portable NVDA 2026.2 in Windows Sandbox on Windows 11 Pro (build 26200), first with a spike script (`git show c612585:scripts/spike_remote.py`) and then with the end-to-end suite.
+
+- **Observed** means seen on the wire or reproduced in the stated test setup.
+- **Source-derived, not observed** means inferred from reading NVDA source, but not seen directly on the wire.
+- **Not tested** means the behavior remains an open question; do not rely on it as a compatibility guarantee.
+
+## Contents
+
+- [Decision: route B](#decision-route-b)
+- [Transport](#transport)
+- [Handshake](#handshake-follower-nvda-to-our-relay)
+- [Messages from NVDA](#messages-from-nvda-follower-to-leader)
+- [Messages to NVDA and key safety](#messages-to-nvda-leader-to-follower)
+- [NVDA configuration](#nvda-config-for-the-follower-nvdaini)
+- [Route A comparison](#route-a-facts-not-used)
+- [Windows Sandbox and foreground behavior](#implementation-notes-windows-sandbox)
+- [Installed and portable NVDA](#installed-and-portable-nvda)
+- [NVDA 2025.1 compatibility finding](#nvda-20251)
+- [Open questions](#open-questions)
 
 ## Decision: route B
 
@@ -197,7 +211,7 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
   `{"type":"error","message":"incorrect_password"}` and closes. Not observed: the
   test connection failed with a TLS error first.
 
-## Windows Sandbox
+## Implementation notes: Windows Sandbox
 
 **Inside the sandbox**
 - It has **no Edge** and **no `notepad.exe`**. `mshta.exe` exists, and NVDA
@@ -256,7 +270,7 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
   the window and the page. Without the still mouse input, every launch after a
   key press went unheard.
 
-## Starting an app: the foreground lock
+### Starting an app: the foreground lock
 
 After recent input, Windows' foreground lock keeps a program started from a
 background process (the daemon) behind the window in front. This is the normal
@@ -286,7 +300,7 @@ NVDA's IO log and a `SetWinEventHook` listener:
 - To confirm the lock is on before trusting a run, check that
   `AllowSetForegroundWindow` fails with error 5.
 
-## Your own NVDA
+## Installed and portable NVDA
 
 - An installed NVDA's `nvda.exe` (`C:\Program Files\NVDA`) carries
   `uiAccess="True"` in its manifest and is byte-identical to

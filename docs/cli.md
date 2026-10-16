@@ -1,8 +1,23 @@
 # `asc` command reference
 
-`asc` (Agent Speech Check) lets an agent, a person or CI use NVDA the way a
-blind user does: press keys, read what NVDA says as text, and check it. This
-file covers all four modes: watch, desktop, sandbox and shared.
+`asc` (Agent Speech Check) lets an agent, a person, or CI use NVDA to inspect an application's accessibility through the speech NVDA actually produces. Use it to press keys, read speech as text, and assert expected output.
+
+This is the complete command and configuration reference. If you're new to `asc`, start with the [README](../README.md) first.
+
+## Quick start
+
+A typical desktop-mode session (`asc setup` offers to download NVDA when it is missing):
+
+```powershell
+asc setup
+asc start --mode desktop
+asc launch "C:\path\to\your-app.exe"
+asc press Tab
+asc press Shift+Tab --expect "expected accessible name"
+asc stop
+```
+
+Use your own app and expected speech. To pick another mode, see [Modes](#modes); the [Commands](#commands) table lists every command.
 
 ## Synopsis
 
