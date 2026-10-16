@@ -111,9 +111,6 @@ problem privately.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). One test fixture, a copy of NVDA's Commands Quick
-Reference, is GPL-2 from NV Access; see
-[tests/fixtures/README.md](tests/fixtures/README.md). It isn't part of the
-installed package.
-
-NVDA is a trademark of NV Access; this project is not affiliated with NV Access.
+MIT, except one test fixture copied from NVDA, which is GPL-2: see
+[tests/fixtures/README.md](tests/fixtures/README.md). NVDA is a trademark of NV
+Access; this project is not affiliated with NV Access.
