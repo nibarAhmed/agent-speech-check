@@ -52,7 +52,8 @@ Paths are TOML literal strings (`'C:\nvda'`). Unknown keys, and values that
 don't fit the tables below, are errors (exit 2) for every command, not only for
 the one that uses that target.
 
-Every command except `asc setup` takes `--target NAME` (default: `default`,
+Every command except `asc setup`, `asc config path` and
+`asc config remove-target` takes `--target NAME` (default: `default`,
 or the `default` setting). A target that isn't listed gets the defaults for
 `--mode` (watch if left out). For a listed target, `--mode` must match its
 `mode`, or `asc start` exits 2.
@@ -134,7 +135,7 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
   the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
-- Exits 3 if there is no portable NVDA, with the hint `asc get-nvda`, or to
+- Exits 7 if there is no portable NVDA, with the hint `asc get-nvda`, or to
   check `--nvda-dir` / `nvda_dir` when you named the folder.
 - `--nvda-setting section.key=value` (repeatable) adds an `nvda.ini` setting,
   for example `--nvda-setting keyboard.speakTypedCharacters=False`, on top of the target's
@@ -358,8 +359,9 @@ Default timeout 30000 ms (the `launch_timeout_ms` setting); on timeout it exits
 1 with what NVDA did say. A command that can't start exits 2. NVDA
 disconnecting or breaking the protocol meanwhile is handled as in `wait` (exit
 3 or 5). Works in every mode. In sandbox mode `CMD` runs inside the sandbox,
-which has no Edge and no Notepad, so start your app from a path under
-`C:\share\`.
+which has no Edge and no Notepad. Your own app must come from a path under
+`C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
+shared folder.
 Windows keeps a program started in the background behind the window in front,
 and then NVDA doesn't hear of it. So in desktop, shared and sandbox mode `launch` first
 sends one mouse input that moves nothing, which lets the program come forward.

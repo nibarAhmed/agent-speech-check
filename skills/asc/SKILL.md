@@ -46,7 +46,7 @@ asc config set share C:\src\app --target app
 asc config set settle_ms 800 --target app      # one target, or [defaults] without --target
 ```
 
-- Every command uses the default target unless you pass `--target NAME`. Once
+- Commands use the default target unless you pass `--target NAME`. Once
   you start a target, pass the same `--target` to every command after it.
 - `asc start --mode M` sets the mode only for a target that isn't in
   `config.toml`. For a listed target with another mode it exits 2: leave out
@@ -99,7 +99,7 @@ asc launch "C:\share\app\run.cmd" --title "My App"
   title there means the app started anyway. In watch mode its window may be
   behind another one, so NVDA said nothing until the user switches to it.
 - Sandbox mode: the command runs inside the sandbox, which has no Edge and no
-  Notepad. The app must come from a folder listed in the target's `share`
+  Notepad. Your own app must come from a folder listed in the target's `share`
   (`asc config set share DIR --target NAME`), seen inside as
   `C:\share\<folder name>`.
 
@@ -120,7 +120,7 @@ asc type "hello"
 - Look commands up instead of guessing: `asc keys heading`, `asc keys report
   title`. In browse mode single letters jump (`h` heading, `k` link, `f` form
   field); add Shift to go back.
-- Desktop mode: `asc get-nvda` must have been run once (exit 3 says so).
+- Desktop mode: `asc get-nvda` must have been run once (exit 7 says so).
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute.
   `asc sandbox-setup` must have been run once (exit 7 says so). It shows an
   admin prompt, so ask the user to run it.
