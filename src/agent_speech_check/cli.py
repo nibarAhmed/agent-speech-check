@@ -613,7 +613,6 @@ def _asking(question: str, choices: tuple[setup.Choice, ...]) -> Callable[[Ask, 
 _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
     field: {
         "nvda_dir": _ask_nvda_dir,
-        "punctuation": _asking("How much punctuation should NVDA speak?", setup.PUNCTUATION),
         "share": _ask_share,
         "window": _asking("How should the sandbox window appear?", setup.WINDOWS),
         "keys_layout": _asking("Which keyboard layout does your NVDA use?", setup.LAYOUTS),

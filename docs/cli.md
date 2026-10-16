@@ -43,7 +43,7 @@ timeout_ms = 8000
 [targets.app]
 mode = "sandbox"
 share = ['C:\src\app']
-nvda_settings = ["speech.symbolLevel=300"]
+nvda_settings = ["keyboard.speakTypedCharacters=False"]
 settle_ms = 800
 ```
 
@@ -136,7 +136,7 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
 - Exits 3 if there is no portable NVDA, with the hint `asc get-nvda`, or to
   check `--nvda-dir` / `nvda_dir` when you named the folder.
 - `--nvda-setting section.key=value` (repeatable) adds an `nvda.ini` setting,
-  for example `--nvda-setting speech.symbolLevel=300`, on top of the target's
+  for example `--nvda-setting keyboard.speakTypedCharacters=False`, on top of the target's
   `nvda_settings`; for the same key, `--nvda-setting` wins. Names are letters,
   digits and `_`, with dots for nested sections. Settings `asc` writes itself
   (`remote`, the synth, sound volume, keyboard layout, the mode sounds) are
@@ -188,8 +188,7 @@ session. Connect your NVDA to `asc` as in watch mode.
 ### `asc setup [--yes]`
 
 Asks a few questions and saves the answers in `config.toml`, for the default
-target: the mode, then for desktop and sandbox which NVDA and how much
-punctuation it speaks, for sandbox the shared folders and window, and for
+target: the mode, then for desktop and sandbox which NVDA, for sandbox the shared folders and window, and for
 watch and shared your NVDA's keyboard layout. It offers to download NVDA for
 desktop mode and to add the sandbox firewall rule, when they are missing.
 

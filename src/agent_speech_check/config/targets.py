@@ -11,7 +11,7 @@
     [targets.app]
     mode = "sandbox"
     share = ['C:\\src\\app']
-    nvda_settings = ["speech.symbolLevel=300"]
+    nvda_settings = ["keyboard.speakTypedCharacters=False"]
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
 `--nvda-setting`, `--nvda-dir` and `--window` are added at `asc start` and are

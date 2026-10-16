@@ -51,15 +51,6 @@ NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
     Choice("folder", "a portable NVDA folder of your own"),
 )
-PUNCTUATION = (
-    Choice("keep", "what that NVDA's own config says", default=True),
-    Choice("none", "no punctuation"),
-    Choice("some", "some punctuation"),
-    Choice("most", "most punctuation"),
-    Choice("all", "all punctuation"),
-)
-# NVDA's speech.symbolLevel values for each punctuation level.
-SYMBOL_LEVELS = {"none": "0", "some": "100", "most": "200", "all": "300"}
 WINDOWS = _choices(
     prefs.WINDOWS,
     {
@@ -75,7 +66,7 @@ LAYOUTS = _choices(
     default="desktop",  # keys_layout's default in prefs
 )
 # Fails at import unless each question has exactly one default.
-for _question in (MODES, NVDA_SOURCES, PUNCTUATION, WINDOWS, LAYOUTS):
+for _question in (MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
     default_of(_question)
 
 
@@ -133,7 +124,6 @@ def yes_no(answer: str, *, default: bool) -> bool | None:
 class Answers:
     mode: str
     nvda_dir: str | None = None
-    punctuation: str = default_of(PUNCTUATION)
     share: tuple[str, ...] = ()
     window: str = default_of(WINDOWS)
     keys_layout: str = default_of(LAYOUTS)
@@ -148,7 +138,6 @@ def _every_answer(labels: dict[str, str]) -> dict[str, str]:
 LABELS = _every_answer(
     {
         "nvda_dir": "NVDA",
-        "punctuation": "Punctuation",
         "share": "Shared folders",
         "window": "Window",
         "keys_layout": "Keyboard layout",
@@ -166,8 +155,8 @@ def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...
 QUESTIONS = _per_mode(
     {
         "watch": ("keys_layout",),
-        "desktop": ("nvda_dir", "punctuation"),
-        "sandbox": ("nvda_dir", "punctuation", "share", "window"),
+        "desktop": ("nvda_dir",),
+        "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
     }
 )
@@ -183,8 +172,6 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["share"] = list(answers.share)
     if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
-    if answers.punctuation in SYMBOL_LEVELS:
-        table["nvda_settings"] = [f"speech.symbolLevel={SYMBOL_LEVELS[answers.punctuation]}"]
     data: dict[str, Any] = {"targets": {DEFAULT_TARGET: table}}
     if answers.keys_layout != default_of(LAYOUTS):
         data["defaults"] = {"keys_layout": answers.keys_layout}
