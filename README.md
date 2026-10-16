@@ -22,7 +22,7 @@ commands and [docs/protocol.md](docs/protocol.md) for how `asc` talks to NVDA.
 ## Modes
 
 - **watch**: listen to your own NVDA while you drive. Never sends keys.
-- **desktop**: asc runs its own silent portable NVDA on the desktop. Only while no other NVDA runs.
+- **desktop**: `asc` runs its own silent portable NVDA on the desktop. Only while no other NVDA runs.
 - **sandbox**: `asc` runs its own NVDA inside Windows Sandbox, so your NVDA is never disturbed.
 - **shared**: drive your own NVDA, only with an explicit opt-in and a panic hotkey.
 
@@ -55,7 +55,7 @@ Notes:
 
 ## Getting started
 
-1. Run `asc setup` to set your preferences.
+1. Run `asc setup` to pick a mode and set your preferences.
 2. Run `asc start` to start `asc` in that mode. In watch mode it prints a host
    and key: connect your NVDA to them once (Tools, Remote Access, Connect).
 3. Run `asc status` to check that NVDA is connected.
@@ -90,7 +90,7 @@ uv run poe check     # everything: dashes, spelling, format, lint, types, dead c
 uv run poe fast      # the quick loop: everything but deps and the slow tests
 ```
 
-- **End-to-end tests** runs NVDA inside Windows Sandbox, so your own
+- **End-to-end tests** run NVDA inside Windows Sandbox, so your own
   NVDA is never touched: `uv run python scripts/e2e_sandbox.py`. Never run
   `pytest -m e2e` directly: it would start a second NVDA.
 - **The installer:** `uv run python scripts/build_installer.py` builds the MSI into

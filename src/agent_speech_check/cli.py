@@ -763,8 +763,9 @@ examples:
 Print commands from NVDA's Commands Quick Reference whose name, keys,
 description or section contain every SEARCH word, one per line:
 KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
-NVDA the target uses: for desktop mode the portable copy, otherwise your own
-NVDA (the running nvda.exe, the uninstall registry entry, Program Files).
+NVDA the target uses: its portable copy for a desktop target or a sandbox
+target with nvda_dir, otherwise your own NVDA (the running nvda.exe, the
+uninstall registry entry, Program Files).
 In browse mode, single letters jump to elements; add Shift to go back.
 
 examples:
