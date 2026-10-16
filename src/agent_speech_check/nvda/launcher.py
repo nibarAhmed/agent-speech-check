@@ -34,7 +34,7 @@ VERSION = "2026.2"
 # What an NVDA release version looks like: 2026.2, 2025.1.1.
 VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
 # Remote Access is built in from 2025.1, but 2025.1 forwards no speech without an
-# audio device (docs/protocol.md). 2026.2 is the version tested; those between are not.
+# audio device (docs/findings.md). 2026.2 is the version tested; those between are not.
 MIN_VERSION = (2026, 2)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60

@@ -102,7 +102,7 @@ sounds, uses the desktop keyboard layout, and connects to the relay by itself.
   update prompts. It leaves out `profileTriggers.ini`, so no profile switches
   on by itself.
 - It needs NVDA 2026.2 or later. Remote Access is built in from 2025.1, but
-  2025.1 forwards no speech without an audio device (see `docs/protocol.md`).
+  2025.1 forwards no speech without an audio device (see `docs/findings.md`).
   An older NVDA exits 7. An `nvda.ini` that `asc` can't read exits 2 and names
   the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second

@@ -1,4 +1,4 @@
-"""The relay NVDA connects out to (route B in `docs/protocol.md`).
+"""The relay NVDA connects out to (see `docs/protocol.md`).
 
 `asc` is both the relay and the leader. NVDA, the follower, connects to
 127.0.0.1 and joins the channel with the target's key. Before it joins it makes

@@ -1,8 +1,8 @@
 """The NVDA Remote Access wire format, as observed in `docs/protocol.md`.
 
 Pure functions, no I/O: `parse_message` turns one received line into a frozen
-dataclass, and the `encode_*` functions build the lines `asc` sends. Under
-route B `asc` is the relay and the leader, and NVDA is the follower.
+dataclass, and the `encode_*` functions build the lines `asc` sends. `asc`
+is the relay and the leader, and NVDA is the follower.
 
 An unknown `type` becomes `Unknown`, so a newer NVDA doesn't break `asc`.
 Anything else that doesn't fit raises `ProtocolError`.

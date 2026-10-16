@@ -2,7 +2,8 @@
 
 A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVDA
 Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
-evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive Windows APIs.
+evidence, is in `docs/protocol.md`; how Windows and NVDA behaved around it is in
+`docs/findings.md`. Windows only: the code and its tests drive Windows APIs.
 
 ## Never
 

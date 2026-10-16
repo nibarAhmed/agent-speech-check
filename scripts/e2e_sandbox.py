@@ -22,7 +22,7 @@ on the host. The icon shows and hides it; pass --show to keep it visible.
 Usage: uv run python scripts/e2e_sandbox.py [--show] [--nvda-version V] [pytest args...]
 
 --nvda-version tests another NVDA than the pinned one, for example 2025.1,
-the oldest with Remote Access (see docs/protocol.md for how it fares).
+the oldest with Remote Access (see docs/findings.md for how it fares).
 """
 
 from __future__ import annotations

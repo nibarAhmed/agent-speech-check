@@ -21,7 +21,7 @@ Replace the app path and expected speech with values from your application. `asc
 ## Requirements
 
 - Windows 11.
-- NVDA 2026.2 or later. Earlier versions with Remote Access built in (2025.1 onwards) send no speech when there is no audio device ([details](docs/protocol.md#nvda-20251)).
+- NVDA 2026.2 or later. Earlier versions with Remote Access built in (2025.1 onwards) send no speech when there is no audio device ([details](docs/findings.md#nvda-20251)).
 - For sandbox mode: Windows 11 24H2 or later (for the `wsb` command), Pro, Enterprise, or Education, with Windows Sandbox turned on, plus the one-time `asc sandbox-setup` step.
 
 ## Choose a mode
@@ -90,7 +90,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
 ## Documentation
 
 - [CLI reference](docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
-- [NVDA Remote Access protocol](docs/protocol.md): observed wire behavior, compatibility notes, and implementation findings.
+- [NVDA Remote Access protocol](docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
+- [Findings](docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
 - [Agent skill](skills/asc/SKILL.md): the recommended workflow for coding agents.
 
 ## License
