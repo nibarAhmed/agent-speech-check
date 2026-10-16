@@ -1,7 +1,7 @@
 # `asc` command reference
 
-Covers watch, desktop, sandbox and shared mode. This file is updated with every
-command change.
+Covers all four modes: watch, desktop, sandbox and shared. This file is updated
+with every command change.
 
 `asc --help` lists the commands and `asc --version` prints the version.
 Results go to stdout and errors to stderr. An error prints `error: <message>`
@@ -48,13 +48,14 @@ settle_ms = 800
 ```
 
 The file holds only what was set: a missing key means the built-in default.
-Paths are TOML literal strings (`'C:\nvda'`). Unknown keys are errors (exit 2),
-and so is anything below that doesn't fit, for every command, not only the one
-that uses the target.
+Paths are TOML literal strings (`'C:\nvda'`). Unknown keys, and values that
+don't fit the tables below, are errors (exit 2) for every command, not only for
+the one that uses that target.
 
 Every command except `asc setup` takes `--target NAME` (default: `default`,
-or the `default` setting). A target that isn't listed gets the defaults for `--mode` (watch if
-left out).
+or the `default` setting). A target that isn't listed gets the defaults for
+`--mode` (watch if left out). For a listed target, `--mode` must match its
+`mode`, or `asc start` exits 2.
 
 **Global settings**
 
@@ -188,9 +189,15 @@ session. Connect your NVDA to `asc` as in watch mode.
 ### `asc setup [--yes]`
 
 Asks a few questions and saves the answers in `config.toml`, for the default
-target: the mode, then for desktop and sandbox which NVDA, for sandbox the shared folders and window, and for
-watch and shared your NVDA's keyboard layout. It offers to download NVDA for
-desktop mode and to add the sandbox firewall rule, when they are missing.
+target:
+
+1. The mode.
+2. Desktop and sandbox mode: which NVDA.
+3. Sandbox mode: the shared folders and the window.
+4. Watch and shared mode: your NVDA's keyboard layout.
+
+When they are missing, it offers to download NVDA for desktop mode and to add
+the sandbox firewall rule.
 
 - Each question comes first, then its numbered choices, with `(default)` after
   the default one, then the prompt (`Choose 1 to 4:`). Enter keeps the
@@ -240,8 +247,8 @@ Releases any held keys, stops the daemon and forgets the speech.
 A daemon that is there but doesn't answer (an older asc, or one that is stuck)
 still counts as running: `asc start`, `asc setup` and `asc config remove-target`
 refuse with exit 4. `asc stop` then ends its process, along with its NVDA or
-sandbox, and so it does for a daemon still there 30 s after agreeing to stop.
-It can't release held keys that way. If Windows won't let it end the process,
+sandbox. It does the same to a daemon that agreed to stop but is still there
+30 s later. It can't release held keys that way. If Windows won't let it end the process,
 it exits 4 and keeps the state file.
 
 ### `asc status`
@@ -317,7 +324,7 @@ or `(nothing said)`.
 Types `TEXT` one character at a time, mapped to keys with this computer's
 keyboard layout (`VkKeyScanW`). Newlines become Enter and tabs become Tab.
 Every character is checked first: if any can't be typed (for example emoji),
-it exits 2 listing them and sends nothing. NVDA gets one quiet period at the
+it exits 2, lists them and sends nothing. It waits for one quiet period at the
 end. Prints the new speech like `press`. Watch mode refuses with exit 4.
 
 ### `asc keys [SEARCH ...] [--layout desktop|laptop] [--nvda-dir DIR] [--lang L] [--braille | --no-braille]`
@@ -347,10 +354,12 @@ h  heading
 
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA said.
-Default timeout 30000 ms (the `launch_timeout_ms` setting); on timeout it exits 1 with what NVDA did say. A
-command that can't start exits 2. NVDA disconnecting or breaking the protocol
-meanwhile is handled as in `wait` (exit 3 or 5). Works in watch, desktop and sandbox mode; in
-sandbox mode `CMD` runs inside the sandbox, so use paths under `C:\share\`.
+Default timeout 30000 ms (the `launch_timeout_ms` setting); on timeout it exits
+1 with what NVDA did say. A command that can't start exits 2. NVDA
+disconnecting or breaking the protocol meanwhile is handled as in `wait` (exit
+3 or 5). Works in every mode. In sandbox mode `CMD` runs inside the sandbox,
+which has no Edge and no Notepad, so start your app from a path under
+`C:\share\`.
 Windows keeps a program started in the background behind the window in front,
 and then NVDA doesn't hear of it. So in desktop, shared and sandbox mode `launch` first
 sends one mouse input that moves nothing, which lets the program come forward.

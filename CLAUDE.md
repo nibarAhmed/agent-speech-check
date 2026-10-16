@@ -77,7 +77,7 @@ These can break the user's own machine or the project, so no task overrides them
 
 `SECURITY.md` makes these promises to users. Code and reviews must keep them.
 
-- Speech stays in memory unless the user passes `--log-file`. Logs never contain speech text or
+- Speech stays in memory: `asc` never writes it to a file. Logs never contain speech text or
   tokens: log a length or a type, never the text. Command output and error messages may show
   speech (`NoMatch` lists what NVDA said), because they go to the caller, not to a log.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.

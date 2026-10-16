@@ -11,7 +11,7 @@ reproduce it and what an attacker could do with it.
 
 ## What `asc` promises
 
-- Speech stays in memory unless you pass `--log-file`. Logs never contain speech text or tokens.
+- Speech stays in memory: `asc` never writes it to a file. Logs never contain speech text or tokens.
 - The daemon's control port listens on 127.0.0.1 only and needs a random token.
 - Watch mode never sends keys; the daemon enforces this.
 - `asc` never writes your own NVDA configuration.

@@ -227,6 +227,13 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
   logging off"). Wait until `vmmemWindowsSandbox` has exited before starting
   another sandbox.
 
+**Network**
+- With networking on, the sandbox sits on the Hyper-V Default Switch subnet
+  (for example 172.24.82.2/20), and its gateway is the host's Default Switch
+  address (172.24.80.1). NVDA inside reaches a relay bound to that address once
+  one inbound firewall rule allows it (`asc sandbox-setup`). No firewall dialog
+  appears with the rule in place.
+
 **The sandbox window and focus**
 - A visible sandbox window takes keyboard focus on the host: keys typed on the
   host (Alt+Tab) reached the sandbox and opened its task switcher in the middle
@@ -278,13 +285,6 @@ NVDA's IO log and a `SetWinEventHook` listener:
   `asc launch` when the target may send input.
 - To confirm the lock is on before trusting a run, check that
   `AllowSetForegroundWindow` fails with error 5.
-
-**Network**
-- With networking on, the sandbox sits on the Hyper-V Default Switch subnet
-  (for example 172.24.82.2/20), and its gateway is the host's Default Switch
-  address (172.24.80.1). NVDA inside reaches a relay bound to that address once
-  one inbound firewall rule allows it (`asc sandbox-setup`). No firewall dialog
-  appears with the rule in place.
 
 ## Your own NVDA
 

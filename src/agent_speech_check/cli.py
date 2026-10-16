@@ -779,10 +779,11 @@ examples:
         """\
 Start CMD and wait until NVDA says something matching --title (a regex), or
 anything at all if --title is left out. Prints what NVDA said.
-Default timeout 30000 ms.
+Default timeout 30000 ms. In sandbox mode CMD runs inside the sandbox, which
+has no Notepad or Edge: start your app from C:\\share\\<folder>.
 
 examples:
-  asc launch "notepad.exe" --title Notepad
+  asc launch "C:\\share\\app\\run.cmd" --title "My App"
   asc launch "py -m myapp" --title "My App" --timeout 60000""",
         cmd_launch,
         _launch_args,
