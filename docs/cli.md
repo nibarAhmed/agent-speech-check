@@ -7,9 +7,12 @@ This is the complete command and configuration reference. If you're new to `asc`
 ## Usage
 
 ```
-asc [--help] [--version] COMMAND [ARGS] [OPTIONS]
+asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 ```
 
+- In the synopses, `[X]` is optional, `UPPERCASE` is a value you supply,
+  `{a,b}` means pick one, `A | B` means one or the other, and `X ...` can
+  repeat. Options may go before or after the arguments.
 - `asc --help` lists the commands, `asc COMMAND --help` describes one, and
   `asc --version` prints the version.
 - Results go to stdout and errors to stderr. An error prints
