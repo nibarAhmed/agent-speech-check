@@ -68,12 +68,11 @@ def test_summary_follows_the_questions_each_mode_asks() -> None:
 
 
 def test_summary_shows_every_answer_for_the_mode() -> None:
-    answers = setup.Answers("sandbox", None, "all", ("C:\\a", "C:\\b"), "show")
+    answers = setup.Answers("sandbox", None, ("C:\\a", "C:\\b"), "show")
     assert setup.summary_lines(answers) == [
         "Your settings:",
         "  Mode:            sandbox",
         "  NVDA:            asc",
-        "  Punctuation:     all",
         "  Shared folders:  C:\\a",
         "                   C:\\b",
         "  Window:          show",
@@ -86,8 +85,8 @@ def test_summary_says_none_and_your_folder() -> None:
         "  Mode:             watch",
         "  Keyboard layout:  desktop",
     ]
-    assert setup.summary_lines(setup.Answers("desktop", "C:\\n"))[2] == "  NVDA:         C:\\n"
-    assert setup.summary_lines(setup.Answers("sandbox"))[4] == "  Shared folders:  none"
+    assert setup.summary_lines(setup.Answers("desktop", "C:\\n"))[2] == "  NVDA:  C:\\n"
+    assert setup.summary_lines(setup.Answers("sandbox"))[3] == "  Shared folders:  none"
 
 
 @pytest.mark.parametrize(
@@ -107,7 +106,7 @@ def test_yes_no(answer: str, result: bool | None) -> None:
 
 def test_to_data_keeps_only_choices() -> None:
     assert setup.to_data(setup.Answers("watch")) == {"targets": {"default": {"mode": "watch"}}}
-    answers = setup.Answers("sandbox", "C:\\n", "all", ("C:\\a",), "show", "laptop")
+    answers = setup.Answers("sandbox", "C:\\n", ("C:\\a",), "show", "laptop")
     assert setup.to_data(answers) == {
         "targets": {
             "default": {
@@ -115,7 +114,6 @@ def test_to_data_keeps_only_choices() -> None:
                 "nvda_dir": "C:\\n",
                 "share": ["C:\\a"],
                 "window": "show",
-                "nvda_settings": ["speech.symbolLevel=300"],
             }
         },
         "defaults": {"keys_layout": "laptop"},
@@ -143,11 +141,11 @@ def test_setup_desktop_with_own_nvda(root: Path, tmp_path: Path) -> None:
     own = tmp_path / "my nvda"
     own.mkdir()
     (own / "nvda.exe").write_bytes(b"")
-    ask = Asker("desktop", "2", str(tmp_path / "nope"), str(tmp_path), str(own), "most", "y")
+    ask = Asker("desktop", "2", str(tmp_path / "nope"), str(tmp_path), str(own), "y")
     run_setup(ask, replace_without_asking=False)
     target = load(root / "config.toml").resolve(None, None)
     assert target.nvda_dir == str(own)
-    assert [s.text for s in target.settings] == ["speech.symbolLevel=200"]
+    assert target.settings == ()
 
 
 def test_setup_desktop_declines_the_download(

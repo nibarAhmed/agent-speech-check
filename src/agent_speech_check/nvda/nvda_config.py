@@ -8,7 +8,7 @@ follower (see `docs/protocol.md`):
 - the browse/focus mode sounds on, so the daemon can track the mode
 - Remote Access set to auto-connect to the relay, with its cert pre-trusted
 
-`--nvda-setting section.key=value` adds anything else (verbosity, punctuation).
+`--nvda-setting section.key=value` adds anything else (verbosity, for example).
 Keys `asc` writes itself are refused, so a setting can never break the above.
 The ini is built as data and written by configobj, which NVDA reads it with, so
 `--nvda-setting` text is never pasted in raw and every value is quoted as NVDA needs.

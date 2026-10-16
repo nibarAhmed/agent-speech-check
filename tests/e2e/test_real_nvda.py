@@ -17,7 +17,6 @@ from pathlib import Path
 import pytest
 from tests.integration.conftest import free_port, run_asc
 
-from agent_speech_check.config.setup import SYMBOL_LEVELS
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
 from agent_speech_check.remote.relay import fingerprint
 from agent_speech_check.windows import winapi
@@ -188,43 +187,3 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert stopped.returncode == 0
     assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()
-
-
-FIELD = """<!doctype html><html><head><title>asc field</title></head><body>
-<label>Name <input type="text" value="Wow!"></label>
-</body></html>
-"""
-
-
-# keep: NVDA's own default (some), which doesn't say "!" either, so "all" is seen to change it.
-@pytest.mark.parametrize(("level", "bang"), [("keep", False), ("all", True), ("none", False)])
-def test_stored_punctuation_level(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, level: str, bang: bool
-) -> None:
-    """The values `asc setup` stores for a punctuation level are the ones NVDA reads."""
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    fetched = run_asc("get-nvda", "--installer", os.environ["ASC_E2E_INSTALLER"], timeout=300)
-    assert fetched.returncode == 0, fetched.stderr
-    assert run_asc("config", "set", "mode", "desktop", "--target", "p").returncode == 0
-    if level != "keep":
-        setting = f"speech.symbolLevel={SYMBOL_LEVELS[level]}"
-        assert run_asc("config", "set", "nvda_settings", setting, "--target", "p").returncode == 0
-    started = run_asc("start", "--target", "p")
-    assert started.returncode == 0, started.stderr
-    try:
-        wait_connected("p")
-        page = tmp_path / "field.html"
-        page.write_text(FIELD, encoding="utf-8")
-        launched = run_asc(
-            "launch", f'mshta.exe "{page}"', "--title", "asc field", "--timeout", "10000",
-            "--target", "p",
-        )  # fmt: skip
-        # After earlier tests' keys Windows limits who takes the focus: launch
-        # must still bring the app to the front, or NVDA hears nothing.
-        assert launched.returncode == 0, launched.stderr
-        field = run_asc("press", "Tab", "--expect", "Wow", "--settle", "800", "--target", "p")
-        assert field.returncode == 0, field.stdout + field.stderr
-        assert ("bang" in field.stdout.lower()) == bang, field.stdout
-    finally:
-        subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
-        run_asc("stop", "--target", "p")
