@@ -19,7 +19,8 @@ asc stop
 Replace the app path and expected speech with values from your application. `asc press` prints what NVDA said; `--expect` makes the command fail when the expected text is not present. See the [CLI reference](docs/cli.md) for exact behavior and options.
 
 ## Requirements
-- Windows 11 .
+
+- Windows 11.
 - NVDA 2026.2 or later. Earlier versions with Remote Access built in (2025.1 onwards) send no speech when there is no audio device ([details](docs/protocol.md#nvda-20251)).
 - For sandbox mode: Windows 11 24H2 or later (for the `wsb` command), Pro, Enterprise, or Education, with Windows Sandbox turned on, plus the one-time `asc sandbox-setup` step.
 
