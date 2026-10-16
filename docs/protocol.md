@@ -10,20 +10,6 @@ Unless a section says otherwise, wire behavior was observed with portable NVDA 2
 - **Source-derived, not observed** means inferred from reading NVDA source, but not seen directly on the wire.
 - **Not tested** means the behavior remains an open question; do not rely on it as a compatibility guarantee.
 
-## Contents
-
-- [Decision: route B](#decision-route-b)
-- [Transport](#transport)
-- [Handshake](#handshake-follower-nvda-to-our-relay)
-- [Messages from NVDA](#messages-from-nvda-follower-to-leader)
-- [Messages to NVDA and key safety](#messages-to-nvda-leader-to-follower)
-- [NVDA configuration](#nvda-config-for-the-follower-nvdaini)
-- [Route A comparison](#route-a-facts-not-used)
-- [Windows Sandbox and foreground behavior](#implementation-notes-windows-sandbox)
-- [Installed and portable NVDA](#installed-and-portable-nvda)
-- [NVDA 2025.1 compatibility finding](#nvda-20251)
-- [Open questions](#open-questions)
-
 ## Decision: route B
 
 `asc` hosts the relay and NVDA connects **out** to it as the follower.
@@ -264,11 +250,9 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
 - **An app started through `wsb exec` doesn't get the foreground**, because of
   Windows' focus-stealing rules: `mshta` ran, but focus stayed on "Program
   Manager" and NVDA said nothing. `asc launch` therefore starts the app through
-  a PowerShell script in the session. It first sends the still mouse input (see
-  the next section), then waits for the new window and brings it forward
-  (`AttachThreadInput`, then `SetForegroundWindow`). With that, NVDA announces
-  the window and the page. Without the still mouse input, every launch after a
-  key press went unheard.
+  a PowerShell script in the session, which sends the still mouse input described
+  in the next section, then waits for the new window and brings it forward
+  (`AttachThreadInput`, then `SetForegroundWindow`).
 
 ### Starting an app: the foreground lock
 

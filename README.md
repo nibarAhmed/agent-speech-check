@@ -6,9 +6,9 @@ Agents can inspect a page's HTML and accessibility tree, but that does not tell 
 
 Use it from a terminal, an AI coding agent, or CI on Windows.
 
-## What you can test
+## Example
 
-```powershell
+```shell
 asc start --mode desktop
 asc launch "C:\path\to\your-app.exe"
 asc press Tab
@@ -19,8 +19,7 @@ asc stop
 Replace the app path and expected speech with values from your application. `asc press` prints what NVDA said; `--expect` makes the command fail when the expected text is not present. See the [CLI reference](docs/cli.md) for exact behavior and options.
 
 ## Requirements
-
-- Windows 11 (the tested environment).
+- Windows 11 .
 - NVDA 2026.2 or later. Earlier versions with Remote Access built in (2025.1 onwards) send no speech when there is no audio device ([details](docs/protocol.md#nvda-20251)).
 - For sandbox mode: Windows 11 24H2 or later (for the `wsb` command), Pro, Enterprise, or Education, with Windows Sandbox turned on, plus the one-time `asc sandbox-setup` step.
 
@@ -39,7 +38,7 @@ If you are unsure, prefer **sandbox** for isolation or **desktop** when you want
 
 With Python and [`uv`](https://docs.astral.sh/uv/) installed, run this from the root of a clone of this repository:
 
-```powershell
+```shell
 uv tool install .
 ```
 
@@ -47,16 +46,15 @@ If `asc` is not found, check that `uv`'s tool bin directory is on `PATH`, then o
 
 ## Get started
 
-1. Open PowerShell in the environment where you want to run tests.
-2. Run `asc setup` to pick a mode and create the configuration. It offers to download NVDA for desktop mode and to add the firewall rule sandbox mode needs (that step asks for admin). You can change settings later with `asc config`.
-3. Start a session, launch your app, and press keys, as in [What you can test](#what-you-can-test). Use `asc speech` to see everything NVDA said so far.
-4. Run `asc stop` when you're done.
+1. Run `asc setup` to pick a mode and create the configuration. It offers to download NVDA for desktop mode and to add the firewall rule sandbox mode needs (that step asks for admin). You can change settings later with `asc config`.
+2. Start a session, launch your app, and press keys, as in the [Example](#example). Use `asc speech` to see everything NVDA said so far. The first sandbox start takes about a minute.
+3. Run `asc stop` when you're done.
 
-The first sandbox start may take about a minute because it prepares the environment. Use `asc status` to check the connection and `asc COMMAND --help` for command-specific options.
+Use `asc status` to check the connection and `asc COMMAND --help` for a command's options.
 
 ## AI agent skill
 
-The repository includes an [agent skill](skills/asc/SKILL.md) for Claude Code and Codex, so the agent knows how to start a session, inspect speech, handle failures, and stop cleanly. The skill is a workflow guide; the [CLI reference](docs/cli.md) remains the source of truth for command syntax.
+The repository includes an [agent skill](skills/asc/SKILL.md) for Claude Code and Codex, so the agent knows how to start a session, inspect speech, handle failures, and stop cleanly.
 
 To install it manually for all your projects, copy the `skills/asc` folder to:
 
@@ -69,7 +67,7 @@ Copy it again after it changes.
 
 You need Windows: `asc` and its tests drive Windows APIs. With [`uv`](https://docs.astral.sh/uv/) installed, in a clone of this repository:
 
-```powershell
+```shell
 uv sync
 uv run poe check     # everything: dashes, spelling, format, lint, types, dead code, deps, tests
 uv run poe fast      # the quick loop: everything but deps and the slow tests
