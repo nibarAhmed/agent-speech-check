@@ -8,7 +8,7 @@ Unless a section says otherwise, wire behavior was observed with portable NVDA 2
 
 - **Observed** means seen on the wire or reproduced in the stated test setup.
 - **Source-derived, not observed** means inferred from reading NVDA source, but not seen directly on the wire.
-- **Not tested** means the behavior remains an open question; do not rely on it as a compatibility guarantee.
+- **Not tested** means the behavior is unknown; do not rely on it as a compatibility guarantee.
 
 ## Terms
 
@@ -224,11 +224,5 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
 - 2025.1, the first with Remote Access built in, joins the relay but forwards
   no speech when the machine has no audio device. Details in
   [findings.md](findings.md#nvda-20251).
-- Versions between 2025.1 and 2026.2 are not tested.
-
-## Open questions
-
-- The exact shape of a server `error` message (not seen on the wire).
-- The `tone` message (not triggered).
-- 2025.1 with an audio device, and versions between 2025.1 and 2026.2 (not
-  tested).
+- 2025.1 with an audio device, and versions between 2025.1 and 2026.2, are not
+  tested.
