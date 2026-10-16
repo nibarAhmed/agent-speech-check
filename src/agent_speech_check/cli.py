@@ -779,8 +779,8 @@ examples:
         """\
 Start CMD and wait until NVDA says something matching --title (a regex), or
 anything at all if --title is left out. Prints what NVDA said.
-Default timeout 30000 ms. In sandbox mode CMD runs inside the sandbox, which
-has no Notepad or Edge: start your own app from C:\\share\\<folder>.
+Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
+inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
 
 examples:
   asc launch "C:\\share\\app\\run.cmd" --title "My App"

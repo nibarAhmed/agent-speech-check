@@ -136,7 +136,8 @@ It runs in a Windows job, so it dies with the daemon even after a crash.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
 - Exits 7 if there is no portable NVDA, with the hint `asc get-nvda`, or to
-  check `--nvda-dir` / `nvda_dir` when you named the folder.
+  check `--nvda-dir` / `nvda_dir` when you named the folder. With
+  `launch = false` (below) no portable NVDA is needed.
 - `--nvda-setting section.key=value` (repeatable) adds an `nvda.ini` setting,
   for example `--nvda-setting keyboard.speakTypedCharacters=False`, on top of the target's
   `nvda_settings`; for the same key, `--nvda-setting` wins. Names are letters,
@@ -358,8 +359,8 @@ anything at all if `--title` is left out, then for quiet. Prints what NVDA said.
 Default timeout 30000 ms (the `launch_timeout_ms` setting); on timeout it exits
 1 with what NVDA did say. A command that can't start exits 2. NVDA
 disconnecting or breaking the protocol meanwhile is handled as in `wait` (exit
-3 or 5). Works in every mode. In sandbox mode `CMD` runs inside the sandbox,
-which has no Edge and no Notepad. Your own app must come from a path under
+3 or 5). Works in every mode. In sandbox mode (unless `launch = false`) `CMD`
+runs inside the sandbox, which has no Edge and no Notepad. Your own app must come from a path under
 `C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
 shared folder.
 Windows keeps a program started in the background behind the window in front,

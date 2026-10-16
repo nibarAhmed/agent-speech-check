@@ -124,6 +124,9 @@ asc type "hello"
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute.
   `asc sandbox-setup` must have been run once (exit 7 says so). It shows an
   admin prompt, so ask the user to run it.
+- A target with `launch = false` (NVDA started elsewhere, which connects by
+  itself) needs neither: no portable NVDA and no sandbox, and `launch` runs
+  the command on this computer.
 - Shared mode needs `asc start --mode shared --i-understand` every time. Tell
   the user the panic key, Control+Shift+Alt+F12, before sending anything.
 
