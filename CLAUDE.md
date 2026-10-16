@@ -8,8 +8,9 @@ evidence, is in `docs/protocol.md`. Windows only: the code and its tests drive W
 
 These can break the user's own machine or the project, so no task overrides them.
 
-- Never run `pytest -m e2e` on the host: it would replace the user's running NVDA
-  with the test's copy. Use `scripts/e2e_sandbox.py`.
+- Never set `ASC_E2E_NVDA` on the host: those e2e tests start that NVDA, which replaces the
+  user's running one, and nothing starts it again. Use `scripts/e2e_sandbox.py`. The
+  sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made for the host and leave it alone.
 - Never write the user's own NVDA configuration. `asc` writes only its own copies.
 - Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
   you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox nothing is

@@ -74,7 +74,7 @@ uv run poe check     # everything: dashes, spelling, format, lint, types, dead c
 uv run poe fast      # the quick loop: everything but deps and the slow tests
 ```
 
-- **End-to-end tests** run NVDA inside Windows Sandbox, so your own NVDA is never touched: `uv run python scripts/e2e_sandbox.py`. Never run `pytest -m e2e` directly: it would replace your running NVDA with the test's copy.
+- **End-to-end tests** run NVDA inside Windows Sandbox, so your own NVDA is never touched: `uv run python scripts/e2e_sandbox.py`. Never set `ASC_E2E_NVDA` on your own machine: those tests start that NVDA, which replaces your running one, and nothing starts yours again. Without it, `pytest -m e2e` skips them. The sandbox-mode tests (`ASC_E2E_SANDBOX=1`) run on the host and leave your NVDA alone.
 - **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
