@@ -215,7 +215,7 @@ def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
     path.write_text(json.dumps({**current, "pid": 4, "started": time.time()}), encoding="utf-8")
     result = run_asc("stop")
     assert result.returncode == 4, result.stderr
-    assert 'cannot end the asc daemon for target "w"' in result.stderr
+    assert 'cannot end the asc daemon for target "w" (pid 4)' in result.stderr
     assert path.exists()
 
 
@@ -230,7 +230,7 @@ def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> N
     result = run_asc("_stop_all")
     assert result.returncode == 4, result.stderr
     assert result.stdout == "stopped: d\n"
-    assert 'cannot end the asc daemon for target "w"' in result.stderr
+    assert 'cannot end the asc daemon for target "w" (pid 4)' in result.stderr
     assert not (env.folder("d") / "state.json").exists()
     assert path.exists()
 

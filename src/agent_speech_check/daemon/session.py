@@ -228,7 +228,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
     after its state file goes, and a sandbox guard outlives its daemon. It never
     ends them, as they may be a person's own asc commands.
     """
-    stuck: list[str] = []
+    stuck: list[tuple[str, int]] = []
     for path in sorted(root.glob(f"*/{state.FILE}")):
         folder, target = path.parent, path.parent.name
         try:
@@ -241,8 +241,8 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
             stop(folder)
         except NotRunning:
             continue
-        except DaemonUnstoppable:
-            stuck.append(target)
+        except DaemonUnstoppable as error:
+            stuck.append((error.target, error.pid))
             continue
         yield target
     if stuck:
