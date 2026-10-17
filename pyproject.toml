@@ -90,8 +90,6 @@ select = [
 # Dev scripts and hooks print and run tools on purpose.
 "scripts/**" = ["T20", "S603", "S607"]
 ".claude/**" = ["T20", "S603", "S607"]
-# A vulture whitelist is bare attribute names on purpose.
-"vulture_whitelist.py" = ["B018"]
 
 # ---------------------------------------------------------------- mypy
 
@@ -106,6 +104,18 @@ explicit_package_bases = true
 [tool.vulture]
 paths = ["src", "vulture_whitelist.py"]
 min_confidence = 60
+# Used, but not in a way vulture can see.
+ignore_names = [
+    # HTMLParser calls these hooks (keyref.py).
+    "handle_starttag", "handle_endtag", "handle_data",
+    # Read only to check NVDA's message (protocol.py).
+    "hz", "paused",
+    # ctypes struct fields, read by Windows (winapi.py).
+    "LimitFlags", "cbSize", "lpfnWndProc", "hInstance", "lpszClassName", "hWnd", "uID", "uFlags",
+    "uCallbackMessage", "hIcon", "szTip", "uVersion",
+    # Tests post the messages Windows would send (winapi.py).
+    "post",
+]
 
 # ---------------------------------------------------------------- deptry
 
