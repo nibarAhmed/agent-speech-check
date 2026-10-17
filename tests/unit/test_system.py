@@ -67,7 +67,7 @@ def test_kill_tree_ends_the_processes_it_started_too() -> None:
 
         assert wait.poll_until(sleeper_started, 10, 0.05)
         family = psutil.Process(parent.pid).children(recursive=True)
-        winapi.kill_tree(parent.pid)
+        assert winapi.kill_tree(parent.pid) == []
         assert parent.wait(10) is not None
         assert not any(p.is_running() for p in family)
     finally:
@@ -154,7 +154,7 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
     installer = tmp_path / "hangs.cmd"
     # Waits about 3 s, long past the timeout, and makes no portable copy.
     installer.write_text("@ping -n 4 127.0.0.1 > nul\r\n", encoding="utf-8")
-    with pytest.raises(InstallerTimedOut, match=r"within 0.5 s"):
+    with pytest.raises(InstallerTimedOut, match=r"within 0.5 s, so asc ended it"):
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
 
 

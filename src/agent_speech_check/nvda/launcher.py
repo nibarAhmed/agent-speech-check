@@ -135,9 +135,10 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         process.wait(timeout_s)
     except subprocess.TimeoutExpired:
         # Its children too, or they would go on writing into `dest`.
-        winapi.kill_tree(process.pid)
-        process.wait()
-        raise InstallerTimedOut(timeout_s) from None
+        left = winapi.kill_tree(process.pid)
+        if process.pid not in left:
+            process.wait()  # it is gone, so this returns at once and records its exit
+        raise InstallerTimedOut(timeout_s, left) from None
     exe = dest / "nvda.exe"
     if not poll_until(exe.is_file, max(0.0, deadline - time.monotonic()), 1):
         raise PortableFailed(str(dest))

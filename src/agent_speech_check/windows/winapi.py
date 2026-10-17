@@ -119,18 +119,21 @@ def terminate(pid: int, timeout_s: float) -> None:
         raise TimeoutError from error
 
 
-def kill_tree(pid: int) -> None:
-    """End a process and every process it started, and wait up to KILL_WAIT_S
-    for them to go. Ending only the process would orphan its children."""
+def kill_tree(pid: int) -> list[int]:
+    """End a process and every process it started, wait up to KILL_WAIT_S for
+    them to go, and return the pids still running. Ending only the process
+    would orphan its children."""
     try:
         process = psutil.Process(pid)
         family = [*process.children(recursive=True), process]
     except psutil.NoSuchProcess:
-        return
+        return []
     for member in family:
-        with contextlib.suppress(psutil.NoSuchProcess):
+        # One that refuses must not stop the rest: it is reported as left.
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
             member.kill()
-    psutil.wait_procs(family, timeout=KILL_WAIT_S)
+    _, alive = psutil.wait_procs(family, timeout=KILL_WAIT_S)
+    return [member.pid for member in alive]
 
 
 def process_image(image: str) -> Path | None:

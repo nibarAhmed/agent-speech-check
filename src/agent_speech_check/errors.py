@@ -286,11 +286,16 @@ class PortableFailed(SetupNeeded):
 
 
 class InstallerTimedOut(SetupNeeded):
-    def __init__(self, seconds: float) -> None:
-        super().__init__(
-            f"the NVDA installer did not finish within {seconds:g} s, so asc ended it",
-            hint="check the installer, or let asc get-nvda download it again",
-        )
+    def __init__(self, seconds: float, left: Sequence[int] = ()) -> None:
+        message = f"the NVDA installer did not finish within {seconds:g} s"
+        if left:
+            pids = ", ".join(map(str, left))
+            message += f", and asc could not end process {pids}"
+            hint = "end those in Task Manager, then asc get-nvda"
+        else:
+            message += ", so asc ended it"
+            hint = "check the installer, or let asc get-nvda download it again"
+        super().__init__(message, hint=hint)
 
 
 class DownloadFailed(NotConnected):
