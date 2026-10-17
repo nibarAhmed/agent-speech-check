@@ -60,9 +60,9 @@ class Keyboard:
         gesture; without it (asc type) only after the last.
         """
         if not self.target.keys:
-            raise KeysRefused(self.target.name)
+            raise KeysRefused
         if not self.relay.connected:
-            raise NvdaNotConnected(self.target.name)
+            raise NvdaNotConnected
         deadline = time.monotonic() + timeout_s
         try:
             await asyncio.wait_for(self._lock.acquire(), timeout_s)
@@ -95,7 +95,7 @@ class Keyboard:
             for key in gesture.strokes:
                 if self._closed:
                     # Shutting down: release_all already ran, so press nothing new.
-                    raise NvdaNotConnected(self.target.name)
+                    raise NvdaNotConnected
                 check()
                 self._pressed.add(key)
                 down.append(key)

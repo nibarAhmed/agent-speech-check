@@ -20,7 +20,7 @@ from agent_speech_check.remote.speech_log import SpeechLog
 
 @pytest.mark.asyncio
 async def test_connection_that_never_joins_is_dropped(tmp_path: Path) -> None:
-    r = relay.Relay("w", relay.load_or_create(tmp_path), SpeechLog(), join_timeout_s=0.5)
+    r = relay.Relay(relay.load_or_create(tmp_path), SpeechLog(), join_timeout_s=0.5)
     server = await r.start(0)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = False
@@ -46,7 +46,7 @@ def _depth(tb: TracebackType | None) -> int:
 
 
 def test_a_kept_protocol_error_does_not_grow_each_time_it_is_raised(tmp_path: Path) -> None:
-    r = relay.Relay("d", relay.load_or_create(tmp_path), SpeechLog())
+    r = relay.Relay(relay.load_or_create(tmp_path), SpeechLog())
     r._lost(ServerSentError("boom"))
     depths = []
     for _ in range(3):

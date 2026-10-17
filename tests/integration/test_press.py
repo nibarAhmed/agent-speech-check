@@ -1,6 +1,6 @@
 """Keys end to end, and every fault fake_nvda can script. No key may stay held.
 
-Target `d` is a desktop target with `launch = false`: NVDA (here the fake)
+Desktop mode has `launch = false` here: NVDA (here the fake)
 connects by itself, so keys are allowed without launching a real NVDA.
 """
 
@@ -16,12 +16,12 @@ from tests.integration.conftest import Env, run_asc, wait_until
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:
-    started = run_asc("start", "--target", "d")
+    started = run_asc("start", "--mode", "desktop")
     assert started.returncode == 0, started.stderr
-    assert "d (desktop mode, keys allowed)" in started.stdout
+    assert "mode: desktop (keys allowed)" in started.stdout
     # launch = false: NVDA runs elsewhere, so asc's keys don't reach this desktop.
     assert "panic key" not in started.stdout
-    fake = env.fake("d")
+    fake = env.fake("desktop")
     yield fake
     fake.close()
 
@@ -131,26 +131,22 @@ def test_bad_input_sends_nothing(nvda: FakeNvda) -> None:
 
 @pytest.mark.usefixtures("env")
 def test_press_without_nvda() -> None:
-    assert run_asc("start", "--target", "d").returncode == 0
+    assert run_asc("start", "--mode", "desktop").returncode == 0
     result = run_asc("press", "Tab")
     assert result.returncode == 3
-    assert 'NVDA is not connected to target "d"' in result.stderr
+    assert "NVDA is not connected" in result.stderr
 
 
 @pytest.mark.xdist_group("desktop")
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_consent_sends_keys_and_has_a_panic_key(env: Env) -> None:
     # Its own panic key, so it never clashes with a real asc on this machine.
-    (env.root / "agent-speech-check" / "config.toml").write_text(
-        "[defaults]\npanic_key = 'ctrl+shift+alt+f21'\n"
-        f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n",
-        encoding="utf-8",
-    )
-    started = run_asc("start", "--target", "sh", "--i-understand")
+    env.config(f"[defaults]\npanic_key = 'ctrl+shift+alt+f21'\n[shared]\nport = {env.port}\n")
+    started = run_asc("start", "--mode", "shared", "--i-understand")
     assert started.returncode == 0, started.stderr
-    assert "sh (shared mode, keys allowed)" in started.stdout
+    assert "mode: shared (keys allowed)" in started.stdout
     assert "panic key: Control+Shift+Alt+F21 stops asc and releases keys" in started.stdout
-    fake = env.fake("sh", {"Tab": [f.speak("OK button")]})
+    fake = env.fake("shared", {"Tab": [f.speak("OK button")]})
     try:
         pressed = run_asc("press", "Tab", "--expect", "OK")
         assert pressed.returncode == 0, pressed.stderr

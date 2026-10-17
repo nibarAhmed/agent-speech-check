@@ -15,7 +15,6 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.targets import DEFAULT_TARGET
 
 
 @dataclass(frozen=True)
@@ -165,14 +164,16 @@ QUESTIONS = _per_mode(
 def to_data(answers: Answers) -> dict[str, Any]:
     """The config the answers make. Defaults are left out, so the file holds
     only what was chosen."""
-    table: dict[str, Any] = {"mode": answers.mode}
+    table: dict[str, Any] = {}
     if answers.nvda_dir is not None:
         table["nvda_dir"] = answers.nvda_dir
     if answers.share:
         table["share"] = list(answers.share)
     if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
-    data: dict[str, Any] = {"targets": {DEFAULT_TARGET: table}}
+    data: dict[str, Any] = {"mode": answers.mode}
+    if table:
+        data[answers.mode] = table
     if answers.keys_layout != default_of(LAYOUTS):
         data["defaults"] = {"keys_layout": answers.keys_layout}
     return data

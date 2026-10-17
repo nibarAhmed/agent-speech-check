@@ -5,11 +5,11 @@ from agent_speech_check.validate import Fields
 
 
 def fields(raw: object, allowed: tuple[str, ...] | None = None) -> Fields:
-    return Fields(raw, "config.toml [targets.app]", UsageError, allowed)
+    return Fields(raw, "config.toml [sandbox]", UsageError, allowed)
 
 
 def test_not_an_object() -> None:
-    with pytest.raises(UsageError, match=r"\[targets.app\]: expected an object, got \[1\]"):
+    with pytest.raises(UsageError, match=r"\[sandbox\]: expected an object, got \[1\]"):
         fields([1])
 
 
@@ -22,7 +22,7 @@ def test_text() -> None:
     f = fields({"a": "hi", "e": "", "n": 3})
     assert f.text("a") == "hi"
     assert f.text("e", allow_empty=True) == ""
-    with pytest.raises(UsageError, match=r"app\] e: expected a string of 1 to 4096"):
+    with pytest.raises(UsageError, match=r"sandbox\] e: expected a string of 1 to 4096"):
         f.text("e")
     with pytest.raises(UsageError, match="got 3"):
         f.text("n")

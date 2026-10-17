@@ -5,7 +5,7 @@
 two throwaway connections (a verified TLS attempt that fails, then a certificate
 fetch), so the relay accepts and forgets connections that fail or close early.
 
-The certificate and channel key are kept per target, because NVDA pins the
+The certificate and channel key are kept per mode, because NVDA pins the
 certificate's fingerprint and a user in watch mode types the key once.
 """
 
@@ -141,13 +141,11 @@ class Relay:
 
     def __init__(
         self,
-        target: str,
         credentials: Credentials,
         speech: SpeechLog,
         *,
         join_timeout_s: float = JOIN_TIMEOUT_S,
     ) -> None:
-        self.target = target
         self.join_timeout_s = join_timeout_s
         self.credentials = credentials
         self.speech = speech
@@ -229,7 +227,7 @@ class Relay:
             if reason is not None:
                 raise ProtocolError(reason)
         if drop_fails and (new or not self.connected):
-            raise NvdaNotConnected(self.target)
+            raise NvdaNotConnected
 
     async def _read(self, reader: asyncio.StreamReader) -> protocol.Message | None:
         try:
@@ -296,7 +294,7 @@ class Relay:
         """Queue one key event without waiting. Only `keyboard.Keyboard` sends keys."""
         writer = self._writer
         if writer is None:
-            raise NvdaNotConnected(self.target)
+            raise NvdaNotConnected
         writer.write(protocol.encode_key(key.vk, extended=key.extended, pressed=pressed))
         return writer
 
@@ -307,7 +305,7 @@ class Relay:
             await writer.drain()
         except ConnectionError:
             self.disconnect()
-            raise NvdaNotConnected(self.target) from None
+            raise NvdaNotConnected from None
 
     async def keepalive(self) -> None:
         while True:

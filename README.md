@@ -45,7 +45,7 @@ uv tool install .
 
 If `asc` is not found, check that `uv`'s tool bin directory is on `PATH`, then open a new terminal.
 
-To uninstall, run `asc stop` for each running target, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself ([details](docs/cli.md#files)).
+To uninstall, run `asc stop`, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself ([details](docs/cli.md#files)).
 
 ## Get started
 
@@ -86,7 +86,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
 `asc` handles speech that can include passwords and private messages, and it can press keys. [SECURITY.md](SECURITY.md) lists what it promises and how to report a problem privately.
 
 - `shared` mode, and `desktop` mode when it launches its NVDA on your computer, send keys into your real Windows session. Their panic hotkey, `Control+Shift+Alt+F12` unless the `panic_key` setting changes it, releases held keys and stops `asc` at once.
-- The relay certificate and channel key are stored in each target's folder. Keep that folder private.
+- The relay certificate and channel key are stored in each mode's folder. Keep that folder private.
 - Speech is kept in memory only and never written to a log. Command output can contain it, so treat that output as sensitive if your app shows private data.
 
 ## Documentation

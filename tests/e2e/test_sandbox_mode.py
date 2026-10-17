@@ -55,11 +55,11 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     app.mkdir()
     (app / "app.html").write_text(APP, encoding="utf-8")
     (root / "config.toml").write_text(
-        f"[targets.sb]\nmode = 'sandbox'\nshare = ['{app.as_posix()}']\n", encoding="utf-8"
+        f"mode = 'sandbox'\n[sandbox]\nshare = ['{app.as_posix()}']\n", encoding="utf-8"
     )
     users_nvda = sorted(winapi.process_ids("nvda.exe"))
 
-    started = run_asc("start", "--target", "sb", timeout=420)
+    started = run_asc("start", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
     assert "nvda: connected" in started.stdout
     assert "sandbox: running" in started.stdout
@@ -121,11 +121,9 @@ def test_sandbox_goes_when_its_daemon_is_killed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _with_installer(tmp_path, monkeypatch)
-    (root / "config.toml").write_text("[targets.k]\nmode = 'sandbox'\n", encoding="utf-8")
-
-    started = run_asc("start", "--target", "k", timeout=420)
+    started = run_asc("start", "--mode", "sandbox", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
-    daemon_pid = state.read(root / "k").pid
+    daemon_pid = state.read(root / "sandbox").pid
     try:
         assert wsb.running()
         # A hard kill (TerminateProcess on Windows): the daemon gets no chance
@@ -195,16 +193,14 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
     )
     (user_config / "asc-marker.txt").write_text("x", encoding="utf-8")
     users_nvda = sorted(winapi.process_ids("nvda.exe"))
-    (root / "config.toml").write_text(
-        f"[targets.own]\nmode = 'sandbox'\nnvda_dir = '{portable}'\n", encoding="utf-8"
-    )
+    (root / "config.toml").write_text(f"[sandbox]\nnvda_dir = '{portable}'\n", encoding="utf-8")
 
-    started = run_asc("start", "--target", "own", timeout=420)
+    started = run_asc("start", "--mode", "sandbox", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
     assert "nvda: connected" in started.stdout
     try:
         assert winapi.windows_titled(wsb.WINDOW_TITLE) == []
-        config = root / "own" / "sandbox" / "config"
+        config = root / "sandbox" / "sandbox" / "config"
         assert (config / "asc-marker.txt").is_file()
         # NVDA has rewritten the file by now, in its own layout.
         ini = [

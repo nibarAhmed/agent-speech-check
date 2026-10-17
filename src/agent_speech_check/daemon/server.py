@@ -43,7 +43,7 @@ from agent_speech_check.remote.speech_log import Entry, SpeechLog
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.windows import winapi
-from agent_speech_check.windows.paths import state_root, target_dir
+from agent_speech_check.windows.paths import mode_dir, state_root
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class Daemon:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        self.relay = Relay(target.name, relay.load_or_create(folder), self.speech)
+        self.relay = Relay(relay.load_or_create(folder), self.speech)
         self.keyboard = Keyboard(target, self.relay, self.speech)
         self.stopping = asyncio.Event()
         self.nvda: launcher.Running | None = None
@@ -151,7 +151,6 @@ class Daemon:
 
     def status(self) -> dict[str, Any]:
         return {
-            "target": self.target.name,
             "mode": self.target.mode,
             "keys": self.target.keys,
             "connected": self.relay.connected,
@@ -176,7 +175,7 @@ class Daemon:
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
         if not self.relay.connected:
-            raise NvdaNotConnected(self.target.name)
+            raise NvdaNotConnected
         after = self.speech.mark if args.since is None else args.since
         losses_before = len(self.relay.losses)
         entry = await self._wait_match(args.regex, after, args.timeout_ms, losses_before)
@@ -200,7 +199,7 @@ class Daemon:
     ) -> AscError:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
-            return NvdaNotConnected(self.target.name, timeout_ms, self.relay.last_error)
+            return NvdaNotConnected(timeout_ms, self.relay.last_error)
         return NoMatch(pattern, timeout_ms, _said(self.speech.since(after).entries), windows)
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:
@@ -220,7 +219,7 @@ class Daemon:
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if not self.relay.connected:
-            raise NvdaNotConnected(self.target.name)
+            raise NvdaNotConnected
         start = self.speech.latest
         # Before the launch, which can take seconds in a sandbox.
         losses_before = len(self.relay.losses)
@@ -336,12 +335,12 @@ async def _main(target: Target, folder: Path) -> None:
 def run(target_json: str) -> int:
     """Entry point for `asc _daemon`. Returns the process exit code."""
     target = Target.from_json(target_json)
-    folder = target_dir(target.name)
+    folder = mode_dir(target.mode)
     folder.mkdir(parents=True, exist_ok=True)
     _setup_logging(folder)
     if winapi.take_mutex(winapi.mutex_name(state_root())) is None:
         raise AlreadyRunning
-    log.info("starting %s (%s mode)", target.name, target.mode)
+    log.info("starting %s mode", target.mode)
     try:
         asyncio.run(_main(target, folder))
     except OSError as error:

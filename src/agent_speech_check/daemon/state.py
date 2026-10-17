@@ -1,4 +1,4 @@
-"""The daemon's state file: `<target folder>\\state.json` with pid, port, token, start time.
+"""The daemon's state file: `<mode folder>\\state.json` with pid, port, token, start time.
 
 Written atomically once the daemon listens, and removed when it stops. The CLI
 proves the file is live by connecting with the token; a stale file is removed.

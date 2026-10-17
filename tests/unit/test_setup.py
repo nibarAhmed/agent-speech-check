@@ -105,17 +105,11 @@ def test_yes_no(answer: str, result: bool | None) -> None:
 
 
 def test_to_data_keeps_only_choices() -> None:
-    assert setup.to_data(setup.Answers("watch")) == {"targets": {"default": {"mode": "watch"}}}
+    assert setup.to_data(setup.Answers("watch")) == {"mode": "watch"}
     answers = setup.Answers("sandbox", "C:\\n", ("C:\\a",), "show", "laptop")
     assert setup.to_data(answers) == {
-        "targets": {
-            "default": {
-                "mode": "sandbox",
-                "nvda_dir": "C:\\n",
-                "share": ["C:\\a"],
-                "window": "show",
-            }
-        },
+        "mode": "sandbox",
+        "sandbox": {"nvda_dir": "C:\\n", "share": ["C:\\a"], "window": "show"},
         "defaults": {"keys_layout": "laptop"},
     }
 
@@ -127,7 +121,7 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ask = Asker("", "laptop", "")
     assert run_setup(ask, replace_without_asking=False) == 0
     settings = load(root / "config.toml")
-    assert settings.resolve(None, None).mode == "watch"
+    assert settings.resolve(None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
     assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
@@ -143,7 +137,7 @@ def test_setup_desktop_with_own_nvda(root: Path, tmp_path: Path) -> None:
     (own / "nvda.exe").write_bytes(b"")
     ask = Asker("desktop", "2", str(tmp_path / "nope"), str(tmp_path), str(own), "y")
     run_setup(ask, replace_without_asking=False)
-    target = load(root / "config.toml").resolve(None, None)
+    target = load(root / "config.toml").resolve(None)
     assert target.nvda_dir == str(own)
     assert target.settings == ()
 
@@ -155,7 +149,7 @@ def test_setup_desktop_declines_the_download(
     out = capsys.readouterr().out
     assert "Run asc get-nvda later." in out
     assert "While it runs, Control+Shift+Alt+F12 stops asc and releases keys." in out
-    assert load(root / "config.toml").resolve(None, None).launches_portable
+    assert load(root / "config.toml").resolve(None).launches_portable
 
 
 def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -164,7 +158,7 @@ def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture
     assert "Answer 1 to 2, or a name." in out
     # The warning comes with the choice of mode, before the next question.
     assert out.index("--i-understand at every asc start") < out.index("keyboard layout")
-    assert load(root / "config.toml").resolve(None, None).mode == "shared"
+    assert load(root / "config.toml").resolve(None).mode == "shared"
 
 
 def test_setup_without_sandbox_says_how_to_get_it(
@@ -176,7 +170,7 @@ def test_setup_without_sandbox_says_how_to_get_it(
     run_setup(Asker("sandbox", "", "", "y"), replace_without_asking=False)
     out = capsys.readouterr().out
     assert f"({unavailable.value.hint}). Pick another mode." in out
-    assert load(root / "config.toml").resolve(None, None).mode == "watch"
+    assert load(root / "config.toml").resolve(None).mode == "watch"
 
 
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -189,7 +183,15 @@ def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFix
     assert capsys.readouterr().out == "asc setup\nNothing changed.\n"
     assert (root / "config.toml").read_text(encoding="utf-8") == before
     run_setup(Asker("y", "", "", "y"), replace_without_asking=False)
-    assert load(root / "config.toml").resolve(None, None).mode == "watch"
+    assert load(root / "config.toml").resolve(None).mode == "watch"
+
+
+def test_setup_replaces_a_config_with_targets(root: Path) -> None:
+    """The way out that OldConfig's hint names: setup never reads the old file."""
+    root.mkdir()
+    (root / "config.toml").write_text('[targets.app]\nmode = "desktop"\n', encoding="utf-8")
+    assert run_setup(Asker("y", "", "", "y"), replace_without_asking=False) == 0
+    assert load(root / "config.toml").resolve(None).mode == "watch"
 
 
 def test_setup_not_saved(root: Path) -> None:
@@ -219,37 +221,40 @@ def test_config_set_get_list_unset(root: Path, capsys: pytest.CaptureFixture[str
         "settle_ms = 700 (global)\n",
         "",
     )
-    assert run(capsys, "config", "set", "mode", "desktop", "--target", "app")[0] == 0
+    assert run(capsys, "config", "set", "mode", "desktop")[1] == "mode = desktop (global)\n"
+    assert run(capsys, "config", "set", "launch", "false")[1] == "launch = false (desktop mode)\n"
+    assert run(capsys, "config", "set", "port", "7000", "--mode", "sandbox")[1] == (
+        "port = 7000 (sandbox mode)\n"
+    )
     assert run(capsys, "config", "get", "settle_ms")[1] == "700\n"
-    out = run(capsys, "config", "list", "--target", "app")[1]
-    assert "mode = desktop (target)\n" in out
+    out = run(capsys, "config", "list")[1]
+    assert "mode = desktop (global)\n" in out
+    assert "launch = false (desktop)\n" in out
     assert "settle_ms = 700 (global)\n" in out
     assert "nvda_dir = none (default)\n" in out
+    assert run(capsys, "config", "get", "port", "--mode", "sandbox")[1] == "7000\n"
+    assert run(capsys, "config", "get", "launch", "--mode", "sandbox")[1] == "true\n"
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
-    assert run(capsys, "config", "remove-target", "app")[1] == "removed: app\n"
-    assert "app" not in load(root / "config.toml").targets
+    assert load(root / "config.toml").resolve("sandbox").port == 7000
 
 
 def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", "prot", "1")
     assert code == 2
     assert "hint: did you mean port?" in err
-    code, _, err = run(capsys, "config", "set", "port", "1", "--target", "new")
+    code, _, err = run(capsys, "config", "set", "settle_ms", "1", "--mode", "watch")
     assert code == 2
-    assert "hint: asc config set mode MODE --target new" in err
+    assert "is global, so it takes no --mode" in err
     code, _, err = run(capsys, "config", "set", "keys", "true")
     assert code == 2
     assert 'unknown setting "keys"' in err
-    code, _, err = run(capsys, "config", "set", "window", "show")
-    assert code == 2
-    assert "not in config.toml" in err
-    run(capsys, "config", "set", "mode", "watch")
+    # No mode set means watch mode, which has no sandbox window.
     code, _, err = run(capsys, "config", "set", "window", "show")
     assert code == 2
     assert "window: expected only in sandbox mode" in err
-    assert "window" not in (root / "config.toml").read_text(encoding="utf-8")
+    assert not (root / "config.toml").exists()
 
 
 @pytest.mark.usefixtures("root")
@@ -278,16 +283,22 @@ def test_config_path_works_with_a_broken_file(
 
 
 @pytest.mark.usefixtures("root")
-def test_remove_target_checks_the_name_before_looking_for_a_daemon(
+def test_mode_is_checked_before_looking_for_a_daemon(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A corrupt state file is deleted when a daemon is looked for there.
     outside = tmp_path / "state.json"
     outside.write_text("{half", encoding="utf-8")
-    code, _, err = run(capsys, "config", "remove-target", "..")
+    code, _, err = run(capsys, "config", "set", "port", "1", "--mode", "..")
     assert code == 2
-    assert "target name: expected" in err
+    assert "invalid choice: '..'" in err
     assert outside.exists()
+
+
+def test_remove_target_is_gone(capsys: pytest.CaptureFixture[str]) -> None:
+    code, _, err = run(capsys, "config", "remove-target", "app")
+    assert code == 2
+    assert "invalid choice: 'remove-target'" in err
 
 
 @pytest.mark.usefixtures("root")

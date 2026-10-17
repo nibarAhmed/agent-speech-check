@@ -11,46 +11,41 @@ from agent_speech_check.errors import (
     BadPreference,
     BadSetting,
     SetupNeeded,
-    TargetNotConfigured,
     UnknownPreference,
     UsageError,
 )
 from agent_speech_check.nvda.nvda_config import Setting, merge
 
 EXAMPLE: dict[str, Any] = {
-    "targets": {
-        "default": {
-            "mode": "sandbox",
-            "nvda_settings": ["speech.symbolLevel=300"],
-            "share": ["C:\\src\\app"],
-        },
-        "a": {"mode": "watch"},
+    "sandbox": {
+        "nvda_settings": ["speech.symbolLevel=300"],
+        "share": ["C:\\src\\app"],
     },
+    "watch": {"port": 7000},
     "defaults": {"settle_ms": 800, "timeout_ms": 8000},
-    "default": "default",
+    "mode": "sandbox",
 }
 
 EXAMPLE_TEXT = """\
 # asc settings. Change them with asc config set, or start over with asc setup.
-default = "default"
+mode = "sandbox"
 
 [defaults]
 settle_ms = 800
 timeout_ms = 8000
 
-[targets.a]
-mode = "watch"
+[watch]
+port = 7000
 
-[targets.default]
-mode = "sandbox"
+[sandbox]
 share = ['C:\\src\\app']
 nvda_settings = ["speech.symbolLevel=300"]
 """
 
 
 def test_render_follows_the_conventions() -> None:
-    # Header, top-level keys, [defaults], then targets by name, keys in PREFS order,
-    # Windows paths as literal strings, LF line endings.
+    # Header, top-level keys, [defaults], then a table per mode in MODES order, keys in
+    # PREFS order, Windows paths as literal strings, LF line endings.
     assert edit.render(EXAMPLE) == EXAMPLE_TEXT
 
 
@@ -60,7 +55,7 @@ def test_render_reads_back() -> None:
 
 def test_path_with_a_quote_and_a_long_list_read_back() -> None:
     share = [f"C:\\it's here\\{'x' * 40}{n}" for n in range(3)]
-    data = {"targets": {"s": {"mode": "sandbox", "share": share, "nvda_dir": "D:\\n v'da"}}}
+    data = {"sandbox": {"share": share, "nvda_dir": "D:\\n v'da"}}
     text = edit.render(data)
     assert "share = [\n" in text  # too long for one line: one item per line
     assert parse(text, "x") == data
@@ -73,7 +68,7 @@ def test_save_checks_before_writing(tmp_path: Path) -> None:
     assert not path.exists()
     edit.save(path, EXAMPLE)
     assert path.read_bytes() == EXAMPLE_TEXT.encode()
-    assert load(path).targets["default"].share == ("C:\\src\\app",)
+    assert load(path).modes["sandbox"].share == ("C:\\src\\app",)
     assert not list(path.parent.glob("*.tmp"))
 
 
@@ -81,42 +76,41 @@ def _config(data: dict[str, Any]) -> Config:
     return Config.from_data(data, "config.toml")
 
 
-def test_set_target_setting_goes_to_the_default_target() -> None:
-    settings = _config({"default": "app", "targets": {"app": {"mode": "desktop"}}})
+def test_mode_setting_goes_to_the_mode_settings_table() -> None:
+    settings = _config({"mode": "desktop", "desktop": {"port": 7000}})
     pref = prefs.find("launch")
     where = edit.owner(settings, pref, None)
-    assert where == "app"
+    assert where == "desktop"
     data, value = edit.set_value(settings, pref, ["False"], where)
     assert value is False
-    assert data["targets"]["app"] == {"mode": "desktop", "launch": False}
-    assert settings.data["targets"]["app"] == {"mode": "desktop"}  # a copy was changed
+    assert data["desktop"] == {"port": 7000, "launch": False}
+    assert settings.data["desktop"] == {"port": 7000}  # a copy was changed
+    assert edit.owner(settings, pref, "sandbox") == "sandbox"
 
 
-def test_mode_makes_a_target_and_nothing_else_does() -> None:
-    settings = _config({})
-    with pytest.raises(TargetNotConfigured, match=r'target "app" is not in config.toml') as exc:
-        edit.set_value(settings, prefs.find("port"), ["1"], "app")
-    assert exc.value.hint == "asc config set mode MODE --target app"
-    data, _ = edit.set_value(settings, prefs.find("mode"), ["sandbox"], "app")
-    assert _config(data).targets["app"].mode == "sandbox"
+def test_any_mode_setting_makes_its_table() -> None:
+    data, _ = edit.set_value(_config({}), prefs.find("port"), ["7000"], "shared")
+    assert data == {"shared": {"port": 7000}}
+    assert _config(data).resolve("shared").port == 7000
+    data, _ = edit.set_value(_config({}), prefs.find("mode"), ["sandbox"], None)
+    assert data == {"mode": "sandbox"}
 
 
 def test_command_defaults_are_global_only() -> None:
-    """Commands talk to whichever daemon runs, so no target can hold their defaults."""
-    settings = _config({"targets": {"app": {"mode": "watch"}}})
+    """Commands talk to whichever daemon runs, so no mode can hold their defaults."""
+    settings = _config({"sandbox": {"window": "show"}})
     data, _ = edit.set_value(settings, prefs.find("settle_ms"), ["600"], None)
     assert data["defaults"] == {"settle_ms": 600}
     assert _config(data).value("settle_ms") == (600, "global")
     assert _config(data).value("timeout_ms") == (5000, "default")
-    with pytest.raises(BadPreference, match="is global, so it takes no --target"):
-        edit.owner(settings, prefs.find("settle_ms"), "app")
-    with pytest.raises(UsageError, match=r"\[targets.app\].*settle_ms"):
-        _config({"targets": {"app": {"mode": "watch", "settle_ms": 900}}})
+    with pytest.raises(BadPreference, match="is global, so it takes no --mode"):
+        edit.owner(settings, prefs.find("settle_ms"), "sandbox")
 
 
-def test_global_setting_takes_no_target() -> None:
-    with pytest.raises(BadPreference, match="is global, so it takes no --target"):
-        edit.owner(_config({}), prefs.find("panic_key"), "app")
+@pytest.mark.parametrize("name", ["panic_key", "mode"])
+def test_global_setting_takes_no_mode(name: str) -> None:
+    with pytest.raises(BadPreference, match="is global, so it takes no --mode"):
+        edit.owner(_config({}), prefs.find(name), "watch")
 
 
 def test_panic_key_is_kept_and_read_back_in_full() -> None:
@@ -157,38 +151,33 @@ def test_unknown_setting_suggests() -> None:
 
 
 def test_clashes_are_refused_when_checked() -> None:
-    settings = _config({"targets": {"app": {"mode": "sandbox", "window": "show"}}})
-    data, _ = edit.set_value(settings, prefs.find("mode"), ["watch"], "app")
+    data, _ = edit.set_value(_config({}), prefs.find("window"), ["show"], "watch")
     with pytest.raises(UsageError, match="window: expected only in sandbox mode"):
         _config(data)
 
 
 def test_unset() -> None:
-    settings = _config({"defaults": {"settle_ms": 600}, "targets": {"a": {"mode": "watch"}}})
+    settings = _config({"defaults": {"settle_ms": 600}, "mode": "watch", "watch": {"port": 1}})
     data = edit.unset_value(settings, prefs.find("settle_ms"), None)
-    assert data == {"targets": {"a": {"mode": "watch"}}}  # no empty [defaults] left
-    with pytest.raises(BadPreference, match="every target needs one"):
-        edit.unset_value(settings, prefs.find("mode"), "a")
-
-
-def test_remove_target() -> None:
-    settings = _config({"targets": {"a": {"mode": "watch"}}})
-    assert edit.remove_target(settings, "a") == {}
-    with pytest.raises(TargetNotConfigured):
-        edit.remove_target(settings, "b")
+    assert data == {"mode": "watch", "watch": {"port": 1}}  # no empty [defaults] left
+    data = edit.unset_value(_config(data), prefs.find("port"), "watch")
+    assert data == {"mode": "watch"}  # nor an empty [watch]
+    assert edit.unset_value(_config(data), prefs.find("mode"), None) == {}
 
 
 def test_entries_say_where_each_value_comes_from() -> None:
     settings = _config(EXAMPLE)
     rows = {name: (value, source) for name, value, source in edit.entries(settings, None)}
-    assert rows["default"] == ("default", "global")
-    assert rows["mode"] == ("sandbox", "target")
+    assert rows["mode"] == ("sandbox", "global")
     assert rows["port"] == (16837, "default")
-    assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "target")
+    assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "sandbox")
     assert rows["settle_ms"] == (800, "global")
     assert rows["timeout_ms"] == (8000, "global")
     assert rows["keys_layout"] == ("desktop", "default")
-    assert [name for name, _, _ in edit.entries(settings, "x")] == [p.name for p in prefs.PREFS]
+    watch = {name: (value, source) for name, value, source in edit.entries(settings, "watch")}
+    assert watch["port"] == (7000, "watch")
+    assert watch["mode"] == ("sandbox", "global")
+    assert list(watch) == [p.name for p in prefs.PREFS]
 
 
 @pytest.mark.parametrize(
@@ -206,9 +195,9 @@ def test_show(value: prefs.Value | None, shown: str) -> None:
         ({"defaults": {"keys_lang": "en"}}, "expected only known keys, got keys_lang"),
         ({"defaults": {"nvda_version": "2026.2"}}, "expected only known keys, got nvda_version"),
         ({"defaults": {"keys_layout": "tiny"}}, "keys_layout: expected one of desktop, laptop"),
-        ({"default": "bad name"}, "target name: expected 1 to 32"),
+        ({"mode": "vm"}, "mode: expected one of watch"),
         (
-            {"targets": {"a": {"mode": "watch", "nvda_settings": ["speech.rate=5"]}}},
+            {"watch": {"nvda_settings": ["speech.rate=5"]}},
             "nvda_settings: expected only for an NVDA that asc launches",
         ),
     ],
@@ -219,8 +208,8 @@ def test_bad_values_in_the_file(data: dict[str, Any], message: str) -> None:
 
 
 def test_owned_nvda_setting_names_the_file() -> None:
-    data = {"targets": {"a": {"mode": "desktop", "nvda_settings": ["speech.synth=x"]}}}
-    with pytest.raises(BadSetting, match=r"\[targets.a\] nvda_settings \"speech.synth=x\""):
+    data = {"desktop": {"nvda_settings": ["speech.synth=x"]}}
+    with pytest.raises(BadSetting, match=r"\[desktop\] nvda_settings \"speech.synth=x\""):
         _config(data)
 
 

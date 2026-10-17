@@ -81,16 +81,15 @@ def is_running(folder: Path) -> bool:
     return _probe(folder)[0]
 
 
-def running_targets(root: Path) -> list[str]:
-    """Every target whose daemon runs, answering or not, by name. Only one can, but
-    an older asc may have left another in its own folder."""
-    return sorted(f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent))
+def any_running(root: Path) -> bool:
+    """A daemon runs, answering or not. Only one can, but an older asc may have
+    left another in its own folder."""
+    return any(is_running(f.parent) for f in root.glob(f"*/{state.FILE}"))
 
 
 def _end(folder: Path) -> None:
     """End a daemon that can't be asked to stop. Its NVDA goes with it (a
     kill-on-close job) and so does its sandbox (the guard)."""
-    target = folder.name
     try:
         current = state.read(folder)
     except NotConnected:
@@ -105,7 +104,7 @@ def _end(folder: Path) -> None:
             winapi.terminate(current.pid, STOP_TIMEOUT_S)
     except OSError:
         # It may still run, so the file stays: forgetting it would orphan it.
-        raise DaemonUnstoppable(target, current.pid) from None
+        raise DaemonUnstoppable(current.pid) from None
     state.remove(folder)
 
 
@@ -190,7 +189,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     for path in sorted(folder.parent.glob(f"*/{state.FILE}")):
         running, silent = _probe(path.parent)
         if silent is not None:
-            raise DaemonNotAnswering(path.parent.name, silent.message)
+            raise DaemonNotAnswering(silent.message)
         if running:
             raise AlreadyRunning
     process = _spawn(target, folder)
@@ -228,7 +227,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
     after its state file goes, and a sandbox guard outlives its daemon. It never
     ends them, as they may be a person's own asc commands.
     """
-    stuck: list[tuple[str, int]] = []
+    stuck: list[int] = []
     for path in sorted(root.glob(f"*/{state.FILE}")):
         folder, target = path.parent, path.parent.name
         try:
@@ -242,7 +241,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
         except NotRunning:
             continue
         except DaemonUnstoppable as error:
-            stuck.append((error.target, error.pid))
+            stuck.append(error.pid)
             continue
         yield target
     if stuck:

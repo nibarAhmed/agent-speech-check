@@ -86,7 +86,7 @@ NVDA's IO log and a `SetWinEventHook` listener:
   moves nothing; size 40 on x64, where 48 fails silently and returns 0), then
   `AllowSetForegroundWindow(ASFW_ANY)`. The app then comes forward by itself
   and NVDA says its title and focus. `mouse.nudge` does this before
-  `asc launch` when the target may send input.
+  `asc launch` when the mode may send input.
 - To confirm the lock is on before trusting a run, check that
   `AllowSetForegroundWindow` fails with error 5.
 

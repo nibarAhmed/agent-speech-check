@@ -21,9 +21,9 @@ def config_file() -> Path:
     return state_root() / "config.toml"
 
 
-def target_dir(name: str) -> Path:
-    """One folder per target: state file, daemon log, relay cert and credentials."""
-    return state_root() / name
+def mode_dir(mode: str) -> Path:
+    """One folder per mode: state file, daemon log, relay cert and credentials."""
+    return state_root() / mode
 
 
 def write_atomic(path: Path, data: str | bytes) -> None:

@@ -17,25 +17,25 @@ from tests.integration.conftest import Env, run_asc, start_asc, tls_client
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:
-    assert run_asc("start", "--target", "d").returncode == 0
-    fake = env.fake("d")
+    assert run_asc("start", "--mode", "desktop").returncode == 0
+    fake = env.fake("desktop")
     yield fake
     fake.close()
 
 
 def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None:
-    assert env.running("d") == []
+    assert env.running("desktop") == []
     waiting = start_asc("wait", "later", "--timeout", "8000")
-    env.wait_running("d", "wait")
-    assert env.running("d") == ["wait"]
+    env.wait_running("desktop", "wait")
+    assert env.running("desktop") == ["wait"]
     nvda.say("later")
     assert 'said: "later"' in waiting.communicate(timeout=30)[0]
-    assert env.running("d") == []
+    assert env.running("desktop") == []
 
 
 def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvda) -> None:
     waiting = start_asc("wait", "later", "--timeout", "8000")
-    env.wait_running("d", "wait")
+    env.wait_running("desktop", "wait")
     with tls_client(env.port) as sock:
         sock.sendall(b"{not json\n")
         assert sock.recv(4096) == b""
@@ -53,7 +53,7 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
     env: Env, nvda: FakeNvda, command: tuple[str, str]
 ) -> None:
     running = start_asc(*command, "--timeout", "8000")
-    env.wait_running("d", command[0])
+    env.wait_running("desktop", command[0])
     nvda.send_raw(b"{not json\n")
     _, err = running.communicate(timeout=30)
     assert running.returncode == 5, err
@@ -62,8 +62,8 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
 
 def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeNvda) -> None:
     waiting = start_asc("wait", "never", "--timeout", "3000")
-    env.wait_running("d", "wait")
+    env.wait_running("desktop", "wait")
     nvda.close()
     _, err = waiting.communicate(timeout=30)
     assert waiting.returncode == 3, err
-    assert 'NVDA is not connected to target "d" after waiting 3000 ms' in err
+    assert "NVDA is not connected after waiting 3000 ms" in err

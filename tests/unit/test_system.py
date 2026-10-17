@@ -152,7 +152,7 @@ def test_sandbox_session_prepares_its_folders(
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     target = replace(
-        defaults("x", "sandbox"),
+        defaults("sandbox"),
         share=("C:/src/app",),
         settings=(Setting.parse("speech.symbolLevel=300"),),
     )
@@ -176,7 +176,7 @@ def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
     portable = tmp_path / "portable"
     (portable / "userConfig" / "addons" / "a").mkdir(parents=True)
     (portable / "userConfig" / "nvda.ini").write_text("[speech]\nrate = 40\n", encoding="utf-8")
-    target = replace(defaults("x", "sandbox"), nvda_dir=str(portable))
+    target = replace(defaults("sandbox"), nvda_dir=str(portable))
     session = SandboxSession(tmp_path / "target", target, RelayAddress("h", 1, "k", "f"))
     config = session._prepare()
     folder = tmp_path / "target" / "sandbox"
@@ -197,9 +197,7 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
     try:
         state = root / "agent-speech-check"
         launcher.installer_path(launcher.VERSION).parent.mkdir(parents=True)
-        session = SandboxSession(
-            state / "x", defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f")
-        )
+        session = SandboxSession(state / "x", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
         config = session._prepare()
         hosts = [part.split("</HostFolder>")[0] for part in config.split("<HostFolder>")[1:]]
         assert len(hosts) == 3
@@ -222,7 +220,7 @@ def test_sandbox_failure_keeps_its_message_and_category() -> None:
 
 
 def test_sandbox_session_before_start() -> None:
-    session = SandboxSession(Path("x"), defaults("x", "sandbox"), RelayAddress("h", 1, "k", "f"))
+    session = SandboxSession(Path("x"), defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
     with pytest.raises(SandboxFailed, match="not running yet"):
         asyncio.run(session.launch("x"))
     asyncio.run(session.stop())  # nothing started, nothing to stop
@@ -374,7 +372,7 @@ def test_tray_icon_selects_and_goes_away() -> None:
 @pytest.mark.xdist_group("desktop")
 def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
     relay = RelayAddress("h", 1, "k", "f")
-    tray = SandboxSession(tmp_path, defaults("x", "sandbox"), relay)
+    tray = SandboxSession(tmp_path, defaults("sandbox"), relay)
     tray.window.start()
     assert tray.window._icon is not None
     assert tray.window.window == "tray"
@@ -382,7 +380,7 @@ def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
     assert tray.window._icon is None
     assert not tray.window._thread.is_alive()
     for window in ("taskbar", "show"):
-        other = SandboxSession(tmp_path, replace(defaults("x", "sandbox"), window=window), relay)
+        other = SandboxSession(tmp_path, replace(defaults("sandbox"), window=window), relay)
         other.window.start()
         assert other.window._icon is None
         other.window.stop()

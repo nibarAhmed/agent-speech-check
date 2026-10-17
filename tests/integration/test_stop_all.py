@@ -18,14 +18,14 @@ from agent_speech_check.errors import AscStillRunning
 from agent_speech_check.windows import winapi
 
 
-def _pid(env: Env, target: str) -> int:
-    pid: int = json.loads((env.folder(target) / "state.json").read_text(encoding="utf-8"))["pid"]
+def _pid(env: Env, folder: str) -> int:
+    pid: int = json.loads((env.folder(folder) / "state.json").read_text(encoding="utf-8"))["pid"]
     return pid
 
 
-def _silent_daemon(env: Env, target: str) -> int:
+def _silent_daemon(env: Env, name: str) -> int:
     """A process that holds a port and drops every request, with a state file in
-    the target's folder: what a stuck daemon of an older asc looks like."""
+    a folder of its own: what a stuck daemon of an older asc looks like."""
     port = free_port()
     serve = (
         "import socket\n"
@@ -35,7 +35,7 @@ def _silent_daemon(env: Env, target: str) -> int:
     )
     process = subprocess.Popen([sys.executable, "-c", serve])  # noqa: S603 - our own interpreter
     assert wait_until(lambda: _listening(port))
-    folder = env.folder(target)
+    folder = env.folder(name)
     folder.mkdir(parents=True)
     state = {"pid": process.pid, "port": port, "token": "t", "started": time.time()}
     (folder / "state.json").write_text(json.dumps(state), encoding="utf-8")
@@ -51,9 +51,9 @@ def _listening(port: int) -> bool:
 
 
 def test_stop_all_stops_every_daemon(env: Env) -> None:
-    assert run_asc("start", "--target", "w").returncode == 0
+    assert run_asc("start", "--mode", "watch").returncode == 0
     # One that doesn't answer, as an older asc's daemon wouldn't.
-    pids = [_pid(env, "w"), _silent_daemon(env, "w2")]
+    pids = [_pid(env, "watch"), _silent_daemon(env, "old-target")]
     # And a file no daemon of this asc wrote.
     old = env.folder("old")
     old.mkdir()
@@ -66,7 +66,7 @@ def test_stop_all_stops_every_daemon(env: Env) -> None:
 
     result = run_asc("_stop_all")
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "stopped: w\nstopped: w2\n"
+    assert result.stdout == "stopped: old-target\nstopped: watch\n"
     # Run from source it has no asc.exe to wait for, so it may return a moment early.
     assert wait_until(lambda: [winapi.image_path(pid) for pid in pids] == [None, None])
     assert list(env.root.glob("agent-speech-check/*/state.json")) == []
