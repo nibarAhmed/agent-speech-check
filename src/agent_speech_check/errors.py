@@ -181,14 +181,6 @@ class TargetsFileError(UsageError):
         super().__init__(f"{path}: {reason}")
 
 
-class OldConfig(UsageError):
-    def __init__(self, path: str) -> None:
-        super().__init__(
-            f"{path} lists targets, which asc no longer reads",
-            hint="asc setup, or move each target's settings to a table named after its mode",
-        )
-
-
 class UnknownPreference(UsageError):
     def __init__(self, name: str, suggestions: Sequence[str]) -> None:
         hint = f"did you mean {', '.join(suggestions)}?" if suggestions else "asc config list"

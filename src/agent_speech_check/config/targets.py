@@ -33,7 +33,6 @@ from agent_speech_check.config import prefs
 from agent_speech_check.config.prefs import MODES, WINDOWS
 from agent_speech_check.errors import (
     FileUnusable,
-    OldConfig,
     TargetsFileError,
     UsageError,
     bad_field,
@@ -230,9 +229,6 @@ class Config:
 
     @classmethod
     def from_data(cls, data: dict[str, Any], file: str) -> Config:
-        if "targets" in data or "default" in data:
-            # The layout before modes. Only a person can say which target is which mode.
-            raise OldConfig(file)
         top = Fields(data, file, UsageError, ("mode", "defaults", *MODES))
         mode = top.choice("mode", MODES) if top.has("mode") else "watch"
         globals_ = Fields(
