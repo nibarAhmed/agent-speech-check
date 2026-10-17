@@ -187,7 +187,7 @@ def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFix
 
 
 def test_setup_replaces_a_config_with_targets(root: Path) -> None:
-    """The way out that OldConfig's hint names: setup never reads the old file."""
+    """Setup never reads the old file, so it replaces one asc no longer reads."""
     root.mkdir()
     (root / "config.toml").write_text('[targets.app]\nmode = "desktop"\n', encoding="utf-8")
     assert run_setup(Asker("y", "", "", "y"), replace_without_asking=False) == 0

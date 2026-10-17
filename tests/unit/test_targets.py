@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.config.targets import Target, defaults, load
-from agent_speech_check.errors import OldConfig, SetupNeeded, TargetsFileError, UsageError
+from agent_speech_check.errors import SetupNeeded, TargetsFileError, UsageError
 from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
 
@@ -55,23 +55,6 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "text",
-    [
-        '[targets.app]\nmode = "watch"\n',
-        'default = "app"\n',
-    ],
-)
-def test_the_old_layout_says_how_to_move(tmp_path: Path, text: str) -> None:
-    with pytest.raises(OldConfig, match="lists targets, which asc no longer reads") as exc:
-        resolve(write(tmp_path, text), None)
-    assert (
-        exc.value.hint
-        == "asc setup, or move each target's settings to a table named after its mode"
-    )
-    assert exc.value.exit_code == 2
-
-
-@pytest.mark.parametrize(
     ("text", "message"),
     [
         ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared"),
@@ -82,6 +65,9 @@ def test_the_old_layout_says_how_to_move(tmp_path: Path, text: str) -> None:
         ("[sandbox]\nshare = ['site']\n", "share: expected full paths"),
         ("[vm]\nport = 1\n", "expected only known keys, got vm"),
         ('default_target = "x"\n', "expected only known keys, got default_target"),
+        # The layout before modes is refused like any other unknown key.
+        ('[targets.app]\nmode = "watch"\n', "expected only known keys, got targets"),
+        ('default = "app"\n', "expected only known keys, got default"),
         (
             '[defaults]\npanic_key = "F12"\n',
             r'\[defaults\] panic_key: bad gesture "F12": a hotkey needs Control, Alt or Windows',
