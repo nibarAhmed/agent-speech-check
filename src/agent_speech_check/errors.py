@@ -453,10 +453,12 @@ class DaemonNotAnswering(Refused):
 class DaemonUnstoppable(Refused):
     def __init__(self, pids: Sequence[int]) -> None:
         self.pids = list(pids)
-        super().__init__(
-            f"cannot end the asc daemon (pid {', '.join(str(pid) for pid in self.pids)})",
-            hint="end it in Task Manager, then try again",
-        )
+        listed = ", ".join(str(pid) for pid in self.pids)
+        if len(self.pids) == 1:
+            message, them = f"cannot end the asc daemon (pid {listed})", "it"
+        else:
+            message, them = f"cannot end the asc daemons (pid {listed})", "them"
+        super().__init__(message, hint=f"end {them} in Task Manager, then try again")
 
 
 class AscStillRunning(Refused):

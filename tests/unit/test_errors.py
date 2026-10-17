@@ -116,3 +116,9 @@ def test_an_installer_asc_could_not_end_is_named() -> None:
     error = errors.InstallerTimedOut(0.5, [111, 222])
     assert "could not end process 111, 222" in error.message
     assert "ended it" not in error.message
+
+
+def test_several_unstoppable_daemons_are_named_in_the_plural() -> None:
+    error = errors.DaemonUnstoppable([111, 222])
+    assert error.message == "cannot end the asc daemons (pid 111, 222)"
+    assert error.hint == "end them in Task Manager, then try again"
