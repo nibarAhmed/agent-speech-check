@@ -278,7 +278,7 @@ def test_config_path_works_with_a_broken_file(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root.mkdir()
-    (root / "config.toml").write_text("[targets\n", encoding="utf-8")
+    (root / "config.toml").write_text("[watch\n", encoding="utf-8")
     assert run(capsys, "config", "path") == (0, f"{root / 'config.toml'}\n", "")
 
 
