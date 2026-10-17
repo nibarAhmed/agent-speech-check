@@ -81,7 +81,8 @@ def portable_hint(folder: Path) -> str:
 def check_version(folder: Path, version: tuple[int, int] | None) -> None:
     """Refuse an NVDA older than MIN_VERSION. An unknown version is let through."""
     if version is not None and version < MIN_VERSION:
-        found, needed = (".".join(map(str, v)) for v in (version, MIN_VERSION))
+        found = ".".join(map(str, version))
+        needed = ".".join(map(str, MIN_VERSION))
         raise NvdaTooOld(str(folder), found, needed, portable_hint(folder))
 
 
