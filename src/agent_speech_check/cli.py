@@ -103,9 +103,6 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
         help="an nvda.ini setting for the NVDA asc launches (repeatable)",
     )
     parser.add_argument(
-        "--nvda-dir", metavar="DIR", help="desktop or sandbox: launch this portable NVDA"
-    )
-    parser.add_argument(
         "--window",
         choices=WINDOWS,
         help="sandbox: its window in the tray (default), on the taskbar, or shown",
@@ -145,7 +142,6 @@ def _keys_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--layout", choices=prefs.BY_NAME["keys_layout"].choices, help=_default("keys_layout")
     )
-    parser.add_argument("--nvda-dir", metavar="DIR", help="read this NVDA's reference")
     parser.add_argument(
         "--lang", default="en", help="reference language, falling back to en (default: en)"
     )
@@ -306,7 +302,7 @@ def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) ->
 
 
 def cmd_start(args: argparse.Namespace) -> int:
-    target = _target(args).with_nvda_dir(args.nvda_dir).with_window(args.window)
+    target = _target(args).with_window(args.window)
     given = tuple(Setting.parse(text) for text in args.nvda_setting)
     if given and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
@@ -375,12 +371,12 @@ def cmd_type(args: argparse.Namespace) -> int:
     return 0
 
 
-def _nvda_dirs(args: argparse.Namespace, target: Target) -> list[tuple[str, Path]]:
-    if args.nvda_dir:
-        return [("--nvda-dir", Path(args.nvda_dir))]
+def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
+    """Where to look for the target's NVDA, and the hint if it isn't there."""
     if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
-        return [("the portable NVDA", launcher.folder_for(target.nvda_dir))]
-    return keyref.candidates()
+        hint = "check nvda_dir" if target.nvda_dir else "asc get-nvda"
+        return [("the portable NVDA", launcher.folder_for(target.nvda_dir))], hint
+    return keyref.candidates(), "start your NVDA"
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
@@ -389,7 +385,8 @@ def cmd_keys(args: argparse.Namespace) -> int:
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
     flags = {"layout": "keys_layout"}
     target = _with_defaults(args, flags)
-    path = keyref.reference(_nvda_dirs(args, target), args.lang)
+    nvda_dirs, hint = _nvda_dirs(target)
+    path = keyref.reference(nvda_dirs, args.lang, hint)
     commands = keyref.parse(path.read_text(encoding="utf-8"))
     found = keyref.search(commands, args.words, args.layout, braille=args.braille)
     _show_lines([c.line(args.layout) for c in found], "(no match)")

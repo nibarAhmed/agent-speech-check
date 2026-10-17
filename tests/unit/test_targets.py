@@ -159,16 +159,6 @@ def test_nvda_dir_for_sandbox(tmp_path: Path) -> None:
     assert resolve(path, "app", None).nvda_dir == "C:/nvda"
 
 
-def test_with_nvda_dir() -> None:
-    target = defaults("x", "desktop")
-    assert target.with_nvda_dir(None) is target
-    assert Path(target.with_nvda_dir("C:/n").nvda_dir or "") == Path("C:/n")
-    # The daemon runs in another folder, so a relative path is made absolute.
-    assert target.with_nvda_dir("nvda").nvda_dir == str(Path.cwd() / "nvda")
-    with pytest.raises(UsageError, match="only for an NVDA that asc launches"):
-        defaults("x", "watch").with_nvda_dir("C:/n")
-
-
 def test_relative_nvda_dir_in_file_is_refused(tmp_path: Path) -> None:
     path = write(tmp_path, "[targets.app]\nmode = 'desktop'\nnvda_dir = 'nvda'\n")
     with pytest.raises(UsageError, match=r"a full path, like C:\\nvda, got") as exc:

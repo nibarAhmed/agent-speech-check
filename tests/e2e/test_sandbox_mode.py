@@ -198,17 +198,11 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
     )
     (user_config / "asc-marker.txt").write_text("x", encoding="utf-8")
     users_nvda = sorted(winapi.process_ids("nvda.exe"))
-
-    started = run_asc(
-        "start",
-        "--mode",
-        "sandbox",
-        "--target",
-        "own",
-        "--nvda-dir",
-        str(portable),
-        timeout=420,
+    (root / "config.toml").write_text(
+        f"[targets.own]\nmode = 'sandbox'\nnvda_dir = '{portable}'\n", encoding="utf-8"
     )
+
+    started = run_asc("start", "--target", "own", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
     assert "nvda: connected" in started.stdout
     try:

@@ -80,7 +80,7 @@ def require_exe(folder: Path) -> Path:
     exe = folder / "nvda.exe"
     if not exe.is_file():
         # asc get-nvda can't help when you named the folder: nvda_dir overrides it.
-        hint = "asc get-nvda" if folder == managed_dir() else "check --nvda-dir or nvda_dir"
+        hint = "asc get-nvda" if folder == managed_dir() else "check nvda_dir"
         raise NvdaNotFound([f"the portable NVDA ({folder})"], hint=hint)
     check_version(str(folder), winapi.file_version(exe))
     return exe

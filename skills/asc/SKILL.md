@@ -26,8 +26,8 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
   restarts the user's screen reader. `asc get-nvda` and `asc start` are safe:
   they never start a second NVDA on the host.
 - The user's installed NVDA is used only as it runs: `watch` or `shared`.
-- If the user names their own portable NVDA, pass `--nvda-dir DIR` to
-  `asc start` (sandbox, or desktop). It runs with a copy of their settings and
+- If the user names their own portable NVDA, set it for a sandbox or desktop
+  target (`asc config set nvda_dir DIR --target NAME`). It runs with a copy of their settings and
   add-ons; `asc` never writes their copy.
 - The sandbox window sits in the system tray by default. If the user wants it
   on the taskbar or shown, pass `--window taskbar` or `--window show`.

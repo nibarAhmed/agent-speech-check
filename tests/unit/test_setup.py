@@ -264,8 +264,9 @@ def test_settings_fill_in_left_out_flags(
     folder = tmp_path / "nvda" / "documentation" / "en"
     folder.mkdir(parents=True)
     shutil.copy(FIXTURE, folder / "keyCommands.html")
-    nvda_dir = str(tmp_path / "nvda")
-    search = ["keys", "--nvda-dir", nvda_dir, "sleep", "mode", "toggle"]
+    run(capsys, "config", "set", "mode", "desktop")
+    run(capsys, "config", "set", "nvda_dir", str(tmp_path / "nvda"))
+    search = ["keys", "sleep", "mode", "toggle"]
     assert run(capsys, *search)[1].startswith("NVDA+shift+s  ")
     run(capsys, "config", "set", "keys_layout", "laptop")
     assert run(capsys, *search)[1].startswith("NVDA+shift+z  ")

@@ -80,29 +80,32 @@ def test_launch_errors(nvda: FakeNvda) -> None:
     assert nvda.held == set()
 
 
-def test_keys_from_a_given_nvda(tmp_path: Path) -> None:
-    docs = tmp_path / "nvda" / "documentation" / "en"
-    docs.mkdir(parents=True)
-    shutil.copy(FIXTURE, docs / "keyCommands.html")
-    nvda_dir = str(tmp_path / "nvda")
-    found = run_asc("keys", "report", "title", "--nvda-dir", nvda_dir)
-    assert found.returncode == 0
-    assert found.stdout.startswith("NVDA+t  Report title: ")
-    assert run_asc("keys", "zzzz", "--nvda-dir", nvda_dir).stdout == "(no match)\n"
-    missing = run_asc("keys", "x", "--nvda-dir", str(tmp_path / "none"))
-    assert missing.returncode == 7
-    assert "NVDA not found. Looked in: --nvda-dir" in missing.stderr
-
-
 def test_keys_for_desktop_target_reads_the_portable_copy(env: Env, tmp_path: Path) -> None:
     portable = tmp_path / "portable"
+    docs = portable / "documentation" / "en"
+    docs.mkdir(parents=True)
+    shutil.copy(FIXTURE, docs / "keyCommands.html")
     (env.root / "agent-speech-check" / "config.toml").write_text(
-        f"[targets.p]\nmode = 'desktop'\nnvda_dir = '{portable.as_posix()}'\n",
+        f"[targets.p]\nmode = 'desktop'\nnvda_dir = '{portable.as_posix()}'\n"
+        "[targets.none]\nmode = 'desktop'\nnvda_dir = 'C:/no/such/nvda'\n",
         encoding="utf-8",
     )
-    missing = run_asc("keys", "x", "--target", "p")
+    found = run_asc("keys", "report", "title", "--target", "p")
+    assert found.returncode == 0
+    assert found.stdout.startswith("NVDA+t  Report title: ")
+    assert run_asc("keys", "zzzz", "--target", "p").stdout == "(no match)\n"
+    missing = run_asc("keys", "x", "--target", "none")
     assert missing.returncode == 7
     assert "the portable NVDA" in missing.stderr
+    assert "hint: check nvda_dir" in missing.stderr
+
+
+@pytest.mark.usefixtures("env")
+@pytest.mark.parametrize("command", ["start", "keys"])
+def test_nvda_dir_is_a_setting_not_a_flag(command: str, tmp_path: Path) -> None:
+    result = run_asc(command, "--nvda-dir", str(tmp_path))
+    assert result.returncode == 2
+    assert "unrecognized arguments: --nvda-dir" in result.stderr
 
 
 @pytest.mark.usefixtures("env")
@@ -174,21 +177,22 @@ def test_settings_are_checked_together_before_anything_starts() -> None:
     assert "synth is a key, not a section" in result.stderr
 
 
-@pytest.mark.usefixtures("env")
-def test_start_nvda_dir(tmp_path: Path) -> None:
-    watch = run_asc("start", "--target", "w", "--nvda-dir", str(tmp_path))
-    assert watch.returncode == 2
-    assert "--nvda-dir nvda_dir: expected only for an NVDA that asc launches" in watch.stderr
+def test_start_nvda_dir(env: Env, tmp_path: Path) -> None:
     missing = tmp_path / "none"
-    desktop = run_asc("start", "--mode", "desktop", "--target", "own", "--nvda-dir", str(missing))
+    broken = tmp_path / "broken"
+    (env.root / "agent-speech-check" / "config.toml").write_text(
+        f"[targets.missing]\nmode = 'desktop'\nnvda_dir = '{missing.as_posix()}'\n"
+        f"[targets.broken]\nmode = 'desktop'\nnvda_dir = '{broken.as_posix()}'\n",
+        encoding="utf-8",
+    )
+    desktop = run_asc("start", "--target", "missing")
     assert desktop.returncode == 7
     assert f"NVDA not found. Looked in: the portable NVDA ({missing})" in desktop.stderr
-    assert "hint: check --nvda-dir or nvda_dir" in desktop.stderr
-    broken = tmp_path / "broken"
+    assert "hint: check nvda_dir" in desktop.stderr
     (broken / "userConfig").mkdir(parents=True)
     (broken / "nvda.exe").write_bytes(b"")
     (broken / "userConfig" / "nvda.ini").write_text("[speech]\nnot a line\n", encoding="utf-8")
-    unreadable = run_asc("start", "--mode", "desktop", "--target", "own", "--nvda-dir", str(broken))
+    unreadable = run_asc("start", "--target", "broken")
     assert unreadable.returncode == 2
     assert "cannot read your NVDA config:" in unreadable.stderr
     assert "nvda.ini line 2" in unreadable.stderr

@@ -66,13 +66,14 @@ def test_reference_falls_back_to_english(tmp_path: Path) -> None:
     english = tmp_path / "nvda" / "documentation" / "en" / "keyCommands.html"
     english.parent.mkdir(parents=True)
     english.write_text("<html></html>", encoding="utf-8")
-    assert keyref.reference([("here", tmp_path / "nvda")], "de") == english
+    assert keyref.reference([("here", tmp_path / "nvda")], "de", "hint") == english
 
 
 def test_reference_not_found_says_where_it_looked(tmp_path: Path) -> None:
     with pytest.raises(NvdaNotFound) as exc:
-        keyref.reference([("the running nvda.exe", tmp_path)], "en")
+        keyref.reference([("the running nvda.exe", tmp_path)], "en", "start your NVDA")
     assert f"Looked in: the running nvda.exe ({tmp_path})" in exc.value.message
+    assert exc.value.hint == "start your NVDA"
     assert exc.value.exit_code == 7
 
 
