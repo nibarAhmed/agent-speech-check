@@ -258,6 +258,11 @@ class DaemonHungUp(DaemonUnreachable):
         super().__init__("it closed the connection without a reply")
 
 
+class PowerShellTimedOut(NotConnected):
+    def __init__(self, seconds: float) -> None:
+        super().__init__(f"PowerShell gave no answer within {seconds:g} s", hint="try again")
+
+
 class NvdaNotFound(SetupNeeded):
     def __init__(self, looked: Sequence[str], hint: str) -> None:
         where = "; ".join(looked) if looked else "nowhere"

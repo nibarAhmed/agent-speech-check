@@ -117,15 +117,23 @@ def drop_other_installers(installer: Path) -> None:
 def create_portable(installer: Path, dest: Path) -> Path:
     """Run the NVDA installer to make a portable copy at `dest`."""
     refuse_if_running()
+    return run_installer(installer, dest)
+
+
+def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIMEOUT_S) -> Path:
+    """`create_portable` without the check that no NVDA runs."""
     if dest.exists():
         shutil.rmtree(dest)
-    subprocess.run(  # noqa: S603 - the official NVDA installer
-        [str(installer), "--create-portable-silent", f"--portable-path={dest}"],
-        check=False,
-        timeout=CREATE_TIMEOUT_S,
-    )
+    try:
+        subprocess.run(  # noqa: S603 - the official NVDA installer
+            [str(installer), "--create-portable-silent", f"--portable-path={dest}"],
+            check=False,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        raise PortableFailed(str(dest)) from None
     exe = dest / "nvda.exe"
-    if not poll_until(exe.is_file, CREATE_TIMEOUT_S, 1):
+    if not poll_until(exe.is_file, timeout_s, 1):
         raise PortableFailed(str(dest))
     return exe
 

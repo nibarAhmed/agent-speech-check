@@ -28,6 +28,7 @@ from agent_speech_check.errors import (
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
+    PortableFailed,
     SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
@@ -125,6 +126,14 @@ def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
         launcher.create_portable(tmp_path / "installer.exe", tmp_path / "portable")
     with pytest.raises(NvdaAlreadyRunning):
         launcher.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
+
+
+def test_an_installer_that_hangs_fails_as_portable_failed(tmp_path: Path) -> None:
+    installer = tmp_path / "hangs.cmd"
+    # Waits about 3 s, long past the timeout, and makes no portable copy.
+    installer.write_text("@ping -n 4 127.0.0.1 > nul\r\n", encoding="utf-8")
+    with pytest.raises(PortableFailed):
+        launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
 
 
 def test_firewall_reads_are_harmless() -> None:
