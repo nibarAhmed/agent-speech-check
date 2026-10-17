@@ -207,14 +207,6 @@ One daemon runs at a time. `asc start` exits 4 while one runs in any mode, and
 `stop`, `status`, `speech`, `wait`, `mark`, `press`, `type` and `launch` talk
 to it without being told its mode.
 
-Older versions kept named targets (`[targets.NAME]` tables and a `default`
-setting). Every command that reads settings exits 2 with such a file. Run
-`asc setup`, or move each target's settings, without its `mode`, to the table
-of its mode, and set `mode` to the old default target's mode. The folders are
-now named after modes, so watch and shared mode make a new relay certificate
-and key: connect your NVDA once more and trust the certificate again. The old
-target folders can be deleted.
-
 ### Global settings
 
 | Setting | Default | Meaning |

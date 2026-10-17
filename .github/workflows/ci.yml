@@ -77,7 +77,7 @@ jobs:
           function StartDaemon {
             & "$dir\asc.exe" start | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "asc start exit $LASTEXITCODE" }
-            (Get-Content "$data\default\state.json" | ConvertFrom-Json).pid
+            (Get-Content "$data\watch\state.json" | ConvertFrom-Json).pid
           }
           function AssertGone($daemon, $when) {
             if (Get-Process -Id $daemon -ErrorAction SilentlyContinue) { throw "daemon $daemon still running after $when" }
@@ -92,7 +92,7 @@ jobs:
           AssertGone $daemon 'upgrade'
           if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
           if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
-          if (-not (Test-Path "$data\default\relay_cert.pem")) { throw "upgrade removed $data" }
+          if (-not (Test-Path "$data\watch\relay_cert.pem")) { throw "upgrade removed $data" }
           foreach ($flag in '--help', '--version') {
             & "$dir\asc.exe" $flag
             if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
@@ -103,11 +103,11 @@ jobs:
           AssertGone $daemon 'a failed uninstall'
           if ((Products) -ne 1) { throw "a failed uninstall left $(Products) products" }
           if (-not (Test-Path "$dir\asc.exe")) { throw "a failed uninstall left no asc.exe" }
-          if (-not (Test-Path "$data\default\relay_cert.pem")) { throw "a failed uninstall removed $data" }
+          if (-not (Test-Path "$data\watch\relay_cert.pem")) { throw "a failed uninstall removed $data" }
           # KEEPDATA=1 keeps the state.
           Msiexec "/x `"$msi`" KEEPDATA=1"
           if ((Products) -ne 0) { throw "$(Products) products left" }
-          if (-not (Test-Path "$data\default\relay_cert.pem")) { throw "KEEPDATA=1 removed $data" }
+          if (-not (Test-Path "$data\watch\relay_cert.pem")) { throw "KEEPDATA=1 removed $data" }
           # A plain uninstall stops the daemon and removes everything.
           Msiexec "/i `"$msi`""
           $daemon = StartDaemon

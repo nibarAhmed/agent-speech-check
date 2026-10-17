@@ -50,11 +50,6 @@ asc config set settle_ms 800                   # timings are global
 - `asc start` uses the `mode` setting unless you pass `--mode M`, with that
   mode's settings. One daemon runs at a time, and the other commands talk to
   it without `--mode`.
-- If a command says `config.toml lists targets`, the file is from an older
-  `asc`. Ask the user to run `asc setup`, or, with their OK, rewrite the file
-  at `asc config path`: `mode = "sandbox"` (the old default target's mode) at
-  the top, then each target's settings, without `mode`, under a table named
-  after its mode, like `[sandbox]`.
 - If presses keep missing speech, or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` rather than passing the
   flag every time. Tell the user what you changed.
