@@ -20,7 +20,7 @@ body:
       label: Steps to reproduce
       description: The asc commands, in order, and the app they ran against.
       placeholder: |
-        1. asc start --target x
+        1. asc start --mode desktop
         2. asc press tab --expect "OK button"
     validations:
       required: true
@@ -39,7 +39,7 @@ body:
         - desktop
         - sandbox
         - shared
-        - not sure, or no target started
+        - not sure, or asc wasn't started
     validations:
       required: true
   - type: input

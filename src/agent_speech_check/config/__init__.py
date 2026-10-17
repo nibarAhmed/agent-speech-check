@@ -1,1 +1,1 @@
-"""Settings: `config.toml`, its preferences and targets, and `asc setup`."""
+"""Settings: `config.toml`, its preferences per mode, and `asc setup`."""

@@ -50,17 +50,17 @@ def wait_connected(timeout_s: float = 90) -> None:
 
 @pytest.fixture
 def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """A started `launch = false` desktop target with a real NVDA joined to it."""
+    """A started `launch = false` desktop mode with a real NVDA joined to it."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     port = free_port()
     root = tmp_path / "agent-speech-check"
     root.mkdir()
     (root / "config.toml").write_text(
-        f'[targets.e]\nmode = "desktop"\nport = {port}\nlaunch = false\n', encoding="utf-8"
+        f'mode = "desktop"\n[desktop]\nport = {port}\nlaunch = false\n', encoding="utf-8"
     )
-    started = run_asc("start", "--target", "e")
+    started = run_asc("start")
     assert started.returncode == 0, started.stderr
-    folder = root / "e"
+    folder = root / "desktop"
     channel = json.loads((folder / "relay.json").read_text(encoding="utf-8"))["channel"]
     config = tmp_path / "nvda_config"
     config.mkdir()
@@ -131,8 +131,6 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         "start",
         "--mode",
         "desktop",
-        "--target",
-        "x",
         "--nvda-setting",
         "presentation.reportTooltips=False",
     )
@@ -141,7 +139,7 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert "panic key: Control+Shift+Alt+F12 stops asc and releases keys" in started.stdout
     try:
         wait_connected()
-        assert "Report title" in run_asc("keys", "report title", "--target", "x").stdout
+        assert "Report title" in run_asc("keys", "report title", "--mode", "desktop").stdout
 
         page = tmp_path / "app.html"
         page.write_text(APP, encoding="utf-8")

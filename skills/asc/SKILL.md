@@ -26,41 +26,40 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
   restarts the user's screen reader. `asc get-nvda` and `asc start` are safe:
   they never start a second NVDA on the host.
 - The user's installed NVDA is used only as it runs: `watch` or `shared`.
-- If the user names their own portable NVDA, set it for a sandbox or desktop
-  target (`asc config set nvda_dir DIR --target NAME`). It runs with a copy of their settings and
+- If the user names their own portable NVDA, set it for sandbox or desktop
+  mode (`asc config set nvda_dir DIR --mode sandbox`). It runs with a copy of their settings and
   add-ons; `asc` never writes their copy.
 - The sandbox window sits in the system tray by default. If the user wants it
   on the taskbar or shown, pass `--window taskbar` or `--window show`.
 
-## Targets and settings
+## Settings
 
-A target is a named set of settings (mode, shared folders, timings). The user's
-choices live in `config.toml`, made by `asc setup`. Never run `asc setup`
+Each mode has its own settings (port, shared folders, ...), and `mode` says
+which one `asc start` uses. The user's choices live in `config.toml`, made by
+`asc setup`. Never run `asc setup`
 yourself: it asks questions (and exits 2 without a terminal), and it replaces
 all their settings. Use `asc config` instead:
 
 ```
 asc config list                                # every setting and its source
-asc config set mode sandbox --target app       # makes a new target
-asc config set share C:\src\app --target app
+asc config set mode sandbox                    # asc start uses sandbox mode
+asc config set share C:\src\app --mode sandbox
 asc config set settle_ms 800                   # timings are global
 ```
 
-- `asc start` uses the default target unless you pass `--target NAME`. One
-  daemon runs at a time, and the other commands talk to it without `--target`.
-- `asc start --mode M` sets the mode only for a target that isn't in
-  `config.toml`. For a listed target with another mode it exits 2: leave out
-  `--mode`, or use another `--target`.
+- `asc start` uses the `mode` setting unless you pass `--mode M`, with that
+  mode's settings. One daemon runs at a time, and the other commands talk to
+  it without `--mode`.
 - If presses keep missing speech, or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` rather than passing the
   flag every time. Tell the user what you changed.
-- A target setting, or `panic_key`, applies to a running target at its next `asc start` (it says so).
+- A mode's setting, or `panic_key`, applies to a running daemon at its next `asc start` (it says so).
 
 ## Workflow
 
 ```
-asc config list                   # which targets exist, and their modes
-asc start --target app            # prints status; exit 4: asc already runs
+asc config list                   # the mode and its settings
+asc start                         # prints status; exit 4: asc already runs
 asc mark                          # everything after this counts
 ...act (click, navigate, press keys, run the test)...
 asc wait "(?i)saved"              # returns as soon as a line matches, else exit 1
@@ -68,9 +67,8 @@ asc speech                        # all lines since the mark
 asc stop                          # when done
 ```
 
-- Without a listed target, start one by mode, for example
-  `asc start --target try --mode desktop`.
-- If `asc start` exits 4, `asc status` shows which target runs. Stop it first
+- To try another mode once, `asc start --mode desktop`.
+- If `asc start` exits 4, `asc status` shows which mode runs. Stop it first
   only if it's the wrong one.
 - `wait` takes a Python regex, searched, `(?i)` for case. Default timeout 5000
   ms (`--timeout`, or the `timeout_ms` setting). On timeout it prints what NVDA
@@ -100,8 +98,8 @@ asc launch "C:\share\app\run.cmd" --title "My App"
   title there means the app started anyway. In watch mode its window may be
   behind another one, so NVDA said nothing until the user switches to it.
 - Sandbox mode: the command runs inside the sandbox, which has no Edge and no
-  Notepad. Your own app must come from a folder listed in the target's `share`
-  (`asc config set share DIR --target NAME`), seen inside as
+  Notepad. Your own app must come from a folder listed in sandbox mode's `share`
+  (`asc config set share DIR --mode sandbox`), seen inside as
   `C:\share\<folder name>`.
 
 ## Pressing keys (desktop, sandbox or shared)
@@ -125,7 +123,7 @@ asc type "hello"
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute.
   `asc sandbox-setup` must have been run once (exit 7 says so). It shows an
   admin prompt, so ask the user to run it.
-- A target with `launch = false` (NVDA started elsewhere, which connects by
+- A mode with `launch = false` (NVDA started elsewhere, which connects by
   itself) needs neither: no portable NVDA and no sandbox, and `launch` runs
   the command on this computer.
 - Shared mode needs `asc start --mode shared --i-understand` every time.

@@ -18,9 +18,9 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 - Results go to stdout and errors to stderr. An error prints
   `error: <message>` and, when there is one, `hint: <what to do>`. Bad
   arguments do too, with the command's `--help` as the hint, and exit 2.
-- `asc start`, `asc keys`, `asc sandbox-setup` and `asc config` take
-  `--target NAME` (see [Targets](#targets)). The rest talk to the one daemon
-  that runs, whatever its target.
+- `asc start`, `asc keys` and `asc config` take `--mode` (see
+  [Choosing a mode](#choosing-a-mode)). The rest talk to the one daemon that
+  runs, whatever its mode.
 - `MS` values are milliseconds. A flag on the command beats the setting it
   defaults to (see [Command defaults](#command-defaults)).
 - Commands that need NVDA exit 3 if it isn't connected or drops meanwhile, and
@@ -32,7 +32,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 
 | Group | Command | Does |
 |---|---|---|
-| Recording | [`start`](#asc-start) | start recording for a target |
+| Recording | [`start`](#asc-start) | start recording in a mode |
 | | [`stop`](#asc-stop) | stop recording and forget the speech |
 | | [`status`](#asc-status) | show whether `asc` is recording and NVDA is connected |
 | Speech | [`speech`](#asc-speech) | print what NVDA said since the mark |
@@ -66,7 +66,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Path | Holds |
 |---|---|
 | `%LOCALAPPDATA%\agent-speech-check\config.toml` | the settings (see [Configuration](#configuration)) |
-| `%LOCALAPPDATA%\agent-speech-check\<target>\` | one target's state file, `daemon.log`, and the relay certificate and channel key |
+| `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key |
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
 
 The certificate and key are created once and kept, because NVDA pins the
@@ -80,7 +80,7 @@ Windows Defender Firewall.
 
 ## Modes
 
-The target's `mode` (or `asc start --mode`) picks one of four.
+The `mode` setting (or `asc start --mode`) picks one of four.
 
 ### Watch mode
 
@@ -88,7 +88,7 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
 
 - Connect once in NVDA: Tools, Remote Access, Connect; choose to allow this computer to be controlled, enter the host and key `asc start` printed, and
   trust the certificate when NVDA asks. The host, key and certificate stay the
-  same for the target.
+  same for the mode.
 - `asc` never writes your NVDA config.
 - `asc` never launches your installed NVDA: a second NVDA restarts the running
   one.
@@ -97,7 +97,7 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
 ### Desktop mode
 
 `asc` launches a portable NVDA (made by `asc get-nvda`, or your own: the
-target's `nvda_dir`) with its own config folder and
+mode's `nvda_dir`) with its own config folder and
 `nvda.ini`. That NVDA starts unattended, uses the silent synth, mutes its own
 sounds, uses the desktop keyboard layout, and connects to the relay by itself.
 `asc stop` ends it, and it always ends when `asc` stops, even after a crash.
@@ -144,8 +144,8 @@ and your own NVDA keeps running undisturbed.
   visible window takes focus and catches keys you type. Don't close it: NVDA
   runs in it.
 - The relay listens only on this computer's Hyper-V Default Switch address
-  (looked up at every start), on port 16837 unless the target sets `port`.
-- Folders listed in the target's `share` are mapped read-only into the sandbox
+  (looked up at every start), on port 16837 unless sandbox mode's `port` says another.
+- Folders listed in sandbox mode's `share` are mapped read-only into the sandbox
   at `C:\share\<folder name>`, so `asc launch` can start your app from there.
 
 ### Shared mode
@@ -159,13 +159,13 @@ your NVDA to `asc` as in watch mode.
 ### Panic key
 
 In shared mode, and in desktop mode when `asc` launches its NVDA on this
-computer, `asc`'s keys land in your real Windows session. While such a target
+computer, `asc`'s keys land in your real Windows session. While such a mode
 runs, the global panic hotkey **Control+Shift+Alt+F12** releases any held keys
 and stops `asc` at once (in desktop mode, its NVDA too).
 
 - `panic_key` in `[defaults]` picks another
-  (`asc config set panic_key Control+Alt+F11`). A running target keeps its key
-  until its next `asc start`.
+  (`asc config set panic_key Control+Alt+F11`). A running daemon keeps its key
+  until the next `asc start`.
 - If another program owns the hotkey, `asc start` refuses (exit 4): `asc` never
   sends keys to this desktop without one.
 - `asc status` shows the panic key.
@@ -181,14 +181,13 @@ hand are not kept.
 
 ```toml
 # asc settings. Change them with asc config set, or start over with asc setup.
-default = "app"
+mode = "sandbox"
 
 [defaults]
 settle_ms = 800
 timeout_ms = 8000
 
-[targets.app]
-mode = "sandbox"
+[sandbox]
 share = ['C:\src\app']
 nvda_settings = ["keyboard.speakTypedCharacters=False"]
 ```
@@ -196,25 +195,31 @@ nvda_settings = ["keyboard.speakTypedCharacters=False"]
 The file holds only what was set: a missing key means the built-in default.
 Paths are TOML literal strings (`'C:\nvda'`). Unknown keys, and values that
 don't fit the tables below, are errors (exit 2) for every command, not only for
-the one that uses that target.
+the mode that uses them.
 
-### Targets
+### Choosing a mode
 
-A target is a named setup: a mode and its settings, with its own folder.
-`asc start` uses the target named by `--target`, or the `default` setting, or
-`default`. A target that isn't listed gets the defaults for `--mode` (watch
-if left out). For a listed target, `--mode` must match its `mode`, or
-`asc start` exits 2.
+`asc start` uses `--mode`, or the `mode` setting, or watch. Each mode keeps its
+own settings in a table named after it (`[watch]`, `[desktop]`, `[sandbox]`,
+`[shared]`) and its own folder. A mode without a table uses the defaults below.
 
-One daemon runs at a time. `asc start` exits 4 while one runs for any target,
-and `stop`, `status`, `speech`, `wait`, `mark`, `press`, `type` and `launch`
-talk to it without being told its target.
+One daemon runs at a time. `asc start` exits 4 while one runs in any mode, and
+`stop`, `status`, `speech`, `wait`, `mark`, `press`, `type` and `launch` talk
+to it without being told its mode.
+
+Older versions kept named targets (`[targets.NAME]` tables and a `default`
+setting). Every command that reads settings exits 2 with such a file. Run
+`asc setup`, or move each target's settings, without its `mode`, to the table
+of its mode, and set `mode` to the old default target's mode. The folders are
+now named after modes, so watch and shared mode make a new relay certificate
+and key: connect your NVDA once more and trust the certificate again. The old
+target folders can be deleted.
 
 ### Global settings
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `default` | `default` | the target used without `--target` |
+| `mode` | watch | the mode `asc start` uses without `--mode` |
 | `panic_key` | Control+Shift+Alt+F12 | the [panic key](#panic-key), written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
 
 ### Command defaults
@@ -229,13 +234,13 @@ built-in default.
 | `launch_timeout_ms` | 30000 (at most 600000) | `launch --timeout` |
 | `keys_layout` | desktop | `keys --layout` (desktop or laptop) |
 
-### Target settings
+### Mode settings
 
-In `[targets.NAME]`. [Modes](#modes) explains each one in context.
+In the mode's table, like `[sandbox]`. [Modes](#modes) explains each one in
+context.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `mode` | (required) | watch, desktop, sandbox or shared |
 | `port` | watch and shared 6837, sandbox 16837, desktop a free one | relay port |
 | `launch` | true in desktop and sandbox mode | false if NVDA is started elsewhere and connects itself |
 | `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
@@ -252,32 +257,32 @@ and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
 ### `asc start`
 
 ```
-asc start [--target NAME] [--mode {watch,desktop,sandbox,shared}]
+asc start [--mode {watch,desktop,sandbox,shared}]
           [--nvda-setting SECTION.KEY=VALUE] [--window {tray,taskbar,show}]
           [--i-understand]
 ```
 
-Starts the daemon for the target and prints its status. What it starts and
+Starts the daemon in the mode and prints its status. What it starts and
 checks depends on the mode: see [Modes](#modes).
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--mode MODE` | the target's `mode`, or watch | mode for an unlisted target |
-| `--nvda-setting SECTION.KEY=VALUE` | the target's `nvda_settings` | an `nvda.ini` setting for the NVDA `asc` launches (repeatable) |
-| `--window {tray,taskbar,show}` | the target's `window`, or tray | sandbox only: its window, for this start only |
+| `--mode MODE` | the `mode` setting, or watch | the mode to start, with its settings |
+| `--nvda-setting SECTION.KEY=VALUE` | the mode's `nvda_settings` | an `nvda.ini` setting for the NVDA `asc` launches (repeatable) |
+| `--window {tray,taskbar,show}` | sandbox mode's `window`, or tray | sandbox only: its window, for this start only |
 | `--i-understand` | off | shared mode: yes, send keys into my own session |
 
-- `--nvda-setting` adds to the target's `nvda_settings`; for the same key,
+- `--nvda-setting` adds to the mode's `nvda_settings`; for the same key,
   `--nvda-setting` wins. Names are letters, digits and `_`, with dots for
   nested sections. Settings `asc` writes itself (`remote`, the synth, sound
   volume, keyboard layout, the mode sounds) are refused with exit 2, and so is
   a setting for an NVDA `asc` doesn't launch.
-- Exits 4 if `asc` is already running, for this target or another, and 3 with
+- Exits 4 if `asc` is already running, in this mode or another, and 3 with
   the last daemon log lines if it fails to start.
 
 ```shell
 asc start
-asc start --target app
+asc start --mode sandbox
 asc start --nvda-setting keyboard.speakTypedCharacters=False
 ```
 
@@ -288,11 +293,10 @@ asc stop
 ```
 
 Releases any held keys, stops the daemon and forgets the speech, and prints
-`stopped: TARGET`. Exits 3 if nothing runs.
+`stopped: MODE`. Exits 3 if nothing runs.
 
 - A daemon that is there but doesn't answer (an older asc, or a stuck one)
-  still counts as running, so `asc start`, `asc setup` and
-  `asc config remove-target` refuse with exit 4. `asc stop` ends its process,
+  still counts as running, so `asc start` and `asc setup` refuse with exit 4. `asc stop` ends its process,
   with its NVDA or sandbox, but can't release held keys that way. The same
   happens to a daemon still there 30 s after agreeing to stop.
 - If Windows won't let it end the process, it exits 4 and keeps the state file.
@@ -303,11 +307,11 @@ Releases any held keys, stops the daemon and forgets the speech, and prints
 asc status
 ```
 
-Shows the target, whether `asc` is recording and NVDA is connected, the
+Shows the mode, whether `asc` is recording and NVDA is connected, the
 browse/focus mode and the speech log:
 
 ```
-target: default (watch mode, keys refused)
+mode: watch (keys refused)
 recording: yes
 nvda: connected
 browse/focus: unknown
@@ -318,7 +322,7 @@ speech: 12 lines kept, latest 12, mark 10
 - `browse/focus` is `unknown` until NVDA first switches modes.
 - A `last error:` line says why the last failed connection was dropped (for
   example a wrong channel key), until NVDA next joins.
-- When the target has a [panic key](#panic-key), it shows it.
+- When the mode has a [panic key](#panic-key), it shows it.
 - If `asc` isn't running, it exits 3.
 
 ### `asc speech`
@@ -433,7 +437,7 @@ asc type "x@example.com" --settle 800
 ### `asc keys`
 
 ```
-asc keys [--target NAME] [--layout {desktop,laptop}] [--lang LANG]
+asc keys [--mode {watch,desktop,sandbox,shared}] [--layout {desktop,laptop}] [--lang LANG]
          [--braille | --no-braille] [SEARCH ...]
 ```
 
@@ -449,11 +453,12 @@ h  heading
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `SEARCH` | none (all) | words that must all appear |
+| `--mode MODE` | the `mode` setting, or watch | whose `nvda_dir` to read |
 | `--layout {desktop,laptop}` | `keys_layout`, desktop | the keyboard layout's keys |
 | `--lang LANG` | en | reference language, like `de` or `pt_BR`, falling back to `en` |
 | `--braille`, `--no-braille` | off | include rows for braille displays |
 
-- It reads `documentation\<lang>\keyCommands.html` from the target's portable
+- It reads `documentation\<lang>\keyCommands.html` from the mode's portable
   NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA (the
   running `nvda.exe`, the uninstall registry entry, then Program Files). If
   none is found it exits 7 and says where it looked.
@@ -529,8 +534,7 @@ asc get-nvda --installer nvda_2026.2.exe
 asc setup [--yes]
 ```
 
-Asks a few questions and saves the answers in `config.toml`, for the default
-target:
+Asks a few questions and saves the answers in `config.toml`:
 
 1. The mode.
 2. Desktop and sandbox mode: which NVDA.
@@ -547,22 +551,21 @@ the sandbox firewall rule. Timings are not asked; change them with
 
 - Each question lists numbered choices and marks the default; Enter keeps it.
   Answer with the number or name.
-- Running it again replaces all settings, after asking. Target folders, with
+- Running it again replaces all settings, after asking. Mode folders, with
   the relay certificate NVDA trusts, are kept.
 - Nothing is written until the last question, `Save?`; Ctrl+C stops without
   saving (exit 130).
 - Without a terminal it exits 2 at once, so a script never waits on it. Use
   `asc config` there.
-- It refuses with exit 4 while any target runs.
+- It refuses with exit 4 while `asc` runs.
 
 ### `asc config`
 
 ```
-asc config list [--target NAME]
-asc config get NAME [--target NAME]
-asc config set NAME VALUE [VALUE ...] [--target NAME]
-asc config unset NAME [--target NAME]
-asc config remove-target TARGET
+asc config list [--mode MODE]
+asc config get NAME [--mode MODE]
+asc config set NAME VALUE [VALUE ...] [--mode MODE]
+asc config unset NAME [--mode MODE]
 asc config path
 ```
 
@@ -571,43 +574,42 @@ Shows or changes the settings in `config.toml` (see
 
 | Action | Does |
 |---|---|
-| `list` | prints every setting as `name = value (source)`; the source is `target`, `global` or `default` |
+| `list` | prints every setting as `name = value (source)`; the source is the mode's name, `global` or `default` |
 | `get` | prints the value only |
 | `set` | changes it and prints `name = value (where)` |
 | `unset` | goes back to the inherited value |
-| `remove-target` | deletes the target's settings (not its folder); exit 4 while it runs |
 | `path` | prints where `config.toml` is (works even when the file is broken) |
 
-- Target settings go to `--target`, or to the default target. Global settings
-  and command defaults go to `[defaults]` and take no `--target` (exit 2).
-- A target is made by setting its `mode`; any other setting for a target that
-  isn't listed exits 2 with that hint. `unset mode` is refused (exit 2).
+- Mode settings go to the table of `--mode`, or of the `mode` setting (watch
+  unless set). Global settings (`mode`, `panic_key`) and command defaults take
+  no `--mode` (exit 2); `panic_key` and command defaults go to `[defaults]`.
+- Unsetting a mode's last setting removes its table.
 - Lists (`share`, `nvda_settings`) take several values and replace the whole
   list. Paths are made full paths. Booleans are `true` or `false`.
 - The whole file is checked before it is written, so a clash (for example
-  `keys true` in watch mode) exits 2 and changes nothing. An unknown setting
+  `window show` in watch mode) exits 2 and changes nothing. An unknown setting
   exits 2 and suggests close names.
-- A running target's settings apply at its next `asc start` (it says so).
+- A running mode's settings apply at its next `asc start` (it says so).
   Command defaults apply at once.
 
 ```shell
 asc config list
-asc config set mode sandbox --target app
-asc config set share C:\src\app C:\data --target app
+asc config set mode sandbox
+asc config set share C:\src\app C:\data --mode sandbox
 asc config unset settle_ms
 ```
 
 ### `asc sandbox-setup`
 
 ```
-asc sandbox-setup [--target NAME]
+asc sandbox-setup
 ```
 
 Creates the one Windows Firewall rule sandbox mode needs, after a Windows admin
 prompt. Sandbox mode's NVDA connects to `asc` on this computer's Hyper-V
 Default Switch address, which Windows Firewall blocks until this rule allows
 it. The rule is inbound TCP, only on the `vEthernet (Default Switch)`
-interface, only the target's relay port (16837 by default), only for the
+interface, only sandbox mode's relay port (16837 unless its `port` says another), only for the
 program that runs `asc`.
 
 - If the rule is already in place it says so and changes nothing.

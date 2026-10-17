@@ -5,7 +5,7 @@
 two throwaway connections (a verified TLS attempt that fails, then a certificate
 fetch), so the relay accepts and forgets connections that fail or close early.
 
-The certificate and channel key are kept per target, because NVDA pins the
+The certificate and channel key are kept per mode, because NVDA pins the
 certificate's fingerprint and a user in watch mode types the key once.
 """
 
