@@ -72,23 +72,24 @@ def refuse_if_running() -> None:
         raise NvdaAlreadyRunning
 
 
-def check_version(folder: str, version: tuple[int, int] | None) -> None:
-    """Refuse an NVDA older than MIN_VERSION. An unknown version is let through."""
-    if version is not None and version < MIN_VERSION:
-        raise NvdaTooOld(folder, ".".join(map(str, version)), ".".join(map(str, MIN_VERSION)))
-
-
-def missing_hint(folder: Path) -> str:
-    """What to do when the portable NVDA isn't in `folder`."""
+def portable_hint(folder: Path) -> str:
+    """What to do when the portable NVDA in `folder` is missing or too old."""
     # asc get-nvda can't help when you named the folder: nvda_dir overrides it.
     return "asc get-nvda" if folder == managed_dir() else "check nvda_dir"
+
+
+def check_version(folder: Path, version: tuple[int, int] | None) -> None:
+    """Refuse an NVDA older than MIN_VERSION. An unknown version is let through."""
+    if version is not None and version < MIN_VERSION:
+        found, needed = (".".join(map(str, v)) for v in (version, MIN_VERSION))
+        raise NvdaTooOld(str(folder), found, needed, portable_hint(folder))
 
 
 def require_exe(folder: Path) -> Path:
     exe = folder / "nvda.exe"
     if not exe.is_file():
-        raise NvdaNotFound([f"the portable NVDA ({folder})"], hint=missing_hint(folder))
-    check_version(str(folder), winapi.file_version(exe))
+        raise NvdaNotFound([f"the portable NVDA ({folder})"], hint=portable_hint(folder))
+    check_version(folder, winapi.file_version(exe))
     return exe
 
 
