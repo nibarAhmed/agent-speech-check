@@ -45,6 +45,8 @@ uv tool install .
 
 If `asc` is not found, check that `uv`'s tool bin directory is on `PATH`, then open a new terminal.
 
+To uninstall, run `asc stop` for each running target, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself ([details](docs/cli.md#files)).
+
 ## Get started
 
 1. Run `asc setup` to pick a mode and create the configuration. It offers to download NVDA for desktop mode and to add the firewall rule sandbox mode needs (that step asks for admin). You can change settings later with `asc config`.

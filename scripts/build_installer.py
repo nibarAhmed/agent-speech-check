@@ -24,10 +24,12 @@ DIST = ROOT / "dist"
 MSI_LIMITS = (255, 255, 65535)
 
 
-def wix_ui() -> str:
-    """The wizard's dialogs, at the WiX version dotnet-tools.json pins."""
+def wix_extensions() -> list[str]:
+    """The wizard's dialogs (UI) and the custom actions (Util), at the WiX version
+    dotnet-tools.json pins."""
     tools = json.loads((ROOT / "dotnet-tools.json").read_text(encoding="utf-8"))
-    return f"WixToolset.UI.wixext/{tools['tools']['wix']['version']}"
+    version = tools["tools"]["wix"]["version"]
+    return [f"WixToolset.{name}.wixext/{version}" for name in ("UI", "Util")]
 
 
 def require_x64(platform: str) -> None:
@@ -62,16 +64,19 @@ def main() -> None:
         cwd=ROOT,
     )  # fmt: skip
     subprocess.run(["dotnet", "tool", "restore"], check=True, cwd=ROOT)
-    ui = wix_ui()
+    extensions = wix_extensions()
     subprocess.run(
-        ["dotnet", "wix", "extension", "add", "-acceptEula", "wix7", ui], check=True, cwd=ROOT
+        ["dotnet", "wix", "extension", "add", "-acceptEula", "wix7", *extensions],
+        check=True,
+        cwd=ROOT,
     )
     msi = DIST / f"agent-speech-check-{version}.msi"
     subprocess.run(
         [
             "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),
             "-d", f"Version={version}", "-d", f"AppDir={DIST / 'asc'}",
-            "-ext", ui, "-loc", str(ROOT / "installer" / "asc.wxl"),
+            *(arg for extension in extensions for arg in ("-ext", extension)),
+            "-loc", str(ROOT / "installer" / "asc.wxl"),
             "-arch", "x64", "-wx", "-acceptEula", "wix7", "-o", str(msi),
         ],
         check=True,

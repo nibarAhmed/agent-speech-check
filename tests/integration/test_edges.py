@@ -219,6 +219,21 @@ def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
     assert path.exists()
 
 
+@pytest.mark.parametrize("daemon_reply", [b""], indirect=True)
+@pytest.mark.usefixtures("daemon_reply")
+def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> None:
+    path = env.folder("w") / "state.json"
+    current = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**current, "pid": 4, "started": time.time()}), encoding="utf-8")
+    assert run_asc("start", "--target", "d").returncode == 0
+    result = run_asc("_stop_all")
+    assert result.returncode == 4, result.stderr
+    assert result.stdout == "stopped: d\n"
+    assert 'cannot end the asc daemon for target "w"' in result.stderr
+    assert not (env.folder("d") / "state.json").exists()
+    assert path.exists()
+
+
 def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     folder = env.folder("w")
     folder.mkdir(parents=True)

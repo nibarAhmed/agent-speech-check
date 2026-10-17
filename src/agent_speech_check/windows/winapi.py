@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import os
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -65,6 +66,19 @@ def image_path(pid: int) -> Path | None:
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return None
     return Path(exe) if exe else None
+
+
+def others_running(image: Path) -> list[int]:
+    """The pids of other processes running the exe at `image`. Ones that won't
+    say their exe are left out."""
+    wanted = os.path.normcase(image)
+    return [
+        process.pid
+        for process in psutil.process_iter(["exe"])
+        if process.pid != os.getpid()
+        and process.info["exe"]
+        and os.path.normcase(process.info["exe"]) == wanted
+    ]
 
 
 def wait_exit(pid: int) -> None:

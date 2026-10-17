@@ -859,6 +859,13 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: stops a sandbox once the process that started it is gone.
         wsb.guard(int(args_list[1]), args_list[2])
         return 0
+    if args_list == ["_stop_all"]:
+        # Hidden: how the installer stops every daemon before it replaces or
+        # removes asc.exe. Only an installed asc.exe has other copies to wait for.
+        image = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        for target in session.stop_all(state_root(), image):
+            print(f"stopped: {target}")
+        return 0
     args = build_parser().parse_args(args_list)
     if args.command is None:
         raise NoCommand

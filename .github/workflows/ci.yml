@@ -58,33 +58,71 @@ jobs:
           $first = "$env:RUNNER_TEMP\first.msi"
           $msi = (Get-Item dist\agent-speech-check-*.msi).FullName
           $dir = "$env:LOCALAPPDATA\Programs\agent-speech-check"
+          $data = "$env:LOCALAPPDATA\agent-speech-check"
           $upgradeCode = '{45024D39-B418-4A36-B773-3A035735ECD7}'
           $installer = New-Object -ComObject WindowsInstaller.Installer
+          $logs = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\msi-logs"
+          $script:run = 0
           function UserPath { [Environment]::GetEnvironmentVariable('Path', 'User') }
           # Its folders: Windows Installer drops an empty entry (a trailing ';') on uninstall.
           function PathFolders($path) { ($path -split ';' | Where-Object { $_ }) -join ';' }
           function Products { @($installer.RelatedProducts($upgradeCode)).Count }
-          function Msiexec($arguments) {
-            $p = Start-Process msiexec $arguments -Wait -PassThru
-            if ($p.ExitCode -ne 0) { throw "msiexec $arguments exit $($p.ExitCode)" }
+          # Exit code 3010 (reboot needed) fails too: it means files were still in use.
+          function Msiexec($arguments, $expected = 0) {
+            $script:run++
+            $p = Start-Process msiexec "$arguments /qn /l*v `"$logs\$script:run.log`"" -Wait -PassThru
+            if ($p.ExitCode -ne $expected) { throw "msiexec $arguments exit $($p.ExitCode), expected $expected" }
           }
-          $p = Start-Process msiexec "/i `"$msi`" ALLUSERS=1 /qn" -Wait -PassThru
-          if ($p.ExitCode -ne 1603) { throw "per-machine install exit $($p.ExitCode), expected 1603" }
+          # A watch-mode daemon from the installed asc, and its pid.
+          function StartDaemon {
+            & "$dir\asc.exe" start | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "asc start exit $LASTEXITCODE" }
+            (Get-Content "$data\default\state.json" | ConvertFrom-Json).pid
+          }
+          function AssertGone($daemon, $when) {
+            if (Get-Process -Id $daemon -ErrorAction SilentlyContinue) { throw "daemon $daemon still running after $when" }
+          }
+          Msiexec "/i `"$msi`" ALLUSERS=1" 1603
           if ((Products) -ne 0) { throw "per-machine install was not refused" }
           $pathBefore = UserPath
-          Msiexec "/i `"$first`" /qn"
-          Msiexec "/i `"$msi`" /qn"
+          Msiexec "/i `"$first`""
+          # An upgrade stops the daemon of the version it replaces.
+          $daemon = StartDaemon
+          Msiexec "/i `"$msi`""
+          AssertGone $daemon 'upgrade'
           if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
           if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
+          if (-not (Test-Path "$data\default\relay_cert.pem")) { throw "upgrade removed $data" }
           foreach ($flag in '--help', '--version') {
             & "$dir\asc.exe" $flag
             if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
           }
-          Msiexec "/x `"$msi`" /qn"
+          # An uninstall that fails at the end rolls back: asc and its state are back.
+          $daemon = StartDaemon
+          Msiexec "/x `"$msi`" WIXFAILWHENDEFERRED=1" 1603
+          AssertGone $daemon 'a failed uninstall'
+          if ((Products) -ne 1) { throw "a failed uninstall left $(Products) products" }
+          if (-not (Test-Path "$dir\asc.exe")) { throw "a failed uninstall left no asc.exe" }
+          if (-not (Test-Path "$data\default\relay_cert.pem")) { throw "a failed uninstall removed $data" }
+          # KEEPDATA=1 keeps the state.
+          Msiexec "/x `"$msi`" KEEPDATA=1"
+          if ((Products) -ne 0) { throw "$(Products) products left" }
+          if (-not (Test-Path "$data\default\relay_cert.pem")) { throw "KEEPDATA=1 removed $data" }
+          # A plain uninstall stops the daemon and removes everything.
+          Msiexec "/i `"$msi`""
+          $daemon = StartDaemon
+          Msiexec "/x `"$msi`""
+          AssertGone $daemon 'uninstall'
           if ((Products) -ne 0) { throw "$(Products) products left" }
           if ((PathFolders (UserPath)) -cne (PathFolders $pathBefore)) { throw "user PATH changed`nbefore: $pathBefore`nafter:  $(UserPath)" }
           if (Test-Path $dir) { throw "$dir left behind" }
+          if (Test-Path $data) { throw "$data left behind" }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: msi
           path: dist/*.msi
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: msi-logs
+          path: ${{ runner.temp }}/msi-logs
