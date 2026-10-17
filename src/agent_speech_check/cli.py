@@ -118,10 +118,6 @@ def _since(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--since", type=int, metavar="N", help="lines after N")
 
 
-def _speech_args(parser: argparse.ArgumentParser) -> None:
-    _since(parser)
-
-
 def _wait_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("regex", metavar="REGEX")
     _timeout(parser)
@@ -324,7 +320,8 @@ def _stop_every(image: Path | None) -> int:
 def cmd_stop(_: argparse.Namespace) -> int:
     # A state file left behind counts as something to clear, not as nothing running.
     found = bool(state.folders(state_root()))
-    if not (_stop_every(None) or found):
+    stopped = _stop_every(None)
+    if not (found or stopped):
         raise NotRunning
     return 0
 
@@ -696,7 +693,7 @@ examples:
   asc speech --since 0       everything still kept
   asc speech --since 41      lines after 41""",
         cmd_speech,
-        _speech_args,
+        _since,
     ),
     "wait": Command(
         "wait until NVDA says something matching REGEX",

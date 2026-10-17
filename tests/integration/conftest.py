@@ -18,7 +18,7 @@ import psutil
 import pytest
 from tests.fake_nvda import FakeNvda, Reply
 
-from agent_speech_check.daemon import session
+from agent_speech_check.daemon import session, state
 from agent_speech_check.remote.relay import fingerprint
 from agent_speech_check.windows.wait import poll_until
 
@@ -124,8 +124,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     yield Env(tmp_path, port)
     # Never leave a daemon behind, even when a test failed half way. 3: none ran.
     if run_asc("stop").returncode not in (0, 3):
-        for state in config.glob("*/state.json"):
-            _kill_if_ours(json.loads(state.read_text(encoding="utf-8"))["pid"])
+        for folder in state.folders(config):
+            raw = (folder / state.FILE).read_text(encoding="utf-8")
+            _kill_if_ours(json.loads(raw)["pid"])
     assert os.environ["LOCALAPPDATA"] == str(tmp_path)
 
 
