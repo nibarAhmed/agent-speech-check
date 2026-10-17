@@ -180,7 +180,7 @@ class UserConfigUnreadable(UsageError):
         at = "" if line is None else f" line {line}"
         super().__init__(
             f"cannot read your NVDA config: {where}{at}",
-            hint="fix that line, or point --nvda-dir at an NVDA with a fresh config",
+            hint="fix that line, or point nvda_dir at an NVDA with a fresh config",
         )
 
 
@@ -280,7 +280,7 @@ class DaemonHungUp(DaemonUnreachable):
 
 
 class NvdaNotFound(SetupNeeded):
-    def __init__(self, looked: Sequence[str], hint: str = "pass --nvda-dir") -> None:
+    def __init__(self, looked: Sequence[str], hint: str) -> None:
         where = "; ".join(looked) if looked else "nowhere"
         super().__init__(f"NVDA not found. Looked in: {where}", hint=hint)
 

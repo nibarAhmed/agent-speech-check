@@ -14,7 +14,7 @@
     nvda_settings = ["keyboard.speakTypedCharacters=False"]
 
 A target that isn't listed gets the defaults for `--mode` (watch if left out).
-`--nvda-setting`, `--nvda-dir` and `--window` are added at `asc start` and are
+`--nvda-setting` and `--window` are added at `asc start` and are
 not kept. The whole file is checked when it is read, so a bad table fails every
 command, not only the ones that use it.
 """
@@ -132,12 +132,6 @@ class Target:
 
     def with_consent(self, consent: bool) -> Target:
         return replace(self, consent=consent)
-
-    def with_nvda_dir(self, nvda_dir: str | None) -> Target:
-        if nvda_dir is None:
-            return self
-        # The daemon runs in its own folder, so a relative path must be made absolute here.
-        return _checked(replace(self, nvda_dir=str(Path(nvda_dir).absolute())), "--nvda-dir")
 
     def with_window(self, window: str | None) -> Target:
         if window is None:

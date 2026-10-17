@@ -97,14 +97,13 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
 ### Desktop mode
 
 `asc` launches a portable NVDA (made by `asc get-nvda`, or your own: the
-target's `nvda_dir` or `--nvda-dir`) with its own config folder and
+target's `nvda_dir`) with its own config folder and
 `nvda.ini`. That NVDA starts unattended, uses the silent synth, mutes its own
 sounds, uses the desktop keyboard layout, and connects to the relay by itself.
 `asc stop` ends it, and it always ends when `asc` stops, even after a crash.
 Its keys land on this desktop, so it has a [panic key](#panic-key).
 
-- **Your own portable NVDA** (`--nvda-dir DIR`, or `nvda_dir` in
-  `config.toml`) keeps your settings and add-ons: its `userConfig` folder is copied into the private config folder, and `asc` writes its own settings on top. Your `userConfig` is only read. `asc` replaces your `[remote]` section,
+- **Your own portable NVDA** (`nvda_dir` in `config.toml`) keeps your settings and add-ons: its `userConfig` folder is copied into the private config folder, and `asc` writes its own settings on top. Your `userConfig` is only read. `asc` replaces your `[remote]` section,
   the synth, sound volume, keyboard layout, mode sounds and the welcome and
   update prompts. It leaves out `profileTriggers.ini`, so no profile switches
   on by itself.
@@ -115,10 +114,10 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
 - Exits 7 if there is no portable NVDA, with the hint `asc get-nvda`, or to
-  check `--nvda-dir` / `nvda_dir` when you named the folder.
+  check `nvda_dir` when you named the folder.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
-  connects to the relay itself. No portable NVDA is needed, and `nvda_dir` and
-  `--nvda-dir` are refused with exit 2, as in watch and shared mode.
+  connects to the relay itself. No portable NVDA is needed, and `nvda_dir` is
+  refused with exit 2, as in watch and shared mode.
 
 ### Sandbox mode
 
@@ -135,7 +134,7 @@ and your own NVDA keeps running undisturbed.
   starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
   NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
   and so does the daemon ending any other way (even killed).
-- With `--nvda-dir DIR` (or `nvda_dir`), the sandbox runs your own portable
+- With `nvda_dir`, the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
   started with a copy of your config, as in desktop mode. Nothing is
   downloaded. Your NVDA on the host may keep running.
@@ -253,8 +252,8 @@ and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
 
 ```
 asc start [--target NAME] [--mode {watch,desktop,sandbox,shared}]
-          [--nvda-setting SECTION.KEY=VALUE] [--nvda-dir DIR]
-          [--window {tray,taskbar,show}] [--i-understand]
+          [--nvda-setting SECTION.KEY=VALUE] [--window {tray,taskbar,show}]
+          [--i-understand]
 ```
 
 Starts the daemon for the target and prints its status. What it starts and
@@ -264,7 +263,6 @@ checks depends on the mode: see [Modes](#modes).
 |---|---|---|
 | `--mode MODE` | the target's `mode`, or watch | mode for an unlisted target |
 | `--nvda-setting SECTION.KEY=VALUE` | the target's `nvda_settings` | an `nvda.ini` setting for the NVDA `asc` launches (repeatable) |
-| `--nvda-dir DIR` | the target's `nvda_dir` | desktop or sandbox: launch this portable NVDA, for this start only |
 | `--window {tray,taskbar,show}` | the target's `window`, or tray | sandbox only: its window, for this start only |
 | `--i-understand` | off | shared mode: yes, send keys into my own session |
 
@@ -441,8 +439,8 @@ asc type "x@example.com" --settle 800
 ### `asc keys`
 
 ```
-asc keys [--target NAME] [--layout {desktop,laptop}] [--nvda-dir DIR]
-         [--lang LANG] [--braille | --no-braille] [SEARCH ...]
+asc keys [--target NAME] [--layout {desktop,laptop}] [--lang LANG]
+         [--braille | --no-braille] [SEARCH ...]
 ```
 
 Prints commands from NVDA's own Commands Quick Reference whose name, keys,
@@ -458,7 +456,6 @@ h  heading
 |---|---|---|
 | `SEARCH` | none (all) | words that must all appear |
 | `--layout {desktop,laptop}` | `keys_layout`, desktop | the keyboard layout's keys |
-| `--nvda-dir DIR` | the target's NVDA | read this NVDA's reference |
 | `--lang LANG` | `keys_lang`, en | reference language, falling back to `en` |
 | `--braille`, `--no-braille` | `keys_braille`, false | include rows for braille displays |
 

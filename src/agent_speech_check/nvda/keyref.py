@@ -182,7 +182,7 @@ def candidates() -> list[tuple[str, Path]]:
     return found
 
 
-def reference(nvda_dirs: list[tuple[str, Path]], lang: str) -> Path:
+def reference(nvda_dirs: list[tuple[str, Path]], lang: str, hint: str) -> Path:
     """The first keyCommands.html in `lang`, falling back to English."""
     looked: list[str] = []
     for label, folder in nvda_dirs:
@@ -191,4 +191,4 @@ def reference(nvda_dirs: list[tuple[str, Path]], lang: str) -> Path:
             if path.is_file():
                 return path
         looked.append(f"{label} ({folder})")
-    raise NvdaNotFound(looked)
+    raise NvdaNotFound(looked, hint)
