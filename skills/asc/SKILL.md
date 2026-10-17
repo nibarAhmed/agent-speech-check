@@ -43,16 +43,16 @@ all their settings. Use `asc config` instead:
 asc config list                                # every setting and its source
 asc config set mode sandbox --target app       # makes a new target
 asc config set share C:\src\app --target app
-asc config set settle_ms 800 --target app      # one target, or [defaults] without --target
+asc config set settle_ms 800                   # timings are global
 ```
 
-- Commands use the default target unless you pass `--target NAME`. Once
-  you start a target, pass the same `--target` to every command after it.
+- `asc start` uses the default target unless you pass `--target NAME`. One
+  daemon runs at a time, and the other commands talk to it without `--target`.
 - `asc start --mode M` sets the mode only for a target that isn't in
   `config.toml`. For a listed target with another mode it exits 2: leave out
   `--mode`, or use another `--target`.
 - If presses keep missing speech, or a slow app times out, raise `settle_ms`,
-  `timeout_ms` or `launch_timeout_ms` for that target rather than passing the
+  `timeout_ms` or `launch_timeout_ms` rather than passing the
   flag every time. Tell the user what you changed.
 - A target setting, or `panic_key`, applies to a running target at its next `asc start` (it says so).
 
@@ -60,17 +60,18 @@ asc config set settle_ms 800 --target app      # one target, or [defaults] witho
 
 ```
 asc config list                   # which targets exist, and their modes
-asc start --target app            # prints status; exit 4 "already running" is fine
-asc mark --target app             # everything after this counts
+asc start --target app            # prints status; exit 4: asc already runs
+asc mark                          # everything after this counts
 ...act (click, navigate, press keys, run the test)...
-asc wait "(?i)saved" --target app # returns as soon as a line matches, else exit 1
-asc speech --target app           # all lines since the mark
-asc stop --target app             # when done
+asc wait "(?i)saved"              # returns as soon as a line matches, else exit 1
+asc speech                        # all lines since the mark
+asc stop                          # when done
 ```
 
 - Without a listed target, start one by mode, for example
-  `asc start --target try --mode desktop`, then pass `--target try` to every
-  command.
+  `asc start --target try --mode desktop`.
+- If `asc start` exits 4, `asc status` shows which target runs. Stop it first
+  only if it's the wrong one.
 - `wait` takes a Python regex, searched, `(?i)` for case. Default timeout 5000
   ms (`--timeout`, or the `timeout_ms` setting). On timeout it prints what NVDA
   did say: read it before retrying.

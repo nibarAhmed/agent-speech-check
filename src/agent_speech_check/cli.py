@@ -827,14 +827,14 @@ examples:
         "show or change one setting",
         """Show or change the settings in config.toml. Target settings go to --target,
 or to the default target. Command defaults (settle_ms, timeout_ms, ...) go to
-[defaults], or to one target with --target. A flag on a command beats both.
+[defaults]. A flag on a command beats them.
 
 examples:
   asc config list
-  asc config set settle_ms 800 --target app
+  asc config set settle_ms 800
   asc config set mode sandbox --target app      makes target app
   asc config set share C:\\src\\app C:\\data --target app
-  asc config unset settle_ms --target app""",
+  asc config unset settle_ms""",
         cmd_config,
         _config_args,
         takes_target=False,

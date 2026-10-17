@@ -18,8 +18,9 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 - Results go to stdout and errors to stderr. An error prints
   `error: <message>` and, when there is one, `hint: <what to do>`. Bad
   arguments do too, with the command's `--help` as the hint, and exit 2.
-- Every command except `asc setup`, `asc config path` and
-  `asc config remove-target` takes `--target NAME` (see [Targets](#targets)).
+- `asc start`, `asc keys`, `asc sandbox-setup` and `asc config` take
+  `--target NAME` (see [Targets](#targets)). The rest talk to the one daemon
+  that runs, whatever its target.
 - `MS` values are milliseconds. A flag on the command beats the setting it
   defaults to (see [Command defaults](#command-defaults)).
 - Commands that need NVDA exit 3 if it isn't connected or drops meanwhile, and
@@ -183,13 +184,13 @@ hand are not kept.
 default = "app"
 
 [defaults]
+settle_ms = 800
 timeout_ms = 8000
 
 [targets.app]
 mode = "sandbox"
 share = ['C:\src\app']
 nvda_settings = ["keyboard.speakTypedCharacters=False"]
-settle_ms = 800
 ```
 
 The file holds only what was set: a missing key means the built-in default.
@@ -199,10 +200,15 @@ the one that uses that target.
 
 ### Targets
 
-A target is a named setup: a mode and its settings, with its own daemon and folder. Commands use the target named by `--target`, or the `default` setting,
-or `default`. A target that isn't listed gets the defaults for `--mode` (watch
+A target is a named setup: a mode and its settings, with its own folder.
+`asc start` uses the target named by `--target`, or the `default` setting, or
+`default`. A target that isn't listed gets the defaults for `--mode` (watch
 if left out). For a listed target, `--mode` must match its `mode`, or
 `asc start` exits 2.
+
+One daemon runs at a time. `asc start` exits 4 while one runs for any target,
+and `stop`, `status`, `speech`, `wait`, `mark`, `press`, `type` and `launch`
+talk to it without being told its target.
 
 ### Global settings
 
@@ -213,8 +219,8 @@ if left out). For a listed target, `--mode` must match its `mode`, or
 
 ### Command defaults
 
-In `[defaults]`, and a target may override them. A flag on the command beats
-the target's value, which beats `[defaults]`, which beats the built-in default.
+In `[defaults]`. A flag on the command beats the setting, which beats the
+built-in default.
 
 | Setting | Default | Flag |
 |---|---|---|
@@ -266,8 +272,8 @@ checks depends on the mode: see [Modes](#modes).
   nested sections. Settings `asc` writes itself (`remote`, the synth, sound
   volume, keyboard layout, the mode sounds) are refused with exit 2, and so is
   a setting for an NVDA `asc` doesn't launch.
-- Exits 4 if the target is already running, and 3 with the last daemon log
-  lines if it fails to start.
+- Exits 4 if `asc` is already running, for this target or another, and 3 with
+  the last daemon log lines if it fails to start.
 
 ```shell
 asc start
@@ -278,10 +284,11 @@ asc start --nvda-setting keyboard.speakTypedCharacters=False
 ### `asc stop`
 
 ```
-asc stop [--target NAME]
+asc stop
 ```
 
-Releases any held keys, stops the daemon and forgets the speech.
+Releases any held keys, stops the daemon and forgets the speech, and prints
+`stopped: TARGET`. Exits 3 if nothing runs.
 
 - A daemon that is there but doesn't answer (an older asc, or a stuck one)
   still counts as running, so `asc start`, `asc setup` and
@@ -293,7 +300,7 @@ Releases any held keys, stops the daemon and forgets the speech.
 ### `asc status`
 
 ```
-asc status [--target NAME]
+asc status
 ```
 
 Shows the target, whether `asc` is recording and NVDA is connected, the
@@ -317,7 +324,7 @@ speech: 12 lines kept, latest 12, mark 10
 ### `asc speech`
 
 ```
-asc speech [--target NAME] [--since N]
+asc speech [--since N]
 ```
 
 Prints what NVDA said after the mark, one numbered line per utterance, and
@@ -338,7 +345,7 @@ Prints `(nothing said)` when there is nothing. If lines after `N` were dropped
 ### `asc wait`
 
 ```
-asc wait [--target NAME] [--timeout MS] [--since N] REGEX
+asc wait [--timeout MS] [--since N] REGEX
 ```
 
 Returns as soon as an utterance after the mark matches `REGEX`, and prints it.
@@ -363,7 +370,7 @@ asc wait "(?i)saved" --timeout 10000
 ### `asc mark`
 
 ```
-asc mark [--target NAME]
+asc mark
 ```
 
 Sets the mark to the latest line and prints it: `mark: 12`. `speech` and `wait`
@@ -372,7 +379,7 @@ look at lines after the mark.
 ### `asc press`
 
 ```
-asc press [--target NAME] [--expect REGEX] [--settle MS] [--timeout MS] KEY [KEY ...]
+asc press [--expect REGEX] [--settle MS] [--timeout MS] KEY [KEY ...]
 ```
 
 Sends each gesture, waits for `--settle` ms of quiet, and prints only the new
@@ -404,7 +411,7 @@ asc press Control+Home NVDA+Down
 ### `asc type`
 
 ```
-asc type [--target NAME] [--settle MS] [--timeout MS] TEXT
+asc type [--settle MS] [--timeout MS] TEXT
 ```
 
 Types `TEXT` one character at a time, mapped to keys with this computer's
@@ -461,7 +468,7 @@ asc keys --layout laptop current line
 ### `asc launch`
 
 ```
-asc launch [--target NAME] [--title REGEX] [--timeout MS] CMD
+asc launch [--title REGEX] [--timeout MS] CMD
 ```
 
 Starts `CMD` and waits until NVDA says something matching `--title`, or
@@ -495,7 +502,7 @@ asc launch "py -m myapp" --title "My App" --timeout 60000
 ### `asc get-nvda`
 
 ```
-asc get-nvda [--target NAME] [--version NVDA_VERSION] [--installer FILE]
+asc get-nvda [--version NVDA_VERSION] [--installer FILE]
 ```
 
 Downloads the NVDA installer from NV Access and makes a portable copy in
@@ -571,9 +578,8 @@ Shows or changes the settings in `config.toml` (see
 | `remove-target` | deletes the target's settings (not its folder); exit 4 while it runs |
 | `path` | prints where `config.toml` is (works even when the file is broken) |
 
-- Target settings go to `--target`, or to the default target. Command defaults
-  go to `[defaults]`, or with `--target` to that target. Global settings take
-  no `--target` (exit 2).
+- Target settings go to `--target`, or to the default target. Global settings
+  and command defaults go to `[defaults]` and take no `--target` (exit 2).
 - A target is made by setting its `mode`; any other setting for a target that
   isn't listed exits 2 with that hint. `unset mode` is refused (exit 2).
 - Lists (`share`, `nvda_settings`) take several values and replace the whole
@@ -588,7 +594,7 @@ Shows or changes the settings in `config.toml` (see
 asc config list
 asc config set mode sandbox --target app
 asc config set share C:\src\app C:\data --target app
-asc config unset settle_ms --target app
+asc config unset settle_ms
 ```
 
 ### `asc sandbox-setup`
