@@ -28,16 +28,16 @@ class State:
         write_atomic(folder / FILE, json.dumps(asdict(self)))
 
 
-def read(folder: Path, target: str) -> State:
+def read(folder: Path) -> State:
     path = folder / FILE
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise NotRunning(target) from None
+        raise NotRunning from None
     except ValueError:
         # Not written by a live daemon (writes are atomic): stale.
         remove(folder)
-        raise NotRunning(target) from None
+        raise NotRunning from None
     f = Fields(raw, str(path), NotConnected, ("pid", "port", "token", "started"))
     return State(
         f.number("pid", low=1, high=2**32),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 
 import pytest
 from tests.integration.conftest import Env, run_asc
@@ -20,38 +21,38 @@ def test_watch_session(env: Env) -> None:
     assert "nvda: not connected" in started.stdout
     assert f"host 127.0.0.1:{env.port}, key " in started.stdout
 
-    assert run_asc("speech", "--target", "w").stdout == "(nothing said)\n"
-    not_connected = run_asc("wait", "x", "--target", "w")
+    assert run_asc("speech").stdout == "(nothing said)\n"
+    not_connected = run_asc("wait", "x")
     assert not_connected.returncode == 3
     assert "NVDA is not connected" in not_connected.stderr
 
     fake = env.fake("w")
     try:
         fake.say("Recycle Bin ", "list item ", "focused ")
-        waited = run_asc("wait", "Recycle", "--target", "w")
+        waited = run_asc("wait", "Recycle")
         assert waited.returncode == 0, waited.stderr
         assert waited.stdout == '1 said: "Recycle Bin list item focused"\n'
 
-        assert run_asc("mark", "--target", "w").stdout == "mark: 1\n"
+        assert run_asc("mark").stdout == "mark: 1\n"
         fake.say("second")
-        assert run_asc("wait", "second", "--target", "w").returncode == 0
-        assert run_asc("speech", "--target", "w").stdout == '2 said: "second"\n'
-        everything = run_asc("speech", "--since", "0", "--target", "w").stdout
+        assert run_asc("wait", "second").returncode == 0
+        assert run_asc("speech").stdout == '2 said: "second"\n'
+        everything = run_asc("speech", "--since", "0").stdout
         assert everything.splitlines() == [
             '1 said: "Recycle Bin list item focused"',
             '2 said: "second"',
         ]
 
-        status = run_asc("status", "--target", "w")
+        status = run_asc("status")
         assert "nvda: connected" in status.stdout
         assert "browse/focus: unknown" in status.stdout
 
-        refused = run_asc("press", "Tab", "--target", "w")
+        refused = run_asc("press", "Tab")
         assert refused.returncode == 4
         assert "watch mode, which never sends keys" in refused.stderr
         assert not any(m.get("type") == "key" for m in fake.received)
 
-        missed = run_asc("wait", "nope", "--timeout", "200", "--target", "w")
+        missed = run_asc("wait", "nope", "--timeout", "200")
         assert missed.returncode == 1
         assert 'no speech matched "nope" within 200 ms' in missed.stderr
         assert 'said: "second"' in missed.stderr
@@ -59,10 +60,10 @@ def test_watch_session(env: Env) -> None:
     finally:
         fake.close()
 
-    stopped = run_asc("stop", "--target", "w")
+    stopped = run_asc("stop")
     assert stopped.returncode == 0
     assert stopped.stdout == "stopped: w\n"
-    gone = run_asc("status", "--target", "w")
+    gone = run_asc("status")
     assert gone.returncode == 3
     assert "not running" in gone.stderr
     assert "not recording" in gone.stderr
@@ -77,7 +78,7 @@ def test_any_unicode_speech_prints_as_utf8(env: Env) -> None:
     fake = env.fake("w")
     try:
         fake.say(SAMPLE)
-        waited = run_asc("wait", SAMPLE[:4], "--target", "w")
+        waited = run_asc("wait", SAMPLE[:4])
         assert waited.returncode == 0, waited.stderr
         assert waited.stdout == f'1 said: "{SAMPLE}"' + chr(10)
     finally:
@@ -88,7 +89,7 @@ def test_cert_and_key_stay_the_same(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
     folder = env.folder("w")
     first = (folder / "relay_cert.pem").read_bytes(), (folder / "relay.json").read_text()
-    assert run_asc("stop", "--target", "w").returncode == 0
+    assert run_asc("stop").returncode == 0
     assert run_asc("start", "--target", "w").returncode == 0
     assert ((folder / "relay_cert.pem").read_bytes(), (folder / "relay.json").read_text()) == first
 
@@ -98,8 +99,9 @@ def test_second_start_is_refused() -> None:
     assert run_asc("start", "--target", "w").returncode == 0
     again = run_asc("start", "--target", "w")
     assert again.returncode == 4
-    assert 'asc is already running for target "w"' in again.stderr
-    assert "hint: asc stop --target w" in again.stderr
+    assert "asc is already running" in again.stderr
+    assert "hint: asc stop
+" in again.stderr
 
 
 def test_stale_state_file_is_removed(env: Env) -> None:
@@ -107,24 +109,43 @@ def test_stale_state_file_is_removed(env: Env) -> None:
     folder.mkdir(parents=True)
     state = {"pid": 1, "port": env.port, "token": "x", "started": 0}
     (folder / "state.json").write_text(json.dumps(state), encoding="utf-8")
-    result = run_asc("status", "--target", "w")
+    result = run_asc("status")
     assert result.returncode == 3
     assert "not running" in result.stderr
     assert not (folder / "state.json").exists()
 
 
 def test_daemon_that_cannot_bind_reports_its_log(env: Env) -> None:
-    assert run_asc("start", "--target", "w").returncode == 0
-    # Same relay port, another target: the second daemon can't listen.
-    (env.root / "agent-speech-check" / "config.toml").write_text(
-        f'[targets.w]\nmode = "watch"\nport = {env.port}\n'
-        f'[targets.w2]\nmode = "watch"\nport = {env.port}\n',
-        encoding="utf-8",
-    )
-    failed = run_asc("start", "--target", "w2")
+    # Something else holds the relay port, so the daemon can't listen.
+    with socket.create_server(("127.0.0.1", env.port)):
+        failed = run_asc("start", "--target", "w")
     assert failed.returncode == 3
     assert "the asc daemon did not start: it exited with code" in failed.stderr
     assert "could not start" in failed.stderr
+
+
+def test_one_daemon_at_a_time(env: Env) -> None:
+    assert run_asc("start", "--target", "w").returncode == 0
+    second = run_asc("start", "--target", "d")
+    assert second.returncode == 4
+    assert "asc is already running" in second.stderr
+    assert "hint: asc stop" in second.stderr
+    assert not (env.folder("d") / "state.json").exists()
+    assert run_asc("stop").stdout == "stopped: w\n"
+    assert run_asc("start", "--target", "d").returncode == 0
+    assert "d (desktop mode, keys allowed)" in run_asc("status").stdout
+
+
+@pytest.mark.usefixtures("env")
+def test_commands_find_the_daemon_without_a_target() -> None:
+    nothing = run_asc("status")
+    assert nothing.returncode == 3
+    assert "asc is not running (not recording)" in nothing.stderr
+    assert "hint: asc start" in nothing.stderr
+    assert run_asc("stop").returncode == 3
+    named = run_asc("speech", "--target", "w")
+    assert named.returncode == 2
+    assert "unrecognized arguments: --target" in named.stderr
 
 
 @pytest.mark.usefixtures("env")

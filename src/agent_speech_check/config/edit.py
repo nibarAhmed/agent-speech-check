@@ -92,9 +92,7 @@ def owner(config: Config, pref: Pref, target: str | None) -> str | None:
         if target is not None:
             raise BadPreference(pref.name, "is global, so it takes no --target")
         return None
-    if pref.scope == TARGET:
-        return check_name(target or config.default)
-    return check_name(target) if target is not None else None
+    return check_name(target or config.default)
 
 
 def label(where: str | None) -> str:
@@ -168,7 +166,7 @@ def entries(config: Config, target: str | None) -> list[tuple[str, Value | None,
             source = "target" if pref.name in listed else "default"
             rows.append((pref.name, _target_value(resolved, pref.name), source))
         else:
-            rows.append((pref.name, *config.value(pref.name, name)))
+            rows.append((pref.name, *config.value(pref.name)))
     return rows
 
 

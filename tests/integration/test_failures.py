@@ -25,7 +25,7 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
 
 def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None:
     assert env.running("d") == []
-    waiting = start_asc("wait", "later", "--timeout", "8000", "--target", "d")
+    waiting = start_asc("wait", "later", "--timeout", "8000")
     env.wait_running("d", "wait")
     assert env.running("d") == ["wait"]
     nvda.say("later")
@@ -34,7 +34,7 @@ def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None
 
 
 def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvda) -> None:
-    waiting = start_asc("wait", "later", "--timeout", "8000", "--target", "d")
+    waiting = start_asc("wait", "later", "--timeout", "8000")
     env.wait_running("d", "wait")
     with tls_client(env.port) as sock:
         sock.sendall(b"{not json\n")
@@ -43,7 +43,7 @@ def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvd
     out, err = waiting.communicate(timeout=30)
     assert waiting.returncode == 0, err
     assert 'said: "later"' in out
-    status = run_asc("status", "--target", "d").stdout
+    status = run_asc("status").stdout
     assert "last error: NVDA sent a line that is not a JSON object" in status
 
 
@@ -52,7 +52,7 @@ def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvd
 def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
     env: Env, nvda: FakeNvda, command: tuple[str, str]
 ) -> None:
-    running = start_asc(*command, "--timeout", "8000", "--target", "d")
+    running = start_asc(*command, "--timeout", "8000")
     env.wait_running("d", command[0])
     nvda.send_raw(b"{not json\n")
     _, err = running.communicate(timeout=30)
@@ -61,7 +61,7 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
 
 
 def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeNvda) -> None:
-    waiting = start_asc("wait", "never", "--timeout", "3000", "--target", "d")
+    waiting = start_asc("wait", "never", "--timeout", "3000")
     env.wait_running("d", "wait")
     nvda.close()
     _, err = waiting.communicate(timeout=30)

@@ -224,11 +224,8 @@ class NeedsTerminal(UsageError):
 
 
 class NotRunning(NotConnected):
-    def __init__(self, target: str) -> None:
-        super().__init__(
-            f"asc is not running for target {_show(target)} (not recording)",
-            hint=f"asc start --target {target}",
-        )
+    def __init__(self) -> None:
+        super().__init__("asc is not running (not recording)", hint="asc start")
 
 
 class NvdaNotConnected(NotConnected):
@@ -441,18 +438,15 @@ class KeysRefused(Refused):
 
 
 class AlreadyRunning(Refused):
-    def __init__(self, target: str) -> None:
-        super().__init__(
-            f"asc is already running for target {_show(target)}",
-            hint=f"asc stop --target {target}",
-        )
+    def __init__(self) -> None:
+        super().__init__("asc is already running", hint="asc stop")
 
 
 class DaemonNotAnswering(Refused):
     def __init__(self, target: str, reason: str) -> None:
         super().__init__(
             f"asc is running for target {_show(target)} but doesn't answer: {reason}",
-            hint=f"asc stop --target {target}, then asc start",
+            hint="asc stop, then asc start",
         )
 
 
@@ -486,7 +480,7 @@ class TargetsRunning(Refused):
         names = ", ".join(_show(t) for t in targets)
         super().__init__(
             f"asc is running for target {names}",
-            hint=f"asc stop --target {targets[0]}, then try again",
+            hint="asc stop, then try again",
         )
 
 

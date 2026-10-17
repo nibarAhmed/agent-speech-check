@@ -220,18 +220,13 @@ def test_config_set_get_list_unset(root: Path, capsys: pytest.CaptureFixture[str
         "",
     )
     assert run(capsys, "config", "set", "mode", "desktop", "--target", "app")[0] == 0
-    out = run(capsys, "config", "set", "settle_ms", "900", "--target", "app")[1]
-    assert out == "settle_ms = 900 (target app)\n"
-    assert run(capsys, "config", "get", "settle_ms", "--target", "app")[1] == "900\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "700\n"
     out = run(capsys, "config", "list", "--target", "app")[1]
     assert "mode = desktop (target)\n" in out
-    assert "settle_ms = 900 (target)\n" in out
+    assert "settle_ms = 700 (global)\n" in out
     assert "nvda_dir = none (default)\n" in out
-    assert run(capsys, "config", "unset", "settle_ms", "--target", "app")[1] == (
-        "settle_ms unset (target app)\n"
-    )
-    assert run(capsys, "config", "get", "settle_ms", "--target", "app")[1] == "700\n"
+    assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
+    assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
     assert run(capsys, "config", "remove-target", "app")[1] == "removed: app\n"
     assert "app" not in load(root / "config.toml").targets
