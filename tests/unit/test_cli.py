@@ -19,7 +19,7 @@ def test_help_points_to_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
     assert exc.value.code == 0
-    assert "exit codes: see docs/cli.md" in capsys.readouterr().out
+    assert "/docs/cli.md#exit-codes" in capsys.readouterr().out
 
 
 def test_command_help_leaves_out_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:

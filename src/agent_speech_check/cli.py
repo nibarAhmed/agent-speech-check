@@ -56,7 +56,9 @@ typical use:
 Speech is kept in memory only. Run asc COMMAND --help for details.
 """
 
-EPILOG = "exit codes: see docs/cli.md"
+EPILOG = (
+    "exit codes: https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#exit-codes"
+)
 
 
 @dataclass(frozen=True)
