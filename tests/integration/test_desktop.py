@@ -35,14 +35,14 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
 def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
     nvda.replies["Shift+H"] = f.SILENCE
     nvda.replies["I"] = [f.speak("i")]
-    typed = run_asc("type", "Hi", "--target", "d")
+    typed = run_asc("type", "Hi")
     assert typed.returncode == 0, typed.stderr
     assert typed.stdout == 'said: "i"\n'
     assert nvda.gestures == ["Shift+H", "I"]
     assert nvda.held == set()
 
     emoji = chr(0x1F600)
-    bad = run_asc("type", f"ok {emoji}", "--target", "d")
+    bad = run_asc("type", f"ok {emoji}")
     assert bad.returncode == 2
     assert "cannot type these characters" in bad.stderr
     assert nvda.gestures == ["Shift+H", "I"]
@@ -51,14 +51,14 @@ def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
 @pytest.mark.usefixtures("env")
 def test_type_refused_in_watch_mode() -> None:
     assert run_asc("start", "--target", "w").returncode == 0
-    refused = run_asc("type", "x", "--target", "w")
+    refused = run_asc("type", "x")
     assert refused.returncode == 4
 
 
 @pytest.mark.xdist_group("desktop")
 def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
     app = f'"{sys.executable}" -c "import time; time.sleep(3)"'
-    launching = start_asc("launch", app, "--title", "My App", "--target", "d")
+    launching = start_asc("launch", app, "--title", "My App")
     env.wait_running("d", "launch")
     nvda.say("Loading")
     nvda.say("My App window")
@@ -69,11 +69,11 @@ def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
 
 @pytest.mark.xdist_group("desktop")
 def test_launch_errors(nvda: FakeNvda) -> None:
-    missing = run_asc("launch", "no-such-program-asc.exe", "--target", "d")
+    missing = run_asc("launch", "no-such-program-asc.exe")
     assert missing.returncode == 2
     assert 'cannot start "no-such-program-asc.exe"' in missing.stderr
     app = f'"{sys.executable}" -c pass'
-    silent = run_asc("launch", app, "--title", "Never", "--timeout", "300", "--target", "d")
+    silent = run_asc("launch", app, "--title", "Never", "--timeout", "300")
     assert silent.returncode == 1
     assert 'no speech matched "Never" within 300 ms' in silent.stderr
     assert "New windows: (none)" in silent.stderr

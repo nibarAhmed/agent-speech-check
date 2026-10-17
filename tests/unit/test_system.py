@@ -91,7 +91,7 @@ def test_window_helpers_without_a_sandbox() -> None:
 
 
 def test_mutex_is_exclusive(tmp_path: Path) -> None:
-    name = winapi.mutex_name(tmp_path, "t")
+    name = winapi.mutex_name(tmp_path)
     first = winapi.take_mutex(name)
     assert first is not None
     assert winapi.take_mutex(name) is None

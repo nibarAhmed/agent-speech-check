@@ -70,22 +70,22 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         client = winapi.process_ids("WindowsSandboxRemoteSession.exe")
         assert winapi.window_pid(winapi.foreground()) not in client
         page = wsb.share_folder(str(app)) + "\\app.html"
-        launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app", "--target", "sb")
+        launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app")
         assert launched.returncode == 0, launched.stderr
         # The app's own window has focus, not a hidden helper window of it
         # (mshta's MainWindowHandle is one, which NVDA calls "unknown").
-        title = run_asc("press", "NVDA+t", "--target", "sb")
+        title = run_asc("press", "NVDA+t")
         assert "asc app" in title.stdout, title.stdout
-        ok = run_asc("press", "Tab", "--expect", "OK button", "--target", "sb")
+        ok = run_asc("press", "Tab", "--expect", "OK button")
         assert ok.returncode == 0, ok.stdout + ok.stderr
-        field = run_asc("press", "Tab", "--settle", "800", "--target", "sb")
+        field = run_asc("press", "Tab", "--settle", "800")
         assert "mode: focus" in field.stdout, field.stdout
-        assert run_asc("type", "hi", "--target", "sb").returncode == 0
-        line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "sb")
+        assert run_asc("type", "hi").returncode == 0
+        line = run_asc("press", "NVDA+Up", "--expect", "hi")
         assert line.returncode == 0, line.stdout + line.stderr
         # A Ctrl+letter shortcut must not also type its letter.
-        assert run_asc("press", "Control+b", "--target", "sb").returncode == 0
-        line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "sb")
+        assert run_asc("press", "Control+b").returncode == 0
+        line = run_asc("press", "NVDA+Up", "--expect", "hi")
         assert '"hi"' in line.stdout, line.stdout
 
         # After those keys Windows limits who takes the focus: a second app
@@ -93,9 +93,8 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         (app / "second.html").write_text(SECOND, encoding="utf-8")
         second = wsb.share_folder(str(app)) + "\\second.html"
         again = run_asc(
-            "launch", f'mshta.exe "{second}"', "--title", "asc second", "--timeout", "10000",
-            "--target", "sb",
-        )  # fmt: skip
+            "launch", f'mshta.exe "{second}"', "--title", "asc second", "--timeout", "10000"
+        )
         assert again.returncode == 0, again.stderr
 
         # Batch launchers, starting the app or running it: NVDA hears the
@@ -105,15 +104,13 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
             (app / f"{name}.html").write_text(SECOND.replace("asc second", app_title), "utf-8")
             (app / f"{name}.cmd").write_text(f'{runs} "%~dp0{name}.html"\n', "utf-8")
             launcher = wsb.share_folder(str(app)) + f"\\{name}.cmd"
-            out = run_asc(
-                "launch", launcher, "--title", app_title, "--timeout", "10000", "--target", "sb"
-            )
+            out = run_asc("launch", launcher, "--title", app_title, "--timeout", "10000")
             assert out.returncode == 0, out.stdout + out.stderr
             assert "terminal" not in out.stdout.lower(), out.stdout
-            said = run_asc("press", "NVDA+t", "--target", "sb")
+            said = run_asc("press", "NVDA+t")
             assert app_title in said.stdout, said.stdout
     finally:
-        stopped = run_asc("stop", "--target", "sb", timeout=120)
+        stopped = run_asc("stop", timeout=120)
     assert stopped.returncode == 0
     assert wsb.wait_gone(120)
     assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
@@ -128,7 +125,7 @@ def test_sandbox_goes_when_its_daemon_is_killed(
 
     started = run_asc("start", "--target", "k", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
-    daemon_pid = state.read(root / "k", "k").pid
+    daemon_pid = state.read(root / "k").pid
     try:
         assert wsb.running()
         # A hard kill (TerminateProcess on Windows): the daemon gets no chance
@@ -215,11 +212,11 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
         ]
         assert "symbolLevel = 300" in ini
         assert "synth = silence" in ini
-        title = run_asc("press", "NVDA+T", "--settle", "800", "--target", "own")
+        title = run_asc("press", "NVDA+T", "--settle", "800")
         assert title.returncode == 0, title.stderr
         assert title.stdout.startswith('said: "'), title.stdout
     finally:
-        stopped = run_asc("stop", "--target", "own", timeout=120)
+        stopped = run_asc("stop", timeout=120)
     assert stopped.returncode == 0
     assert wsb.wait_gone(120)
     assert sorted(winapi.process_ids("nvda.exe")) == users_nvda

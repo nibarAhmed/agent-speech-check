@@ -39,17 +39,17 @@ def insert_held() -> bool:
     return bool(ctypes.windll.user32.GetAsyncKeyState(0x2D) & 0x8000)
 
 
-def wait_connected(target: str, timeout_s: float = 90) -> None:
+def wait_connected(timeout_s: float = 90) -> None:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        if "nvda: connected" in run_asc("status", "--target", target).stdout:
+        if "nvda: connected" in run_asc("status").stdout:
             return
         time.sleep(1)
     raise AssertionError("NVDA did not connect")
 
 
 @pytest.fixture
-def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """A started `launch = false` desktop target with a real NVDA joined to it."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     port = free_port()
@@ -72,50 +72,43 @@ def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
         [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
     )
     try:
-        wait_connected("e")
-        yield "e"
+        wait_connected()
+        yield
     finally:
-        run_asc("stop", "--target", "e")
+        run_asc("stop")
         process.kill()
         process.wait(30)
 
 
-def test_real_nvda_joins_speaks_and_releases(real_nvda: str) -> None:
+@pytest.mark.usefixtures("real_nvda")
+def test_real_nvda_joins_speaks_and_releases() -> None:
     joined = run_asc(
-        "wait",
-        "Connected as controlled computer",
-        "--since",
-        "0",
-        "--timeout",
-        "20000",
-        "--target",
-        real_nvda,
+        "wait", "Connected as controlled computer", "--since", "0", "--timeout", "20000"
     )
     assert joined.returncode == 0, joined.stderr
 
-    pressed = run_asc("press", "NVDA+T", "--settle", "800", "--target", real_nvda)
+    pressed = run_asc("press", "NVDA+T", "--settle", "800")
     assert pressed.returncode == 0, pressed.stderr
     assert pressed.stdout.startswith('said: "'), pressed.stdout
     assert not insert_held()
 
 
-def test_mode_sounds_arrive_with_volume_zero(real_nvda: str, tmp_path: Path) -> None:
+@pytest.mark.usefixtures("real_nvda")
+def test_mode_sounds_arrive_with_volume_zero(tmp_path: Path) -> None:
     page = tmp_path / "page.html"
     page.write_text(PAGE, encoding="utf-8")
     browser = subprocess.Popen(  # noqa: S603 - Windows' own mshta, inside the sandbox
         [r"C:\Windows\System32\mshta.exe", str(page)]
     )
     try:
-        loaded = run_asc("wait", "asc test page", "--timeout", "30000", "--target", real_nvda)
+        loaded = run_asc("wait", "asc test page", "--timeout", "30000")
         assert loaded.returncode == 0, loaded.stderr
-        heading = run_asc(
-            "press", "H", "--expect", "Second heading", "--settle", "800", "--target", real_nvda
-        )
+        heading = run_asc("press", "H", "--expect", "Second heading", "--settle", "800")
         assert heading.returncode == 0, heading.stdout + heading.stderr
-        into_field = run_asc("press", "Tab", "--settle", "1000", "--target", real_nvda)
+        into_field = run_asc("press", "Tab", "--settle", "1000")
         assert into_field.returncode == 0, into_field.stderr
         assert "mode: focus" in into_field.stdout, into_field.stdout
-        status = run_asc("status", "--target", real_nvda).stdout
+        status = run_asc("status").stdout
         assert "browse/focus: focus" in status
     finally:
         browser.kill()
@@ -147,26 +140,24 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     # Its NVDA runs on this desktop, so asc's keys land here: it has a panic key.
     assert "panic key: Control+Shift+Alt+F12 stops asc and releases keys" in started.stdout
     try:
-        wait_connected("x")
+        wait_connected()
         assert "Report title" in run_asc("keys", "report title", "--target", "x").stdout
 
         page = tmp_path / "app.html"
         page.write_text(APP, encoding="utf-8")
-        launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app", "--target", "x")
+        launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app")
         assert launched.returncode == 0, launched.stderr
 
-        ok = run_asc("press", "Tab", "--expect", "OK button", "--target", "x")
+        ok = run_asc("press", "Tab", "--expect", "OK button")
         assert ok.returncode == 0, ok.stdout + ok.stderr
-        wrong = run_asc(
-            "press", "NVDA+T", "--expect", "Cancel button", "--timeout", "2000", "--target", "x"
-        )
+        wrong = run_asc("press", "NVDA+T", "--expect", "Cancel button", "--timeout", "2000")
         assert wrong.returncode == 1
         assert "said: " in wrong.stderr
 
-        field = run_asc("press", "Tab", "--settle", "800", "--target", "x")
+        field = run_asc("press", "Tab", "--settle", "800")
         assert "mode: focus" in field.stdout, field.stdout
-        assert run_asc("type", "hi", "--target", "x").returncode == 0
-        line = run_asc("press", "NVDA+Up", "--expect", "hi", "--target", "x")
+        assert run_asc("type", "hi").returncode == 0
+        line = run_asc("press", "NVDA+Up", "--expect", "hi")
         assert line.returncode == 0, line.stdout + line.stderr
 
         # Batch launchers, starting the app or running it: NVDA hears the
@@ -176,16 +167,14 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
             (tmp_path / f"{name}.html").write_text(APP.replace("asc app", app_title), "utf-8")
             launcher = tmp_path / f"{name}.cmd"
             launcher.write_text(f'{runs} "%~dp0{name}.html"\n', "utf-8")
-            out = run_asc(
-                "launch", str(launcher), "--title", app_title, "--timeout", "10000", "--target", "x"
-            )
+            out = run_asc("launch", str(launcher), "--title", app_title, "--timeout", "10000")
             assert out.returncode == 0, out.stdout + out.stderr
             assert "terminal" not in out.stdout.lower(), out.stdout
-            said = run_asc("press", "NVDA+t", "--target", "x")
+            said = run_asc("press", "NVDA+t")
             assert app_title in said.stdout, said.stdout
     finally:
         subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
-        stopped = run_asc("stop", "--target", "x")
+        stopped = run_asc("stop")
     assert stopped.returncode == 0
     assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()

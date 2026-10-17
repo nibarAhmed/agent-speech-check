@@ -21,10 +21,10 @@ _kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCW
 _kernel32.CreateMutexW.restype = wintypes.HANDLE
 
 
-def mutex_name(root: Path, target: str) -> str:
-    """Unique per state folder and target, so test runs never meet a real daemon."""
+def mutex_name(root: Path) -> str:
+    """One per state folder, so only one daemon runs, and test runs never meet a real one."""
     digest = hashlib.sha256(str(root).lower().encode()).hexdigest()[:16]
-    return f"Local\\agent-speech-check-{digest}-{target}"
+    return f"Local\\agent-speech-check-{digest}"
 
 
 def take_mutex(name: str) -> int | None:

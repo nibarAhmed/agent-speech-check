@@ -236,9 +236,9 @@ def _exchange(port: int, payload: bytes, timeout_s: float) -> bytes:
         return b"".join(chunks)
 
 
-def call(folder: Path, target: str, request: Request, timeout_s: float) -> dict[str, Any]:
-    """Send one request to the target's daemon and return its result."""
-    current = state.read(folder, target)
+def call(folder: Path, request: Request, timeout_s: float) -> dict[str, Any]:
+    """Send one request to the daemon whose state file is in `folder`, and return its result."""
+    current = state.read(folder)
     message = {
         "v": IPC_VERSION,
         "token": current.token,
@@ -250,7 +250,7 @@ def call(folder: Path, target: str, request: Request, timeout_s: float) -> dict[
         data = _exchange(current.port, payload, timeout_s)
     except ConnectionRefusedError:
         state.remove(folder)
-        raise NotRunning(target) from None
+        raise NotRunning from None
     except TimeoutError:
         raise DaemonNoReply from None
     except OSError as error:

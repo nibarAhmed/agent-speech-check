@@ -339,8 +339,8 @@ def run(target_json: str) -> int:
     folder = target_dir(target.name)
     folder.mkdir(parents=True, exist_ok=True)
     _setup_logging(folder)
-    if winapi.take_mutex(winapi.mutex_name(state_root(), target.name)) is None:
-        raise AlreadyRunning(target.name)
+    if winapi.take_mutex(winapi.mutex_name(state_root())) is None:
+        raise AlreadyRunning
     log.info("starting %s (%s mode)", target.name, target.mode)
     try:
         asyncio.run(_main(target, folder))

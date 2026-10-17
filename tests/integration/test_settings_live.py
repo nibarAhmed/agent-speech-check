@@ -15,8 +15,8 @@ def test_changes_while_running(env: Env) -> None:
     assert changed.returncode == 0, changed.stderr
     assert changed.stdout.endswith("applies at the next asc start of w\n")
     # Command defaults are read by every command, so they apply at once.
-    timing = run_asc("config", "set", "timeout_ms", "300", "--target", "w")
-    assert timing.stdout == "timeout_ms = 300 (target w)\n"
+    timing = run_asc("config", "set", "timeout_ms", "300")
+    assert timing.stdout == "timeout_ms = 300 (global)\n"
     # Global, but a daemon takes the panic key at its start.
     panic = run_asc("config", "set", "panic_key", "ctrl+shift+alt+f20")
     assert panic.returncode == 0, panic.stderr
@@ -33,11 +33,11 @@ def test_timeout_setting_used_by_wait(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
     fake = env.fake("w")
     try:
-        assert run_asc("config", "set", "timeout_ms", "300", "--target", "w").returncode == 0
-        waited = run_asc("wait", "never", "--target", "w")
+        assert run_asc("config", "set", "timeout_ms", "300").returncode == 0
+        waited = run_asc("wait", "never")
         assert waited.returncode == 1
         assert "within 300 ms" in waited.stderr
-        flagged = run_asc("wait", "never", "--timeout", "200", "--target", "w")
+        flagged = run_asc("wait", "never", "--timeout", "200")
         assert "within 200 ms" in flagged.stderr
     finally:
         fake.close()

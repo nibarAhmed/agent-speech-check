@@ -21,7 +21,7 @@ from agent_speech_check import __version__
 from agent_speech_check.config import edit, prefs, setup
 from agent_speech_check.config.prefs import MODES, WINDOWS
 from agent_speech_check.config.targets import SANDBOX_PORT, Config, Target, load
-from agent_speech_check.daemon import ipc, server, session
+from agent_speech_check.daemon import ipc, server, session, state
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
@@ -30,6 +30,7 @@ from agent_speech_check.errors import (
     InternalError,
     NeedsTerminal,
     NoCommand,
+    NotRunning,
     TargetsRunning,
     UnrecognizedArguments,
     UsageError,
@@ -285,20 +286,20 @@ def _target(args: argparse.Namespace, settings: Config | None = None) -> Target:
     return settings.resolve(args.target, getattr(args, "mode", None))
 
 
-def _with_defaults(args: argparse.Namespace, flags: dict[str, str]) -> Target:
-    """The target. Each flag in `flags` left out is filled in from its setting."""
+def _with_defaults(args: argparse.Namespace, flags: dict[str, str]) -> Config:
+    """The settings. Each flag in `flags` left out is filled in from its setting."""
     settings = load(config_file())
-    target = _target(args, settings)
     for flag, name in flags.items():
         if getattr(args, flag) is None:
-            setattr(args, flag, settings.value(name, target.name)[0])
-    return target
+            setattr(args, flag, settings.value(name)[0])
+    return settings
 
 
-def _call(target: Target, cmd: str, raw: dict[str, Any], timeout_ms: int = 0) -> dict[str, Any]:
+def _call(cmd: str, raw: dict[str, Any], timeout_ms: int = 0) -> dict[str, Any]:
+    """Send one request to the daemon, whichever target it runs for."""
     request = ipc.parse_request(cmd, raw)
     timeout_s = timeout_ms / 1000 + session.STATUS_TIMEOUT_S
-    return ipc.call(target_dir(target.name), target.name, request, timeout_s)
+    return session.call(state_root(), request, timeout_s)
 
 
 def cmd_start(args: argparse.Namespace) -> int:
@@ -315,20 +316,25 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stop(args: argparse.Namespace) -> int:
-    target = _target(args)
-    session.stop(target_dir(target.name), target.name)
-    print(f"stopped: {target.name}")
+def cmd_stop(_: argparse.Namespace) -> int:
+    # A state file left behind counts as something to clear, not as nothing running.
+    found = any(state_root().glob(f"*/{state.FILE}"))
+    stopped = 0
+    for target in session.stop_all(state_root(), None):
+        print(f"stopped: {target}")
+        stopped += 1
+    if not (found or stopped):
+        raise NotRunning
     return 0
 
 
-def cmd_status(args: argparse.Namespace) -> int:
-    _show_status(_call(_target(args), "status", {}))
+def cmd_status(_: argparse.Namespace) -> int:
+    _show_status(_call("status", {}))
     return 0
 
 
 def cmd_speech(args: argparse.Namespace) -> int:
-    result = _call(_target(args), "speech", {"since": args.since})
+    result = _call("speech", {"since": args.since})
     if result["dropped"]:
         print(f"({result['dropped']} earlier lines dropped)")
     lines = [f"{n} {text}" for n, text in result["lines"]]
@@ -340,34 +346,34 @@ _TIMINGS = {"settle": "settle_ms", "timeout": "timeout_ms"}
 
 
 def cmd_wait(args: argparse.Namespace) -> int:
-    target = _with_defaults(args, {"timeout": "timeout_ms"})
+    _with_defaults(args, {"timeout": "timeout_ms"})
     raw = {"pattern": args.regex, "timeout_ms": args.timeout, "since": args.since}
-    n, text = _call(target, "wait", raw, args.timeout)["line"]
+    n, text = _call("wait", raw, args.timeout)["line"]
     print(f"{n} {text}")
     return 0
 
 
-def cmd_mark(args: argparse.Namespace) -> int:
-    print(f"mark: {_call(_target(args), 'mark', {})['mark']}")
+def cmd_mark(_: argparse.Namespace) -> int:
+    print(f"mark: {_call('mark', {})['mark']}")
     return 0
 
 
 def cmd_press(args: argparse.Namespace) -> int:
-    target = _with_defaults(args, _TIMINGS)
+    _with_defaults(args, _TIMINGS)
     raw = {
         "gestures": args.gestures,
         "expect": args.expect,
         "settle_ms": args.settle,
         "timeout_ms": args.timeout,
     }
-    _show_said(_call(target, "press", raw, args.timeout)["lines"])
+    _show_said(_call("press", raw, args.timeout)["lines"])
     return 0
 
 
 def cmd_type(args: argparse.Namespace) -> int:
-    target = _with_defaults(args, _TIMINGS)
+    _with_defaults(args, _TIMINGS)
     raw = {"text": args.text, "settle_ms": args.settle, "timeout_ms": args.timeout}
-    _show_said(_call(target, "type", raw, args.timeout)["lines"])
+    _show_said(_call("type", raw, args.timeout)["lines"])
     return 0
 
 
@@ -383,8 +389,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
     # It names a folder, so nothing like ..\ may get in.
     if not re.fullmatch(r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?", args.lang):
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
-    flags = {"layout": "keys_layout"}
-    target = _with_defaults(args, flags)
+    target = _target(args, _with_defaults(args, {"layout": "keys_layout"}))
     nvda_dirs, hint = _nvda_dirs(target)
     path = keyref.reference(nvda_dirs, args.lang, hint)
     commands = keyref.parse(path.read_text(encoding="utf-8"))
@@ -394,9 +399,9 @@ def cmd_keys(args: argparse.Namespace) -> int:
 
 
 def cmd_launch(args: argparse.Namespace) -> int:
-    target = _with_defaults(args, {"timeout": "launch_timeout_ms"})
+    _with_defaults(args, {"timeout": "launch_timeout_ms"})
     raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
-    _show_said(_call(target, "launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
+    _show_said(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
     return 0
 
 
@@ -436,7 +441,7 @@ def _make_portable(version: str, installer: Path | None = None) -> None:
 
 
 def _running(target: str) -> bool:
-    return session.is_running(target_dir(target), target)
+    return session.is_running(target_dir(target))
 
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:
@@ -664,7 +669,8 @@ COMMANDS: dict[str, Command] = {
         "start recording for a target",
         """\
 Start the background daemon for a target. Targets come from config.toml (see
-asc config), or default to --mode (watch if left out).
+asc config), or default to --mode (watch if left out). One daemon runs at a
+time: the other commands talk to it, whatever its target.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
 keys. Connect once in NVDA (Tools, Remote Access, Connect): allow this computer
@@ -679,14 +685,17 @@ examples:
     ),
     "stop": Command(
         "stop recording and forget the speech",
-        "Stop the daemon. Held keys are released. A daemon that doesn't answer is ended.",
+        "Stop the daemon, whatever its target. Held keys are released. A daemon that\n"
+        "doesn't answer is ended.",
         cmd_stop,
+        takes_target=False,
     ),
     "status": Command(
         "show whether asc is recording and NVDA is connected",
         "Show the target, whether NVDA is connected, how to connect it, and the\n"
         "browse/focus mode (unknown until NVDA first switches).",
         cmd_status,
+        takes_target=False,
     ),
     "speech": Command(
         "print what NVDA said since the mark",
@@ -700,6 +709,7 @@ examples:
   asc speech --since 41      lines after 41""",
         cmd_speech,
         _speech_args,
+        takes_target=False,
     ),
     "wait": Command(
         "wait until NVDA says something matching REGEX",
@@ -713,11 +723,13 @@ examples:
   asc wait "(?i)saved" --timeout 10000""",
         cmd_wait,
         _wait_args,
+        takes_target=False,
     ),
     "mark": Command(
         "remember the current end of the speech log",
         "Print and set the mark.",
         cmd_mark,
+        takes_target=False,
     ),
     "press": Command(
         "press keys and print what NVDA said",
@@ -734,6 +746,7 @@ examples:
   asc press Control+Home NVDA+Down""",
         cmd_press,
         _press_args,
+        takes_target=False,
     ),
     "type": Command(
         "type text and print what NVDA said",
@@ -747,6 +760,7 @@ examples:
   asc type "x@example.com" --settle 800""",
         cmd_type,
         _type_args,
+        takes_target=False,
     ),
     "keys": Command(
         "look up NVDA commands in NVDA's own reference",
@@ -779,6 +793,7 @@ examples:
   asc launch "py -m myapp" --title "My App" --timeout 60000""",
         cmd_launch,
         _launch_args,
+        takes_target=False,
     ),
     "get-nvda": Command(
         "make the portable NVDA that desktop mode launches",
@@ -792,6 +807,7 @@ examples:
   asc get-nvda --installer nvda_2026.2.exe""",
         cmd_get_nvda,
         _get_nvda_args,
+        takes_target=False,
     ),
     "setup": Command(
         "choose your settings, by answering questions",
@@ -811,14 +827,14 @@ examples:
         "show or change one setting",
         """Show or change the settings in config.toml. Target settings go to --target,
 or to the default target. Command defaults (settle_ms, timeout_ms, ...) go to
-[defaults], or to one target with --target. A flag on a command beats both.
+[defaults]. A flag on a command beats them.
 
 examples:
   asc config list
-  asc config set settle_ms 800 --target app
+  asc config set settle_ms 800
   asc config set mode sandbox --target app      makes target app
   asc config set share C:\\src\\app C:\\data --target app
-  asc config unset settle_ms --target app""",
+  asc config unset settle_ms""",
         cmd_config,
         _config_args,
         takes_target=False,

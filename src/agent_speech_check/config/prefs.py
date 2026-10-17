@@ -30,7 +30,6 @@ from agent_speech_check.validate import Fields
 
 GLOBAL = "global"
 TARGET = "target"
-BOTH = "both"
 
 MODES = ("watch", "desktop", "sandbox", "shared")
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
@@ -129,17 +128,16 @@ PREFS: tuple[Pref, ...] = (
     Pref("share", TARGET, "paths"),
     Pref("window", TARGET, "choice", choices=WINDOWS),
     Pref("nvda_settings", TARGET, "settings"),
-    Pref("settle_ms", BOTH, "int", ipc.DEFAULT_SETTLE_MS, *ipc.SETTLE_MS),
-    Pref("timeout_ms", BOTH, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
-    Pref("launch_timeout_ms", BOTH, "int", ipc.DEFAULT_LAUNCH_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
-    Pref("keys_layout", BOTH, "choice", "desktop", choices=LAYOUTS),
+    Pref("settle_ms", GLOBAL, "int", ipc.DEFAULT_SETTLE_MS, *ipc.SETTLE_MS),
+    Pref("timeout_ms", GLOBAL, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
+    Pref("launch_timeout_ms", GLOBAL, "int", ipc.DEFAULT_LAUNCH_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
+    Pref("keys_layout", GLOBAL, "choice", "desktop", choices=LAYOUTS),
 )
 BY_NAME = {pref.name: pref for pref in PREFS}
 
 # Keys each part of the file may hold.
-TARGET_KEYS = tuple(p.name for p in PREFS if p.scope in (TARGET, BOTH))
-DEFAULTS_KEYS = tuple(p.name for p in PREFS if p.scope in (GLOBAL, BOTH) and p.name != "default")
-COMMAND_DEFAULTS = tuple(p.name for p in PREFS if p.scope == BOTH)
+TARGET_KEYS = tuple(p.name for p in PREFS if p.scope == TARGET)
+DEFAULTS_KEYS = tuple(p.name for p in PREFS if p.scope == GLOBAL and p.name != "default")
 
 
 def find(name: str) -> Pref:

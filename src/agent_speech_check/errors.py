@@ -224,11 +224,8 @@ class NeedsTerminal(UsageError):
 
 
 class NotRunning(NotConnected):
-    def __init__(self, target: str) -> None:
-        super().__init__(
-            f"asc is not running for target {_show(target)} (not recording)",
-            hint=f"asc start --target {target}",
-        )
+    def __init__(self) -> None:
+        super().__init__("asc is not running (not recording)", hint="asc start")
 
 
 class NvdaNotConnected(NotConnected):
@@ -441,23 +438,21 @@ class KeysRefused(Refused):
 
 
 class AlreadyRunning(Refused):
-    def __init__(self, target: str) -> None:
-        super().__init__(
-            f"asc is already running for target {_show(target)}",
-            hint=f"asc stop --target {target}",
-        )
+    def __init__(self) -> None:
+        super().__init__("asc is already running", hint="asc stop")
 
 
 class DaemonNotAnswering(Refused):
     def __init__(self, target: str, reason: str) -> None:
         super().__init__(
             f"asc is running for target {_show(target)} but doesn't answer: {reason}",
-            hint=f"asc stop --target {target}, then asc start",
+            hint="asc stop, then asc start",
         )
 
 
 class DaemonUnstoppable(Refused):
     def __init__(self, target: str, pid: int) -> None:
+        self.target, self.pid = target, pid
         super().__init__(
             f"cannot end the asc daemon for target {_show(target)} (pid {pid})",
             hint="end that process in Task Manager",
@@ -465,8 +460,8 @@ class DaemonUnstoppable(Refused):
 
 
 class DaemonsUnstoppable(Refused):
-    def __init__(self, targets: Sequence[str]) -> None:
-        names = ", ".join(_show(t) for t in targets)
+    def __init__(self, stuck: Sequence[tuple[str, int]]) -> None:
+        names = ", ".join(f"{_show(target)} (pid {pid})" for target, pid in stuck)
         super().__init__(
             f"cannot end the asc daemon for target {names}",
             hint="end it in Task Manager, then try again",
@@ -486,7 +481,7 @@ class TargetsRunning(Refused):
         names = ", ".join(_show(t) for t in targets)
         super().__init__(
             f"asc is running for target {names}",
-            hint=f"asc stop --target {targets[0]}, then try again",
+            hint="asc stop, then try again",
         )
 
 

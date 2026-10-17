@@ -44,11 +44,22 @@ CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0}
 CONNECT_POLL_S = 1.0
 
 
-def status(folder: Path, target: str) -> dict[str, Any]:
-    return ipc.call(folder, target, ipc.Request("status", ipc.NoArgs()), STATUS_TIMEOUT_S)
+def status(folder: Path) -> dict[str, Any]:
+    return ipc.call(folder, ipc.Request("status", ipc.NoArgs()), STATUS_TIMEOUT_S)
 
 
-def _probe(folder: Path, target: str) -> tuple[bool, NotConnected | None]:
+def call(root: Path, request: ipc.Request, timeout_s: float) -> dict[str, Any]:
+    """Send one request to the daemon that runs, wherever its folder is."""
+    for path in sorted(root.glob(f"*/{state.FILE}")):
+        try:
+            return ipc.call(path.parent, request, timeout_s)
+        except NotRunning:
+            # Stale: no daemon got the request, so the next one may.
+            continue
+    raise NotRunning
+
+
+def _probe(folder: Path) -> tuple[bool, NotConnected | None]:
     """Whether a daemon runs for the target, and if it doesn't answer, why.
     A stale state file is removed on the way.
 
@@ -58,7 +69,7 @@ def _probe(folder: Path, target: str) -> tuple[bool, NotConnected | None]:
     if not state.exists(folder):
         return False, None
     try:
-        status(folder, target)
+        status(folder)
     except NotRunning:  # a NotConnected too, so it must come first
         return False, None
     except NotConnected as error:
@@ -66,22 +77,22 @@ def _probe(folder: Path, target: str) -> tuple[bool, NotConnected | None]:
     return True, None
 
 
-def is_running(folder: Path, target: str) -> bool:
-    return _probe(folder, target)[0]
+def is_running(folder: Path) -> bool:
+    return _probe(folder)[0]
 
 
 def running_targets(root: Path) -> list[str]:
-    """Every target whose daemon runs, answering or not, by name."""
-    return sorted(
-        f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent, f.parent.name)
-    )
+    """Every target whose daemon runs, answering or not, by name. Only one can, but
+    an older asc may have left another in its own folder."""
+    return sorted(f.parent.name for f in root.glob(f"*/{state.FILE}") if is_running(f.parent))
 
 
-def _end(folder: Path, target: str) -> None:
+def _end(folder: Path) -> None:
     """End a daemon that can't be asked to stop. Its NVDA goes with it (a
     kill-on-close job) and so does its sandbox (the guard)."""
+    target = folder.name
     try:
-        current = state.read(folder, target)
+        current = state.read(folder)
     except NotConnected:
         # A file this asc can't read names no process to end: only the file goes.
         state.remove(folder)
@@ -158,12 +169,12 @@ def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
     timeout_s = CONNECT_TIMEOUT_S[target.mode]
     deadline = time.monotonic() + timeout_s
     while True:
-        current = status(folder, target.name)
+        current = status(folder)
         if current["connected"]:
             return current
         failure = sandbox_failure(current)
         if failure or time.monotonic() > deadline:
-            stop(folder, target.name)
+            stop(folder)
             if failure:
                 raise failure
             raise NvdaDidNotConnect(timeout_s, log_tail(folder))
@@ -175,11 +186,13 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
     relay.load_or_create(folder)
-    running, silent = _probe(folder, target.name)
-    if silent is not None:
-        raise DaemonNotAnswering(target.name, silent.message)
-    if running:
-        raise AlreadyRunning(target.name)
+    # Only one daemon runs: whichever target it is for, and even one an older asc left.
+    for path in sorted(folder.parent.glob(f"*/{state.FILE}")):
+        running, silent = _probe(path.parent)
+        if silent is not None:
+            raise DaemonNotAnswering(path.parent.name, silent.message)
+        if running:
+            raise AlreadyRunning
     process = _spawn(target, folder)
     if not poll_until(
         lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S
@@ -190,45 +203,46 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
         raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
     if target.launches_nvda:
         return _wait_connected(target, folder)
-    return status(folder, target.name)
+    return status(folder)
 
 
-def stop(folder: Path, target: str, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
+def stop(folder: Path, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
     try:
-        ipc.call(folder, target, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
+        ipc.call(folder, ipc.Request("stop", ipc.NoArgs()), STATUS_TIMEOUT_S)
     except NotRunning:
         raise
     except NotConnected:
-        _end(folder, target)
+        _end(folder)
         return
     if not poll_until(lambda: not state.exists(folder), timeout_s, POLL_S):
         # It said yes but is still there: end it.
-        _end(folder, target)
+        _end(folder)
 
 
 def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_S) -> Iterator[str]:
-    """Stop every target's daemon, for the installer, yielding each target stopped.
+    """Stop every target's daemon, for `asc stop` and the installer, yielding each
+    target stopped.
 
     Tries them all before raising for any it couldn't end. Then waits for the
     other processes running `image`: a stopped daemon still runs for a moment
     after its state file goes, and a sandbox guard outlives its daemon. It never
     ends them, as they may be a person's own asc commands.
     """
-    stuck: list[str] = []
+    stuck: list[tuple[str, int]] = []
     for path in sorted(root.glob(f"*/{state.FILE}")):
         folder, target = path.parent, path.parent.name
         try:
-            state.read(folder, target)
+            state.read(folder)
         except NotConnected:
             # Gone already, or a file that names no process to stop.
             state.remove(folder)
             continue
         try:
-            stop(folder, target)
+            stop(folder)
         except NotRunning:
             continue
-        except DaemonUnstoppable:
-            stuck.append(target)
+        except DaemonUnstoppable as error:
+            stuck.append((error.target, error.pid))
             continue
         yield target
     if stuck:

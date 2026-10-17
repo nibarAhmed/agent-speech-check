@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import shutil
+import socket
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -20,19 +23,37 @@ def _pid(env: Env, target: str) -> int:
     return pid
 
 
+def _silent_daemon(env: Env, target: str) -> int:
+    """A process that holds a port and drops every request, with a state file in
+    the target's folder: what a stuck daemon of an older asc looks like."""
+    port = free_port()
+    serve = (
+        "import socket\n"
+        f"server = socket.create_server(('127.0.0.1', {port}))\n"
+        "while True:\n"
+        "    server.accept()[0].close()\n"
+    )
+    process = subprocess.Popen([sys.executable, "-c", serve])  # noqa: S603 - our own interpreter
+    assert wait_until(lambda: _listening(port))
+    folder = env.folder(target)
+    folder.mkdir(parents=True)
+    state = {"pid": process.pid, "port": port, "token": "t", "started": time.time()}
+    (folder / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    return process.pid
+
+
+def _listening(port: int) -> bool:
+    try:
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+    except OSError:
+        return False
+    return True
+
+
 def test_stop_all_stops_every_daemon(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
-    # Its own relay port, picked once w holds its own: two daemons can't share one.
-    config = env.root / "agent-speech-check" / "config.toml"
-    with config.open("a", encoding="utf-8") as file:
-        file.write(f'[targets.w2]\nmode = "watch"\nport = {free_port()}\n')
-    started = run_asc("start", "--target", "w2")
-    assert started.returncode == 0, started.stderr
-    pids = [_pid(env, "w"), _pid(env, "w2")]
-    # One that doesn't answer (a token it doesn't know), as an older asc wouldn't.
-    path = env.folder("w2") / "state.json"
-    current = json.loads(path.read_text(encoding="utf-8"))
-    path.write_text(json.dumps({**current, "token": "not-its-token"}), encoding="utf-8")
+    # One that doesn't answer, as an older asc's daemon wouldn't.
+    pids = [_pid(env, "w"), _silent_daemon(env, "w2")]
     # And a file no daemon of this asc wrote.
     old = env.folder("old")
     old.mkdir()

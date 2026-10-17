@@ -93,7 +93,7 @@ class Env:
 
     def running(self, target: str) -> list[str]:
         """The commands the target's daemon is running for other clients."""
-        running: list[str] = session.status(self.folder(target), target)["running"]
+        running: list[str] = session.status(self.folder(target))["running"]
         return running
 
     def wait_running(self, target: str, command: str) -> None:
@@ -120,9 +120,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
         encoding="utf-8",
     )
     yield Env(tmp_path, port)
-    # Never leave a daemon behind, even when a test failed half way.
-    for state in config.glob("*/state.json"):
-        if run_asc("stop", "--target", state.parent.name).returncode != 0:
+    # Never leave a daemon behind, even when a test failed half way. 3: none ran.
+    if run_asc("stop").returncode not in (0, 3):
+        for state in config.glob("*/state.json"):
             _kill_if_ours(json.loads(state.read_text(encoding="utf-8"))["pid"])
     assert os.environ["LOCALAPPDATA"] == str(tmp_path)
 

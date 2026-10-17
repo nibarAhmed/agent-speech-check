@@ -205,8 +205,7 @@ def _read(path: Path) -> dict[str, Any]:
     return parse(text, str(path))
 
 
-def _from_table(name: str, raw: object, file: str) -> tuple[Target, dict[str, prefs.Value]]:
-    """A target and its own command defaults."""
+def _from_table(name: str, raw: object, file: str) -> Target:
     where = f"{file}: [targets.{name}]"
     f = Fields(raw, where, UsageError, prefs.TARGET_KEYS)
     # Required: the mode decides every other default.
@@ -223,8 +222,7 @@ def _from_table(name: str, raw: object, file: str) -> tuple[Target, dict[str, pr
         if key in _TARGET_FIELDS
     }
     target = replace(defaults(name, mode), **kept, settings=settings)
-    overrides = {key: values[key] for key in prefs.COMMAND_DEFAULTS if key in values}
-    return _checked(target, where), overrides
+    return _checked(target, where)
 
 
 _TARGET_FIELDS = frozenset(field.name for field in fields(Target))
@@ -244,7 +242,6 @@ class Config:
     default: str = DEFAULT_TARGET
     defaults: Mapping[str, prefs.Value] = field(default_factory=dict)
     targets: Mapping[str, Target] = field(default_factory=dict)
-    overrides: Mapping[str, Mapping[str, prefs.Value]] = field(default_factory=dict)
 
     @classmethod
     def from_data(cls, data: dict[str, Any], file: str) -> Config:
@@ -254,13 +251,10 @@ class Config:
             data.get("defaults", {}), f"{file}: [defaults]", UsageError, prefs.DEFAULTS_KEYS
         )
         tables = Fields(data.get("targets", {}), f"{file}: [targets]", UsageError)
-        targets: dict[str, Target] = {}
-        overrides: dict[str, dict[str, prefs.Value]] = {}
-        for name, raw in tables.raw.items():
-            targets[name], overrides[name] = _from_table(check_name(name), raw, file)
-        return cls(
-            data, default, _checked_values(globals_, prefs.DEFAULTS_KEYS), targets, overrides
-        )
+        targets = {
+            name: _from_table(check_name(name), raw, file) for name, raw in tables.raw.items()
+        }
+        return cls(data, default, _checked_values(globals_, prefs.DEFAULTS_KEYS), targets)
 
     def resolve(self, name: str | None, mode: str | None) -> Target:
         """The target to use: listed here, or defaults for `mode`."""
@@ -272,12 +266,8 @@ class Config:
             raise ModeMismatch(chosen, target.mode, mode)
         return replace(target, panic_key=parse_hotkey(str(self.value("panic_key")[0])))
 
-    def value(self, name: str, target: str | None = None) -> tuple[prefs.Value | None, str]:
-        """A global or command default setting and where it came from: target,
-        global or default."""
-        own = self.overrides.get(target or self.default, {})
-        if name in own:
-            return own[name], "target"
+    def value(self, name: str) -> tuple[prefs.Value | None, str]:
+        """A global setting and where it came from: global or default."""
         if name == "default":
             return self.default, "global" if "default" in self.data else "default"
         if name in self.defaults:

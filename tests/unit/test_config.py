@@ -20,14 +20,13 @@ from agent_speech_check.nvda.nvda_config import Setting, merge
 EXAMPLE: dict[str, Any] = {
     "targets": {
         "default": {
-            "settle_ms": 800,
             "mode": "sandbox",
             "nvda_settings": ["speech.symbolLevel=300"],
             "share": ["C:\\src\\app"],
         },
         "a": {"mode": "watch"},
     },
-    "defaults": {"timeout_ms": 8000},
+    "defaults": {"settle_ms": 800, "timeout_ms": 8000},
     "default": "default",
 }
 
@@ -36,6 +35,7 @@ EXAMPLE_TEXT = """\
 default = "default"
 
 [defaults]
+settle_ms = 800
 timeout_ms = 8000
 
 [targets.a]
@@ -45,7 +45,6 @@ mode = "watch"
 mode = "sandbox"
 share = ['C:\\src\\app']
 nvda_settings = ["speech.symbolLevel=300"]
-settle_ms = 800
 """
 
 
@@ -102,15 +101,17 @@ def test_mode_makes_a_target_and_nothing_else_does() -> None:
     assert _config(data).targets["app"].mode == "sandbox"
 
 
-def test_command_default_global_or_per_target() -> None:
+def test_command_defaults_are_global_only() -> None:
+    """Commands talk to whichever daemon runs, so no target can hold their defaults."""
     settings = _config({"targets": {"app": {"mode": "watch"}}})
     data, _ = edit.set_value(settings, prefs.find("settle_ms"), ["600"], None)
     assert data["defaults"] == {"settle_ms": 600}
-    data, _ = edit.set_value(_config(data), prefs.find("settle_ms"), ["900"], "app")
-    both = _config(data)
-    assert both.value("settle_ms", "app") == (900, "target")
-    assert both.value("settle_ms", "other") == (600, "global")
-    assert both.value("timeout_ms", "app") == (5000, "default")
+    assert _config(data).value("settle_ms") == (600, "global")
+    assert _config(data).value("timeout_ms") == (5000, "default")
+    with pytest.raises(BadPreference, match="is global, so it takes no --target"):
+        edit.owner(settings, prefs.find("settle_ms"), "app")
+    with pytest.raises(UsageError, match=r"\[targets.app\].*settle_ms"):
+        _config({"targets": {"app": {"mode": "watch", "settle_ms": 900}}})
 
 
 def test_global_setting_takes_no_target() -> None:
@@ -184,7 +185,7 @@ def test_entries_say_where_each_value_comes_from() -> None:
     assert rows["mode"] == ("sandbox", "target")
     assert rows["port"] == (16837, "default")
     assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "target")
-    assert rows["settle_ms"] == (800, "target")
+    assert rows["settle_ms"] == (800, "global")
     assert rows["timeout_ms"] == (8000, "global")
     assert rows["keys_layout"] == ("desktop", "default")
     assert [name for name, _, _ in edit.entries(settings, "x")] == [p.name for p in prefs.PREFS]
