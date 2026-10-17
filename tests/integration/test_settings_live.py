@@ -17,6 +17,10 @@ def test_changes_while_running(env: Env) -> None:
     # Command defaults are read by every command, so they apply at once.
     timing = run_asc("config", "set", "timeout_ms", "300", "--target", "w")
     assert timing.stdout == "timeout_ms = 300 (target w)\n"
+    # Global, but a daemon takes the panic key at its start.
+    panic = run_asc("config", "set", "panic_key", "ctrl+shift+alt+f20")
+    assert panic.returncode == 0, panic.stderr
+    assert panic.stdout.endswith("applies at the next asc start of w\n")
 
     removed = run_asc("config", "remove-target", "w")
     assert removed.returncode == 4

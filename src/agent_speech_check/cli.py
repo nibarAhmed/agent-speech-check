@@ -449,13 +449,18 @@ def _config_change(settings: Config, args: argparse.Namespace) -> int:
     else:
         data = edit.unset_value(settings, pref, where)
         done = f"{pref.name} unset ({edit.label(where)})"
-    # Command defaults are read by each command, so only target settings wait.
+    # Command defaults are read by each command, so only target settings and the
+    # panic key, which every daemon takes at its start, wait.
     # Asked before saving, so a failed look leaves the file as it was.
-    waits = where is not None and pref.scope == prefs.TARGET and _running(where)
+    waiting: list[str] = []
+    if pref.name == "panic_key":
+        waiting = session.running_targets(state_root())
+    elif where is not None and pref.scope == prefs.TARGET and _running(where):
+        waiting = [where]
     edit.save(config_file(), data)
     print(done)
-    if waits:
-        print(f"applies at the next asc start of {where}")
+    if waiting:
+        print(f"applies at the next asc start of {', '.join(waiting)}")
     return 0
 
 

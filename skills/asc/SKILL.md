@@ -54,7 +54,7 @@ asc config set settle_ms 800 --target app      # one target, or [defaults] witho
 - If presses keep missing speech, or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` for that target rather than passing the
   flag every time. Tell the user what you changed.
-- A setting for a running target applies at its next `asc start` (it says so).
+- A target setting, or `panic_key`, applies to a running target at its next `asc start` (it says so).
 
 ## Workflow
 
