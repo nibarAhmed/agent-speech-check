@@ -110,10 +110,6 @@ class SpeechLog:
         self.mark = self.latest
         return self.mark
 
-    def clear(self) -> None:
-        self._entries.clear()
-        self.mark = self.latest
-
     def since(self, n: int) -> Since:
         """Lines numbered above `n`, and how many of those fell off the log."""
         # Numbers are consecutive within the log, so the first kept line

@@ -32,17 +32,12 @@ async def test_empty_speech_is_only_activity() -> None:
     assert log.last_activity > before
 
 
-async def test_mark_and_clear_keep_numbers() -> None:
+async def test_mark() -> None:
     log = SpeechLog()
     log.said("a")
     assert log.set_mark() == 1
     log.said("b")
     assert [e.text for e in log.since(log.mark).entries] == ["b"]
-    log.clear()
-    assert log.since(0).entries == ()
-    assert log.since(0).dropped == 0
-    log.said("c")
-    assert log.since(0).entries[0].n == 3
 
 
 async def test_cap_reports_dropped() -> None:

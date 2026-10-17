@@ -294,8 +294,30 @@ def test_remove_target_checks_the_name_before_looking_for_a_daemon(
     assert outside.exists()
 
 
-def test_help_says_booleans_as_the_file_does(capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.usefixtures("root")
+@pytest.mark.parametrize("name", ["keys_lang", "keys_braille", "nvda_version"])
+def test_removed_settings_are_unknown(name: str, capsys: pytest.CaptureFixture[str]) -> None:
+    code, _, err = run(capsys, "config", "set", name, "x")
+    assert code == 2
+    assert f'unknown setting "{name}"' in err
+
+
+@pytest.mark.usefixtures("root")
+def test_keys_refuses_a_bad_language(capsys: pytest.CaptureFixture[str]) -> None:
+    code, _, err = run(capsys, "keys", "--lang", "../x", "heading")
+    assert code == 2
+    assert "--lang: expected a language code like en or pt_BR" in err
+
+
+def test_clear_is_gone(capsys: pytest.CaptureFixture[str]) -> None:
+    code, _, err = run(capsys, "clear")
+    assert code == 2
+    assert "invalid choice: 'clear'" in err
+
+
+def test_keys_flags_default_without_settings(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         main(["keys", "--help"])
     out = " ".join(capsys.readouterr().out.split())
-    assert "keys_braille setting, false unless set" in out
+    assert "falling back to en (default: en)" in out
+    assert "include braille displays (default: off)" in out

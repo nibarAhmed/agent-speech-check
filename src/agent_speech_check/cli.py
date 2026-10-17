@@ -146,11 +146,14 @@ def _keys_args(parser: argparse.ArgumentParser) -> None:
         "--layout", choices=prefs.BY_NAME["keys_layout"].choices, help=_default("keys_layout")
     )
     parser.add_argument("--nvda-dir", metavar="DIR", help="read this NVDA's reference")
-    parser.add_argument("--lang", help=f"reference language ({_default('keys_lang')})")
+    parser.add_argument(
+        "--lang", default="en", help="reference language, falling back to en (default: en)"
+    )
     parser.add_argument(
         "--braille",
         action=argparse.BooleanOptionalAction,
-        help=f"include braille displays ({_default('keys_braille')})",
+        default=False,
+        help="include braille displays (default: off)",
     )
 
 
@@ -161,7 +164,12 @@ def _launch_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--version", dest="nvda_version", help=_default("nvda_version"))
+    parser.add_argument(
+        "--version",
+        dest="nvda_version",
+        default=launcher.VERSION,
+        help=f"the NVDA version (default: {launcher.VERSION})",
+    )
     parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
 
 
@@ -348,12 +356,6 @@ def cmd_mark(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_clear(args: argparse.Namespace) -> int:
-    _call(_target(args), "clear", {})
-    print("cleared")
-    return 0
-
-
 def cmd_press(args: argparse.Namespace) -> int:
     target = _with_defaults(args, _TIMINGS)
     raw = {
@@ -382,7 +384,10 @@ def _nvda_dirs(args: argparse.Namespace, target: Target) -> list[tuple[str, Path
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
-    flags = {"layout": "keys_layout", "lang": "keys_lang", "braille": "keys_braille"}
+    # It names a folder, so nothing like ..\ may get in.
+    if not re.fullmatch(r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?", args.lang):
+        raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
+    flags = {"layout": "keys_layout"}
     target = _with_defaults(args, flags)
     path = keyref.reference(_nvda_dirs(args, target), args.lang)
     commands = keyref.parse(path.read_text(encoding="utf-8"))
@@ -417,12 +422,9 @@ def _add_firewall_rule(port: int, program: str) -> None:
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
     # It goes into the download URL and a file name.
-    if args.nvda_version is not None and not re.fullmatch(
-        launcher.VERSION_PATTERN, args.nvda_version
-    ):
+    if not re.fullmatch(launcher.VERSION_PATTERN, args.nvda_version):
         raise bad_field(UsageError, "--version", "an NVDA version like 2026.2", args.nvda_version)
-    version = args.nvda_version or str(load(config_file()).value("nvda_version")[0])
-    _make_portable(version, Path(args.installer) if args.installer else None)
+    _make_portable(args.nvda_version, Path(args.installer) if args.installer else None)
     return 0
 
 
@@ -719,11 +721,6 @@ examples:
         "remember the current end of the speech log",
         "Print and set the mark.",
         cmd_mark,
-    ),
-    "clear": Command(
-        "drop all kept speech",
-        "Drop all kept speech. Line numbers keep counting.",
-        cmd_clear,
     ),
     "press": Command(
         "press keys and print what NVDA said",
