@@ -15,13 +15,14 @@ from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_c
 
 from agent_speech_check.config.targets import SANDBOX_PORT, Target
 from agent_speech_check.daemon import ipc, session, state
-from agent_speech_check.errors import DaemonNoReply
+from agent_speech_check.cli import run_setup
+from agent_speech_check.errors import DaemonNoReply, DaemonRunning
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.windows import winapi
 
 
 def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
-    assert run_asc("start", "--target", "w").returncode == 0
+    assert run_asc("start", "--mode", "watch").returncode == 0
     with tls_client(env.port) as sock:
         sock.sendall(b'{"type":"protocol_version","version":2}\n')
         sock.sendall(b'{"type":"join","channel":"wrong","connection_type":"slave"}\n')
@@ -34,8 +35,8 @@ def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
 
 
 def test_second_press_waits_then_gives_up(env: Env) -> None:
-    assert run_asc("start", "--target", "d").returncode == 0
-    fake = env.fake("d", {"Space": f.SILENCE})
+    assert run_asc("start", "--mode", "desktop").returncode == 0
+    fake = env.fake("desktop", {"Space": f.SILENCE})
     try:
         slow = start_asc("press", "Space", "--settle", "3000")
         # Once NVDA has the key, the slow press holds the keyboard for its settle.
@@ -75,7 +76,7 @@ HANG = b"hang"
 @pytest.fixture
 def daemon_reply(env: Env, request: pytest.FixtureRequest) -> Iterator[None]:
     fake = FakeDaemon(request.param)
-    folder = env.folder("w")
+    folder = env.folder("watch")
     folder.mkdir(parents=True)
     state = {"pid": 1, "port": fake.port, "token": "t", "started": 0}
     (folder / "state.json").write_text(json.dumps(state), encoding="utf-8")
@@ -114,13 +115,13 @@ def test_daemon_hangs_up() -> None:
 def test_config_set_looks_for_the_daemon_before_saving(env: Env) -> None:
     path = env.root / "agent-speech-check" / "config.toml"
     before = path.read_text(encoding="utf-8")
-    result = run_asc("config", "set", "port", "7000", "--target", "w")
+    result = run_asc("config", "set", "port", "7000", "--mode", "watch")
     assert result.returncode == 6
     assert path.read_text(encoding="utf-8") == before
 
 
 def _ipc_port(env: Env) -> int:
-    state = json.loads((env.folder("w") / "state.json").read_text(encoding="utf-8"))
+    state = json.loads((env.folder("watch") / "state.json").read_text(encoding="utf-8"))
     port: int = state["port"]
     return port
 
@@ -134,7 +135,7 @@ def _ipc_port(env: Env) -> int:
     ],
 )
 def test_ipc_drops_bad_requests_without_a_reply(env: Env, request_line: bytes) -> None:
-    assert run_asc("start", "--target", "w").returncode == 0
+    assert run_asc("start", "--mode", "watch").returncode == 0
     with socket.create_connection(("127.0.0.1", _ipc_port(env)), timeout=10) as sock:
         sock.sendall(request_line)
         assert sock.recv(4096) == b""
@@ -142,7 +143,7 @@ def test_ipc_drops_bad_requests_without_a_reply(env: Env, request_line: bytes) -
 
 
 def test_corrupt_state_file_means_not_running(env: Env) -> None:
-    folder = env.folder("w")
+    folder = env.folder("watch")
     folder.mkdir(parents=True)
     (folder / "state.json").write_text("{half", encoding="utf-8")
     result = run_asc("status")
@@ -154,17 +155,17 @@ def test_corrupt_state_file_means_not_running(env: Env) -> None:
 def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     """A live daemon that can't be talked to (here: a token it doesn't know, which it
     drops without a reply) is still running: nothing may forget it, and stop ends it."""
-    assert run_asc("start", "--target", "w").returncode == 0
-    path = env.folder("w") / "state.json"
+    assert run_asc("start", "--mode", "watch").returncode == 0
+    path = env.folder("watch") / "state.json"
     current = json.loads(path.read_text(encoding="utf-8"))
     path.write_text(json.dumps({**current, "token": "not-its-token"}), encoding="utf-8")
 
-    removed = run_asc("config", "remove-target", "w")
-    assert removed.returncode == 4, removed.stderr
-    started = run_asc("start", "--target", "w")
+    with pytest.raises(DaemonRunning):
+        run_setup(lambda _: "", replace_without_asking=True)
+    started = run_asc("start", "--mode", "watch")
     # Refused, not "not connected": retrying start can't help, stopping can.
     assert started.returncode == 4, started.stderr
-    assert 'asc is running for target "w" but doesn\'t answer' in started.stderr
+    assert "asc is running but doesn't answer" in started.stderr
     assert "hint: asc stop, then asc start" in started.stderr
     assert path.exists()
 
@@ -176,8 +177,8 @@ def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
 
 def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
     """A pid in a dead daemon's file may since belong to another program."""
-    assert run_asc("start", "--target", "w").returncode == 0
-    path = env.folder("w") / "state.json"
+    assert run_asc("start", "--mode", "watch").returncode == 0
+    path = env.folder("watch") / "state.json"
     current = json.loads(path.read_text(encoding="utf-8"))
     path.write_text(json.dumps({**current, "token": "x", "started": 1.0}), encoding="utf-8")
     try:
@@ -190,56 +191,56 @@ def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
 
 def test_stop_clears_a_state_file_without_a_pid(env: Env) -> None:
     """A state file this asc can't read names no process to end: stop drops it."""
-    folder = env.folder("w")
+    folder = env.folder("watch")
     folder.mkdir(parents=True)
     (folder / "state.json").write_text('{"pid": "old"}', encoding="utf-8")
     assert run_asc("stop").returncode == 0
     assert not (folder / "state.json").exists()
-    assert run_asc("start", "--target", "w").returncode == 0
+    assert run_asc("start", "--mode", "watch").returncode == 0
 
 
 @pytest.mark.parametrize("daemon_reply", [b'{"v":1,"ok":true,"result":{}}\n'], indirect=True)
 @pytest.mark.usefixtures("daemon_reply")
 def test_stop_ends_a_daemon_that_agrees_but_stays(env: Env) -> None:
     """In-process with a short wait: the real one is 30 s."""
-    session.stop(env.folder("w"), timeout_s=0.5)
-    assert not (env.folder("w") / "state.json").exists()
+    session.stop(env.folder("watch"), timeout_s=0.5)
+    assert not (env.folder("watch") / "state.json").exists()
 
 
 @pytest.mark.parametrize("daemon_reply", [b""], indirect=True)
 @pytest.mark.usefixtures("daemon_reply")
 def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
     """Pid 4 is Windows' System process: running since boot, and no one may end it."""
-    path = env.folder("w") / "state.json"
+    path = env.folder("watch") / "state.json"
     current = json.loads(path.read_text(encoding="utf-8"))
     path.write_text(json.dumps({**current, "pid": 4, "started": time.time()}), encoding="utf-8")
     result = run_asc("stop")
     assert result.returncode == 4, result.stderr
-    assert 'cannot end the asc daemon for target "w" (pid 4)' in result.stderr
+    assert "cannot end the asc daemon (pid 4)" in result.stderr
     assert path.exists()
 
 
 def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> None:
-    assert run_asc("start", "--target", "d").returncode == 0
+    assert run_asc("start", "--mode", "desktop").returncode == 0
     # Then one only an older asc could have left next to it, in its own folder.
     fake = FakeDaemon(b"")
-    path = env.folder("w") / "state.json"
+    path = env.folder("watch") / "state.json"
     path.parent.mkdir(parents=True)
     state = {"pid": 4, "port": fake.port, "token": "t", "started": time.time()}
     path.write_text(json.dumps(state), encoding="utf-8")
     result = run_asc("_stop_all")
     assert result.returncode == 4, result.stderr
-    assert result.stdout == "stopped: d\n"
-    assert 'cannot end the asc daemon for target "w" (pid 4)' in result.stderr
-    assert not (env.folder("d") / "state.json").exists()
+    assert result.stdout == "stopped: desktop\n"
+    assert "cannot end the asc daemon (pid 4)" in result.stderr
+    assert not (env.folder("desktop") / "state.json").exists()
     assert path.exists()
 
 
 def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
-    folder = env.folder("w")
+    folder = env.folder("watch")
     folder.mkdir(parents=True)
     (folder / "relay.json").write_text("{half", encoding="utf-8")
-    result = run_asc("start", "--target", "w")
+    result = run_asc("start", "--mode", "watch")
     assert result.returncode == 7
     assert "relay.json: expected an object" in result.stderr
 
@@ -256,11 +257,11 @@ def test_sandbox_setup_is_a_no_op_when_done() -> None:
 
 
 def test_start_replaces_a_stale_state_file(env: Env) -> None:
-    folder = env.folder("w")
+    folder = env.folder("watch")
     folder.mkdir(parents=True)
     stale = {"pid": 1, "port": free_port(), "token": "old", "started": 0}
     (folder / "state.json").write_text(json.dumps(stale), encoding="utf-8")
-    started = run_asc("start", "--target", "w")
+    started = run_asc("start", "--mode", "watch")
     assert started.returncode == 0, started.stderr
     fresh = json.loads((folder / "state.json").read_text(encoding="utf-8"))
     assert fresh["token"] != stale["token"]
@@ -277,8 +278,8 @@ def test_keys_finds_your_own_nvda() -> None:
 
 
 def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
-    assert run_asc("start", "--target", "d").returncode == 0
-    fake = env.fake("d", {"Tab": [f.speak("x")]})
+    assert run_asc("start", "--mode", "desktop").returncode == 0
+    fake = env.fake("desktop", {"Tab": [f.speak("x")]})
     try:
         assert run_asc("press", "Tab").returncode == 0
         assert run_asc("stop").returncode == 0
@@ -290,10 +291,10 @@ def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
 
 @pytest.mark.usefixtures("env")
 def test_the_named_mutex_refuses_a_second_daemon() -> None:
-    """One mutex for every target: a daemon started some other way still can't run
+    """One mutex for every mode: a daemon started some other way still can't run
     next to the first."""
-    assert run_asc("start", "--target", "w").returncode == 0
-    target = Target("d", "desktop", free_port(), launch=False)
+    assert run_asc("start", "--mode", "watch").returncode == 0
+    target = Target("desktop", free_port(), launch=False)
     second = run_asc("_daemon", target.to_json())
     assert second.returncode == 4
     assert "asc is already running" in second.stderr
@@ -307,7 +308,7 @@ def test_daemon_that_never_answers(env: Env) -> None:
     with pytest.raises(
         DaemonNoReply, match="cannot talk to the asc daemon: no reply in time"
     ) as exc:
-        ipc.call(env.folder("w"), request, 0.3)
+        ipc.call(env.folder("watch"), request, 0.3)
     assert exc.value.exit_code == 3
 
 
@@ -321,9 +322,9 @@ def test_too_many_gestures_send_nothing() -> None:
 def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
     """A sandbox's NVDA vanishes without closing when its sandbox stops. The
     daemon must still exit at once, not when the TLS close times out."""
-    assert run_asc("start", "--target", "w").returncode == 0
-    pid = state.read(env.folder("w")).pid
-    channel = env.channel("w")
+    assert run_asc("start", "--mode", "watch").returncode == 0
+    pid = state.read(env.folder("watch")).pid
+    channel = env.channel("watch")
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE

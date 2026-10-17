@@ -2,18 +2,15 @@
 
 `asc setup`, `asc config` and the file loader all read this table, so a setting
 exists in one place. A setting's scope says where it may live:
-- `global`: top level (`default`) or `[defaults]`
-- `target`: `[targets.NAME]`
-- `both`: `[defaults]`, and a target may override it
+- `global`: top level (`mode`) or `[defaults]`
+- `per mode`: a table named after the mode, like `[sandbox]`
 
-A `both` setting is a command default. The order is the command line flag,
-then the target's value, then `[defaults]`, then the built-in default.
+A command default in `[defaults]` gives way to its flag on the command line.
 """
 
 from __future__ import annotations
 
 import difflib
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,15 +26,13 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.validate import Fields
 
 GLOBAL = "global"
-TARGET = "target"
+PER_MODE = "per mode"
 
 MODES = ("watch", "desktop", "sandbox", "shared")
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
 # taskbar, or left alone.
 WINDOWS = ("tray", "taskbar", "show")
 LAYOUTS = ("desktop", "laptop")
-# A target name, which is also its folder name.
-NAME_PATTERN = r"[A-Za-z0-9_-]{1,32}"
 
 type Value = str | int | bool | list[str]
 
@@ -46,12 +41,11 @@ type Value = str | int | bool | list[str]
 class Pref:
     name: str
     scope: str
-    kind: str  # bool, int, choice, text, hotkey, path, paths or settings
+    kind: str  # bool, int, choice, hotkey, path, paths or settings
     default: str | int | bool | None = None  # None: none, or it depends on the mode
     low: int = 0
     high: int = 0
     choices: tuple[str, ...] = ()
-    pattern: str = ""  # text: what a valid value looks like
 
     @property
     def is_list(self) -> bool:
@@ -59,7 +53,7 @@ class Pref:
 
     def check(self, raw: object, where: str) -> Value:
         """A value from the file, checked on its own. Rules across settings
-        (keys in watch mode, say) are checked on the whole target."""
+        (window outside sandbox mode, say) are checked on the whole table."""
         f = Fields({self.name: raw}, where, UsageError)
         if self.kind == "bool":
             return f.flag(self.name)
@@ -77,16 +71,12 @@ class Pref:
             return paths[0] if one else paths
         if self.is_list:
             return list(f.strings(self.name))
-        value = f.text(self.name, max_len=40)
-        if self.kind == "hotkey":
-            try:
-                value = keys.parse_hotkey(value).text
-            except UsageError as error:
-                field = f"{where} {self.name}"
-                raise BadInFile(field, error.message, error.hint) from None
-        elif not re.fullmatch(self.pattern, value):
-            raise bad_field(UsageError, f"{where} {self.name}", "a value like the default", value)
-        return value
+        # What is left is a hotkey.
+        try:
+            return keys.parse_hotkey(f.text(self.name, max_len=40)).text
+        except UsageError as error:
+            field = f"{where} {self.name}"
+            raise BadInFile(field, error.message, error.hint) from None
 
     def parse(self, values: list[str]) -> Value:
         """`asc config set` text into the value the file holds. The whole file
@@ -119,15 +109,14 @@ class Pref:
 
 
 PREFS: tuple[Pref, ...] = (
-    Pref("default", GLOBAL, "text", "default", pattern=NAME_PATTERN),
+    Pref("mode", GLOBAL, "choice", "watch", choices=MODES),
     Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
-    Pref("mode", TARGET, "choice", choices=MODES),
-    Pref("port", TARGET, "int", low=1, high=65535),
-    Pref("launch", TARGET, "bool"),
-    Pref("nvda_dir", TARGET, "path"),
-    Pref("share", TARGET, "paths"),
-    Pref("window", TARGET, "choice", choices=WINDOWS),
-    Pref("nvda_settings", TARGET, "settings"),
+    Pref("port", PER_MODE, "int", low=1, high=65535),
+    Pref("launch", PER_MODE, "bool"),
+    Pref("nvda_dir", PER_MODE, "path"),
+    Pref("share", PER_MODE, "paths"),
+    Pref("window", PER_MODE, "choice", choices=WINDOWS),
+    Pref("nvda_settings", PER_MODE, "settings"),
     Pref("settle_ms", GLOBAL, "int", ipc.DEFAULT_SETTLE_MS, *ipc.SETTLE_MS),
     Pref("timeout_ms", GLOBAL, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
     Pref("launch_timeout_ms", GLOBAL, "int", ipc.DEFAULT_LAUNCH_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
@@ -136,8 +125,8 @@ PREFS: tuple[Pref, ...] = (
 BY_NAME = {pref.name: pref for pref in PREFS}
 
 # Keys each part of the file may hold.
-TARGET_KEYS = tuple(p.name for p in PREFS if p.scope == TARGET)
-DEFAULTS_KEYS = tuple(p.name for p in PREFS if p.scope == GLOBAL and p.name != "default")
+MODE_KEYS = tuple(p.name for p in PREFS if p.scope == PER_MODE)
+DEFAULTS_KEYS = tuple(p.name for p in PREFS if p.scope == GLOBAL and p.name != "mode")
 
 
 def find(name: str) -> Pref:

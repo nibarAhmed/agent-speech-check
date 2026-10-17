@@ -38,9 +38,7 @@ class SandboxSession:
         self.state = "starting"
         self.failure: AscError | None = None
         self.sandbox_id: str | None = None
-        self.window = wsb.SandboxWindow(
-            target.sandbox_window, f"asc sandbox {target.name}: show or hide"
-        )
+        self.window = wsb.SandboxWindow(target.sandbox_window)
 
     def _prepare(self) -> str:
         """Write the mapped folders and return the sandbox configuration."""

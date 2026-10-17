@@ -83,28 +83,31 @@ class Env:
     root: Path
     port: int
 
-    def folder(self, target: str) -> Path:
-        return self.root / "agent-speech-check" / target
+    def folder(self, mode: str) -> Path:
+        return self.root / "agent-speech-check" / mode
 
-    def channel(self, target: str) -> str:
-        relay = (self.folder(target) / "relay.json").read_text(encoding="utf-8")
+    def config(self, text: str) -> None:
+        (self.root / "agent-speech-check" / "config.toml").write_text(text, encoding="utf-8")
+
+    def channel(self, mode: str) -> str:
+        relay = (self.folder(mode) / "relay.json").read_text(encoding="utf-8")
         channel: str = json.loads(relay)["channel"]
         return channel
 
-    def running(self, target: str) -> list[str]:
-        """The commands the target's daemon is running for other clients."""
-        running: list[str] = session.status(self.folder(target))["running"]
+    def running(self, mode: str) -> list[str]:
+        """The commands the mode's daemon is running for other clients."""
+        running: list[str] = session.status(self.folder(mode))["running"]
         return running
 
-    def wait_running(self, target: str, command: str) -> None:
+    def wait_running(self, mode: str, command: str) -> None:
         """Wait until the daemon runs `command`, so a test acts during it, not before."""
-        assert wait_until(lambda: command in self.running(target)), self.running(target)
+        assert wait_until(lambda: command in self.running(mode)), self.running(mode)
 
-    def fake(self, target: str, replies: dict[str, Reply | str] | None = None) -> FakeNvda:
-        """A fake NVDA connected to the target's relay, using its stored key and cert."""
-        folder = self.folder(target)
+    def fake(self, mode: str, replies: dict[str, Reply | str] | None = None) -> FakeNvda:
+        """A fake NVDA connected to the mode's relay, using its stored key and cert."""
+        folder = self.folder(mode)
         cert = fingerprint(folder / "relay_cert.pem")
-        fake = FakeNvda(self.port, self.channel(target), cert, replies or {})
+        fake = FakeNvda(self.port, self.channel(mode), cert, replies or {})
         return fake.start()
 
 
@@ -115,8 +118,7 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     config = tmp_path / "agent-speech-check"
     config.mkdir()
     (config / "config.toml").write_text(
-        f'[targets.w]\nmode = "watch"\nport = {port}\n'
-        f'[targets.d]\nmode = "desktop"\nport = {port}\nlaunch = false\n',
+        f"[watch]\nport = {port}\n[desktop]\nport = {port}\nlaunch = false\n",
         encoding="utf-8",
     )
     yield Env(tmp_path, port)

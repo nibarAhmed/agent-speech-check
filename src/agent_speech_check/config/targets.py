@@ -1,28 +1,26 @@
-"""Targets: named NVDA setups, listed in `config.toml` or made from defaults.
+"""Targets: what `asc start` starts, from a mode and its settings in `config.toml`.
 
 `config.toml` sits in the state folder (`%LOCALAPPDATA%\\agent-speech-check`).
 `asc setup` and `asc config` write it; `prefs.py` lists every setting it holds:
 
-    default = "app"
+    mode = "sandbox"
 
     [defaults]
     settle_ms = 600
 
-    [targets.app]
-    mode = "sandbox"
+    [sandbox]
     share = ['C:\\src\\app']
     nvda_settings = ["keyboard.speakTypedCharacters=False"]
 
-A target that isn't listed gets the defaults for `--mode` (watch if left out).
-`--nvda-setting` and `--window` are added at `asc start` and are
-not kept. The whole file is checked when it is read, so a bad table fails every
-command, not only the ones that use it.
+`mode` is what `asc start` uses without `--mode` (watch if not set). A mode
+without a table gets its defaults. `--nvda-setting` and `--window` are added at
+`asc start` and are not kept. The whole file is checked when it is read, so a
+bad table fails every command, not only the ones that use it.
 """
 
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
@@ -32,10 +30,10 @@ import tomlkit
 import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.prefs import MODES, NAME_PATTERN, WINDOWS
+from agent_speech_check.config.prefs import MODES, WINDOWS
 from agent_speech_check.errors import (
     FileUnusable,
-    ModeMismatch,
+    OldConfig,
     TargetsFileError,
     UsageError,
     bad_field,
@@ -45,17 +43,14 @@ from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.validate import Fields
 
-DEFAULT_TARGET = "default"
 WATCH_PORT = 6837
 # Fixed, so the one firewall rule `asc sandbox-setup` makes keeps matching.
 SANDBOX_PORT = 16837
-_NAME = re.compile(NAME_PATTERN)
 _PANIC = parse_hotkey(PANIC_KEY)
 
 
 @dataclass(frozen=True)
 class Target:
-    name: str
     mode: str
     port: int  # 0: pick a free port
     launch: bool
@@ -66,7 +61,7 @@ class Target:
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
     consent: bool = False
-    # Global in config.toml, so `Config.resolve` gives every target the same one.
+    # Global in config.toml, so `Config.resolve` gives every mode the same one.
     panic_key: Hotkey = _PANIC
 
     def to_json(self) -> str:
@@ -86,7 +81,6 @@ class Target:
         f = Fields(raw, where, UsageError, tuple(field.name for field in fields(Target)))
         settings = f.opt_strings("settings")
         target = Target(
-            check_name(f.text("name")),
             f.choice("mode", MODES),
             f.number("port", low=0, high=65535),
             launch=f.flag("launch"),
@@ -142,12 +136,6 @@ class Target:
         return _checked(replace(self, window=window), "--window")
 
 
-def check_name(name: str) -> str:
-    if not _NAME.fullmatch(name):
-        raise bad_field(UsageError, "target name", "1 to 32 letters, digits, - or _", name)
-    return name
-
-
 def _checked(target: Target, where: str) -> Target:
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
@@ -170,10 +158,9 @@ def _checked(target: Target, where: str) -> Target:
     return target
 
 
-def defaults(name: str, mode: str) -> Target:
+def defaults(mode: str) -> Target:
     ports = {"watch": WATCH_PORT, "shared": WATCH_PORT, "sandbox": SANDBOX_PORT}
     return Target(
-        name,
         mode,
         ports.get(mode, 0),
         launch=mode in ("desktop", "sandbox"),
@@ -205,12 +192,10 @@ def _read(path: Path) -> dict[str, Any]:
     return parse(text, str(path))
 
 
-def _from_table(name: str, raw: object, file: str) -> Target:
-    where = f"{file}: [targets.{name}]"
-    f = Fields(raw, where, UsageError, prefs.TARGET_KEYS)
-    # Required: the mode decides every other default.
-    mode = f.choice("mode", MODES)
-    values = _checked_values(f, prefs.TARGET_KEYS)
+def _from_table(mode: str, raw: object, file: str) -> Target:
+    where = f"{file}: [{mode}]"
+    f = Fields(raw, where, UsageError, prefs.MODE_KEYS)
+    values = _checked_values(f, prefs.MODE_KEYS)
     settings = tuple(
         Setting.parse(text, f"{where} nvda_settings") for text in values.get("nvda_settings", [])
     )
@@ -221,7 +206,7 @@ def _from_table(name: str, raw: object, file: str) -> Target:
         for key, value in values.items()
         if key in _TARGET_FIELDS
     }
-    target = replace(defaults(name, mode), **kept, settings=settings)
+    target = replace(defaults(mode), **kept, settings=settings)
     return _checked(target, where)
 
 
@@ -239,37 +224,33 @@ class Config:
     `asc config` to change and write back."""
 
     data: Mapping[str, Any] = field(default_factory=dict)
-    default: str = DEFAULT_TARGET
+    mode: str = "watch"
     defaults: Mapping[str, prefs.Value] = field(default_factory=dict)
-    targets: Mapping[str, Target] = field(default_factory=dict)
+    modes: Mapping[str, Target] = field(default_factory=dict)
 
     @classmethod
     def from_data(cls, data: dict[str, Any], file: str) -> Config:
-        top = Fields(data, file, UsageError, ("default", "defaults", "targets"))
-        default = check_name(top.opt_text("default", max_len=32) or DEFAULT_TARGET)
+        if "targets" in data or "default" in data:
+            # The layout before modes. Only a person can say which target is which mode.
+            raise OldConfig(file)
+        top = Fields(data, file, UsageError, ("mode", "defaults", *MODES))
+        mode = top.choice("mode", MODES) if top.has("mode") else "watch"
         globals_ = Fields(
             data.get("defaults", {}), f"{file}: [defaults]", UsageError, prefs.DEFAULTS_KEYS
         )
-        tables = Fields(data.get("targets", {}), f"{file}: [targets]", UsageError)
-        targets = {
-            name: _from_table(check_name(name), raw, file) for name, raw in tables.raw.items()
-        }
-        return cls(data, default, _checked_values(globals_, prefs.DEFAULTS_KEYS), targets)
+        modes = {name: _from_table(name, data[name], file) for name in MODES if name in data}
+        return cls(data, mode, _checked_values(globals_, prefs.DEFAULTS_KEYS), modes)
 
-    def resolve(self, name: str | None, mode: str | None) -> Target:
-        """The target to use: listed here, or defaults for `mode`."""
-        chosen = check_name(name or self.default)
-        target = self.targets.get(chosen)
-        if target is None:
-            target = defaults(chosen, mode or "watch")
-        elif mode is not None and mode != target.mode:
-            raise ModeMismatch(chosen, target.mode, mode)
+    def resolve(self, mode: str | None) -> Target:
+        """What `asc start` starts: `mode`, or the `mode` setting, with its table."""
+        chosen = mode or self.mode
+        target = self.modes.get(chosen) or defaults(chosen)
         return replace(target, panic_key=parse_hotkey(str(self.value("panic_key")[0])))
 
     def value(self, name: str) -> tuple[prefs.Value | None, str]:
         """A global setting and where it came from: global or default."""
-        if name == "default":
-            return self.default, "global" if "default" in self.data else "default"
+        if name == "mode":
+            return self.mode, "global" if "mode" in self.data else "default"
         if name in self.defaults:
             return self.defaults[name], "global"
         return prefs.BY_NAME[name].default, "default"

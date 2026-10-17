@@ -162,14 +162,6 @@ class UntypableText(UsageError):
         )
 
 
-class ModeMismatch(UsageError):
-    def __init__(self, target: str, configured: str, given: str) -> None:
-        super().__init__(
-            f"target {_show(target)} is {configured} mode in config.toml, not {given}",
-            hint="leave out --mode, or use another --target",
-        )
-
-
 class BadSetting(UsageError):
     def __init__(self, setting: str, reason: str, where: str = "--nvda-setting") -> None:
         super().__init__(f"{where} {_show(setting)}: {reason}")
@@ -187,6 +179,14 @@ class UserConfigUnreadable(UsageError):
 class TargetsFileError(UsageError):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"{path}: {reason}")
+
+
+class OldConfig(UsageError):
+    def __init__(self, path: str) -> None:
+        super().__init__(
+            f"{path} lists targets, which asc no longer reads",
+            hint="asc setup, or move each target's settings to a table named after its mode",
+        )
 
 
 class UnknownPreference(UsageError):
@@ -207,14 +207,6 @@ class BadInFile(UsageError):
         super().__init__(f"{where}: {reason}", hint=hint)
 
 
-class TargetNotConfigured(UsageError):
-    def __init__(self, target: str) -> None:
-        super().__init__(
-            f"target {_show(target)} is not in config.toml",
-            hint=f"asc config set mode MODE --target {target}",
-        )
-
-
 class NeedsTerminal(UsageError):
     def __init__(self) -> None:
         super().__init__(
@@ -229,13 +221,11 @@ class NotRunning(NotConnected):
 
 
 class NvdaNotConnected(NotConnected):
-    def __init__(
-        self, target: str, waited_ms: int | None = None, last_error: str | None = None
-    ) -> None:
+    def __init__(self, waited_ms: int | None = None, last_error: str | None = None) -> None:
         waited = "" if waited_ms is None else f" after waiting {waited_ms} ms"
         why = f"; last error: {last_error}" if last_error else ""
         super().__init__(
-            f"NVDA is not connected to target {_show(target)}{waited}{why}",
+            f"NVDA is not connected{waited}{why}",
             hint="asc status shows how NVDA should connect",
         )
 
@@ -391,7 +381,7 @@ class SandboxBusy(Refused):
     def __init__(self) -> None:
         super().__init__(
             "a Windows Sandbox is already running, and Windows allows only one",
-            hint="close it, or asc stop the target that started it",
+            hint="close it, or asc stop if asc started it",
         )
 
 
@@ -430,10 +420,10 @@ class WsbMissing(SetupNeeded):
 
 
 class KeysRefused(Refused):
-    def __init__(self, target: str) -> None:
+    def __init__(self) -> None:
         super().__init__(
-            f"target {_show(target)} is in watch mode, which never sends keys",
-            hint="use a desktop or sandbox target to send keys",
+            "asc is in watch mode, which never sends keys",
+            hint="asc stop, then asc start --mode desktop or sandbox",
         )
 
 
@@ -443,27 +433,26 @@ class AlreadyRunning(Refused):
 
 
 class DaemonNotAnswering(Refused):
-    def __init__(self, target: str, reason: str) -> None:
+    def __init__(self, reason: str) -> None:
         super().__init__(
-            f"asc is running for target {_show(target)} but doesn't answer: {reason}",
+            f"asc is running but doesn't answer: {reason}",
             hint="asc stop, then asc start",
         )
 
 
 class DaemonUnstoppable(Refused):
-    def __init__(self, target: str, pid: int) -> None:
-        self.target, self.pid = target, pid
+    def __init__(self, pid: int) -> None:
+        self.pid = pid
         super().__init__(
-            f"cannot end the asc daemon for target {_show(target)} (pid {pid})",
+            f"cannot end the asc daemon (pid {pid})",
             hint="end that process in Task Manager",
         )
 
 
 class DaemonsUnstoppable(Refused):
-    def __init__(self, stuck: Sequence[tuple[str, int]]) -> None:
-        names = ", ".join(f"{_show(target)} (pid {pid})" for target, pid in stuck)
+    def __init__(self, pids: Sequence[int]) -> None:
         super().__init__(
-            f"cannot end the asc daemon for target {names}",
+            f"cannot end the asc daemon (pid {', '.join(str(pid) for pid in pids)})",
             hint="end it in Task Manager, then try again",
         )
 
@@ -476,13 +465,9 @@ class AscStillRunning(Refused):
         )
 
 
-class TargetsRunning(Refused):
-    def __init__(self, targets: Sequence[str]) -> None:
-        names = ", ".join(_show(t) for t in targets)
-        super().__init__(
-            f"asc is running for target {names}",
-            hint="asc stop, then try again",
-        )
+class DaemonRunning(Refused):
+    def __init__(self) -> None:
+        super().__init__("asc is running", hint="asc stop, then try again")
 
 
 class NvdaAlreadyRunning(Refused):

@@ -27,11 +27,11 @@ from agent_speech_check.errors import (
     AscError,
     BadArguments,
     BadSetting,
+    DaemonRunning,
     InternalError,
     NeedsTerminal,
     NoCommand,
     NotRunning,
-    TargetsRunning,
     UnrecognizedArguments,
     UsageError,
     bad_field,
@@ -40,7 +40,7 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.windows.paths import config_file, state_root, target_dir
+from agent_speech_check.windows.paths import config_file, mode_dir, state_root
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
@@ -72,12 +72,12 @@ class Command:
     details: str
     run: Callable[[argparse.Namespace], int]
     add_args: Callable[[argparse.ArgumentParser], None] | None = None
-    # False for a command that picks its own target, or none.
-    takes_target: bool = True
+    # True for a command that works on one mode's settings.
+    takes_mode: bool = False
 
 
-def _add_target(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--target", metavar="NAME", help="target name (default: default)")
+def _add_mode(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--mode", choices=MODES, help="default: the mode setting, watch unless set")
 
 
 def _default(name: str) -> str:
@@ -95,7 +95,6 @@ def _settle(parser: argparse.ArgumentParser) -> None:
 
 
 def _start_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--mode", choices=MODES, help="mode for an unlisted target")
     parser.add_argument(
         "--nvda-setting",
         action="append",
@@ -170,10 +169,6 @@ def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
 
 
-def _sandbox_setup_args(parser: argparse.ArgumentParser) -> None:
-    parser.set_defaults(mode="sandbox")
-
-
 def _setup_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--yes", action="store_true", help="replace settings without asking")
 
@@ -183,7 +178,6 @@ CONFIG_HELP = {
     "get": "print one setting's value",
     "set": "change a setting (a list takes several values)",
     "unset": "go back to the inherited value",
-    "remove-target": "delete a target's settings",
     "path": "print where config.toml is",
 }
 
@@ -196,10 +190,8 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
             sub.add_argument("name", metavar="NAME")
         if action == "set":
             sub.add_argument("values", nargs="+", metavar="VALUE")
-        if action == "remove-target":
-            sub.add_argument("name", metavar="TARGET")
-        elif action != "path":
-            _add_target(sub)
+        if action != "path":
+            _add_mode(sub)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -235,8 +227,8 @@ def build_parser() -> argparse.ArgumentParser:
             description=command.details,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
-        if command.takes_target:
-            _add_target(sub)
+        if command.takes_mode:
+            _add_mode(sub)
         if command.add_args is not None:
             command.add_args(sub)
     return parser
@@ -255,7 +247,7 @@ def _connect_line(status: dict[str, Any]) -> str:
 
 def _show_status(status: dict[str, Any]) -> None:
     keys = "keys allowed" if status["keys"] else "keys refused"
-    print(f"target: {status['target']} ({status['mode']} mode, {keys})")
+    print(f"mode: {status['mode']} ({keys})")
     print("recording: yes")
     print(f"nvda: {'connected' if status['connected'] else 'not connected'}")
     if not status["connected"]:
@@ -283,7 +275,7 @@ def _show_said(lines: list[str]) -> None:
 
 def _target(args: argparse.Namespace, settings: Config | None = None) -> Target:
     settings = settings or load(config_file())
-    return settings.resolve(args.target, getattr(args, "mode", None))
+    return settings.resolve(args.mode)
 
 
 def _with_defaults(args: argparse.Namespace, flags: dict[str, str]) -> Config:
@@ -296,7 +288,7 @@ def _with_defaults(args: argparse.Namespace, flags: dict[str, str]) -> Config:
 
 
 def _call(cmd: str, raw: dict[str, Any], timeout_ms: int = 0) -> dict[str, Any]:
-    """Send one request to the daemon, whichever target it runs for."""
+    """Send one request to the daemon, whatever its mode."""
     request = ipc.parse_request(cmd, raw)
     timeout_s = timeout_ms / 1000 + session.STATUS_TIMEOUT_S
     return session.call(state_root(), request, timeout_s)
@@ -310,8 +302,8 @@ def cmd_start(args: argparse.Namespace) -> int:
     settings = nvda_config.merge(target.settings, given)
     nvda_config.check(settings)
     target = target.with_settings(settings).with_consent(args.i_understand)
-    status = session.start(target, target_dir(target.name))
-    print(f"started: {target.name}")
+    status = session.start(target, mode_dir(target.mode))
+    print(f"started: {target.mode}")
     _show_status(status)
     return 0
 
@@ -378,7 +370,7 @@ def cmd_type(args: argparse.Namespace) -> int:
 
 
 def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
-    """Where to look for the target's NVDA, and the hint if it isn't there."""
+    """Where to look for the mode's NVDA, and the hint if it isn't there."""
     if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
         hint = "check nvda_dir" if target.nvda_dir else "asc get-nvda"
         return [("the portable NVDA", launcher.folder_for(target.nvda_dir))], hint
@@ -405,9 +397,9 @@ def cmd_launch(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_sandbox_setup(args: argparse.Namespace) -> int:
+def cmd_sandbox_setup(_: argparse.Namespace) -> int:
     wsb.require_available()
-    target = _target(args)
+    target = load(config_file()).resolve("sandbox")
     program = firewall.daemon_program()
     if firewall.rule_ok(target.port, program):
         print(f"firewall rule already in place for port {target.port}")
@@ -440,31 +432,26 @@ def _make_portable(version: str, installer: Path | None = None) -> None:
     print(f"portable NVDA ready: {exe}")
 
 
-def _running(target: str) -> bool:
-    return session.is_running(target_dir(target))
-
-
 def _config_change(settings: Config, args: argparse.Namespace) -> int:
     pref = prefs.find(args.name)
-    where = edit.owner(settings, pref, args.target)
+    where = edit.owner(settings, pref, args.mode)
     if args.action == "set":
         data, value = edit.set_value(settings, pref, args.values, where)
         done = f"{pref.name} = {edit.show(value)} ({edit.label(where)})"
     else:
         data = edit.unset_value(settings, pref, where)
         done = f"{pref.name} unset ({edit.label(where)})"
-    # Command defaults are read by each command, so only target settings and the
-    # panic key, which every daemon takes at its start, wait.
+    # Command defaults are read by each command, so only a running mode's settings
+    # and the panic key, which the daemon takes at its start, wait.
     # Asked before saving, so a failed look leaves the file as it was.
-    waiting: list[str] = []
     if pref.name == "panic_key":
-        waiting = session.running_targets(state_root())
-    elif where is not None and pref.scope == prefs.TARGET and _running(where):
-        waiting = [where]
+        waiting = session.any_running(state_root())
+    else:
+        waiting = where is not None and session.is_running(mode_dir(where))
     edit.save(config_file(), data)
     print(done)
     if waiting:
-        print(f"applies at the next asc start of {', '.join(waiting)}")
+        print("applies at the next asc start")
     return 0
 
 
@@ -475,18 +462,12 @@ def cmd_config(args: argparse.Namespace) -> int:
         return 0
     settings = load(config_file())
     if args.action == "list":
-        for name, value, source in edit.entries(settings, args.target):
+        for name, value, source in edit.entries(settings, args.mode):
             print(f"{name} = {edit.show(value)} ({source})")
     elif args.action == "get":
         pref = prefs.find(args.name)
-        values = {name: value for name, value, _ in edit.entries(settings, args.target)}
+        values = {name: value for name, value, _ in edit.entries(settings, args.mode)}
         print(edit.show(values[pref.name]))
-    elif args.action == "remove-target":
-        data = edit.remove_target(settings, args.name)
-        if _running(args.name):
-            raise TargetsRunning([args.name])
-        edit.save(config_file(), data)
-        print(f"removed: {args.name}")
     else:
         return _config_change(settings, args)
     return 0
@@ -632,9 +613,8 @@ def _answers(ask: Ask) -> setup.Answers:
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
-    running = session.running_targets(state_root())
-    if running:
-        raise TargetsRunning(running)
+    if session.any_running(state_root()):
+        raise DaemonRunning
     path = config_file()
     print("asc setup")
     if path.exists() and not replace_without_asking:
@@ -666,36 +646,35 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 COMMANDS: dict[str, Command] = {
     "start": Command(
-        "start recording for a target",
+        "start recording",
         """\
-Start the background daemon for a target. Targets come from config.toml (see
-asc config), or default to --mode (watch if left out). One daemon runs at a
-time: the other commands talk to it, whatever its target.
+Start the background daemon in --mode, or the mode setting (watch unless set),
+with that mode's settings from config.toml (see asc config). One daemon runs
+at a time: the other commands talk to it.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
 keys. Connect once in NVDA (Tools, Remote Access, Connect): allow this computer
 to be controlled, host and key as printed, and trust the certificate when asked.
-The host, key and certificate stay the same for the target.
+The host, key and certificate stay the same for the mode.
 
 examples:
   asc start
-  asc start --target app""",
+  asc start --mode sandbox""",
         cmd_start,
         _start_args,
+        takes_mode=True,
     ),
     "stop": Command(
         "stop recording and forget the speech",
-        "Stop the daemon, whatever its target. Held keys are released. A daemon that\n"
+        "Stop the daemon, whatever its mode. Held keys are released. A daemon that\n"
         "doesn't answer is ended.",
         cmd_stop,
-        takes_target=False,
     ),
     "status": Command(
         "show whether asc is recording and NVDA is connected",
-        "Show the target, whether NVDA is connected, how to connect it, and the\n"
+        "Show the mode, whether NVDA is connected, how to connect it, and the\n"
         "browse/focus mode (unknown until NVDA first switches).",
         cmd_status,
-        takes_target=False,
     ),
     "speech": Command(
         "print what NVDA said since the mark",
@@ -709,7 +688,6 @@ examples:
   asc speech --since 41      lines after 41""",
         cmd_speech,
         _speech_args,
-        takes_target=False,
     ),
     "wait": Command(
         "wait until NVDA says something matching REGEX",
@@ -723,13 +701,11 @@ examples:
   asc wait "(?i)saved" --timeout 10000""",
         cmd_wait,
         _wait_args,
-        takes_target=False,
     ),
     "mark": Command(
         "remember the current end of the speech log",
         "Print and set the mark.",
         cmd_mark,
-        takes_target=False,
     ),
     "press": Command(
         "press keys and print what NVDA said",
@@ -746,7 +722,6 @@ examples:
   asc press Control+Home NVDA+Down""",
         cmd_press,
         _press_args,
-        takes_target=False,
     ),
     "type": Command(
         "type text and print what NVDA said",
@@ -760,7 +735,6 @@ examples:
   asc type "x@example.com" --settle 800""",
         cmd_type,
         _type_args,
-        takes_target=False,
     ),
     "keys": Command(
         "look up NVDA commands in NVDA's own reference",
@@ -768,8 +742,8 @@ examples:
 Print commands from NVDA's Commands Quick Reference whose name, keys,
 description or section contain every SEARCH word, one per line:
 KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
-NVDA the target uses: its portable copy for a desktop target or a sandbox
-target with nvda_dir, otherwise your own NVDA (the running nvda.exe, the
+NVDA the mode uses: its portable copy in desktop mode, or in sandbox mode
+with nvda_dir, otherwise your own NVDA (the running nvda.exe, the
 uninstall registry entry, Program Files).
 In browse mode, single letters jump to elements; add Shift to go back.
 
@@ -779,6 +753,7 @@ examples:
   asc keys --layout laptop current line""",
         cmd_keys,
         _keys_args,
+        takes_mode=True,
     ),
     "launch": Command(
         "start an app and wait until NVDA speaks",
@@ -793,7 +768,6 @@ examples:
   asc launch "py -m myapp" --title "My App" --timeout 60000""",
         cmd_launch,
         _launch_args,
-        takes_target=False,
     ),
     "get-nvda": Command(
         "make the portable NVDA that desktop mode launches",
@@ -807,12 +781,11 @@ examples:
   asc get-nvda --installer nvda_2026.2.exe""",
         cmd_get_nvda,
         _get_nvda_args,
-        takes_target=False,
     ),
     "setup": Command(
         "choose your settings, by answering questions",
-        """Ask a few questions and save the answers in config.toml, for the default
-target. Running it again replaces all your settings. It needs a terminal;
+        """Ask a few questions and save the answers in config.toml: your mode and its
+settings. Running it again replaces all your settings. It needs a terminal;
 scripts and agents use asc config instead. Press Enter to keep a default, and
 Ctrl+C to stop without saving.
 
@@ -821,23 +794,22 @@ examples:
   asc setup --yes          replace existing settings without asking""",
         cmd_setup,
         _setup_args,
-        takes_target=False,
     ),
     "config": Command(
         "show or change one setting",
-        """Show or change the settings in config.toml. Target settings go to --target,
-or to the default target. Command defaults (settle_ms, timeout_ms, ...) go to
-[defaults]. A flag on a command beats them.
+        """Show or change the settings in config.toml. A mode's settings (port, share,
+...) go to --mode, or to the mode setting's. Global settings and command
+defaults (settle_ms, timeout_ms, ...) take no --mode. A flag on a command
+beats a command default.
 
 examples:
   asc config list
+  asc config set mode sandbox                   asc start uses sandbox mode
+  asc config set share C:\\src\\app C:\\data --mode sandbox
   asc config set settle_ms 800
-  asc config set mode sandbox --target app      makes target app
-  asc config set share C:\\src\\app C:\\data --target app
   asc config unset settle_ms""",
         cmd_config,
         _config_args,
-        takes_target=False,
     ),
     "sandbox-setup": Command(
         "allow the sandbox's NVDA to reach asc (asks for admin once)",
@@ -845,14 +817,13 @@ examples:
 computer's Hyper-V Default Switch address. Windows Firewall blocks that until
 one rule allows it. This command creates that rule after a Windows admin
 prompt: inbound TCP only, only on the Default Switch, only the relay port
-(16837 unless the target sets another), only for the program running asc.
-Run it again after updating Python or asc, since the rule names the program.
+(16837 unless the port setting of sandbox mode says another), only for the
+program running asc. Run it again after updating Python or asc, since the rule
+names the program.
 
 examples:
-  asc sandbox-setup
-  asc sandbox-setup --target app""",
+  asc sandbox-setup""",
         cmd_sandbox_setup,
-        _sandbox_setup_args,
     ),
 }
 

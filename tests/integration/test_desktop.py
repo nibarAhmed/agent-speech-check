@@ -26,8 +26,8 @@ NVDA_RUNNING = bool(winapi.process_ids("nvda.exe"))
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:
-    assert run_asc("start", "--target", "d").returncode == 0
-    fake = env.fake("d")
+    assert run_asc("start", "--mode", "desktop").returncode == 0
+    fake = env.fake("desktop")
     yield fake
     fake.close()
 
@@ -50,7 +50,7 @@ def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
 
 @pytest.mark.usefixtures("env")
 def test_type_refused_in_watch_mode() -> None:
-    assert run_asc("start", "--target", "w").returncode == 0
+    assert run_asc("start", "--mode", "watch").returncode == 0
     refused = run_asc("type", "x")
     assert refused.returncode == 4
 
@@ -59,7 +59,7 @@ def test_type_refused_in_watch_mode() -> None:
 def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
     app = f'"{sys.executable}" -c "import time; time.sleep(3)"'
     launching = start_asc("launch", app, "--title", "My App")
-    env.wait_running("d", "launch")
+    env.wait_running("desktop", "launch")
     nvda.say("Loading")
     nvda.say("My App window")
     out, _ = launching.communicate(timeout=30)
@@ -80,21 +80,18 @@ def test_launch_errors(nvda: FakeNvda) -> None:
     assert nvda.held == set()
 
 
-def test_keys_for_desktop_target_reads_the_portable_copy(env: Env, tmp_path: Path) -> None:
+def test_keys_in_desktop_mode_reads_the_portable_copy(env: Env, tmp_path: Path) -> None:
     portable = tmp_path / "portable"
     docs = portable / "documentation" / "en"
     docs.mkdir(parents=True)
     shutil.copy(FIXTURE, docs / "keyCommands.html")
-    (env.root / "agent-speech-check" / "config.toml").write_text(
-        f"[targets.p]\nmode = 'desktop'\nnvda_dir = '{portable.as_posix()}'\n"
-        "[targets.none]\nmode = 'desktop'\nnvda_dir = 'C:/no/such/nvda'\n",
-        encoding="utf-8",
-    )
-    found = run_asc("keys", "report", "title", "--target", "p")
+    env.config(f"[desktop]\nnvda_dir = '{portable.as_posix()}'\n")
+    found = run_asc("keys", "report", "title", "--mode", "desktop")
     assert found.returncode == 0
     assert found.stdout.startswith("NVDA+t  Report title: ")
-    assert run_asc("keys", "zzzz", "--target", "p").stdout == "(no match)\n"
-    missing = run_asc("keys", "x", "--target", "none")
+    assert run_asc("keys", "zzzz", "--mode", "desktop").stdout == "(no match)\n"
+    env.config("[desktop]\nnvda_dir = 'C:/no/such/nvda'\n")
+    missing = run_asc("keys", "x", "--mode", "desktop")
     assert missing.returncode == 7
     assert "the portable NVDA" in missing.stderr
     assert "hint: check nvda_dir" in missing.stderr
@@ -110,32 +107,28 @@ def test_nvda_dir_is_a_setting_not_a_flag(command: str, tmp_path: Path) -> None:
 
 @pytest.mark.usefixtures("env")
 def test_settings_only_for_a_launched_nvda() -> None:
-    result = run_asc("start", "--target", "w", "--nvda-setting", "speech.rate=50")
+    result = run_asc("start", "--mode", "watch", "--nvda-setting", "speech.rate=50")
     assert result.returncode == 2
     assert "only an NVDA that asc launches takes settings" in result.stderr
-    bad = run_asc("start", "--mode", "desktop", "--target", "x", "--nvda-setting", "remote.k=1")
+    bad = run_asc("start", "--mode", "sandbox", "--nvda-setting", "remote.k=1")
     assert bad.returncode == 2
     assert "asc sets this itself" in bad.stderr
 
 
 @pytest.mark.skipif(not NVDA_RUNNING, reason="needs an NVDA running on this machine")
-@pytest.mark.usefixtures("env")
-def test_desktop_and_get_nvda_refuse_while_nvda_runs(tmp_path: Path) -> None:
+def test_desktop_and_get_nvda_refuse_while_nvda_runs(env: Env, tmp_path: Path) -> None:
     (tmp_path / "nvda.exe").write_bytes(b"")
-    (tmp_path / "agent-speech-check" / "config.toml").write_text(
-        f"[targets.x]\nmode = 'desktop'\nnvda_dir = '{tmp_path.as_posix()}'\n",
-        encoding="utf-8",
-    )
-    started = run_asc("start", "--target", "x")
+    env.config(f"[desktop]\nnvda_dir = '{tmp_path.as_posix()}'\n")
+    started = run_asc("start", "--mode", "desktop")
     assert started.returncode == 4
     assert "nvda.exe is already running" in started.stderr
     fetched = run_asc("get-nvda", "--installer", str(tmp_path / "nvda.exe"))
     assert fetched.returncode == 4
 
 
-@pytest.mark.usefixtures("env")
-def test_desktop_without_portable_nvda(tmp_path: Path) -> None:
-    result = run_asc("start", "--mode", "desktop", "--target", "x")
+def test_desktop_without_portable_nvda(env: Env, tmp_path: Path) -> None:
+    env.config("")
+    result = run_asc("start", "--mode", "desktop")
     assert result.returncode == 7
     assert "NVDA not found" in result.stderr
     assert "hint: asc get-nvda" in result.stderr
@@ -150,29 +143,23 @@ def test_sandbox_needs_the_firewall_rule(env: Env, monkeypatch: pytest.MonkeyPat
     (bin_dir / "wsb.exe").write_bytes(b"")
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     # A port no rule covers, so this never starts a real sandbox.
-    (env.root / "agent-speech-check" / "config.toml").write_text(
-        f"[targets.s]\nmode = 'sandbox'\nport = {env.port}\n", encoding="utf-8"
-    )
-    result = run_asc("start", "--target", "s")
+    env.config(f"[sandbox]\nport = {env.port}\n")
+    result = run_asc("start", "--mode", "sandbox")
     assert result.returncode == 7
     assert "the firewall rule that lets the sandbox reach asc is missing" in result.stderr
     assert "hint: asc sandbox-setup" in result.stderr
 
 
-def test_keys_for_sandbox_target_reads_your_own_nvda(env: Env) -> None:
+@pytest.mark.usefixtures("env")
+def test_keys_in_sandbox_mode_reads_your_own_nvda() -> None:
     # Sandbox mode makes its portable NVDA inside the sandbox, never on the host.
-    (env.root / "agent-speech-check" / "config.toml").write_text(
-        "[targets.s]\nmode = 'sandbox'\n", encoding="utf-8"
-    )
-    found = run_asc("keys", "x", "--target", "s")
+    found = run_asc("keys", "x", "--mode", "sandbox")
     assert "the portable NVDA" not in found.stderr
 
 
 @pytest.mark.usefixtures("env")
 def test_settings_are_checked_together_before_anything_starts() -> None:
-    result = run_asc(
-        "start", "--mode", "desktop", "--target", "x", "--nvda-setting", "speech.synth.rate=1"
-    )
+    result = run_asc("start", "--mode", "sandbox", "--nvda-setting", "speech.synth.rate=1")
     assert result.returncode == 2, result.stderr
     assert "synth is a key, not a section" in result.stderr
 
@@ -180,19 +167,16 @@ def test_settings_are_checked_together_before_anything_starts() -> None:
 def test_start_nvda_dir(env: Env, tmp_path: Path) -> None:
     missing = tmp_path / "none"
     broken = tmp_path / "broken"
-    (env.root / "agent-speech-check" / "config.toml").write_text(
-        f"[targets.missing]\nmode = 'desktop'\nnvda_dir = '{missing.as_posix()}'\n"
-        f"[targets.broken]\nmode = 'desktop'\nnvda_dir = '{broken.as_posix()}'\n",
-        encoding="utf-8",
-    )
-    desktop = run_asc("start", "--target", "missing")
+    env.config(f"[desktop]\nnvda_dir = '{missing.as_posix()}'\n")
+    desktop = run_asc("start", "--mode", "desktop")
     assert desktop.returncode == 7
     assert f"NVDA not found. Looked in: the portable NVDA ({missing})" in desktop.stderr
     assert "hint: check nvda_dir" in desktop.stderr
     (broken / "userConfig").mkdir(parents=True)
     (broken / "nvda.exe").write_bytes(b"")
     (broken / "userConfig" / "nvda.ini").write_text("[speech]\nnot a line\n", encoding="utf-8")
-    unreadable = run_asc("start", "--target", "broken")
+    env.config(f"[desktop]\nnvda_dir = '{broken.as_posix()}'\n")
+    unreadable = run_asc("start", "--mode", "desktop")
     assert unreadable.returncode == 2
     assert "cannot read your NVDA config:" in unreadable.stderr
     assert "nvda.ini line 2" in unreadable.stderr
