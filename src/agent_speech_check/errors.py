@@ -456,6 +456,23 @@ class DaemonUnstoppable(Refused):
         )
 
 
+class DaemonsUnstoppable(Refused):
+    def __init__(self, targets: Sequence[str]) -> None:
+        names = ", ".join(_show(t) for t in targets)
+        super().__init__(
+            f"cannot end the asc daemon for target {names}",
+            hint="end it in Task Manager, then try again",
+        )
+
+
+class AscStillRunning(Refused):
+    def __init__(self, pids: Sequence[int]) -> None:
+        super().__init__(
+            f"asc is still running (pid {', '.join(str(pid) for pid in pids)})",
+            hint="close it, or end it in Task Manager, then try again",
+        )
+
+
 class TargetsRunning(Refused):
     def __init__(self, targets: Sequence[str]) -> None:
         names = ", ".join(_show(t) for t in targets)

@@ -3,10 +3,12 @@
   Per user by default, no admin. Program Files is the target because Windows Installer
   redirects it to %LOCALAPPDATA%\Programs for a per-user install (a profile folder as
   target fails validation, ICE38). So asc lands in %LOCALAPPDATA%\Programs\agent-speech-check
-  and that folder goes on the user PATH. Uninstall removes both. State in
-  %LOCALAPPDATA%\agent-speech-check is the user's and is kept.
+  and that folder goes on the user PATH. Upgrade, repair and uninstall first stop every
+  asc daemon. Uninstall removes both, and asc's state in %LOCALAPPDATA%\agent-speech-check
+  too (settings, logs, relay keys, the portable NVDA), unless KEEPDATA=1. Upgrades keep it.
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="Agent Speech Check"
            Manufacturer="nibarAhmed"
            Version="$(Version)"
@@ -25,6 +27,30 @@
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
               Value="Open a new terminal, then run asc setup. Terminals that were already open don't see the new PATH." />
+
+    <!-- Stop every daemon before InstallValidate checks for files in use, so a daemon
+         from the old version neither keeps running nor holds asc.exe. It runs the
+         installed asc.exe, the old one during an upgrade. Each daemon may take 30 s,
+         and QuietExec stops waiting (but leaves the process) after a minute by
+         default, so it gets 5. A failure must not block the install: Return="ignore". -->
+    <SetProperty Id="WixQuietExecCmdLine" Value="&quot;[INSTALLFOLDER]asc.exe&quot; _stop_all"
+                 Before="StopDaemons" Sequence="execute" />
+    <Property Id="WixQuietExecCmdTimeout" Value="300000" />
+    <CustomAction Id="StopDaemons" BinaryRef="Wix4UtilCA_X64" DllEntry="WixQuietExec"
+                  Execute="immediate" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="StopDaemons" Before="InstallValidate"
+              Condition="Installed OR WIX_UPGRADE_DETECTED" />
+    </InstallExecuteSequence>
+
+    <!-- The state folder goes with the product, through Windows Installer's own
+         RemoveFile rows, so a failed uninstall puts it back. Not when an upgrade removes
+         the old version, and not with KEEPDATA=1. Private (mixed case), so the command
+         line can't point it elsewhere. -->
+    <Property Id="AscData" Value="%LOCALAPPDATA%\agent-speech-check" />
+    <Property Id="KEEPDATA" Secure="yes" />
+    <!-- Only with WIXFAILWHENDEFERRED=1: fails just before the end, so CI can check rollback. -->
+    <util:FailWhenDeferred />
 
     <!-- A short wizard: Welcome, then Next installs, then Finish. No licence page (MIT
          needs no click-through) and no folder choice. Repair and remove use WiX's standard
@@ -66,6 +92,12 @@
         <Environment Id="PATH" Name="PATH" Value="[INSTALLFOLDER]"
                      Action="set" Part="last" System="no" Permanent="no" />
         <RegistryValue Root="HKCU" Key="Software\agent-speech-check" Name="UserPath"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="StateFolder" Directory="INSTALLFOLDER">
+        <util:RemoveFolderEx Property="AscData" On="uninstall"
+                             Condition="NOT UPGRADINGPRODUCTCODE AND NOT KEEPDATA" />
+        <RegistryValue Root="HKCU" Key="Software\agent-speech-check" Name="StateFolder"
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </Feature>

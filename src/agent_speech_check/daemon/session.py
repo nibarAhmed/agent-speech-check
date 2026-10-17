@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -13,8 +14,10 @@ from agent_speech_check.daemon.server import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
+    AscStillRunning,
     DaemonNotAnswering,
     DaemonStartFailed,
+    DaemonsUnstoppable,
     DaemonUnstoppable,
     FirewallRuleMissing,
     NotConnected,
@@ -200,3 +203,36 @@ def stop(folder: Path, target: str, *, timeout_s: float = STOP_TIMEOUT_S) -> Non
     if not poll_until(lambda: not state.exists(folder), timeout_s, POLL_S):
         # It said yes but is still there: end it.
         _end(folder, target)
+
+
+def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_S) -> Iterator[str]:
+    """Stop every target's daemon, for the installer, yielding each target stopped.
+
+    Tries them all before raising for any it couldn't end. Then waits for the
+    other processes running `image`: a stopped daemon still runs for a moment
+    after its state file goes, and a sandbox guard outlives its daemon. It never
+    ends them, as they may be a person's own asc commands.
+    """
+    stuck: list[str] = []
+    for path in sorted(root.glob(f"*/{state.FILE}")):
+        folder, target = path.parent, path.parent.name
+        try:
+            state.read(folder, target)
+        except NotConnected:
+            # Gone already, or a file that names no process to stop.
+            state.remove(folder)
+            continue
+        try:
+            stop(folder, target)
+        except NotRunning:
+            continue
+        except DaemonUnstoppable:
+            stuck.append(target)
+            continue
+        yield target
+    if stuck:
+        raise DaemonsUnstoppable(stuck)
+    if image is not None and not poll_until(
+        lambda: not winapi.others_running(image), timeout_s, POLL_S
+    ):
+        raise AscStillRunning(winapi.others_running(image))

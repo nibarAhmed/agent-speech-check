@@ -72,6 +72,12 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 The certificate and key are created once and kept, because NVDA pins the
 certificate.
 
+The MSI installer stops every `asc` daemon before it upgrades, repairs or
+removes `asc`. Removing it also deletes this whole folder, unless you run
+`msiexec /x FILE.msi KEEPDATA=1`; an upgrade keeps it. The firewall rule from
+`asc sandbox-setup` (`agent-speech-check sandbox relay`) stays: delete it in
+Windows Defender Firewall.
+
 ## Modes
 
 The target's `mode` (or `asc start --mode`) picks one of four.
