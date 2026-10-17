@@ -138,7 +138,7 @@ def test_values_are_converted_by_type() -> None:
     with pytest.raises(BadPreference, match="expected a whole number"):
         prefs.find("port").parse(["x"])
     with pytest.raises(BadPreference, match="expected true or false"):
-        prefs.find("keys").parse(["yes"])
+        prefs.find("launch").parse(["yes"])
     with pytest.raises(BadPreference, match="takes one value"):
         prefs.find("mode").parse(["watch", "desktop"])
 
@@ -157,9 +157,9 @@ def test_unknown_setting_suggests() -> None:
 
 
 def test_clashes_are_refused_when_checked() -> None:
-    settings = _config({"targets": {"app": {"mode": "desktop", "keys": True}}})
+    settings = _config({"targets": {"app": {"mode": "sandbox", "window": "show"}}})
     data, _ = edit.set_value(settings, prefs.find("mode"), ["watch"], "app")
-    with pytest.raises(UsageError, match="keys: expected false in watch mode"):
+    with pytest.raises(UsageError, match="window: expected only in sandbox mode"):
         _config(data)
 
 

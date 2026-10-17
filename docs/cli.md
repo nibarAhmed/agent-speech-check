@@ -235,7 +235,6 @@ In `[targets.NAME]`. [Modes](#modes) explains each one in context.
 |---|---|---|
 | `mode` | (required) | watch, desktop, sandbox or shared |
 | `port` | watch and shared 6837, sandbox 16837, desktop a free one | relay port |
-| `keys` | false in watch mode, else true | may send keys; never true in watch mode |
 | `launch` | true in desktop and sandbox mode | false if NVDA is started elsewhere and connects itself |
 | `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
 | `share` | none | sandbox: folders mapped read-only to `C:\share\<name>`, full paths |
@@ -497,8 +496,8 @@ said. Works in every mode.
   `C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
   shared folder. A `.cmd` or `.bat` runs in a hidden console, so NVDA hears
   the app it starts, not the console.
-- `launch` brings the new window forward so NVDA hears it, except with
-  `keys = false` (always so in watch mode), where it may stay behind.
+- `launch` brings the new window forward so NVDA hears it, except in watch
+  mode, where it may stay behind.
 
 ```shell
 asc launch "C:\share\app\run.cmd" --title "My App"

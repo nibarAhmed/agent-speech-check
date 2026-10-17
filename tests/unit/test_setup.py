@@ -246,12 +246,15 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert "hint: asc config set mode MODE --target new" in err
     code, _, err = run(capsys, "config", "set", "keys", "true")
     assert code == 2
+    assert 'unknown setting "keys"' in err
+    code, _, err = run(capsys, "config", "set", "window", "show")
+    assert code == 2
     assert "not in config.toml" in err
     run(capsys, "config", "set", "mode", "watch")
-    code, _, err = run(capsys, "config", "set", "keys", "true")
+    code, _, err = run(capsys, "config", "set", "window", "show")
     assert code == 2
-    assert "keys: expected false in watch mode" in err
-    assert "keys" not in (root / "config.toml").read_text(encoding="utf-8")
+    assert "window: expected only in sandbox mode" in err
+    assert "window" not in (root / "config.toml").read_text(encoding="utf-8")
 
 
 @pytest.mark.usefixtures("root")

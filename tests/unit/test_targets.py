@@ -21,12 +21,19 @@ def write(tmp_path: Path, text: str) -> Path:
 
 def test_no_file_gives_watch_default(tmp_path: Path) -> None:
     target = resolve(tmp_path / "config.toml", None, None)
-    assert target == Target("default", "watch", 6837, keys=False, launch=False)
+    assert target == Target("default", "watch", 6837, launch=False)
 
 
 def test_mode_defaults() -> None:
-    assert defaults("x", "desktop") == Target("x", "desktop", 0, keys=True, launch=True)
-    assert defaults("x", "sandbox") == Target("x", "sandbox", 16837, keys=True, launch=True)
+    assert defaults("x", "desktop") == Target("x", "desktop", 0, launch=True)
+    assert defaults("x", "sandbox") == Target("x", "sandbox", 16837, launch=True)
+
+
+def test_keys_follow_the_mode() -> None:
+    assert not defaults("x", "watch").keys
+    assert defaults("x", "shared").keys
+    assert defaults("x", "sandbox").keys
+    assert replace(defaults("x", "desktop"), launch=False).keys
 
 
 def test_panic_key_wherever_keys_reach_this_desktop() -> None:
@@ -44,7 +51,7 @@ def test_listed_target_and_default_name(tmp_path: Path) -> None:
         'default = "app"\n[targets.app]\nmode = "desktop"\nport = 16837\nlaunch = false\n',
     )
     target = resolve(path, None, None)
-    assert target == Target("app", "desktop", 16837, keys=True, launch=False)
+    assert target == Target("app", "desktop", 16837, launch=False)
     assert resolve(path, "app", "desktop") == target
     assert resolve(path, "other", None).mode == "watch"
 
@@ -59,7 +66,7 @@ def test_mode_mismatch(tmp_path: Path) -> None:
     ("text", "message"),
     [
         ('[targets.app]\nmode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared"),
-        ('[targets.app]\nmode = "watch"\nkeys = true\n', "keys: expected false in watch mode"),
+        ('[targets.app]\nmode = "desktop"\nkeys = true\n', "expected only known keys, got keys"),
         ('[targets.app]\nmode = "watch"\nport = 0\n', "port: expected a whole number from 1"),
         ('[targets.app]\nmode = "watch"\nprot = 1\n', "expected only known keys, got prot"),
         ("[targets.app]\nmode = 'sandbox'\nshare = ['site']\n", "share: expected full paths"),
@@ -103,14 +110,12 @@ def test_json_round_trip() -> None:
     assert Target.from_json(target.to_json()) == target
     with pytest.raises(UsageError, match="daemon target: expected JSON"):
         Target.from_json("{")
-    with pytest.raises(UsageError, match="keys: expected false in watch mode"):
+    with pytest.raises(UsageError, match="expected only known keys, got keys"):
         Target.from_json(
             '{"name":"x","mode":"watch","port":1,"keys":true,"launch":false,"settings":[]}'
         )
     with pytest.raises(UsageError, match="settings: expected a list of strings"):
-        Target.from_json(
-            '{"name":"x","mode":"desktop","port":1,"keys":true,"launch":true,"settings":[1]}'
-        )
+        Target.from_json('{"name":"x","mode":"desktop","port":1,"launch":true,"settings":[1]}')
 
 
 def test_json_round_trip_with_settings_and_nvda_dir() -> None:
