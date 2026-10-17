@@ -54,7 +54,7 @@ asc config set settle_ms 800 --target app      # one target, or [defaults] witho
 - If presses keep missing speech, or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` for that target rather than passing the
   flag every time. Tell the user what you changed.
-- A setting for a running target applies at its next `asc start` (it says so).
+- A target setting, or `panic_key`, applies to a running target at its next `asc start` (it says so).
 
 ## Workflow
 
@@ -128,7 +128,8 @@ asc type "hello"
   itself) needs neither: no portable NVDA and no sandbox, and `launch` runs
   the command on this computer.
 - Shared mode needs `asc start --mode shared --i-understand` every time. Tell
-  the user the panic key, Control+Shift+Alt+F12, before sending anything.
+  the user the panic key before sending anything: `asc status` shows it
+  (Control+Shift+Alt+F12 unless `panic_key` in config.toml changes it).
 
 ## Exit codes
 

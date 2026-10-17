@@ -35,6 +35,7 @@ from agent_speech_check.errors import (
     UsageError,
     bad_field,
 )
+from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
@@ -448,13 +449,18 @@ def _config_change(settings: Config, args: argparse.Namespace) -> int:
     else:
         data = edit.unset_value(settings, pref, where)
         done = f"{pref.name} unset ({edit.label(where)})"
-    # Command defaults are read by each command, so only target settings wait.
+    # Command defaults are read by each command, so only target settings and the
+    # panic key, which every daemon takes at its start, wait.
     # Asked before saving, so a failed look leaves the file as it was.
-    waits = where is not None and pref.scope == prefs.TARGET and _running(where)
+    waiting: list[str] = []
+    if pref.name == "panic_key":
+        waiting = session.running_targets(state_root())
+    elif where is not None and pref.scope == prefs.TARGET and _running(where):
+        waiting = [where]
     edit.save(config_file(), data)
     print(done)
-    if waits:
-        print(f"applies at the next asc start of {where}")
+    if waiting:
+        print(f"applies at the next asc start of {', '.join(waiting)}")
     return 0
 
 
@@ -574,7 +580,7 @@ def _ask_mode(ask: Ask) -> str:
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
-            print(f"While it runs, {server.PANIC_KEY} stops asc and releases keys.")
+            print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
         return mode
 
 

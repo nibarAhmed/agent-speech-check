@@ -154,8 +154,9 @@ and your own NVDA keeps running undisturbed.
 your NVDA to `asc` as in watch mode.
 
 - It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
-- While it runs, the global panic hotkey **Control+Shift+Alt+F12** releases any held keys and stops `asc` at once. If another program owns that hotkey, shared
-  mode refuses to start (exit 4): it never runs without one.
+- While it runs, the global panic hotkey **Control+Shift+Alt+F12** releases any held keys and stops `asc` at once. `panic_key` in `[defaults]` picks another
+  (`asc config set panic_key Control+Alt+F11`). If another program owns the
+  hotkey, shared mode refuses to start (exit 4): it never runs without one.
 - `asc status` shows the panic key.
 
 ## Configuration
@@ -197,6 +198,7 @@ if left out). For a listed target, `--mode` must match its `mode`, or
 |---|---|---|
 | `default` | `default` | the target used without `--target` |
 | `nvda_version` | 2026.2 | the NVDA `asc get-nvda` downloads |
+| `panic_key` | Control+Shift+Alt+F12 | shared mode's panic hotkey, written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
 
 ### Command defaults
 

@@ -158,6 +158,43 @@ def parse_gesture(text: str) -> Gesture:
     return Gesture(tuple(modifiers), key)
 
 
+@dataclass(frozen=True)
+class Hotkey:
+    """A system-wide hotkey, as RegisterHotKey takes it."""
+
+    text: str
+    modifiers: int
+    vk: int
+
+
+# The panic hotkey unless `panic_key` in config.toml names another.
+PANIC_KEY = "Control+Shift+Alt+F12"
+# NVDA isn't here: RegisterHotKey knows only these four modifiers.
+_HOTKEY_MODIFIERS = {
+    "Control": winapi.MOD_CONTROL,
+    "Shift": winapi.MOD_SHIFT,
+    "Alt": winapi.MOD_ALT,
+    "Windows": winapi.MOD_WIN,
+}
+
+
+def parse_hotkey(text: str) -> Hotkey:
+    gesture = parse_gesture(text)
+    if any(key.name == "NVDA" for key in gesture.strokes):
+        raise BadGesture(text, "NVDA can't be part of a hotkey; use Control, Shift, Alt, Windows")
+    if gesture.key in MODIFIERS.values():
+        raise BadGesture(text, f"{gesture.key.name} is a modifier, so it can't end a hotkey")
+    # Shift alone isn't enough: Shift+A would catch every capital A anyone types.
+    if all(modifier.name == "Shift" for modifier in gesture.modifiers):
+        raise BadGesture(
+            text, "a hotkey needs Control, Alt or Windows, so it doesn't take keys from apps"
+        )
+    modifiers = 0
+    for modifier in gesture.modifiers:
+        modifiers |= _HOTKEY_MODIFIERS[modifier.name]
+    return Hotkey(str(gesture), modifiers, gesture.key.vk)
+
+
 def parse_gestures(texts: list[str]) -> tuple[Gesture, ...]:
     """Parse every gesture before any is sent."""
     return tuple(parse_gesture(text) for text in texts)

@@ -138,13 +138,16 @@ def test_press_without_nvda() -> None:
 @pytest.mark.xdist_group("desktop")
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_consent_sends_keys_and_has_a_panic_key(env: Env) -> None:
+    # Its own panic key, so it never clashes with a real asc on this machine.
     (env.root / "agent-speech-check" / "config.toml").write_text(
-        f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n", encoding="utf-8"
+        "[defaults]\npanic_key = 'ctrl+shift+alt+f21'\n"
+        f"[targets.sh]\nmode = 'shared'\nport = {env.port}\n",
+        encoding="utf-8",
     )
     started = run_asc("start", "--target", "sh", "--i-understand")
     assert started.returncode == 0, started.stderr
     assert "sh (shared mode, keys allowed)" in started.stdout
-    assert "panic key: Control+Shift+Alt+F12 stops asc and releases keys" in started.stdout
+    assert "panic key: Control+Shift+Alt+F21 stops asc and releases keys" in started.stdout
     fake = env.fake("sh", {"Tab": [f.speak("OK button")]})
     try:
         pressed = run_asc("press", "Tab", "--expect", "OK", "--target", "sh")

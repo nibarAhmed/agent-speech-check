@@ -113,9 +113,21 @@ def test_command_default_global_or_per_target() -> None:
     assert both.value("timeout_ms", "app") == (5000, "default")
 
 
-def test_global_setting_takes_no_target() -> None:
+@pytest.mark.parametrize("name", ["nvda_version", "panic_key"])
+def test_global_setting_takes_no_target(name: str) -> None:
     with pytest.raises(BadPreference, match="is global, so it takes no --target"):
-        edit.owner(_config({}), prefs.find("nvda_version"), "app")
+        edit.owner(_config({}), prefs.find(name), "app")
+
+
+def test_panic_key_is_kept_and_read_back_in_full() -> None:
+    pref = prefs.find("panic_key")
+    assert pref.parse(["ctrl+f11"]) == "Control+F11"
+    with pytest.raises(BadPreference, match='"panic_key": bad gesture "F11": a hotkey needs'):
+        pref.parse(["F11"])
+    # Written by hand, it is read back in full too.
+    config = _config({"defaults": {"panic_key": "ctrl+f11"}})
+    assert config.value("panic_key") == ("Control+F11", "global")
+    assert _config({}).value("panic_key") == ("Control+Shift+Alt+F12", "default")
 
 
 def test_values_are_converted_by_type() -> None:

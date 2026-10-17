@@ -42,10 +42,11 @@ These can break the user's own machine or the project, so no task overrides them
   fakes. Its low coverage outside e2e is expected; never lower the 90% coverage floor for it.
 - For changes that touch the protocol or NVDA config, run the e2e tests against real NVDA
   (`scripts/e2e_sandbox.py`), or state clearly that they weren't run.
-- Some tests touch machine-wide state (window titles, the foreground window, the panic hotkey,
+- Some tests touch machine-wide state (window titles, the foreground window, global hotkeys,
   Windows Sandbox), so a real `asc` sandbox or daemon on this machine can make them fail. Check for
-  one before blaming your change. When a test clashes, give it its own names and titles instead of
-  skipping it.
+  one before blaming your change. When a test clashes, give it its own names, titles and hotkeys
+  instead of skipping it. Tests never use the default panic key, and each test that registers a
+  hotkey uses its own (Control+Shift+Alt with F21, F22 or F23), because workers run in parallel.
 
 ## Code
 
