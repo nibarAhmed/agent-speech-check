@@ -46,8 +46,10 @@ Use the bug report or feature request form. Report security problems privately, 
 
 ## Tests next to a real `asc`
 
-Some tests touch machine-wide state: window titles, the foreground window, the panic hotkey and
+Some tests touch machine-wide state: window titles, the foreground window, global hotkeys and
 Windows Sandbox. If you also use `asc` for real on the same machine (another project's sandbox
 or daemon), those tests can meet it and fail. Check for a running sandbox or `asc` daemon before
 blaming your change, and don't stop processes you didn't start. When a test clashes, give it its
-own names and titles instead of skipping it: skips can push coverage under the 90% floor.
+own names, titles and hotkeys instead of skipping it: skips can push coverage under the 90% floor.
+Tests never use the default panic key (they set `panic_key`), and each test that registers a
+hotkey uses its own, because test workers run in parallel.

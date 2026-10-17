@@ -184,8 +184,11 @@ def parse_hotkey(text: str) -> Hotkey:
         raise BadGesture(text, "NVDA can't be part of a hotkey; use Control, Shift, Alt, Windows")
     if gesture.key in MODIFIERS.values():
         raise BadGesture(text, f"{gesture.key.name} is a modifier, so it can't end a hotkey")
-    if not gesture.modifiers:
-        raise BadGesture(text, "a hotkey needs a modifier, so it doesn't take the key from apps")
+    # Shift alone isn't enough: Shift+A would catch every capital A anyone types.
+    if all(modifier.name == "Shift" for modifier in gesture.modifiers):
+        raise BadGesture(
+            text, "a hotkey needs Control, Alt or Windows, so it doesn't take keys from apps"
+        )
     modifiers = 0
     for modifier in gesture.modifiers:
         modifiers |= _HOTKEY_MODIFIERS[modifier.name]

@@ -57,7 +57,7 @@ def test_mode_mismatch(tmp_path: Path) -> None:
         ('default_target = "x"\n', "expected only known keys, got default_target"),
         (
             '[defaults]\npanic_key = "F12"\n',
-            r'\[defaults\] panic_key: bad gesture "F12": a hotkey needs a modifier',
+            r'\[defaults\] panic_key: bad gesture "F12": a hotkey needs Control, Alt or Windows',
         ),
         ('[targets.app]\nmode = "shared"\npanic_key = "Alt+F1"\n', "got panic_key"),
     ],

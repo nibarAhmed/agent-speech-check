@@ -97,7 +97,9 @@ def test_hotkey_as_register_hotkey_takes_it() -> None:
 @pytest.mark.parametrize(
     ("text", "reason"),
     [
-        ("F12", "needs a modifier"),
+        ("F12", "needs Control, Alt or Windows"),
+        # Shift alone would catch typed capitals: asc type "A" is Shift+A.
+        ("Shift+A", "needs Control, Alt or Windows"),
         ("NVDA+F12", "NVDA can't be part of a hotkey"),
         ("Control+NVDA+F12", "NVDA can't be part of a hotkey"),
         ("Control+Shift", "Shift is a modifier, so it can't end a hotkey"),

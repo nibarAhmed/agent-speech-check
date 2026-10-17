@@ -198,7 +198,7 @@ if left out). For a listed target, `--mode` must match its `mode`, or
 |---|---|---|
 | `default` | `default` | the target used without `--target` |
 | `nvda_version` | 2026.2 | the NVDA `asc get-nvda` downloads |
-| `panic_key` | Control+Shift+Alt+F12 | shared mode's panic hotkey: at least one of Control, Shift, Alt or Windows, then one key that isn't a modifier, written as for `asc press` (not NVDA) |
+| `panic_key` | Control+Shift+Alt+F12 | shared mode's panic hotkey, written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
 
 ### Command defaults
 
