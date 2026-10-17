@@ -101,6 +101,9 @@ def created_at(pid: int) -> float | None:
         raise PermissionError from error
 
 
+KILL_WAIT_S = 10
+
+
 def terminate(pid: int, timeout_s: float) -> None:
     """End a process and wait up to `timeout_s` for it to go. Nothing if it's
     gone; raises if it can't be ended or is still there after the wait."""
@@ -116,8 +119,8 @@ def terminate(pid: int, timeout_s: float) -> None:
         raise TimeoutError from error
 
 
-def kill_tree(pid: int, timeout_s: float = 10) -> None:
-    """End a process and every process it started, and wait up to `timeout_s`
+def kill_tree(pid: int) -> None:
+    """End a process and every process it started, and wait up to KILL_WAIT_S
     for them to go. Ending only the process would orphan its children."""
     try:
         process = psutil.Process(pid)
@@ -127,7 +130,7 @@ def kill_tree(pid: int, timeout_s: float = 10) -> None:
     for member in family:
         with contextlib.suppress(psutil.NoSuchProcess):
             member.kill()
-    psutil.wait_procs(family, timeout=timeout_s)
+    psutil.wait_procs(family, timeout=KILL_WAIT_S)
 
 
 def process_image(image: str) -> Path | None:
