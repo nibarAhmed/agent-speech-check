@@ -100,7 +100,7 @@ def test_second_start_is_refused() -> None:
     again = run_asc("start", "--mode", "watch")
     assert again.returncode == 4
     assert "asc is already running" in again.stderr
-    assert again.stderr.endswith("hint: asc stop\n")
+    assert again.stderr.endswith("hint: asc stop, then try again\n")
 
 
 def test_stale_state_file_is_removed(env: Env) -> None:

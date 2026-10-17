@@ -17,7 +17,6 @@ from agent_speech_check.errors import (
     AscStillRunning,
     DaemonNotAnswering,
     DaemonStartFailed,
-    DaemonsUnstoppable,
     DaemonUnstoppable,
     FirewallRuleMissing,
     NotConnected,
@@ -50,9 +49,9 @@ def status(folder: Path) -> dict[str, Any]:
 
 def call(root: Path, request: ipc.Request, timeout_s: float) -> dict[str, Any]:
     """Send one request to the daemon that runs, wherever its folder is."""
-    for path in sorted(root.glob(f"*/{state.FILE}")):
+    for folder in state.folders(root):
         try:
-            return ipc.call(path.parent, request, timeout_s)
+            return ipc.call(folder, request, timeout_s)
         except NotRunning:
             # Stale: no daemon got the request, so the next one may.
             continue
@@ -84,7 +83,7 @@ def is_running(folder: Path) -> bool:
 def any_running(root: Path) -> bool:
     """A daemon runs, answering or not. Only one can, but an older asc may have
     left another in its own folder."""
-    return any(is_running(f.parent) for f in root.glob(f"*/{state.FILE}"))
+    return any(is_running(folder) for folder in state.folders(root))
 
 
 def _end(folder: Path) -> None:
@@ -104,7 +103,7 @@ def _end(folder: Path) -> None:
             winapi.terminate(current.pid, STOP_TIMEOUT_S)
     except OSError:
         # It may still run, so the file stays: forgetting it would orphan it.
-        raise DaemonUnstoppable(current.pid) from None
+        raise DaemonUnstoppable([current.pid]) from None
     state.remove(folder)
 
 
@@ -186,8 +185,8 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
     relay.load_or_create(folder)
     # Only one daemon runs, whatever its mode, even one that no longer answers.
-    for path in sorted(folder.parent.glob(f"*/{state.FILE}")):
-        running, silent = _probe(path.parent)
+    for other in state.folders(folder.parent):
+        running, silent = _probe(other)
         if silent is not None:
             raise DaemonNotAnswering(silent.message)
         if running:
@@ -228,8 +227,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
     ends them, as they may be a person's own asc commands.
     """
     stuck: list[int] = []
-    for path in sorted(root.glob(f"*/{state.FILE}")):
-        folder, name = path.parent, path.parent.name
+    for folder in state.folders(root):
         try:
             state.read(folder)
         except NotConnected:
@@ -241,11 +239,11 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
         except NotRunning:
             continue
         except DaemonUnstoppable as error:
-            stuck.append(error.pid)
+            stuck += error.pids
             continue
-        yield name
+        yield folder.name
     if stuck:
-        raise DaemonsUnstoppable(stuck)
+        raise DaemonUnstoppable(stuck)
     if image is not None and not poll_until(
         lambda: not winapi.others_running(image), timeout_s, POLL_S
     ):

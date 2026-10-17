@@ -53,3 +53,8 @@ def remove(folder: Path) -> None:
 
 def exists(folder: Path) -> bool:
     return (folder / FILE).exists()
+
+
+def folders(root: Path) -> list[Path]:
+    """The mode folders under `root` that hold a state file, in name order."""
+    return sorted(path.parent for path in root.glob(f"*/{FILE}"))

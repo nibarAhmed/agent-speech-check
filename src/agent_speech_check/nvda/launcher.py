@@ -78,12 +78,16 @@ def check_version(folder: str, version: tuple[int, int] | None) -> None:
         raise NvdaTooOld(folder, ".".join(map(str, version)), ".".join(map(str, MIN_VERSION)))
 
 
+def missing_hint(folder: Path) -> str:
+    """What to do when the portable NVDA isn't in `folder`."""
+    # asc get-nvda can't help when you named the folder: nvda_dir overrides it.
+    return "asc get-nvda" if folder == managed_dir() else "check nvda_dir"
+
+
 def require_exe(folder: Path) -> Path:
     exe = folder / "nvda.exe"
     if not exe.is_file():
-        # asc get-nvda can't help when you named the folder: nvda_dir overrides it.
-        hint = "asc get-nvda" if folder == managed_dir() else "check nvda_dir"
-        raise NvdaNotFound([f"the portable NVDA ({folder})"], hint=hint)
+        raise NvdaNotFound([f"the portable NVDA ({folder})"], hint=missing_hint(folder))
     check_version(str(folder), winapi.file_version(exe))
     return exe
 

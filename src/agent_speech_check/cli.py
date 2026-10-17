@@ -24,10 +24,10 @@ from agent_speech_check.config.targets import SANDBOX_PORT, Config, Target, load
 from agent_speech_check.daemon import ipc, server, session, state
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
+    AlreadyRunning,
     AscError,
     BadArguments,
     BadSetting,
-    DaemonRunning,
     InternalError,
     NeedsTerminal,
     NoCommand,
@@ -114,14 +114,14 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _speech_args(parser: argparse.ArgumentParser) -> None:
+def _since(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--since", type=int, metavar="N", help="lines after N")
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("regex", metavar="REGEX")
     _timeout(parser)
-    parser.add_argument("--since", type=int, metavar="N", help="lines after N")
+    _since(parser)
 
 
 def _press_args(parser: argparse.ArgumentParser) -> None:
@@ -308,13 +308,19 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_stop(_: argparse.Namespace) -> int:
-    # A state file left behind counts as something to clear, not as nothing running.
-    found = any(state_root().glob(f"*/{state.FILE}"))
+def _stop_every(image: Path | None) -> int:
+    """Stop every daemon, print each one stopped, and return how many."""
     stopped = 0
-    for mode in session.stop_all(state_root(), None):
+    for mode in session.stop_all(state_root(), image):
         print(f"stopped: {mode}")
         stopped += 1
+    return stopped
+
+
+def cmd_stop(_: argparse.Namespace) -> int:
+    # A state file left behind counts as something to clear, not as nothing running.
+    found = bool(state.folders(state_root()))
+    stopped = _stop_every(None)
     if not (found or stopped):
         raise NotRunning
     return 0
@@ -372,8 +378,8 @@ def cmd_type(args: argparse.Namespace) -> int:
 def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
     """Where to look for the mode's NVDA, and the hint if it isn't there."""
     if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
-        hint = "check nvda_dir" if target.nvda_dir else "asc get-nvda"
-        return [("the portable NVDA", launcher.folder_for(target.nvda_dir))], hint
+        folder = launcher.folder_for(target.nvda_dir)
+        return [("the portable NVDA", folder)], launcher.missing_hint(folder)
     return keyref.candidates(), "start your NVDA"
 
 
@@ -614,7 +620,7 @@ def _answers(ask: Ask) -> setup.Answers:
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
     if session.any_running(state_root()):
-        raise DaemonRunning
+        raise AlreadyRunning
     path = config_file()
     print("asc setup")
     if path.exists() and not replace_without_asking:
@@ -687,7 +693,7 @@ examples:
   asc speech --since 0       everything still kept
   asc speech --since 41      lines after 41""",
         cmd_speech,
-        _speech_args,
+        _since,
     ),
     "wait": Command(
         "wait until NVDA says something matching REGEX",
@@ -841,8 +847,7 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.
         image = Path(sys.executable) if getattr(sys, "frozen", False) else None
-        for mode in session.stop_all(state_root(), image):
-            print(f"stopped: {mode}")
+        _stop_every(image)
         return 0
     args = build_parser().parse_args(args_list)
     if args.command is None:

@@ -16,7 +16,7 @@ from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_c
 from agent_speech_check.cli import run_setup
 from agent_speech_check.config.targets import SANDBOX_PORT, Target
 from agent_speech_check.daemon import ipc, session, state
-from agent_speech_check.errors import DaemonNoReply, DaemonRunning
+from agent_speech_check.errors import AlreadyRunning, DaemonNoReply
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.windows import winapi
 
@@ -160,7 +160,7 @@ def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     current = json.loads(path.read_text(encoding="utf-8"))
     path.write_text(json.dumps({**current, "token": "not-its-token"}), encoding="utf-8")
 
-    with pytest.raises(DaemonRunning):
+    with pytest.raises(AlreadyRunning):
         run_setup(lambda _: "", replace_without_asking=True)
     started = run_asc("start", "--mode", "watch")
     # Refused, not "not connected": retrying start can't help, stopping can.
