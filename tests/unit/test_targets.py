@@ -65,9 +65,6 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
         ("[sandbox]\nshare = ['site']\n", "share: expected full paths"),
         ("[vm]\nport = 1\n", "expected only known keys, got vm"),
         ('default_target = "x"\n', "expected only known keys, got default_target"),
-        # The layout before modes is refused like any other unknown key.
-        ('[targets.app]\nmode = "watch"\n', "expected only known keys, got targets"),
-        ('default = "app"\n', "expected only known keys, got default"),
         (
             '[defaults]\npanic_key = "F12"\n',
             r'\[defaults\] panic_key: bad gesture "F12": a hotkey needs Control, Alt or Windows',

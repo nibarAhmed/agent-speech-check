@@ -1,7 +1,7 @@
-"""One target's Windows Sandbox, from start to stop, for the daemon.
+"""Sandbox mode's Windows Sandbox, from start to stop, for the daemon.
 
 The sandbox gets three mapped folders (the start script, the NVDA installer or
-your own portable NVDA, and a writable config folder) plus the target's `share`
+your own portable NVDA, and a writable config folder) plus sandbox mode's `share`
 folders. Its NVDA connects out to the relay on the host's Default Switch
 address. For the whole session the window is kept hidden behind a tray icon
 that shows and hides it ("tray", the default), minimised ("taskbar"), or left

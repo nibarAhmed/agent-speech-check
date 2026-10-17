@@ -122,7 +122,7 @@ def parse_list(text: str) -> list[str]:
 
 def window_step(window: str, *, shown: bool, minimized: bool) -> tuple[str | None, bool]:
     """For one visible sandbox window: what to do ("hide", "minimize" or None),
-    and whether the user now wants it shown. `window` is the target's choice."""
+    and whether the user now wants it shown. `window` is sandbox mode's setting."""
     if window == "tray":
         if shown and not minimized:
             return None, True
@@ -355,7 +355,7 @@ def _has_session(sandbox_id: str) -> bool:
 
 
 class SandboxWindow:
-    """Keeps the sandbox window where the target wants it: "tray" (hidden, the
+    """Keeps the sandbox window where the `window` setting wants it: "tray" (hidden, the
     tray icon toggles it), "taskbar" (minimised) or "show". `start` it before
     the sandbox and `stop` it after (or use it as a context manager): `keep`
     runs on its own thread every KEEP_WINDOW_EVERY_S in between. `toggle` may

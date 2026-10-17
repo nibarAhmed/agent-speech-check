@@ -1,6 +1,6 @@
 """The one place keys are sent from, and the one owner of which keys may be held.
 
-`Keyboard.press` refuses keys for targets that may not send them (watch mode),
+`Keyboard.press` refuses keys in watch mode, which may not send them,
 holds one lock across each gesture and its settle period so two `asc press`
 calls never interleave, and always releases every key it pressed.
 

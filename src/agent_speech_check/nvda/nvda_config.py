@@ -84,7 +84,7 @@ class Setting:
 
 
 def merge(kept: tuple[Setting, ...], given: tuple[Setting, ...]) -> tuple[Setting, ...]:
-    """A target's kept settings, then the ones given at start. A given setting
+    """A mode's kept settings, then the ones given at start. A given setting
     replaces a kept one with the same key."""
     replaced = {setting.key for setting in given}
     return tuple(s for s in kept if s.key not in replaced) + given

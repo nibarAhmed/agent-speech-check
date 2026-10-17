@@ -1,7 +1,7 @@
 """The relay NVDA connects out to (see `docs/protocol.md`).
 
 `asc` is both the relay and the leader. NVDA, the follower, connects to
-127.0.0.1 and joins the channel with the target's key. Before it joins it makes
+127.0.0.1 and joins the channel with the mode's key. Before it joins it makes
 two throwaway connections (a verified TLS attempt that fails, then a certificate
 fetch), so the relay accepts and forgets connections that fail or close early.
 
@@ -105,7 +105,7 @@ def fingerprint(cert_path: Path) -> str:
 
 
 def load_or_create(folder: Path) -> Credentials:
-    """The target's relay cert and channel key, created on first use and then kept."""
+    """The mode's relay cert and channel key, created on first use and then kept."""
     try:
         return _load_or_create(folder)
     except OSError as error:
