@@ -186,6 +186,14 @@ def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFix
     assert load(root / "config.toml").resolve(None).mode == "watch"
 
 
+def test_setup_replaces_a_broken_file(root: Path) -> None:
+    """The way out of a file asc can't load: setup never reads it."""
+    root.mkdir()
+    (root / "config.toml").write_text("[watch\n", encoding="utf-8")
+    assert run_setup(Asker("y", "", "", "y"), replace_without_asking=False) == 0
+    assert load(root / "config.toml").resolve(None).mode == "watch"
+
+
 def test_setup_not_saved(root: Path) -> None:
     run_setup(Asker("", "", "n"), replace_without_asking=True)
     assert not (root / "config.toml").exists()
