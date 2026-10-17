@@ -40,6 +40,7 @@ from agent_speech_check.errors import (
     UsageError,
     bad_field,
 )
+from agent_speech_check.inputs.keys import PANIC_KEY, Hotkey, parse_hotkey
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.validate import Fields
@@ -49,6 +50,7 @@ WATCH_PORT = 6837
 # Fixed, so the one firewall rule `asc sandbox-setup` makes keeps matching.
 SANDBOX_PORT = 16837
 _NAME = re.compile(NAME_PATTERN)
+_PANIC = parse_hotkey(PANIC_KEY)
 
 
 @dataclass(frozen=True)
@@ -65,10 +67,13 @@ class Target:
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
     consent: bool = False
+    # Global in config.toml, so `Config.resolve` gives every target the same one.
+    panic_key: Hotkey = _PANIC
 
     def to_json(self) -> str:
         data = asdict(self)
         data["settings"] = [setting.text for setting in self.settings]
+        data["panic_key"] = self.panic_key.text
         return json.dumps(data)
 
     @classmethod
@@ -92,6 +97,9 @@ class Target:
             window=f.opt_text("window", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent") if f.has("consent") else False,
+            panic_key=parse_hotkey(f.text("panic_key", max_len=40))
+            if f.has("panic_key")
+            else _PANIC,
         )
         return _checked(target, where)
 
@@ -259,10 +267,10 @@ class Config:
         chosen = check_name(name or self.default)
         target = self.targets.get(chosen)
         if target is None:
-            return defaults(chosen, mode or "watch")
-        if mode is not None and mode != target.mode:
+            target = defaults(chosen, mode or "watch")
+        elif mode is not None and mode != target.mode:
             raise ModeMismatch(chosen, target.mode, mode)
-        return target
+        return replace(target, panic_key=parse_hotkey(str(self.value("panic_key")[0])))
 
     def value(self, name: str, target: str | None = None) -> tuple[prefs.Value | None, str]:
         """A global or command default setting and where it came from: target,

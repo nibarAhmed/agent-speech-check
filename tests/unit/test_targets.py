@@ -5,6 +5,7 @@ import pytest
 
 from agent_speech_check.config.targets import Target, defaults, load
 from agent_speech_check.errors import ModeMismatch, SetupNeeded, TargetsFileError, UsageError
+from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
 
 
@@ -54,11 +55,28 @@ def test_mode_mismatch(tmp_path: Path) -> None:
         ('[targets.app]\nmode = "watch"\nprot = 1\n', "expected only known keys, got prot"),
         ("[targets.app]\nmode = 'sandbox'\nshare = ['site']\n", "share: expected full paths"),
         ('default_target = "x"\n', "expected only known keys, got default_target"),
+        (
+            '[defaults]\npanic_key = "F12"\n',
+            r'\[defaults\] panic_key: bad gesture "F12": a hotkey needs a modifier',
+        ),
+        ('[targets.app]\nmode = "shared"\npanic_key = "Alt+F1"\n', "got panic_key"),
     ],
 )
 def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
     with pytest.raises(UsageError, match=message):
         resolve(write(tmp_path, text), "app", None)
+
+
+def test_panic_key_default_and_from_file(tmp_path: Path) -> None:
+    assert resolve(tmp_path / "none.toml", None, None).panic_key == parse_hotkey(PANIC_KEY)
+    path = write(
+        tmp_path, '[defaults]\npanic_key = "ctrl+alt+f11"\n[targets.app]\nmode = "shared"\n'
+    )
+    target = resolve(path, "app", None)
+    assert target.panic_key.text == "Control+Alt+F11"
+    # Global: every target gets it, listed or not.
+    assert resolve(path, "other", "watch").panic_key == target.panic_key
+    assert Target.from_json(target.to_json()) == target
 
 
 def test_toml_syntax_error(tmp_path: Path) -> None:

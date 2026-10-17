@@ -35,6 +35,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
+from agent_speech_check.inputs.keys import Hotkey
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import Relay
@@ -47,10 +48,6 @@ from agent_speech_check.windows.paths import state_root, target_dir
 log = logging.getLogger(__name__)
 
 LOG_FILE = "daemon.log"
-# Shared mode's panic hotkey: releases held keys and stops asc.
-PANIC_KEY = "Control+Shift+Alt+F12"
-PANIC_MODIFIERS = winapi.MOD_CONTROL | winapi.MOD_SHIFT | winapi.MOD_ALT
-PANIC_VK = 0x7B
 STOP_DELAY_S = 0.05
 
 
@@ -64,17 +61,18 @@ def _setup_logging(folder: Path) -> None:
     root.setLevel(logging.INFO)
 
 
-def take_panic_key(on_press: Callable[[], None]) -> winapi.GlobalHotkey:
-    """Shared mode never runs without a way for the user to stop it at once."""
-    hotkey = winapi.GlobalHotkey(PANIC_MODIFIERS, PANIC_VK, on_press)
+def take_panic_key(key: Hotkey, on_press: Callable[[], None]) -> winapi.GlobalHotkey:
+    """Shared mode never runs without a way for the user to stop it at once: the
+    panic hotkey releases held keys and stops asc."""
+    hotkey = winapi.GlobalHotkey(key.modifiers, key.vk, on_press)
     if not hotkey.start():
-        raise PanicKeyTaken(PANIC_KEY)
+        raise PanicKeyTaken(key.text)
     return hotkey
 
 
-def check_panic_key() -> None:
+def check_panic_key(key: Hotkey) -> None:
     """Refuse shared mode up front if another program owns the panic hotkey."""
-    take_panic_key(lambda: None).stop()
+    take_panic_key(key, lambda: None).stop()
 
 
 def start_app(command: str) -> None:
@@ -173,7 +171,7 @@ class Daemon:
             "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
             "sandbox_failure": self._sandbox_failure(),
-            "panic_key": None if self.panic is None else PANIC_KEY,
+            "panic_key": None if self.panic is None else self.target.panic_key.text,
             "running": list(self.running),
         }
 
@@ -280,7 +278,7 @@ class Daemon:
         def pressed() -> None:
             loop.call_soon_threadsafe(self._on_panic)
 
-        self.panic = take_panic_key(pressed)
+        self.panic = take_panic_key(self.target.panic_key, pressed)
 
     def _on_panic(self) -> None:
         log.warning("panic hotkey pressed: stopping")

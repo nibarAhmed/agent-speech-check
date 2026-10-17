@@ -18,7 +18,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_speech_check.daemon import ipc
-from agent_speech_check.errors import BadPreference, UnknownPreference, UsageError, bad_field
+from agent_speech_check.errors import (
+    BadInFile,
+    BadPreference,
+    UnknownPreference,
+    UsageError,
+    bad_field,
+)
+from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import launcher
 from agent_speech_check.validate import Fields
 
@@ -41,7 +48,7 @@ type Value = str | int | bool | list[str]
 class Pref:
     name: str
     scope: str
-    kind: str  # bool, int, choice, text, path, paths or settings
+    kind: str  # bool, int, choice, text, hotkey, path, paths or settings
     default: str | int | bool | None = None  # None: none, or it depends on the mode
     low: int = 0
     high: int = 0
@@ -73,7 +80,13 @@ class Pref:
         if self.is_list:
             return list(f.strings(self.name))
         value = f.text(self.name, max_len=40)
-        if not re.fullmatch(self.pattern, value):
+        if self.kind == "hotkey":
+            try:
+                value = keys.parse_hotkey(value).text
+            except UsageError as error:
+                field = f"{where} {self.name}"
+                raise BadInFile(field, error.message, error.hint) from None
+        elif not re.fullmatch(self.pattern, value):
             raise bad_field(UsageError, f"{where} {self.name}", "a value like the default", value)
         return value
 
@@ -99,12 +112,18 @@ class Pref:
                 raise BadPreference(self.name, "expected a whole number") from None
         if self.kind == "path":
             return str(Path(text).absolute())
+        if self.kind == "hotkey":
+            try:
+                text = keys.parse_hotkey(text).text
+            except UsageError as error:
+                raise BadPreference(self.name, error.message, error.hint) from None
         return text
 
 
 PREFS: tuple[Pref, ...] = (
     Pref("default", GLOBAL, "text", "default", pattern=NAME_PATTERN),
     Pref("nvda_version", GLOBAL, "text", launcher.VERSION, pattern=launcher.VERSION_PATTERN),
+    Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
     Pref("mode", TARGET, "choice", choices=MODES),
     Pref("port", TARGET, "int", low=1, high=65535),
     Pref("keys", TARGET, "bool"),

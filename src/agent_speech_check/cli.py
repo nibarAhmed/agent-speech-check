@@ -35,6 +35,7 @@ from agent_speech_check.errors import (
     UsageError,
     bad_field,
 )
+from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
@@ -574,7 +575,7 @@ def _ask_mode(ask: Ask) -> str:
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
-            print(f"While it runs, {server.PANIC_KEY} stops asc and releases keys.")
+            print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
         return mode
 
 

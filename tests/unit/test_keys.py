@@ -1,7 +1,16 @@
 import pytest
 
-from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
-from agent_speech_check.inputs.keys import parse_gesture, parse_gestures, parse_key, text_gestures
+from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText, UsageError
+from agent_speech_check.inputs.keys import (
+    PANIC_KEY,
+    Hotkey,
+    parse_gesture,
+    parse_gestures,
+    parse_hotkey,
+    parse_key,
+    text_gestures,
+)
+from agent_speech_check.windows import winapi
 
 
 def test_nvda_key_is_extended_insert() -> None:
@@ -75,6 +84,29 @@ def test_gesture_order() -> None:
 def test_bad_gestures(text: str, reason: str) -> None:
     with pytest.raises(BadGesture, match=reason):
         parse_gesture(text)
+
+
+def test_hotkey_as_register_hotkey_takes_it() -> None:
+    mods = winapi.MOD_CONTROL | winapi.MOD_SHIFT | winapi.MOD_ALT
+    assert parse_hotkey(PANIC_KEY) == Hotkey("Control+Shift+Alt+F12", mods, 0x7B)
+    assert parse_hotkey("win+ctrl+f23") == Hotkey(
+        "Windows+Control+F23", winapi.MOD_WIN | winapi.MOD_CONTROL, 0x86
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("F12", "needs a modifier"),
+        ("NVDA+F12", "NVDA can't be part of a hotkey"),
+        ("Control+NVDA+F12", "NVDA can't be part of a hotkey"),
+        ("Control+Shift", "Shift is a modifier, so it can't end a hotkey"),
+        ("Control+Nope", "unknown key"),
+    ],
+)
+def test_bad_hotkeys(text: str, reason: str) -> None:
+    with pytest.raises(UsageError, match=reason):
+        parse_hotkey(text)
 
 
 def test_all_parsed_before_any_used() -> None:

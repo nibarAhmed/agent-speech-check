@@ -200,6 +200,13 @@ class BadPreference(UsageError):
         super().__init__(f"setting {_show(name)}: {reason}", hint=hint)
 
 
+class BadInFile(UsageError):
+    """A value from config.toml failed a parser that doesn't know where it came from."""
+
+    def __init__(self, where: str, reason: str, hint: str | None = None) -> None:
+        super().__init__(f"{where}: {reason}", hint=hint)
+
+
 class TargetNotConfigured(UsageError):
     def __init__(self, target: str) -> None:
         super().__init__(
@@ -403,7 +410,8 @@ class PanicKeyTaken(Refused):
     def __init__(self, key: str) -> None:
         super().__init__(
             f"cannot register the panic hotkey {key}: another program owns it",
-            hint="shared mode never runs without its panic hotkey; close that program",
+            hint="shared mode never runs without its panic hotkey; close that program, "
+            "or pick another key with asc config set panic_key",
         )
 
 

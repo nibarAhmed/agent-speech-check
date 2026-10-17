@@ -138,7 +138,7 @@ def precheck(target: Target) -> None:
     if target.mode == "shared":
         if not target.consent:
             raise SharedNeedsConsent
-        server.check_panic_key()
+        server.check_panic_key(target.panic_key)
     if target.launches_portable:
         _check_nvda(target)
         launcher.refuse_if_running()
