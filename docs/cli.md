@@ -137,7 +137,8 @@ and your own NVDA keeps running undisturbed.
 - With `nvda_dir`, the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
   started with a copy of your config, as in desktop mode. Nothing is
-  downloaded. Your NVDA on the host may keep running.
+  downloaded. Your NVDA on the host may keep running. Exits 7 with the hint
+  to check `nvda_dir` if that NVDA is missing or too old.
 - The sandbox window is hidden in the system tray; its "asc sandbox" icon
   shows or hides it. `--window taskbar` (or `window = "taskbar"`) keeps it
   minimised on the taskbar instead, and `--window show` leaves it open, but a

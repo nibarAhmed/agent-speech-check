@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -376,7 +377,7 @@ def test_nvda_version_check() -> None:
     launcher.check_version(named, (2027, 1))
     # 2025.1 has Remote Access but forwards no speech without an audio device.
     for old in ((2024, 4), (2025, 1), (2026, 1)):
-        with pytest.raises(NvdaTooOld, match=r"nvda is version \d+\.\d") as exc:
+        with pytest.raises(NvdaTooOld, match=re.escape(f"{named} is version ") + r"\d+\.\d") as exc:
             launcher.check_version(named, old)
         assert exc.value.exit_code == 7
         assert "needs 2026.2 or later" in exc.value.message
