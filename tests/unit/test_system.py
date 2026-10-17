@@ -17,6 +17,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+import psutil
 import pytest
 
 from agent_speech_check.config.targets import defaults
@@ -24,6 +25,7 @@ from agent_speech_check.daemon import ipc
 from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
+    InstallerTimedOut,
     NoDefaultSwitch,
     NvdaAlreadyRunning,
     NvdaNotFound,
@@ -37,7 +39,7 @@ from agent_speech_check.nvda import launcher
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.windows import winapi
+from agent_speech_check.windows import wait, winapi
 
 
 def test_kill_on_close_job_kills_the_child() -> None:
@@ -49,6 +51,27 @@ def test_kill_on_close_job_kills_the_child() -> None:
         assert child.wait(10) is not None
     finally:
         child.kill()
+
+
+def test_kill_tree_ends_the_processes_it_started_too() -> None:
+    sleeper = "import time; time.sleep(60)"
+    start_child = f"subprocess.Popen([sys.executable, '-c', {sleeper!r}])"
+    code = f"import subprocess, sys; {start_child}; {sleeper}"
+    parent = subprocess.Popen([sys.executable, "-c", code])  # noqa: S603 - our own script
+    try:
+        # A venv's python.exe is a launcher with the real interpreter as its child,
+        # so wait for the sleeper itself: a python with no children of its own.
+        def sleeper_started() -> bool:
+            family = psutil.Process(parent.pid).children(recursive=True)
+            return any(not p.children() for p in family if p.name().startswith("python"))
+
+        assert wait.poll_until(sleeper_started, 10, 0.05)
+        family = psutil.Process(parent.pid).children(recursive=True)
+        assert winapi.kill_tree(parent.pid) == []
+        assert parent.wait(10) is not None
+        assert not any(p.is_running() for p in family)
+    finally:
+        parent.kill()
 
 
 def test_terminate_a_process_that_ended_but_is_still_held() -> None:
@@ -125,6 +148,14 @@ def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
         launcher.create_portable(tmp_path / "installer.exe", tmp_path / "portable")
     with pytest.raises(NvdaAlreadyRunning):
         launcher.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
+
+
+def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
+    installer = tmp_path / "hangs.cmd"
+    # Waits about 3 s, long past the timeout, and makes no portable copy.
+    installer.write_text("@ping -n 4 127.0.0.1 > nul\r\n", encoding="utf-8")
+    with pytest.raises(InstallerTimedOut, match=r"within 0.5 s, so asc ended it"):
+        launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
 
 
 def test_firewall_reads_are_harmless() -> None:

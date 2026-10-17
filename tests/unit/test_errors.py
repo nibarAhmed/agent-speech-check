@@ -110,3 +110,9 @@ def test_no_match_after_launch_says_which_windows_opened() -> None:
 def test_an_unreadable_user_config_names_the_line_when_known() -> None:
     assert errors.UserConfigUnreadable("nvda.ini", 3).message.endswith("nvda.ini line 3")
     assert errors.UserConfigUnreadable("nvda.ini", None).message.endswith("config: nvda.ini")
+
+
+def test_an_installer_asc_could_not_end_is_named() -> None:
+    error = errors.InstallerTimedOut(0.5, [111, 222])
+    assert "could not end process 111, 222" in error.message
+    assert "ended it" not in error.message

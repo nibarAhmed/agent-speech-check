@@ -258,6 +258,11 @@ class DaemonHungUp(DaemonUnreachable):
         super().__init__("it closed the connection without a reply")
 
 
+class PowerShellTimedOut(NotConnected):
+    def __init__(self, seconds: float) -> None:
+        super().__init__(f"PowerShell gave no answer within {seconds:g} s", hint="try again")
+
+
 class NvdaNotFound(SetupNeeded):
     def __init__(self, looked: Sequence[str], hint: str) -> None:
         where = "; ".join(looked) if looked else "nowhere"
@@ -278,6 +283,19 @@ class PortableFailed(SetupNeeded):
             f"the NVDA installer made no portable copy in {folder}",
             hint="check the installer, or let asc get-nvda download it again",
         )
+
+
+class InstallerTimedOut(SetupNeeded):
+    def __init__(self, seconds: float, left: Sequence[int] = ()) -> None:
+        message = f"the NVDA installer did not finish within {seconds:g} s"
+        if left:
+            pids = ", ".join(map(str, left))
+            message += f", and asc could not end process {pids}"
+            hint = "end those in Task Manager, then asc get-nvda"
+        else:
+            message += ", so asc ended it"
+            hint = "check the installer, or let asc get-nvda download it again"
+        super().__init__(message, hint=hint)
 
 
 class DownloadFailed(NotConnected):

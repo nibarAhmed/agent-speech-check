@@ -3,6 +3,7 @@ needs. Keep logic elsewhere."""
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import hashlib
 import os
@@ -100,6 +101,9 @@ def created_at(pid: int) -> float | None:
         raise PermissionError from error
 
 
+KILL_WAIT_S = 10
+
+
 def terminate(pid: int, timeout_s: float) -> None:
     """End a process and wait up to `timeout_s` for it to go. Nothing if it's
     gone; raises if it can't be ended or is still there after the wait."""
@@ -113,6 +117,23 @@ def terminate(pid: int, timeout_s: float) -> None:
         raise PermissionError from error
     except psutil.TimeoutExpired as error:
         raise TimeoutError from error
+
+
+def kill_tree(pid: int) -> list[int]:
+    """End a process and every process it started, wait up to KILL_WAIT_S for
+    them to go, and return the pids still running. Ending only the process
+    would orphan its children."""
+    try:
+        process = psutil.Process(pid)
+        family = [*process.children(recursive=True), process]
+    except psutil.NoSuchProcess:
+        return []
+    for member in family:
+        # One that refuses must not stop the rest: it is reported as left.
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            member.kill()
+    _, alive = psutil.wait_procs(family, timeout=KILL_WAIT_S)
+    return [member.pid for member in alive]
 
 
 def process_image(image: str) -> Path | None:

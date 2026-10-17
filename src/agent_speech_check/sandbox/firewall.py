@@ -15,12 +15,13 @@ import ipaddress
 import os
 import sys
 
-from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch
+from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch, PowerShellTimedOut
 from agent_speech_check.windows import winapi
 from agent_speech_check.windows.powershell import encoded, quote, run
 
 RULE_NAME = "agent-speech-check sandbox relay"
 INTERFACE = "vEthernet (Default Switch)"
+UAC_TIMEOUT_S = 300
 
 
 def create_script(port: int, program: str) -> str:
@@ -91,6 +92,10 @@ def create_rule(port: int, program: str) -> None:
         "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList "
         f"'-NoProfile','-NonInteractive','-EncodedCommand','{inner}'"
     )
-    run(outer)
+    try:
+        # It waits for the UAC prompt, so give a person time to answer it.
+        run(outer, timeout_s=UAC_TIMEOUT_S)
+    except PowerShellTimedOut:
+        raise FirewallFailed(RULE_NAME) from None
     if not rule_ok(port, program):
         raise FirewallFailed(RULE_NAME)

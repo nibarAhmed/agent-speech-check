@@ -1,5 +1,8 @@
 import base64
 
+import pytest
+
+from agent_speech_check.errors import PowerShellTimedOut
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.windows import powershell
 
@@ -38,3 +41,8 @@ def test_parse_address() -> None:
 
 def test_encoded_is_utf16_base64() -> None:
     assert base64.b64decode(powershell.encoded("hi")).decode("utf-16-le") == "hi"
+
+
+def test_run_that_outlasts_its_timeout_is_an_asc_error() -> None:
+    with pytest.raises(PowerShellTimedOut, match="within 1 s"):
+        powershell.run("Start-Sleep -Seconds 10", timeout_s=1)

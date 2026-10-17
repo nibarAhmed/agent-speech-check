@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import subprocess
 
+from agent_speech_check.errors import PowerShellTimedOut
+
 TIMEOUT_S = 60
 
 
@@ -23,13 +25,16 @@ def command_line(script: str) -> str:
     return f"powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded(script)}"
 
 
-def run(script: str) -> str:
+def run(script: str, *, timeout_s: float = TIMEOUT_S) -> str:
     """Run `script` and return what it printed."""
-    return subprocess.run(  # noqa: S603 - fixed program, our own script
-        ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded(script)],  # noqa: S607
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        timeout=TIMEOUT_S,
-    ).stdout
+    try:
+        return subprocess.run(  # noqa: S603 - fixed program, our own script
+            ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded(script)],  # noqa: S607
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout_s,
+        ).stdout
+    except subprocess.TimeoutExpired:
+        raise PowerShellTimedOut(timeout_s) from None
