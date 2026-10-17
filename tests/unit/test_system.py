@@ -110,7 +110,7 @@ def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc.value.hint == "asc get-nvda"
     with pytest.raises(NvdaNotFound) as exc:
         launcher.require_exe(tmp_path)
-    assert exc.value.hint == "check --nvda-dir or nvda_dir"
+    assert exc.value.hint == "check nvda_dir"
     (tmp_path / "nvda.exe").write_bytes(b"")
     assert launcher.require_exe(tmp_path) == tmp_path / "nvda.exe"
 
