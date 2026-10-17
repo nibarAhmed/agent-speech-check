@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -370,15 +371,26 @@ def test_file_version(tmp_path: Path) -> None:
 
 
 def test_nvda_version_check() -> None:
-    launcher.check_version("C:/nvda", None)
-    launcher.check_version("C:/nvda", (2026, 2))
-    launcher.check_version("C:/nvda", (2027, 1))
+    named = Path("C:/nvda")
+    launcher.check_version(named, None)
+    launcher.check_version(named, (2026, 2))
+    launcher.check_version(named, (2027, 1))
     # 2025.1 has Remote Access but forwards no speech without an audio device.
     for old in ((2024, 4), (2025, 1), (2026, 1)):
-        with pytest.raises(NvdaTooOld, match=r"C:/nvda is version \d+\.\d") as exc:
-            launcher.check_version("C:/nvda", old)
+        with pytest.raises(NvdaTooOld, match=re.escape(f"{named} is version ") + r"\d+\.\d") as exc:
+            launcher.check_version(named, old)
         assert exc.value.exit_code == 7
         assert "needs 2026.2 or later" in exc.value.message
+
+
+def test_an_old_nvda_gets_the_hint_for_its_folder() -> None:
+    # asc get-nvda can't replace an NVDA in a folder the user named in nvda_dir.
+    with pytest.raises(NvdaTooOld) as exc:
+        launcher.check_version(Path("C:/nvda"), (2025, 1))
+    assert exc.value.hint == "check nvda_dir"
+    with pytest.raises(NvdaTooOld) as exc:
+        launcher.check_version(launcher.managed_dir(), (2025, 1))
+    assert exc.value.hint == "asc get-nvda"
 
 
 @pytest.mark.xdist_group("desktop")

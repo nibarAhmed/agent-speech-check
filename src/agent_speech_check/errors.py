@@ -270,10 +270,10 @@ class NvdaNotFound(SetupNeeded):
 
 
 class NvdaTooOld(SetupNeeded):
-    def __init__(self, folder: str, version: str, minimum: str) -> None:
+    def __init__(self, folder: str, version: str, minimum: str, hint: str) -> None:
         super().__init__(
             f"the NVDA in {folder} is version {version}; asc needs {minimum} or later",
-            hint="asc get-nvda",
+            hint=hint,
         )
 
 

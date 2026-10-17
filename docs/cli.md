@@ -113,8 +113,8 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   the line.
 - It refuses with exit 4 while any `nvda.exe` runs, because starting a second
   NVDA restarts the running one. Use watch mode next to your own NVDA.
-- Exits 7 if there is no portable NVDA, with the hint `asc get-nvda`, or to
-  check `nvda_dir` when you named the folder.
+- Exits 7 if there is no portable NVDA or it is too old, with the hint
+  `asc get-nvda`, or to check `nvda_dir` when you named the folder.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
   connects to the relay itself. No portable NVDA is needed, and `nvda_dir` is
   refused with exit 2, as in watch and shared mode.
@@ -137,7 +137,8 @@ and your own NVDA keeps running undisturbed.
 - With `nvda_dir`, the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
   started with a copy of your config, as in desktop mode. Nothing is
-  downloaded. Your NVDA on the host may keep running.
+  downloaded. Your NVDA on the host may keep running. Exits 7 with the hint
+  to check `nvda_dir` if that NVDA is missing or too old.
 - The sandbox window is hidden in the system tray; its "asc sandbox" icon
   shows or hides it. `--window taskbar` (or `window = "taskbar"`) keeps it
   minimised on the taskbar instead, and `--window show` leaves it open, but a

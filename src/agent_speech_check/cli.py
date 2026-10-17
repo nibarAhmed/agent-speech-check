@@ -379,7 +379,7 @@ def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
     """Where to look for the mode's NVDA, and the hint if it isn't there."""
     if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
         folder = launcher.folder_for(target.nvda_dir)
-        return [("the portable NVDA", folder)], launcher.missing_hint(folder)
+        return [("the portable NVDA", folder)], launcher.portable_hint(folder)
     return keyref.candidates(), "start your NVDA"
 
 

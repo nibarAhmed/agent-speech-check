@@ -119,7 +119,8 @@ asc type "hello"
 - Look commands up instead of guessing: `asc keys heading`, `asc keys report
   title`. In browse mode single letters jump (`h` heading, `k` link, `f` form
   field); add Shift to go back.
-- Desktop mode: `asc get-nvda` must have been run once (exit 7 says so).
+- Desktop mode: `asc get-nvda` must have been run once (exit 7 says so). With
+  `nvda_dir`, exit 7 means that NVDA is missing or too old: tell the user.
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute.
   `asc sandbox-setup` must have been run once (exit 7 says so). It shows an
   admin prompt, so ask the user to run it.
