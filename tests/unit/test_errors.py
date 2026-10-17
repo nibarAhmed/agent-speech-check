@@ -40,6 +40,8 @@ def test_from_kind_unknown_is_internal() -> None:
 
 
 def _sample(annotation: str) -> object:
+    if annotation == "Sequence[tuple[str, int]]":
+        return [("x", 1)]
     if annotation.startswith("Sequence"):
         return ["x"]
     if "None" in annotation:
