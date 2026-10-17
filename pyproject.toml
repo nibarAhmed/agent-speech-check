@@ -90,6 +90,8 @@ select = [
 # Dev scripts and hooks print and run tools on purpose.
 "scripts/**" = ["T20", "S603", "S607"]
 ".claude/**" = ["T20", "S603", "S607"]
+# A vulture whitelist is bare attribute names on purpose.
+"vulture_whitelist.py" = ["B018"]
 
 # ---------------------------------------------------------------- mypy
 
@@ -103,7 +105,7 @@ explicit_package_bases = true
 
 [tool.vulture]
 paths = ["src", "vulture_whitelist.py"]
-min_confidence = 80
+min_confidence = 60
 
 # ---------------------------------------------------------------- deptry
 

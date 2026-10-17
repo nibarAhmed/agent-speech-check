@@ -195,11 +195,6 @@ def parse_hotkey(text: str) -> Hotkey:
     return Hotkey(str(gesture), modifiers, gesture.key.vk)
 
 
-def parse_gestures(texts: list[str]) -> tuple[Gesture, ...]:
-    """Parse every gesture before any is sent."""
-    return tuple(parse_gesture(text) for text in texts)
-
-
 _SHIFT_BITS = ((1, "shift"), (2, "control"), (4, "alt"))
 _MAX_UTF16_UNIT = 0xFFFF
 _TYPED_SPECIALS = {"\n": "enter", "\t": "tab"}

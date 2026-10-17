@@ -87,10 +87,8 @@ class Target:
             share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
-            consent=f.flag("consent") if f.has("consent") else False,
-            panic_key=parse_hotkey(f.text("panic_key", max_len=40))
-            if f.has("panic_key")
-            else _PANIC,
+            consent=f.flag("consent"),
+            panic_key=parse_hotkey(f.text("panic_key", max_len=40)),
         )
         return _checked(target, where)
 

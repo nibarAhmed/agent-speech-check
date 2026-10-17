@@ -1,9 +1,9 @@
-"""What NVDA said, numbered and timestamped, in memory only.
+"""What NVDA said, numbered, in memory only.
 
-Lines are numbered from 1 and numbers are never reused, even after `clear`. The
-log keeps the newest `CAP` lines. It also tracks browse/focus mode from NVDA's
-mode sounds (`focusMode.wav`, `browseMode.wav`) or, when the user turned those
-sounds off, from the spoken words "focus mode" and "browse mode".
+Lines are numbered from 1 and numbers are never reused. The log keeps the
+newest `CAP` lines. It also tracks browse/focus mode from NVDA's mode sounds
+(`focusMode.wav`, `browseMode.wav`) or, when the user turned those sounds off,
+from the spoken words "focus mode" and "browse mode".
 
 All methods run on the daemon's event loop.
 """
@@ -32,7 +32,6 @@ type Kind = Literal["said", "mode"]
 @dataclass(frozen=True)
 class Entry:
     n: int
-    ms: int
     kind: Kind
     text: str
 
@@ -53,13 +52,12 @@ class SpeechLog:
     def __init__(self, cap: int = CAP) -> None:
         self._entries: deque[Entry] = deque(maxlen=cap)
         self._next = 1
-        self._start = time.monotonic()
-        # Lines below this number fell off the end of the log (not cleared).
+        # Lines below this number fell off the end of the log.
         self._dropped_below = 1
         self._changed = asyncio.Event()
         self.mark = 0
         self.mode = "unknown"
-        self.last_activity = self._start
+        self.last_activity = time.monotonic()
 
     @property
     def latest(self) -> int:
@@ -71,7 +69,7 @@ class SpeechLog:
     def _add(self, kind: Kind, text: str) -> Entry:
         if self._entries.maxlen is not None and len(self._entries) == self._entries.maxlen:
             self._dropped_below = self._entries[0].n + 1
-        entry = Entry(self._next, int((time.monotonic() - self._start) * 1000), kind, text)
+        entry = Entry(self._next, kind, text)
         self._next += 1
         self._entries.append(entry)
         self._wake()

@@ -18,7 +18,6 @@ from typing import Any
 from agent_speech_check.errors import LineTooLong, MalformedLine, ProtocolError, ServerSentError
 from agent_speech_check.validate import Fields
 
-PROTOCOL_VERSION = 2
 MAX_LINE = 1024 * 1024
 LEADER_ID = 1
 

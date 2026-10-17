@@ -37,7 +37,7 @@ from agent_speech_check.errors import (
     bad_field,
     from_kind,
 )
-from agent_speech_check.inputs.keys import Gesture, parse_gestures, text_gestures
+from agent_speech_check.inputs.keys import Gesture, parse_gesture, text_gestures
 from agent_speech_check.validate import Fields
 
 log = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ class PressArgs:
 
     @property
     def parsed(self) -> tuple[Gesture, ...]:
-        return parse_gestures(list(self.gestures))
+        return tuple(parse_gesture(text) for text in self.gestures)
 
     @property
     def regex(self) -> re.Pattern[str] | None:
