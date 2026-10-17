@@ -56,8 +56,6 @@ def test_watch_session(env: Env) -> None:
         assert 'no speech matched "nope" within 200 ms' in missed.stderr
         assert 'said: "second"' in missed.stderr
 
-        assert run_asc("clear", "--target", "w").stdout == "cleared\n"
-        assert run_asc("speech", "--target", "w").stdout == "(nothing said)\n"
     finally:
         fake.close()
 

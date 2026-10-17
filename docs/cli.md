@@ -37,7 +37,6 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Speech | [`speech`](#asc-speech) | print what NVDA said since the mark |
 | | [`wait`](#asc-wait) | wait until NVDA says something matching `REGEX` |
 | | [`mark`](#asc-mark) | remember the current end of the speech log |
-| | [`clear`](#asc-clear) | drop all kept speech |
 | Input | [`press`](#asc-press) | press keys and print what NVDA said |
 | | [`type`](#asc-type) | type text and print what NVDA said |
 | | [`keys`](#asc-keys) | look up NVDA commands in NVDA's own reference |
@@ -210,7 +209,6 @@ if left out). For a listed target, `--mode` must match its `mode`, or
 | Setting | Default | Meaning |
 |---|---|---|
 | `default` | `default` | the target used without `--target` |
-| `nvda_version` | 2026.2 | the NVDA `asc get-nvda` downloads |
 | `panic_key` | Control+Shift+Alt+F12 | the [panic key](#panic-key), written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
 
 ### Command defaults
@@ -224,8 +222,6 @@ the target's value, which beats `[defaults]`, which beats the built-in default.
 | `timeout_ms` | 5000 (at most 600000) | `wait`, `press`, `type --timeout` |
 | `launch_timeout_ms` | 30000 (at most 600000) | `launch --timeout` |
 | `keys_layout` | desktop | `keys --layout` (desktop or laptop) |
-| `keys_lang` | en | `keys --lang` |
-| `keys_braille` | false | `keys --braille`, `--no-braille` |
 
 ### Target settings
 
@@ -373,14 +369,6 @@ asc mark [--target NAME]
 Sets the mark to the latest line and prints it: `mark: 12`. `speech` and `wait`
 look at lines after the mark.
 
-### `asc clear`
-
-```
-asc clear [--target NAME]
-```
-
-Drops all kept speech. Line numbers keep counting.
-
 ### `asc press`
 
 ```
@@ -455,8 +443,8 @@ h  heading
 |---|---|---|
 | `SEARCH` | none (all) | words that must all appear |
 | `--layout {desktop,laptop}` | `keys_layout`, desktop | the keyboard layout's keys |
-| `--lang LANG` | `keys_lang`, en | reference language, falling back to `en` |
-| `--braille`, `--no-braille` | `keys_braille`, false | include rows for braille displays |
+| `--lang LANG` | en | reference language, like `de` or `pt_BR`, falling back to `en` |
+| `--braille`, `--no-braille` | off | include rows for braille displays |
 
 - It reads `documentation\<lang>\keyCommands.html` from the target's portable
   NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA (the
@@ -516,7 +504,7 @@ download deletes the kept installers of other versions.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--version NVDA_VERSION` | `nvda_version`, 2026.2 | the NVDA version, shaped like `2026.2` (else exit 2) |
+| `--version NVDA_VERSION` | 2026.2 | the NVDA version, shaped like `2026.2` (else exit 2) |
 | `--installer FILE` | none | use this local installer, no download |
 
 - It refuses with exit 4 while any `nvda.exe` runs, because the installer

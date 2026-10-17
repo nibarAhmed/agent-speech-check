@@ -118,7 +118,6 @@ class Daemon:
             "status": self._status,
             "stop": self._stop,
             "mark": self._mark,
-            "clear": self._clear,
             "speech": self._speech,
             "wait": self._wait,
             "press": self._press,
@@ -145,10 +144,6 @@ class Daemon:
 
     async def _mark(self, _args: ipc.NoArgs) -> dict[str, Any]:
         return {"mark": self.speech.set_mark()}
-
-    async def _clear(self, _args: ipc.NoArgs) -> dict[str, Any]:
-        self.speech.clear()
-        return {}
 
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
         result = self.speech.since(self.speech.mark if args.since is None else args.since)

@@ -26,7 +26,6 @@ from agent_speech_check.errors import (
     bad_field,
 )
 from agent_speech_check.inputs import keys
-from agent_speech_check.nvda import launcher
 from agent_speech_check.validate import Fields
 
 GLOBAL = "global"
@@ -122,7 +121,6 @@ class Pref:
 
 PREFS: tuple[Pref, ...] = (
     Pref("default", GLOBAL, "text", "default", pattern=NAME_PATTERN),
-    Pref("nvda_version", GLOBAL, "text", launcher.VERSION, pattern=launcher.VERSION_PATTERN),
     Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
     Pref("mode", TARGET, "choice", choices=MODES),
     Pref("port", TARGET, "int", low=1, high=65535),
@@ -135,8 +133,6 @@ PREFS: tuple[Pref, ...] = (
     Pref("timeout_ms", BOTH, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
     Pref("launch_timeout_ms", BOTH, "int", ipc.DEFAULT_LAUNCH_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
     Pref("keys_layout", BOTH, "choice", "desktop", choices=LAYOUTS),
-    Pref("keys_lang", BOTH, "text", "en", pattern=r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?"),
-    Pref("keys_braille", BOTH, "bool", default=False),
 )
 BY_NAME = {pref.name: pref for pref in PREFS}
 

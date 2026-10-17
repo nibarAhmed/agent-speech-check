@@ -113,10 +113,9 @@ def test_command_default_global_or_per_target() -> None:
     assert both.value("timeout_ms", "app") == (5000, "default")
 
 
-@pytest.mark.parametrize("name", ["nvda_version", "panic_key"])
-def test_global_setting_takes_no_target(name: str) -> None:
+def test_global_setting_takes_no_target() -> None:
     with pytest.raises(BadPreference, match="is global, so it takes no --target"):
-        edit.owner(_config({}), prefs.find(name), "app")
+        edit.owner(_config({}), prefs.find("panic_key"), "app")
 
 
 def test_panic_key_is_kept_and_read_back_in_full() -> None:
@@ -187,7 +186,7 @@ def test_entries_say_where_each_value_comes_from() -> None:
     assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "target")
     assert rows["settle_ms"] == (800, "target")
     assert rows["timeout_ms"] == (8000, "global")
-    assert rows["keys_braille"] == (False, "default")
+    assert rows["keys_layout"] == ("desktop", "default")
     assert [name for name, _, _ in edit.entries(settings, "x")] == [p.name for p in prefs.PREFS]
 
 
@@ -203,7 +202,8 @@ def test_show(value: prefs.Value | None, shown: str) -> None:
     ("data", "message"),
     [
         ({"defaults": {"mode": "watch"}}, "expected only known keys, got mode"),
-        ({"defaults": {"keys_lang": "../x"}}, "keys_lang: expected a value like the default"),
+        ({"defaults": {"keys_lang": "en"}}, "expected only known keys, got keys_lang"),
+        ({"defaults": {"nvda_version": "2026.2"}}, "expected only known keys, got nvda_version"),
         ({"defaults": {"keys_layout": "tiny"}}, "keys_layout: expected one of desktop, laptop"),
         ({"default": "bad name"}, "target name: expected 1 to 32"),
         (

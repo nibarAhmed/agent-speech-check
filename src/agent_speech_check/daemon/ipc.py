@@ -195,7 +195,6 @@ COMMANDS: dict[str, Callable[[Fields], Args]] = {
     "status": NoArgs.parse,
     "stop": NoArgs.parse,
     "mark": NoArgs.parse,
-    "clear": NoArgs.parse,
     "speech": SpeechArgs.parse,
     "wait": WaitArgs.parse,
     "press": PressArgs.parse,
