@@ -285,6 +285,14 @@ class PortableFailed(SetupNeeded):
         )
 
 
+class InstallerTimedOut(SetupNeeded):
+    def __init__(self, seconds: float) -> None:
+        super().__init__(
+            f"the NVDA installer did not finish within {seconds:g} s, so asc ended it",
+            hint="check the installer, or let asc get-nvda download it again",
+        )
+
+
 class DownloadFailed(NotConnected):
     def __init__(self, url: str, reason: str) -> None:
         super().__init__(

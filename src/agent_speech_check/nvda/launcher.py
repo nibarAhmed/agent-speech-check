@@ -11,12 +11,14 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
 from agent_speech_check.errors import (
     DownloadFailed,
+    InstallerTimedOut,
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
@@ -121,19 +123,23 @@ def create_portable(installer: Path, dest: Path) -> Path:
 
 
 def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIMEOUT_S) -> Path:
-    """`create_portable` without the check that no NVDA runs."""
+    """`create_portable` without the check that no NVDA runs. One deadline
+    covers the installer and the wait for its copy."""
     if dest.exists():
         shutil.rmtree(dest)
+    deadline = time.monotonic() + timeout_s
+    process = subprocess.Popen(  # noqa: S603 - the official NVDA installer
+        [str(installer), "--create-portable-silent", f"--portable-path={dest}"]
+    )
     try:
-        subprocess.run(  # noqa: S603 - the official NVDA installer
-            [str(installer), "--create-portable-silent", f"--portable-path={dest}"],
-            check=False,
-            timeout=timeout_s,
-        )
+        process.wait(timeout_s)
     except subprocess.TimeoutExpired:
-        raise PortableFailed(str(dest)) from None
+        # Its children too, or they would go on writing into `dest`.
+        winapi.kill_tree(process.pid)
+        process.wait()
+        raise InstallerTimedOut(timeout_s) from None
     exe = dest / "nvda.exe"
-    if not poll_until(exe.is_file, timeout_s, 1):
+    if not poll_until(exe.is_file, max(0.0, deadline - time.monotonic()), 1):
         raise PortableFailed(str(dest))
     return exe
 
