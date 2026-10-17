@@ -176,7 +176,7 @@ class UserConfigUnreadable(UsageError):
         )
 
 
-class TargetsFileError(UsageError):
+class ConfigFileError(UsageError):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(f"{path}: {reason}")
 

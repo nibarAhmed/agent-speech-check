@@ -1,4 +1,4 @@
-"""Targets: what `asc start` starts, from a mode and its settings in `config.toml`.
+"""Read `config.toml` into a `Target`: what `asc start` starts, from a mode and its settings.
 
 `config.toml` sits in the state folder (`%LOCALAPPDATA%\\agent-speech-check`).
 `asc setup` and `asc config` write it; `prefs.py` lists every setting it holds:
@@ -32,8 +32,8 @@ import tomlkit.exceptions
 from agent_speech_check.config import prefs
 from agent_speech_check.config.prefs import MODES, WINDOWS
 from agent_speech_check.errors import (
+    ConfigFileError,
     FileUnusable,
-    TargetsFileError,
     UsageError,
     bad_field,
 )
@@ -170,7 +170,7 @@ def parse(text: str, where: str) -> dict[str, Any]:
     try:
         return tomlkit.parse(text).unwrap()
     except tomlkit.exceptions.ParseError as error:
-        raise TargetsFileError(where, str(error)) from None
+        raise ConfigFileError(where, str(error)) from None
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -185,7 +185,7 @@ def _read(path: Path) -> dict[str, Any]:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         line = data[: error.start].count(b"\n") + 1
-        raise TargetsFileError(str(path), f"not UTF-8 (line {line})") from None
+        raise ConfigFileError(str(path), f"not UTF-8 (line {line})") from None
     return parse(text, str(path))
 
 
