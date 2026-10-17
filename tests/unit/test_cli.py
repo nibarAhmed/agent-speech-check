@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check import __version__, errors
+from agent_speech_check import __version__
 from agent_speech_check.cli import main
 
 
@@ -15,14 +15,18 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().out.strip() == f"asc {__version__}"
 
 
-def test_help_lists_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
+def test_help_points_to_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
     assert exc.value.code == 0
-    out = capsys.readouterr().out
-    assert "130  interrupted" in out
-    for category in errors.CATEGORIES:
-        assert f"\n  {category.exit_code}    " in out
+    assert "/docs/cli.md#exit-codes" in capsys.readouterr().out
+
+
+def test_command_help_leaves_out_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["wait", "--help"])
+    assert exc.value.code == 0
+    assert "exit codes" not in capsys.readouterr().out
 
 
 def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:

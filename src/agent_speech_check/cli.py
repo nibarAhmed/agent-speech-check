@@ -56,18 +56,9 @@ typical use:
 Speech is kept in memory only. Run asc COMMAND --help for details.
 """
 
-EPILOG = """\
-exit codes:
-  0    OK
-  1    a wait or --expect failed
-  2    usage error
-  3    not connected or not running
-  4    refused, or busy
-  5    protocol error
-  6    internal error (a bug in asc)
-  7    setup needed (see the hint)
-  130  interrupted (Ctrl+C)
-"""
+EPILOG = (
+    "exit codes: https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#exit-codes"
+)
 
 
 @dataclass(frozen=True)
@@ -236,7 +227,6 @@ def build_parser() -> argparse.ArgumentParser:
             name,
             help=command.summary,
             description=command.details,
-            epilog=EPILOG,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
         if command.takes_target:
