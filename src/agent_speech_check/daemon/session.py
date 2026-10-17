@@ -135,15 +135,16 @@ def _check_sandbox(target: Target) -> None:
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
-    if target.mode == "shared":
-        if not target.consent:
-            raise SharedNeedsConsent
-        server.check_panic_key(target.panic_key)
+    if target.mode == "shared" and not target.consent:
+        raise SharedNeedsConsent
     if target.launches_portable:
         _check_nvda(target)
         launcher.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)
+    # Last: it holds the hotkey for a moment, so only once nothing else refuses.
+    if target.takes_panic_key:
+        server.check_panic_key(target.panic_key)
 
 
 def sandbox_failure(current: dict[str, Any]) -> AscError | None:

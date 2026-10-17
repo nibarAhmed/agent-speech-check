@@ -62,8 +62,8 @@ def _setup_logging(folder: Path) -> None:
 
 
 def take_panic_key(key: Hotkey, on_press: Callable[[], None]) -> winapi.GlobalHotkey:
-    """Shared mode never runs without a way for the user to stop it at once: the
-    panic hotkey releases held keys and stops asc."""
+    """asc never sends keys into this Windows session without a way for the user to
+    stop it at once: the panic hotkey releases held keys and stops asc."""
     hotkey = winapi.GlobalHotkey(key.modifiers, key.vk, on_press)
     if not hotkey.start():
         raise PanicKeyTaken(key.text)
@@ -71,7 +71,7 @@ def take_panic_key(key: Hotkey, on_press: Callable[[], None]) -> winapi.GlobalHo
 
 
 def check_panic_key(key: Hotkey) -> None:
-    """Refuse shared mode up front if another program owns the panic hotkey."""
+    """Refuse to start up front if another program owns the panic hotkey."""
     take_panic_key(key, lambda: None).stop()
 
 
@@ -269,10 +269,10 @@ class Daemon:
             )
 
     def _start_panic_key(self) -> None:
-        if self.target.mode != "shared":
-            return
-        if not self.target.consent:
+        if self.target.mode == "shared" and not self.target.consent:
             raise SharedNeedsConsent
+        if not self.target.takes_panic_key:
+            return
         loop = asyncio.get_running_loop()
 
         def pressed() -> None:

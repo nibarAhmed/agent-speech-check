@@ -29,7 +29,7 @@ Replace the app path and expected speech with values from your application. `asc
 | Mode | Best for | What it does |
 |---|---|---|
 | `sandbox` | Isolated tests | Runs NVDA inside Windows Sandbox so test input stays away from your normal desktop. Requires a supported Windows edition and one-time setup. |
-| `desktop` | Local development and CI | Starts a portable NVDA with a private configuration. It will not start while another `nvda.exe` is running. |
+| `desktop` | Local development and CI | Starts a portable NVDA with a private configuration. It will not start while another `nvda.exe` is running. Its keys go to your desktop, so it provides a panic hotkey. |
 | `watch` | Listening to an NVDA you already run | Captures speech from your existing NVDA. `asc` does not send keys in this mode. |
 | `shared` | Driving an existing NVDA session | Sends keys to your real Windows session. Requires an explicit `--i-understand` on each start and provides a panic hotkey. Use with care. |
 
@@ -85,7 +85,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
 
 `asc` handles speech that can include passwords and private messages, and it can press keys. [SECURITY.md](SECURITY.md) lists what it promises and how to report a problem privately.
 
-- `shared` mode sends keys into your real Windows session. Its panic hotkey, `Control+Shift+Alt+F12` unless the `panic_key` setting changes it, releases held keys and stops `asc` at once.
+- `shared` mode, and `desktop` mode when it launches its NVDA on your computer, send keys into your real Windows session. Their panic hotkey, `Control+Shift+Alt+F12` unless the `panic_key` setting changes it, releases held keys and stops `asc` at once.
 - The relay certificate and channel key are stored in each target's folder. Keep that folder private.
 - Speech is kept in memory only and never written to a log. Command output can contain it, so treat that output as sensitive if your app shows private data.
 
