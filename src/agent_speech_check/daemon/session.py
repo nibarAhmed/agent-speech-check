@@ -1,4 +1,4 @@
-"""Starting and stopping a target's daemon. No printing: `cli.py` shows the results."""
+"""Starting and stopping the daemon. No printing: `cli.py` shows the results."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ def call(root: Path, request: ipc.Request, timeout_s: float) -> dict[str, Any]:
 
 
 def _probe(folder: Path) -> tuple[bool, NotConnected | None]:
-    """Whether a daemon runs for the target, and if it doesn't answer, why.
+    """Whether a daemon runs in the folder, and if it doesn't answer, why.
     A stale state file is removed on the way.
 
     A daemon that is there but can't be talked to (an older asc, or one that
@@ -124,7 +124,7 @@ def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
 
 def _check_nvda(target: Target) -> None:
     """The NVDA asc will launch exists, is new enough, and its own config reads
-    and takes the target's settings."""
+    and takes the mode's settings."""
     folder = launcher.folder_for(target.nvda_dir)
     launcher.require_exe(folder)
     nvda_config.check(target.settings, nvda_config.user_ini(nvda_config.source_config(folder)))
@@ -185,7 +185,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
     relay.load_or_create(folder)
-    # Only one daemon runs: whichever target it is for, and even one an older asc left.
+    # Only one daemon runs, whatever its mode, even one that no longer answers.
     for path in sorted(folder.parent.glob(f"*/{state.FILE}")):
         running, silent = _probe(path.parent)
         if silent is not None:
@@ -219,8 +219,8 @@ def stop(folder: Path, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
 
 
 def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_S) -> Iterator[str]:
-    """Stop every target's daemon, for `asc stop` and the installer, yielding each
-    target stopped.
+    """Stop every daemon, for `asc stop` and the installer, yielding the folder name
+    of each one stopped.
 
     Tries them all before raising for any it couldn't end. Then waits for the
     other processes running `image`: a stopped daemon still runs for a moment
@@ -229,7 +229,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
     """
     stuck: list[int] = []
     for path in sorted(root.glob(f"*/{state.FILE}")):
-        folder, target = path.parent, path.parent.name
+        folder, name = path.parent, path.parent.name
         try:
             state.read(folder)
         except NotConnected:
@@ -243,7 +243,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
         except DaemonUnstoppable as error:
             stuck.append(error.pid)
             continue
-        yield target
+        yield name
     if stuck:
         raise DaemonsUnstoppable(stuck)
     if image is not None and not poll_until(

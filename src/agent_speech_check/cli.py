@@ -312,8 +312,8 @@ def cmd_stop(_: argparse.Namespace) -> int:
     # A state file left behind counts as something to clear, not as nothing running.
     found = any(state_root().glob(f"*/{state.FILE}"))
     stopped = 0
-    for target in session.stop_all(state_root(), None):
-        print(f"stopped: {target}")
+    for mode in session.stop_all(state_root(), None):
+        print(f"stopped: {mode}")
         stopped += 1
     if not (found or stopped):
         raise NotRunning
@@ -841,8 +841,8 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.
         image = Path(sys.executable) if getattr(sys, "frozen", False) else None
-        for target in session.stop_all(state_root(), image):
-            print(f"stopped: {target}")
+        for mode in session.stop_all(state_root(), image):
+            print(f"stopped: {mode}")
         return 0
     args = build_parser().parse_args(args_list)
     if args.command is None:

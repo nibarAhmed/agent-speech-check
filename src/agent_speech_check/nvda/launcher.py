@@ -48,7 +48,7 @@ def managed_dir() -> Path:
 
 
 def folder_for(nvda_dir: str | None) -> Path:
-    """A target's portable NVDA: its `nvda_dir`, else the one `asc get-nvda` made."""
+    """A mode's portable NVDA: its `nvda_dir`, else the one `asc get-nvda` made."""
     return Path(nvda_dir) if nvda_dir else managed_dir()
 
 

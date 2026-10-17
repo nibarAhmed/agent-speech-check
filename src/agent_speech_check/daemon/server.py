@@ -1,6 +1,6 @@
 """The background process for one target: relay, speech log, keys and waits.
 
-`asc start` runs it as `asc _daemon <target json>`. It writes the state file
+`asc start` runs it as `asc _daemon <settings json>`. It writes the state file
 once it listens, runs until `asc stop` (or Ctrl+Break), then releases any held
 keys and removes the state file. If a long-lived task crashes, it logs the
 error and exits rather than keep running half dead.
