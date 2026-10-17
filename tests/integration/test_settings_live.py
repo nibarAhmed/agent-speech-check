@@ -6,7 +6,7 @@ import pytest
 from tests.integration.conftest import Env, run_asc
 
 from agent_speech_check.cli import run_setup
-from agent_speech_check.errors import DaemonRunning
+from agent_speech_check.errors import AlreadyRunning
 
 
 def test_changes_while_running(env: Env) -> None:
@@ -25,7 +25,7 @@ def test_changes_while_running(env: Env) -> None:
     assert panic.returncode == 0, panic.stderr
     assert panic.stdout.endswith("applies at the next asc start\n")
 
-    with pytest.raises(DaemonRunning, match="asc is running"):
+    with pytest.raises(AlreadyRunning, match="asc is already running"):
         run_setup(lambda _: "", replace_without_asking=True)
 
 

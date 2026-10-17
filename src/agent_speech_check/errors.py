@@ -439,7 +439,7 @@ class KeysRefused(Refused):
 
 class AlreadyRunning(Refused):
     def __init__(self) -> None:
-        super().__init__("asc is already running", hint="asc stop")
+        super().__init__("asc is already running", hint="asc stop, then try again")
 
 
 class DaemonNotAnswering(Refused):
@@ -451,16 +451,8 @@ class DaemonNotAnswering(Refused):
 
 
 class DaemonUnstoppable(Refused):
-    def __init__(self, pid: int) -> None:
-        self.pid = pid
-        super().__init__(
-            f"cannot end the asc daemon (pid {pid})",
-            hint="end that process in Task Manager",
-        )
-
-
-class DaemonsUnstoppable(Refused):
     def __init__(self, pids: Sequence[int]) -> None:
+        self.pids = list(pids)
         super().__init__(
             f"cannot end the asc daemon (pid {', '.join(str(pid) for pid in pids)})",
             hint="end it in Task Manager, then try again",
@@ -473,11 +465,6 @@ class AscStillRunning(Refused):
             f"asc is still running (pid {', '.join(str(pid) for pid in pids)})",
             hint="close it, or end it in Task Manager, then try again",
         )
-
-
-class DaemonRunning(Refused):
-    def __init__(self) -> None:
-        super().__init__("asc is running", hint="asc stop, then try again")
 
 
 class NvdaAlreadyRunning(Refused):
