@@ -109,6 +109,12 @@ class Target:
         return self.mode == "desktop" and self.launch
 
     @property
+    def takes_panic_key(self) -> bool:
+        """asc's keys land in this Windows session (shared mode, or desktop mode's
+        own NVDA), so a panic hotkey must be able to stop it."""
+        return self.mode == "shared" or self.launches_portable
+
+    @property
     def launches_sandbox(self) -> bool:
         """asc starts NVDA inside Windows Sandbox (sandbox mode)."""
         return self.mode == "sandbox" and self.launch

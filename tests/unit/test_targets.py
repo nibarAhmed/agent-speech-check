@@ -29,6 +29,15 @@ def test_mode_defaults() -> None:
     assert defaults("x", "sandbox") == Target("x", "sandbox", 16837, keys=True, launch=True)
 
 
+def test_panic_key_wherever_keys_reach_this_desktop() -> None:
+    assert defaults("x", "shared").takes_panic_key
+    assert defaults("x", "desktop").takes_panic_key
+    # NVDA runs elsewhere (a VM, the sandbox), or asc sends no keys at all.
+    assert not replace(defaults("x", "desktop"), launch=False).takes_panic_key
+    assert not defaults("x", "sandbox").takes_panic_key
+    assert not defaults("x", "watch").takes_panic_key
+
+
 def test_listed_target_and_default_name(tmp_path: Path) -> None:
     path = write(
         tmp_path,

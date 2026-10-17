@@ -580,6 +580,7 @@ def _ask_mode(ask: Ask) -> str:
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
+        if mode in ("shared", "desktop"):
             print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
         return mode
 

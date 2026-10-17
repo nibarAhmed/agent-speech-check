@@ -152,7 +152,9 @@ def test_setup_desktop_declines_the_download(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
-    assert "Run asc get-nvda later." in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Run asc get-nvda later." in out
+    assert "While it runs, Control+Shift+Alt+F12 stops asc and releases keys." in out
     assert load(root / "config.toml").resolve(None, None).launches_portable
 
 

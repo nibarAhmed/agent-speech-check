@@ -144,6 +144,8 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         "presentation.reportTooltips=False",
     )
     assert started.returncode == 0, started.stderr
+    # Its NVDA runs on this desktop, so asc's keys land here: it has a panic key.
+    assert "panic key: Control+Shift+Alt+F12 stops asc and releases keys" in started.stdout
     try:
         wait_connected("x")
         assert "Report title" in run_asc("keys", "report title", "--target", "x").stdout

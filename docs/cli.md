@@ -101,6 +101,7 @@ target's `nvda_dir` or `--nvda-dir`) with its own config folder and
 `nvda.ini`. That NVDA starts unattended, uses the silent synth, mutes its own
 sounds, uses the desktop keyboard layout, and connects to the relay by itself.
 `asc stop` ends it, and it always ends when `asc` stops, even after a crash.
+Its keys land on this desktop, so it has a [panic key](#panic-key).
 
 - **Your own portable NVDA** (`--nvda-dir DIR`, or `nvda_dir` in
   `config.toml`) keeps your settings and add-ons: its `userConfig` folder is copied into the private config folder, and `asc` writes its own settings on top. Your `userConfig` is only read. `asc` replaces your `[remote]` section,
@@ -154,10 +155,23 @@ and your own NVDA keeps running undisturbed.
 your NVDA to `asc` as in watch mode.
 
 - It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
-- While it runs, the global panic hotkey **Control+Shift+Alt+F12** releases any held keys and stops `asc` at once. `panic_key` in `[defaults]` picks another
-  (`asc config set panic_key Control+Alt+F11`). If another program owns the
-  hotkey, shared mode refuses to start (exit 4): it never runs without one.
+- It has a [panic key](#panic-key).
+
+### Panic key
+
+In shared mode, and in desktop mode when `asc` launches its NVDA on this
+computer, `asc`'s keys land in your real Windows session. While such a target
+runs, the global panic hotkey **Control+Shift+Alt+F12** releases any held keys
+and stops `asc` at once (in desktop mode, its NVDA too).
+
+- `panic_key` in `[defaults]` picks another
+  (`asc config set panic_key Control+Alt+F11`). A running target keeps its key
+  until its next `asc start`.
+- If another program owns the hotkey, `asc start` refuses (exit 4): `asc` never
+  sends keys to this desktop without one.
 - `asc status` shows the panic key.
+- Desktop mode with `launch = false`, and sandbox mode, have none: their keys
+  land in another session.
 
 ## Configuration
 
@@ -198,7 +212,7 @@ if left out). For a listed target, `--mode` must match its `mode`, or
 |---|---|---|
 | `default` | `default` | the target used without `--target` |
 | `nvda_version` | 2026.2 | the NVDA `asc get-nvda` downloads |
-| `panic_key` | Control+Shift+Alt+F12 | shared mode's panic hotkey, written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
+| `panic_key` | Control+Shift+Alt+F12 | the [panic key](#panic-key), written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
 
 ### Command defaults
 
@@ -304,7 +318,7 @@ speech: 12 lines kept, latest 12, mark 10
 - `browse/focus` is `unknown` until NVDA first switches modes.
 - A `last error:` line says why the last failed connection was dropped (for
   example a wrong channel key), until NVDA next joins.
-- In shared mode it shows the panic key.
+- When the target has a [panic key](#panic-key), it shows it.
 - If `asc` isn't running, it exits 3.
 
 ### `asc speech`

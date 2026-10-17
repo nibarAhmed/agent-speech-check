@@ -410,7 +410,7 @@ class PanicKeyTaken(Refused):
     def __init__(self, key: str) -> None:
         super().__init__(
             f"cannot register the panic hotkey {key}: another program owns it",
-            hint="shared mode never runs without its panic hotkey; close that program, "
+            hint="asc never sends keys to this desktop without one; close that program, "
             "or pick another key with asc config set panic_key",
         )
 
