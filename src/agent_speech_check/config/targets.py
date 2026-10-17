@@ -58,7 +58,6 @@ class Target:
     name: str
     mode: str
     port: int  # 0: pick a free port
-    keys: bool
     launch: bool
     nvda_dir: str | None = None
     share: tuple[str, ...] = ()
@@ -90,7 +89,6 @@ class Target:
             check_name(f.text("name")),
             f.choice("mode", MODES),
             f.number("port", low=0, high=65535),
-            keys=f.flag("keys"),
             launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             share=f.opt_strings("share"),
@@ -102,6 +100,11 @@ class Target:
             else _PANIC,
         )
         return _checked(target, where)
+
+    @property
+    def keys(self) -> bool:
+        """asc may send keys: every mode but watch."""
+        return self.mode != "watch"
 
     @property
     def launches_portable(self) -> bool:
@@ -152,8 +155,6 @@ def check_name(name: str) -> str:
 
 
 def _checked(target: Target, where: str) -> Target:
-    if target.mode == "watch" and target.keys:
-        raise bad_field(UsageError, f"{where} keys", "false in watch mode", target.keys)
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
@@ -181,7 +182,6 @@ def defaults(name: str, mode: str) -> Target:
         name,
         mode,
         ports.get(mode, 0),
-        keys=mode != "watch",
         launch=mode in ("desktop", "sandbox"),
     )
 

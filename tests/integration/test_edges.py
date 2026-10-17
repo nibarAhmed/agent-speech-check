@@ -289,7 +289,7 @@ def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
 
 def test_the_named_mutex_refuses_a_second_daemon(env: Env) -> None:
     assert run_asc("start", "--target", "w").returncode == 0
-    target = Target("w", "watch", env.port, keys=False, launch=False)
+    target = Target("w", "watch", env.port, launch=False)
     second = run_asc("_daemon", target.to_json())
     assert second.returncode == 4
     assert 'asc is already running for target "w"' in second.stderr
