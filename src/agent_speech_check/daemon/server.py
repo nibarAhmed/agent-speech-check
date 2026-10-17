@@ -162,7 +162,6 @@ class Daemon:
             "latest": self.speech.latest,
             "mark": self.speech.mark,
             "last_error": self.relay.last_error,
-            "nvda_pid": None if self.nvda is None else self.nvda.process.pid,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
             "sandbox_failure": self._sandbox_failure(),
             "panic_key": None if self.panic is None else self.target.panic_key.text,

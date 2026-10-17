@@ -1,11 +1,11 @@
 import pytest
 
+from agent_speech_check.daemon import ipc
 from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText, UsageError
 from agent_speech_check.inputs.keys import (
     PANIC_KEY,
     Hotkey,
     parse_gesture,
-    parse_gestures,
     parse_hotkey,
     parse_key,
     text_gestures,
@@ -112,9 +112,12 @@ def test_bad_hotkeys(text: str, reason: str) -> None:
 
 
 def test_all_parsed_before_any_used() -> None:
+    raw = {"expect": None, "settle_ms": 400, "timeout_ms": 1000}
     with pytest.raises(UnknownKey):
-        parse_gestures(["Tab", "Nope"])
-    assert len(parse_gestures(["Tab", "H"])) == 2
+        ipc.parse_request("press", {**raw, "gestures": ["Tab", "Nope"]})
+    args = ipc.parse_request("press", {**raw, "gestures": ["Tab", "H"]}).args
+    assert isinstance(args, ipc.PressArgs)
+    assert len(args.parsed) == 2
 
 
 def test_text_gestures_use_the_keyboard_layout() -> None:
