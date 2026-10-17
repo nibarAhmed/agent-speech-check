@@ -1,4 +1,4 @@
-"""The background process for one target: relay, speech log, keys and waits.
+"""The background process for one mode: relay, speech log, keys and waits.
 
 `asc start` runs it as `asc _daemon <settings json>`. It writes the state file
 once it listens, runs until `asc stop` (or Ctrl+Break), then releases any held
