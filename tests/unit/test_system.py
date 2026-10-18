@@ -399,6 +399,20 @@ def test_a_damaged_cached_installer_is_downloaded_again(
     assert not damaged.exists()
 
 
+def test_a_held_cached_installer_is_a_failed_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Held open, as a sandbox running it would, so it can't be deleted.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    held = launcher.installer_path("2026.2")
+    held.parent.mkdir(parents=True)
+    with held.open("wb") as file:
+        file.write(b"not the listed file")
+        file.flush()
+        with pytest.raises(DownloadFailed):
+            launcher.download("2026.2", SHA1)
+
+
 def test_a_new_installer_replaces_the_old_ones(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
