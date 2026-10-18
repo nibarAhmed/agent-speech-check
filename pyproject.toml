@@ -130,7 +130,7 @@ testpaths = ["tests"]
 # (a small subset of the code) is not failed by the floor.
 addopts = ["--strict-markers"]
 pythonpath = ["."]
-markers = ["e2e: needs a real portable NVDA (manual or nightly)"]
+markers = ["e2e: needs a real portable NVDA (Windows Sandbox or the e2e CI workflow)"]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 

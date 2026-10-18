@@ -1,0 +1,55 @@
+name: e2e
+
+# The real-NVDA tests, on a hosted runner: a throwaway VM with no one's NVDA to
+# replace, so the tests start a portable NVDA here, as they do in Windows Sandbox.
+on:
+  # Skips only docs: a file left off this list runs the tests, it doesn't skip them.
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      # The tests run PR code, which must not find the token on disk.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: uv sync --locked
+      - name: Create a portable NVDA
+        shell: pwsh
+        run: |
+          $nvda = "$env:RUNNER_TEMP\nvda"
+          $out = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\e2e-out"
+          $installer = uv run python -c "from agent_speech_check.nvda import launcher as l; print(l.download(l.VERSION))"
+          if ($LASTEXITCODE -ne 0) { throw "download exit $LASTEXITCODE" }
+          uv run python -c "import sys; from pathlib import Path; from agent_speech_check.nvda import launcher; launcher.create_portable(Path(sys.argv[1]), Path(sys.argv[2]))" $installer $nvda
+          if ($LASTEXITCODE -ne 0) { throw "portable exit $LASTEXITCODE" }
+          # The tests read these.
+          "ASC_E2E_NVDA=$nvda" >> $env:GITHUB_ENV
+          "ASC_E2E_OUT=$out" >> $env:GITHUB_ENV
+          "ASC_E2E_INSTALLER=$installer" >> $env:GITHUB_ENV
+      # A step timeout, under the job's, so a hang still fails here and uploads the log.
+      - name: e2e tests
+        timeout-minutes: 20
+        run: uv run pytest -m e2e tests/e2e -v -p no:cacheprovider
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-out
+          path: ${{ runner.temp }}/e2e-out

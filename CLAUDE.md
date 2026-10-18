@@ -11,11 +11,12 @@ These can break the user's own machine or the project, so no task overrides them
 
 - Never set `ASC_E2E_NVDA` on the host: those e2e tests start that NVDA, which replaces the
   user's running one, and nothing starts it again. Use `scripts/e2e_sandbox.py`. The
-  sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made for the host and leave it alone.
+  sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made for the host and leave it alone. The
+  one exception is a throwaway CI runner, where `.github/workflows/e2e.yml` sets it.
 - Never write the user's own NVDA configuration. `asc` writes only its own copies.
 - Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
-  you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox nothing is
-  the user's, so stopping by name is fine there.
+  you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox or on a
+  throwaway CI runner nothing is the user's, so stopping by name is fine there.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - Never push to `main`: it's protected. Work on a branch and open a PR.
 
@@ -41,7 +42,8 @@ These can break the user's own machine or the project, so no task overrides them
 - Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
   fakes. Its low coverage outside e2e is expected; never lower the 90% coverage floor for it.
 - For changes that touch the protocol or NVDA config, run the e2e tests against real NVDA
-  (`scripts/e2e_sandbox.py`), or state clearly that they weren't run.
+  (`scripts/e2e_sandbox.py`), or state clearly that they weren't run. The e2e CI workflow also
+  runs the real-NVDA tests on PRs, but not the sandbox-mode ones.
 - Some tests touch machine-wide state (window titles, the foreground window, global hotkeys,
   Windows Sandbox), so a real `asc` sandbox or daemon on this machine can make them fail. Check for
   one before blaming your change. When a test clashes, give it its own names, titles and hotkeys
