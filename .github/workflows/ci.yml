@@ -32,7 +32,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install
         run: uv sync --locked
-      - name: Check (lint, types, dead code, deps, tests)
+      - name: Check (lint, types, dead code, deps, Actions, tests)
         run: uv run poe check
 
   installer:

@@ -19,11 +19,11 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
 - Changes reach `main` only through a pull request. Direct pushes to `main` are refused.
 - Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
   Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
-- CI must pass: `check (3.12)`, `check (3.13)`, `installer` and `pr-title` (the title is a
-  conventional commit). `e2e` must pass too when it runs: it skips PRs that change only docs, so
-  it isn't a required check. It runs the real-NVDA tests on a throwaway runner, but not the
-  sandbox-mode ones, because GitHub's runners have no Windows Sandbox, so the template asks
-  whether you ran `scripts/e2e_sandbox.py`.
+- CI must pass: `check (3.12)`, `check (3.13)`, `installer`, `zizmor` (GitHub Actions security)
+  and `pr-title` (the title is a conventional commit). `e2e` must pass too when it runs: it
+  skips PRs that change only docs, so it isn't a required check. It runs the real-NVDA tests on
+  a throwaway runner, but not the sandbox-mode ones, because GitHub's runners have no Windows
+  Sandbox, so the template asks whether you ran `scripts/e2e_sandbox.py`.
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
