@@ -63,7 +63,7 @@ dead = "vulture"
 deps = "deptry src"
 # GitHub Actions and Dependabot config. Offline, so it needs no GitHub token.
 actions = "zizmor --offline .github"
-test ="pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
+test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup --no-cov -p no:cacheprovider"
 check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "actions", "test"]
 
