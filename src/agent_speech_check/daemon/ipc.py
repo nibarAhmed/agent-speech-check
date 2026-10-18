@@ -330,5 +330,7 @@ async def _answer(raw: dict[str, Any], handler: Handler) -> bytes:
     except AscError as error:
         return _error_reply(error)
     except Exception as error:
+        # The daemon's log formatter keeps the bug's message, which can hold the
+        # request's text, out of the log.
         log.exception("internal error handling %r", raw.get("cmd"))
         return _error_reply(InternalError(f"{type(error).__name__}: {error}"))

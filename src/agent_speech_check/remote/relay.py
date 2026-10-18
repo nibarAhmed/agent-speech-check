@@ -221,7 +221,8 @@ class Relay:
 
     def _failed(self, error: AscError) -> None:
         self.last_error = error.message
-        log.warning("dropped a connection: %s", error.message)
+        # Its type only: the message can quote what NVDA sent, speech included.
+        log.warning("dropped a connection: %s", type(error).__name__)
 
     def _lost(self, reason: AscError | None = None) -> None:
         self._writer = None
