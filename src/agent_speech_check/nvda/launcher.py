@@ -24,6 +24,7 @@ from pathlib import Path
 
 from agent_speech_check.errors import (
     DownloadFailed,
+    FileUnusable,
     InstallerInUse,
     InstallerTimedOut,
     NvdaAlreadyRunning,
@@ -31,6 +32,7 @@ from agent_speech_check.errors import (
     NvdaTooOld,
     PortableFailed,
     PortableNotReplaced,
+    ProgramWontStart,
 )
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
@@ -47,6 +49,8 @@ VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
 # Remote Access is built in from 2025.1, but 2025.1 forwards no speech without an
 # audio device (docs/findings.md). 2026.2 is the version tested; those between are not.
 MIN_VERSION = (2026, 2)
+# Windows errors for a file that is no program it can run: bad format, wrong machine.
+NOT_A_PROGRAM = (193, 216)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
 # The lookup runs before desktop and sandbox starts, so offline it gives up soon.
@@ -294,8 +298,10 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         except OSError as error:  # a file in it is open
             raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
     deadline = time.monotonic() + timeout_s
-    process = subprocess.Popen(  # noqa: S603 - the official NVDA installer
-        [str(installer), "--create-portable-silent", f"--portable-path={new}"]
+    process = _start(
+        [str(installer), "--create-portable-silent", f"--portable-path={new}"],
+        # asc get-nvda --version and the offline fallback reuse a kept installer.
+        hint="delete it, then asc get-nvda",
     )
     try:
         process.wait(timeout_s)
@@ -318,6 +324,19 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
     shutil.rmtree(old, ignore_errors=True)
     return dest / "nvda.exe"
+
+
+def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
+    """Start NVDA or its installer. A file Windows won't run is a setup problem, not a bug."""
+    try:
+        return subprocess.Popen(args)  # noqa: S603 - NVDA, or the NVDA installer
+    except OSError as error:
+        if error.winerror not in NOT_A_PROGRAM:
+            # Access denied, for one: the program may be fine.
+            raise FileUnusable.from_os(args[0], error) from None
+        # Windows' text names the program as a literal %1.
+        reason = (error.strerror or str(error)).replace("%1", "the program")
+        raise ProgramWontStart(args[0], reason, hint) from None
 
 
 @dataclass
@@ -344,14 +363,15 @@ def launch(
     exe = require_exe(folder)
     refuse_if_running()
     nvda_config.write(config_dir, relay, settings, nvda_config.source_config(folder))
-    process = subprocess.Popen(  # noqa: S603 - the portable NVDA asc manages
+    process = _start(
         [
             str(exe),
             f"--config-path={config_dir}",
             f"--log-file={config_dir.parent / 'nvda.log'}",
             "-l",
             "20",
-        ]
+        ],
+        hint="replace it: asc get-nvda, or a working NVDA in nvda_dir",
     )
     try:
         job = winapi.kill_on_close_job(process.pid)
