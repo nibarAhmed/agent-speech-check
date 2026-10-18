@@ -28,11 +28,11 @@ from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
     InstallerTimedOut,
-    PortableNotReplaced,
     NoDefaultSwitch,
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
+    PortableNotReplaced,
     SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
