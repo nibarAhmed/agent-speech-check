@@ -12,7 +12,7 @@ from collections.abc import Iterator
 
 import pytest
 from tests.fake_nvda import FakeNvda
-from tests.integration.conftest import Env, run_asc, start_asc, tls_client
+from tests.integration.conftest import Env, run_asc, start_asc, tls_client, wait_until
 
 
 @pytest.fixture
@@ -67,3 +67,13 @@ def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeN
     _, err = waiting.communicate(timeout=30)
     assert waiting.returncode == 3, err
     assert "NVDA is not connected after waiting 3000 ms" in err
+
+
+def test_a_rejected_message_from_nvda_keeps_its_values_out_of_the_log(
+    env: Env, nvda: FakeNvda
+) -> None:
+    # Speech in the wrong shape: a string where NVDA sends a list.
+    nvda.send({"type": "speak", "sequence": "my password"})
+    log = env.folder("desktop") / "daemon.log"
+    assert wait_until(lambda: "dropped a connection" in log.read_text(encoding="utf-8"))
+    assert "my password" not in log.read_text(encoding="utf-8")
