@@ -17,7 +17,6 @@ import json
 import logging
 import re
 import socket
-import traceback
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -330,9 +329,8 @@ async def _answer(raw: dict[str, Any], handler: Handler) -> bytes:
         return _reply({"ok": True, "result": await handler(request)})
     except AscError as error:
         return _error_reply(error)
-    except Exception as error:  # noqa: BLE001 - the request handler: any bug becomes exit 6
-        # The type and where, never the message: it can hold the request's text.
-        where = "".join(traceback.format_tb(error.__traceback__)).rstrip()
-        cmd = raw.get("cmd")
-        log.error("internal error handling %r: %s\n%s", cmd, type(error).__name__, where)  # noqa: TRY400 - no message on purpose
+    except Exception as error:
+        # The daemon's log formatter keeps the bug's message, which can hold the
+        # request's text, out of the log.
+        log.exception("internal error handling %r", raw.get("cmd"))
         return _error_reply(InternalError(f"{type(error).__name__}: {error}"))

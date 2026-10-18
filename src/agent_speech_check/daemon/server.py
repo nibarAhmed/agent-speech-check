@@ -17,6 +17,7 @@ import secrets
 import signal
 import subprocess
 import time
+import traceback
 from collections.abc import Awaitable, Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -51,11 +52,53 @@ LOG_FILE = "daemon.log"
 STOP_DELAY_S = 0.05
 
 
+class LogFormatter(logging.Formatter):
+    """Writes a traceback's frames and exception types, never their messages: a
+    message can hold speech or a request's text. Every traceback in the log
+    comes through here, asyncio's own included."""
+
+    def __init__(self) -> None:
+        super().__init__("%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Never the traceback text another handler cached on the record, messages and all.
+        cached, record.exc_text = record.exc_text, None
+        try:
+            return super().format(record)
+        finally:
+            record.exc_text = cached
+
+    def formatException(self, ei: Any) -> str:
+        error = ei[1]
+        if not isinstance(error, BaseException):
+            return super().formatException(ei)
+        return "".join(_exception_lines(error, set())).rstrip()
+
+
+def _exception_lines(error: BaseException, seen: set[int]) -> list[str]:
+    if id(error) in seen:
+        return []
+    seen.add(id(error))
+    kind = type(error)
+    lines = [
+        "Traceback (most recent call last):\n",
+        *traceback.format_tb(error.__traceback__),
+        f"{kind.__module__}.{kind.__qualname__} (message not logged)\n",
+    ]
+    if isinstance(error, BaseExceptionGroup):
+        for inner in error.exceptions:
+            lines += _exception_lines(inner, seen)
+    cause = error.__cause__ or (None if error.__suppress_context__ else error.__context__)
+    if cause is not None:
+        lines += ["caused by:\n", *_exception_lines(cause, seen)]
+    return lines
+
+
 def _setup_logging(folder: Path) -> None:
     handler = RotatingFileHandler(
         folder / LOG_FILE, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
     )
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.setFormatter(LogFormatter())
     root = logging.getLogger()
     root.addHandler(handler)
     root.setLevel(logging.INFO)
