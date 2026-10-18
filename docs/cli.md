@@ -115,8 +115,8 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   NVDA restarts the running one. Use watch mode next to your own NVDA.
 - Exits 7 if there is no portable NVDA or it is too old, with the hint
   `asc get-nvda`, or to check `nvda_dir` when you named the folder.
-- Before it starts, `asc start` asks NV Access for the latest NVDA (a short
-  lookup; offline it says nothing). If that is newer than the portable NVDA, at a
+- Before it starts, `asc start` asks NV Access for the latest NVDA (at most
+  5 s; offline it says nothing). If that is newer than the portable NVDA, at a
   terminal it offers to update `asc`'s own copy first; a failed update keeps the
   old copy. Without a terminal, as when an agent runs it, it prints
   `NVDA <version> is available: asc get-nvda` and starts. An NVDA in `nvda_dir`

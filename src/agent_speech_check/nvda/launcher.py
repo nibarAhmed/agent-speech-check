@@ -14,6 +14,7 @@ import logging
 import re
 import shutil
 import subprocess
+import threading
 import time
 import urllib.request
 from collections.abc import Callable, Iterator
@@ -48,8 +49,7 @@ VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
 MIN_VERSION = (2026, 2)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
-# The lookup runs before desktop and sandbox starts, so offline it gives up soon
-# (name resolution aside, which this doesn't bound).
+# The lookup runs before desktop and sandbox starts, so offline it gives up soon.
 LOOKUP_TIMEOUT_S = 5
 # The update check answers a few short lines.
 LOOKUP_MAX_BYTES = 4096
@@ -130,14 +130,30 @@ def _failing_as_download(url: str) -> Iterator[None]:
         ) from None
 
 
+def _read_update_check(into: list[str | DownloadFailed]) -> None:
+    try:
+        with (
+            _failing_as_download(UPDATE_URL),
+            urllib.request.urlopen(UPDATE_URL, timeout=LOOKUP_TIMEOUT_S) as response,
+        ):
+            into.append(response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace"))
+    except DownloadFailed as error:
+        into.append(error)
+
+
 def latest() -> Release:
-    """Ask NV Access for the latest stable NVDA."""
-    with (
-        _failing_as_download(UPDATE_URL),
-        urllib.request.urlopen(UPDATE_URL, timeout=LOOKUP_TIMEOUT_S) as response,
-    ):
-        text = response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace")
-    release = parse_release(text)
+    """Ask NV Access for the latest stable NVDA, within LOOKUP_TIMEOUT_S in all."""
+    # urlopen's timeout covers each socket wait, not name resolution or a slow
+    # reply. A daemon thread can be left behind: it never holds asc's exit.
+    answer: list[str | DownloadFailed] = []
+    reader = threading.Thread(target=_read_update_check, args=(answer,), daemon=True)
+    reader.start()
+    reader.join(LOOKUP_TIMEOUT_S)
+    if not answer:
+        raise DownloadFailed(UPDATE_URL, f"no answer within {LOOKUP_TIMEOUT_S:g} s")
+    if isinstance(answer[0], DownloadFailed):
+        raise answer[0]
+    release = parse_release(answer[0])
     if release is None:
         raise DownloadFailed(UPDATE_URL, "the answer names no NVDA version")
     return release

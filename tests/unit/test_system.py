@@ -576,6 +576,36 @@ def test_a_garbled_answer_is_a_failed_lookup(monkeypatch: pytest.MonkeyPatch) ->
         server.close()
 
 
+def test_the_lookup_has_one_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A byte at a time, each sooner than the socket timeout, so only a limit on
+    # the whole lookup stops it, as it must for slow name resolution.
+    server = socket.create_server(("127.0.0.1", 0))
+    done = threading.Event()
+
+    def trickle() -> None:
+        conn, _ = server.accept()
+        with conn:
+            conn.recv(4096)
+            for byte in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"x" * 1000:
+                if done.wait(0.1):  # the slowness is what this test is about
+                    return
+                conn.sendall(bytes([byte]))
+
+    thread = threading.Thread(target=trickle, daemon=True)
+    thread.start()
+    monkeypatch.setattr(launcher, "UPDATE_URL", f"http://127.0.0.1:{server.getsockname()[1]}/")
+    monkeypatch.setattr(launcher, "LOOKUP_TIMEOUT_S", 1)
+    started = time.monotonic()
+    try:
+        with pytest.raises(DownloadFailed, match="no answer within 1 s"):
+            launcher.latest()
+        assert time.monotonic() - started < 3
+    finally:
+        done.set()
+        thread.join(5)
+        server.close()
+
+
 def test_sha1_matches(tmp_path: Path) -> None:
     file = tmp_path / "nvda.exe"
     file.write_bytes(b"asc")
