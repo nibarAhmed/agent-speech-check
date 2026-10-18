@@ -1,9 +1,10 @@
 """The relay NVDA connects out to (see `docs/protocol.md`).
 
 `asc` is both the relay and the leader. NVDA, the follower, connects to
-127.0.0.1 and joins the channel with the mode's key. Before it joins it makes
-two throwaway connections (a verified TLS attempt that fails, then a certificate
-fetch), so the relay accepts and forgets connections that fail or close early.
+127.0.0.1 (in sandbox mode, the host's Default Switch address) and joins the
+channel with the mode's key. Before it joins it makes two throwaway connections
+(a verified TLS attempt that fails, then a certificate fetch), so the relay
+accepts and forgets connections that fail or close early.
 
 The certificate and channel key are kept per mode, because NVDA pins the
 certificate's fingerprint and a user in watch mode types the key once.
@@ -230,17 +231,18 @@ class Relay:
             raise NvdaNotConnected
 
     async def _read(self, reader: asyncio.StreamReader) -> protocol.Message | None:
-        try:
-            line = await reader.readuntil(b"\n")
-        except asyncio.IncompleteReadError as error:
-            if error.partial.strip():
-                return protocol.parse_message(error.partial)
-            return None
-        except asyncio.LimitOverrunError:
-            raise LineTooLong(protocol.MAX_LINE) from None
-        if not line.strip():
-            return await self._read(reader)
-        return protocol.parse_message(line.rstrip(b"\r\n"))
+        # A loop, not a call per blank line: a peer decides how many it sends.
+        while True:
+            try:
+                line = await reader.readuntil(b"\n")
+            except asyncio.IncompleteReadError as error:
+                if error.partial.strip():
+                    return protocol.parse_message(error.partial)
+                return None
+            except asyncio.LimitOverrunError:
+                raise LineTooLong(protocol.MAX_LINE) from None
+            if line.strip():
+                return protocol.parse_message(line.rstrip(b"\r\n"))
 
     async def _join(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> bool:
         """Wait for `join`. False when the connection closes first (a cert fetch)."""
@@ -312,7 +314,9 @@ class Relay:
             await asyncio.sleep(KEEPALIVE_S)
             writer = self._writer
             if writer is not None:
-                with contextlib.suppress(ConnectionError):
+                # OSError, as in `_handle`: ssl.SSLError is not a ConnectionError,
+                # and an error here would end the daemon's TaskGroup.
+                with contextlib.suppress(OSError):
                     writer.write(protocol.encode_ping())
                     await writer.drain()
 
