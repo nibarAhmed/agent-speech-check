@@ -1,4 +1,5 @@
-"""Real NVDA end to end. Run only inside Windows Sandbox: scripts/e2e_sandbox.py.
+"""Real NVDA end to end. Run only inside Windows Sandbox (scripts/e2e_sandbox.py)
+or on a throwaway CI runner (.github/workflows/e2e.yml).
 
 Never run these on a desktop where your own NVDA runs: starting a second NVDA
 restarts the running one. They skip unless ASC_E2E_NVDA names a portable NVDA.
