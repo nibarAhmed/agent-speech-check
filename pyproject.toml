@@ -48,6 +48,7 @@ dev = [
     "ruff",
     "types-psutil>=7.2.2.20260906",
     "vulture",
+    "zizmor>=1.31.1",
 ]
 
 # ---------------------------------------------------------------- tasks
@@ -60,14 +61,16 @@ lint = "ruff check ."
 types = "mypy"
 dead = "vulture"
 deps = "deptry src"
-test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
+# GitHub Actions and Dependabot config. Offline, so it needs no GitHub token.
+actions = "zizmor --offline .github"
+test ="pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup --no-cov -p no:cacheprovider"
-check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
+check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "actions", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.
 [tool.poe.tasks.fast]
-sequence = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "unit"]
+sequence = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "actions", "unit"]
 ignore_fail = "return_non_zero"
 
 # ---------------------------------------------------------------- ruff
