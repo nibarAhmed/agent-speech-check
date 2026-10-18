@@ -1,8 +1,7 @@
 name: zizmor
 
-# zizmor's online audits (known-vulnerable actions, impostor commits) need the job's token.
-# This job only reads the workflow files and runs none of the PR's code, so the token is
-# safe here. `poe check` runs the offline audits locally and in CI.
+# The online audits (known-vulnerable actions, impostor commits) need the job's token,
+# which is safe here: this job runs none of the PR's code. `poe check` runs the offline ones.
 on:
   push:
     branches: [main]
@@ -25,5 +24,5 @@ jobs:
       - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
         with:
           advanced-security: false
-          # The same zizmor as the dev dependency, not whatever is latest.
+          # uv.lock's zizmor, not the latest (tests/unit/test_ci_config.py).
           version: 1.31.1
