@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import shutil
 import subprocess
 import time
 from collections.abc import Iterator
@@ -20,7 +21,7 @@ from tests.integration.conftest import free_port, run_asc
 
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
 from agent_speech_check.remote.relay import fingerprint
-from agent_speech_check.windows import winapi
+from agent_speech_check.windows import paths, winapi
 from agent_speech_check.windows.wait import poll_until
 
 pytestmark = [
@@ -49,8 +50,15 @@ def wait_connected(timeout_s: float = 90) -> None:
     raise AssertionError("NVDA did not connect")
 
 
+def nvda_log(request: pytest.FixtureRequest, tmp_path: Path) -> Path:
+    """This test's own NVDA log, where the e2e runs collect it."""
+    return Path(os.environ.get("ASC_E2E_OUT", tmp_path)) / f"{request.node.name}.nvda.log"
+
+
 @pytest.fixture
-def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def real_nvda(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
     """A started `launch = false` desktop mode with a real NVDA joined to it."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     port = free_port()
@@ -68,7 +76,7 @@ def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]
     ini = render(RelayAddress("127.0.0.1", port, channel, fingerprint(folder / "relay_cert.pem")))
     (config / "nvda.ini").write_text(ini, encoding="utf-8")
     nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
-    log = Path(os.environ.get("ASC_E2E_OUT", tmp_path)) / "nvda.log"
+    log = nvda_log(request, tmp_path)
     process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
         [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
     )
@@ -123,7 +131,9 @@ APP = """<!doctype html><html><head><title>asc app</title></head><body>
 """
 
 
-def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_desktop_mode_end_to_end(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """asc gets, launches and stops its own NVDA, and drives an app."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     fetched = run_asc("get-nvda", "--installer", os.environ["ASC_E2E_INSTALLER"], timeout=300)
@@ -174,6 +184,10 @@ def test_desktop_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     finally:
         subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
         stopped = run_asc("stop")
+        # asc's own NVDA logs into its mode folder, which goes with tmp_path.
+        log = paths.mode_dir("desktop") / "nvda.log"
+        if log.exists():
+            shutil.copy(log, nvda_log(request, tmp_path))
     assert stopped.returncode == 0
     assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()

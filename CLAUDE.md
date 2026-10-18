@@ -15,8 +15,8 @@ These can break the user's own machine or the project, so no task overrides them
   one exception is a throwaway CI runner, where `.github/workflows/e2e.yml` sets it.
 - Never write the user's own NVDA configuration. `asc` writes only its own copies.
 - Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
-  you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox nothing is
-  the user's, so stopping by name is fine there.
+  you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox or on a
+  throwaway CI runner nothing is the user's, so stopping by name is fine there.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - Never push to `main`: it's protected. Work on a branch and open a PR.
 
