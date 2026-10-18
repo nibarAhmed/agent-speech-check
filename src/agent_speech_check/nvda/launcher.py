@@ -82,8 +82,13 @@ def cached_installer() -> Path | None:
     for path in installers_dir().glob("nvda_*.exe"):
         version = path.stem.removeprefix("nvda_")
         if re.fullmatch(VERSION_PATTERN, version):
-            found[tuple(int(n) for n in version.split("."))] = path
+            found[version_numbers(version)] = path
     return found[max(found)] if found else None
+
+
+def version_numbers(version: str) -> tuple[int, ...]:
+    """A version like 2026.2.1 as numbers, to compare."""
+    return tuple(int(n) for n in version.split("."))
 
 
 def installer_url(version: str) -> str:
@@ -96,10 +101,6 @@ class Release:
 
     version: str
     sha1: str  # of the installer, lowercase hex
-
-    @property
-    def numbers(self) -> tuple[int, ...]:
-        return tuple(int(n) for n in self.version.split("."))
 
 
 def parse_release(text: str) -> Release | None:
@@ -143,7 +144,7 @@ def latest() -> Release:
 
 def newer(release: Release, have: tuple[int, ...] | None) -> bool:
     """`release` is newer than the version `have`. An unknown version is not older."""
-    return have is not None and release.numbers > have
+    return have is not None and version_numbers(release.version) > have
 
 
 def update_for(exe: Path) -> Release | None:
@@ -170,10 +171,8 @@ def latest_installer(note: Callable[[str], object] = log.warning) -> Path:
         if cached is None:
             raise
     # Not checked by a lookup, so it could be one --version pinned below the minimum.
-    version = winapi.file_version(cached)
-    if version is not None and version < MIN_VERSION:
-        found, needed = (".".join(map(str, v[:2])) for v in (version, MIN_VERSION))
-        raise NvdaTooOld(str(cached), found, needed, "connect to the network, or asc get-nvda")
+    hint = "connect to the network, or asc get-nvda"
+    check_version(cached, winapi.file_version(cached), hint)
     note(f"cannot get the latest NVDA, so using {cached.name}")
     return cached
 
@@ -199,12 +198,13 @@ def portable_hint(folder: Path) -> str:
     return "asc get-nvda" if folder == managed_dir() else "check nvda_dir"
 
 
-def check_version(folder: Path, version: tuple[int, ...] | None) -> None:
-    """Refuse an NVDA older than MIN_VERSION. An unknown version is let through."""
+def check_version(folder: Path, version: tuple[int, ...] | None, hint: str | None = None) -> None:
+    """Refuse an NVDA older than MIN_VERSION. An unknown version is let through.
+    `hint` defaults to the one for a portable NVDA in `folder`."""
     if version is not None and version < MIN_VERSION:
         found = ".".join(map(str, version[:2]))
         needed = ".".join(map(str, MIN_VERSION))
-        raise NvdaTooOld(str(folder), found, needed, portable_hint(folder))
+        raise NvdaTooOld(str(folder), found, needed, hint or portable_hint(folder))
 
 
 def require_exe(folder: Path) -> Path:

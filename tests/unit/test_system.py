@@ -504,8 +504,9 @@ def test_offline_a_cached_installer_too_old_is_refused(
     cached.parent.mkdir(parents=True)
     # Any file with a version resource older than MIN_VERSION will do.
     shutil.copy(Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll", cached)
-    with pytest.raises(NvdaTooOld):
+    with pytest.raises(NvdaTooOld) as exc:
         launcher.latest_installer()
+    assert exc.value.hint == "connect to the network, or asc get-nvda"
 
 
 def test_cached_installer_is_the_highest_version(
