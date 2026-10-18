@@ -69,7 +69,7 @@ def real_nvda(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]
     (config / "nvda.ini").write_text(ini, encoding="utf-8")
     nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
     log = Path(os.environ.get("ASC_E2E_OUT", tmp_path)) / "nvda.log"
-    process = subprocess.Popen(  # noqa: S603 - the sandbox's portable NVDA
+    process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
         [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
     )
     try:
@@ -98,7 +98,7 @@ def test_real_nvda_joins_speaks_and_releases() -> None:
 def test_mode_sounds_arrive_with_volume_zero(tmp_path: Path) -> None:
     page = tmp_path / "page.html"
     page.write_text(PAGE, encoding="utf-8")
-    browser = subprocess.Popen(  # noqa: S603 - Windows' own mshta, inside the sandbox
+    browser = subprocess.Popen(  # noqa: S603 - Windows' own mshta
         [r"C:\Windows\System32\mshta.exe", str(page)]
     )
     try:
