@@ -1,0 +1,29 @@
+name: zizmor
+
+# zizmor's online audits (known-vulnerable actions, impostor commits) need the job's token.
+# This job only reads the workflow files and runs none of the PR's code, so the token is
+# safe here. `poe check` runs the offline audits locally and in CI.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: zizmor-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Findings fail the job, like the other checks, instead of going to the Security tab.
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
+          # The same zizmor as the dev dependency, not whatever is latest.
+          version: 1.31.1
