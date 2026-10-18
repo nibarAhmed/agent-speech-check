@@ -19,13 +19,18 @@ from agent_speech_check.remote import relay
 from agent_speech_check.remote.speech_log import SpeechLog
 
 
+def _client_context() -> ssl.SSLContext:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
+
 @pytest.mark.asyncio
 async def test_connection_that_never_joins_is_dropped(tmp_path: Path) -> None:
     r = relay.Relay(relay.load_or_create(tmp_path), SpeechLog(), join_timeout_s=0.5)
     server = await r.start(0)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    context = _client_context()
     async with server:
         reader, writer = await asyncio.open_connection(r.host, r.port, ssl=context)
         started = time.monotonic()
@@ -105,9 +110,7 @@ async def test_a_flood_of_blank_lines_before_the_join_is_skipped(tmp_path: Path)
     credentials = relay.load_or_create(tmp_path)
     r = relay.Relay(credentials, SpeechLog())
     server = await r.start(0)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    context = _client_context()
     join = {"type": "join", "channel": credentials.channel, "connection_type": "slave"}
     async with server:
         reader, writer = await asyncio.open_connection(r.host, r.port, ssl=context)

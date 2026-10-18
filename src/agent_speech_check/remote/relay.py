@@ -305,7 +305,7 @@ class Relay:
         writer = self.write_key(key, pressed=pressed)
         try:
             await writer.drain()
-        except ConnectionError:
+        except OSError:  # ConnectionError or ssl.SSLError
             self.disconnect()
             raise NvdaNotConnected from None
 
@@ -314,8 +314,8 @@ class Relay:
             await asyncio.sleep(KEEPALIVE_S)
             writer = self._writer
             if writer is not None:
-                # OSError, as in `_handle`: ssl.SSLError is not a ConnectionError,
-                # and an error here would end the daemon's TaskGroup.
+                # OSError covers ssl.SSLError, which is not a ConnectionError.
+                # An error here would end the daemon's TaskGroup.
                 with contextlib.suppress(OSError):
                     writer.write(protocol.encode_ping())
                     await writer.drain()
