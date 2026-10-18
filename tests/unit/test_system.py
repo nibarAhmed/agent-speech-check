@@ -376,8 +376,27 @@ def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.Monkey
     installer = launcher.installer_path("2026.2")
     installer.parent.mkdir(parents=True)
     installer.write_bytes(b"already here")
+    stale = launcher.installer_path("2027.1")
+    stale.write_bytes(b"")
     assert launcher.download("2026.2") == installer
     assert installer.read_bytes() == b"already here"
+    # Else sandbox mode, which takes the highest cached version, would take it.
+    assert not stale.exists()
+    sha1 = "629d8889d129c48627f6629b2d0e640a9bb12541"  # of b"already here"
+    assert launcher.download("2026.2", sha1) == installer
+
+
+def test_a_damaged_cached_installer_is_downloaded_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    damaged = launcher.installer_path("0.0-asc-no-such-version")
+    damaged.parent.mkdir(parents=True)
+    damaged.write_bytes(b"half a file")
+    # Its SHA-1 doesn't match, so it goes; the download then fails, as there is no such release.
+    with pytest.raises(DownloadFailed):
+        launcher.download("0.0-asc-no-such-version", SHA1)
+    assert not damaged.exists()
 
 
 def test_a_new_installer_replaces_the_old_ones(

@@ -469,7 +469,10 @@ def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None)
     else:
         # The release already looked up, so a second lookup can't pick another.
         update = partial(_make_portable, release.version, sha1=release.sha1)
-        _offer(ask, f"{news}. Update before starting?", update, "asc get-nvda")
+        try:
+            _offer(ask, f"{news}. Update before starting?", update, "asc get-nvda")
+        except EOFError:  # no answer: start with the NVDA it has
+            print("\nRun asc get-nvda later.")
 
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:

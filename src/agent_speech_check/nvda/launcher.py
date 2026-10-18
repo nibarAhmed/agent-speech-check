@@ -220,6 +220,9 @@ def download(version: str, sha1: str | None = None) -> Path:
     file download: nothing runs."""
     installer = installer_path(version)
     installer.parent.mkdir(parents=True, exist_ok=True)
+    # A kept installer can be damaged, or not ours: an e2e test puts one there.
+    if installer.exists() and sha1 is not None and not sha1_matches(installer, sha1):
+        installer.unlink()
     if not installer.exists():
         partial = installer.with_suffix(".part")
         url = installer_url(version)
@@ -237,7 +240,8 @@ def download(version: str, sha1: str | None = None) -> Path:
             partial.unlink()
             raise DownloadFailed(url, "its SHA-1 is not the one NV Access lists")
         partial.replace(installer)
-        drop_other_installers(installer)
+    # Also when it was kept: sandbox mode takes the highest version it finds.
+    drop_other_installers(installer)
     return installer
 
 

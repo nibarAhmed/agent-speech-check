@@ -354,3 +354,12 @@ def test_at_a_terminal_the_update_is_offered(capsys: pytest.CaptureFixture[str])
     say_update(NEWER, None, ask)
     assert "NVDA 2027.1 is available. Update before starting?" in ask.prompts[0]
     assert "Run asc get-nvda later." in capsys.readouterr().out
+
+
+def test_no_answer_to_the_update_is_a_no(capsys: pytest.CaptureFixture[str]) -> None:
+    # Ctrl+Z, Enter at the prompt: start goes on with the NVDA it has.
+    def eof(_: str) -> str:
+        raise EOFError
+
+    say_update(NEWER, None, eof)
+    assert "Run asc get-nvda later." in capsys.readouterr().out
