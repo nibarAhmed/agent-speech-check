@@ -24,6 +24,7 @@ from pathlib import Path
 
 from agent_speech_check.errors import (
     DownloadFailed,
+    FileUnusable,
     InstallerInUse,
     InstallerTimedOut,
     NvdaAlreadyRunning,
@@ -48,6 +49,8 @@ VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
 # Remote Access is built in from 2025.1, but 2025.1 forwards no speech without an
 # audio device (docs/findings.md). 2026.2 is the version tested; those between are not.
 MIN_VERSION = (2026, 2)
+# Windows errors for a file that is no program it can run: bad format, wrong machine.
+NOT_A_PROGRAM = (193, 216)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
 # The lookup runs before desktop and sandbox starts, so offline it gives up soon.
@@ -328,6 +331,9 @@ def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
     try:
         return subprocess.Popen(args)  # noqa: S603 - NVDA, or the NVDA installer
     except OSError as error:
+        if error.winerror not in NOT_A_PROGRAM:
+            # Access denied, for one: the program may be fine.
+            raise FileUnusable.from_os(args[0], error) from None
         # Windows' text names the program as a literal %1.
         reason = (error.strerror or str(error)).replace("%1", "the program")
         raise ProgramWontStart(args[0], reason, hint) from None
