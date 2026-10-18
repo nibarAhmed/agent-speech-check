@@ -139,7 +139,7 @@ def _check_sandbox(target: Target) -> None:
         raise SandboxBusy
     if target.nvda_dir is None:
         # Only a file download; the installer runs inside the sandbox.
-        launcher.download(launcher.VERSION)
+        launcher.latest_installer()
 
 
 def precheck(target: Target) -> None:

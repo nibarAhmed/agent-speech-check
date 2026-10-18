@@ -6,10 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.cli import main, run_setup
+from agent_speech_check.cli import main, run_setup, say_update
 from agent_speech_check.config import prefs, setup
 from agent_speech_check.config.targets import load
 from agent_speech_check.errors import AscError
+from agent_speech_check.nvda.launcher import Release
 from agent_speech_check.sandbox import wsb
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
@@ -328,3 +329,28 @@ def test_keys_flags_default_without_settings(capsys: pytest.CaptureFixture[str])
     out = " ".join(capsys.readouterr().out.split())
     assert "falling back to en (default: en)" in out
     assert "include braille displays (default: off)" in out
+
+
+# ---------------------------------------------------------------- a newer NVDA at start
+
+NEWER = Release("2027.1", "a5b01592f4e2355432848d3ad82f5bd214f25947")
+
+
+def test_without_a_terminal_a_newer_nvda_is_one_line(capsys: pytest.CaptureFixture[str]) -> None:
+    # Agents have no terminal: they read this and run asc get-nvda themselves.
+    say_update(NEWER, None, None)
+    assert capsys.readouterr().out == "NVDA 2027.1 is available: asc get-nvda\n"
+
+
+def test_an_nvda_dir_is_never_updated(capsys: pytest.CaptureFixture[str]) -> None:
+    ask = Asker()
+    say_update(NEWER, "C:/my-nvda", ask)
+    assert capsys.readouterr().out == "NVDA 2027.1 is available (nvda_dir is older)\n"
+    assert ask.prompts == []
+
+
+def test_at_a_terminal_the_update_is_offered(capsys: pytest.CaptureFixture[str]) -> None:
+    ask = Asker("n")
+    say_update(NEWER, None, ask)
+    assert "NVDA 2027.1 is available. Update before starting?" in ask.prompts[0]
+    assert "Run asc get-nvda later." in capsys.readouterr().out

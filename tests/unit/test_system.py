@@ -155,8 +155,13 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
     installer = tmp_path / "hangs.cmd"
     # Waits about 3 s, long past the timeout, and makes no portable copy.
     installer.write_text("@ping -n 4 127.0.0.1 > nul\r\n", encoding="utf-8")
+    old = tmp_path / "portable" / "nvda.exe"
+    old.parent.mkdir()
+    old.write_bytes(b"the copy that works")
     with pytest.raises(InstallerTimedOut, match=r"within 0.5 s, so asc ended it"):
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
+    # A failed update leaves the old copy to start with.
+    assert old.read_bytes() == b"the copy that works"
 
 
 def test_firewall_reads_are_harmless() -> None:
@@ -183,6 +188,9 @@ def test_sandbox_session_prepares_its_folders(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    installer = launcher.installer_path("2026.2")
+    installer.parent.mkdir(parents=True)
+    installer.write_bytes(b"")  # what the precheck downloaded
     target = replace(
         defaults("sandbox"),
         share=("C:/src/app",),
@@ -202,6 +210,16 @@ def test_sandbox_session_prepares_its_folders(
     assert "<Networking>Enable</Networking>" in config
     assert str(folder / "config") in config
     assert session.state == "starting"
+
+
+def test_sandbox_session_without_an_installer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    (tmp_path / "agent-speech-check" / "nvda").mkdir(parents=True)
+    session = SandboxSession(tmp_path / "t", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
+    with pytest.raises(NvdaNotFound, match="the NVDA installer"):
+        session._prepare()
 
 
 def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
@@ -228,7 +246,9 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("LOCALAPPDATA", str(root))
     try:
         state = root / "agent-speech-check"
-        launcher.installer_path(launcher.VERSION).parent.mkdir(parents=True)
+        installer = launcher.installer_path("2026.2")
+        installer.parent.mkdir(parents=True)
+        installer.write_bytes(b"")
         session = SandboxSession(state / "x", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
         config = session._prepare()
         hosts = [part.split("</HostFolder>")[0] for part in config.split("<HostFolder>")[1:]]
@@ -359,10 +379,98 @@ def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.Mo
     assert old.exists()  # only a finished download replaces the old installers
 
 
+# What api.nvaccess.org/nvdaUpdateCheck?versionType=stable answered on 2026-10-18.
+NV_ACCESS_ANSWER = """\
+apiCompatTo: 2026.1.0
+apiVersion: 2026.2.0
+launcherHash: a5b01592f4e2355432848d3ad82f5bd214f25947
+launcherUrl: https://download.nvaccess.org/releases/2026.2/nvda_2026.2.exe
+version: 2026.2
+"""
+SHA1 = "a5b01592f4e2355432848d3ad82f5bd214f25947"
+# Nothing listens on port 1, so a lookup there fails at once, as offline.
+NOWHERE = "http://127.0.0.1:1/"
+
+
+def test_parse_release() -> None:
+    assert launcher.parse_release(NV_ACCESS_ANSWER) == launcher.Release("2026.2", SHA1)
+    assert launcher.parse_release(f"version: 2026.2.1\nlauncherHash: {SHA1.upper()}") == (
+        launcher.Release("2026.2.1", SHA1)
+    )
+    # The version goes into a URL and a file name, so anything odd is no answer.
+    for text in (
+        "",
+        "<html>maintenance</html>",
+        f"version: 2026.2&calc\nlauncherHash: {SHA1}",
+        "version: 2026.2\nlauncherHash: abc",
+        f"launcherHash: {SHA1}",
+    ):
+        assert launcher.parse_release(text) is None
+
+
+def test_newer() -> None:
+    release = launcher.Release("2026.2", SHA1)
+    assert launcher.newer(release, (2026, 1, 0))
+    assert not launcher.newer(release, (2026, 2, 0))
+    assert not launcher.newer(release, (2027, 1, 0))
+    assert launcher.newer(launcher.Release("2026.2.1", SHA1), (2026, 2, 0))
+    assert not launcher.newer(release, None)
+
+
+def test_a_failed_lookup_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
+    with pytest.raises(DownloadFailed, match="cannot download NVDA"):
+        launcher.latest()
+    # A start never fails because NV Access can't be reached.
+    kernel32 = Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll"
+    assert launcher.update_for(kernel32) is None
+
+
+def test_no_update_for_a_file_without_a_version(tmp_path: Path) -> None:
+    empty = tmp_path / "nvda.exe"
+    empty.write_bytes(b"")
+    assert launcher.update_for(empty) is None
+
+
+def test_offline_the_cached_installer_is_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
+    with pytest.raises(DownloadFailed):
+        launcher.latest_installer()  # nothing cached to fall back on
+    assert launcher.cached_installer() is None
+    cached = launcher.installer_path("2026.1")
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"")
+    assert launcher.cached_installer() == cached
+    assert launcher.latest_installer() == cached
+
+
+def test_cached_installer_is_the_newest_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    old, new = launcher.installer_path("2026.2"), launcher.installer_path("2026.10")
+    old.parent.mkdir(parents=True)
+    for path in (new, old, old.with_suffix(".part")):
+        path.write_bytes(b"")
+    os.utime(old, (1, 1))
+    assert launcher.cached_installer() == new
+
+
+def test_sha1_matches(tmp_path: Path) -> None:
+    file = tmp_path / "nvda.exe"
+    file.write_bytes(b"asc")
+    assert launcher.sha1_matches(file, "43f0af343451be62bc8bdc64c292c7166d48491f")
+    assert not launcher.sha1_matches(file, SHA1)
+
+
 def test_file_version(tmp_path: Path) -> None:
     kernel32 = Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll"
     version = winapi.file_version(kernel32)
     assert version is not None
+    assert len(version) == 3
     assert version[0] == 10  # Windows 10 and 11 both report 10
     empty = tmp_path / "nvda.exe"
     empty.write_bytes(b"")

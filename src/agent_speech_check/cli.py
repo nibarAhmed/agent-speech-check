@@ -163,8 +163,7 @@ def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--version",
         dest="nvda_version",
-        default=launcher.VERSION,
-        help=f"the NVDA version (default: {launcher.VERSION})",
+        help="the NVDA version (default: the latest)",
     )
     parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
 
@@ -302,6 +301,8 @@ def cmd_start(args: argparse.Namespace) -> int:
     settings = nvda_config.merge(target.settings, given)
     nvda_config.check(settings)
     target = target.with_settings(settings).with_consent(args.i_understand)
+    if target.launches_portable and not launcher.running():
+        _offer_update(target.nvda_dir)
     status = session.start(target, mode_dir(target.mode))
     print(f"started: {target.mode}")
     _show_status(status)
@@ -421,21 +422,49 @@ def _add_firewall_rule(port: int, program: str) -> None:
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
+    version = args.nvda_version
     # It goes into the download URL and a file name.
-    if not re.fullmatch(launcher.VERSION_PATTERN, args.nvda_version):
-        raise bad_field(UsageError, "--version", "an NVDA version like 2026.2", args.nvda_version)
-    _make_portable(args.nvda_version, Path(args.installer) if args.installer else None)
+    if version is not None and not re.fullmatch(launcher.VERSION_PATTERN, version):
+        raise bad_field(UsageError, "--version", "an NVDA version like 2026.2", version)
+    _make_portable(version, Path(args.installer) if args.installer else None)
     return 0
 
 
-def _make_portable(version: str, installer: Path | None = None) -> None:
-    """asc's own portable NVDA, from `installer` or a download of `version`."""
+def _make_portable(version: str | None = None, installer: Path | None = None) -> None:
+    """asc's own portable NVDA, from `installer`, else a download of `version`,
+    else of the latest NVDA."""
     launcher.refuse_if_running()
     if installer is None:
-        print(f"downloading {launcher.installer_url(version)}")
-        installer = launcher.download(version)
+        installer = _download(version)
     exe = launcher.create_portable(installer, launcher.managed_dir())
-    print(f"portable NVDA ready: {exe}")
+    print(f"portable NVDA ready: {exe} (from {installer.name})")
+
+
+def _download(version: str | None) -> Path:
+    if version is None:
+        print("downloading the latest NVDA")
+        return launcher.latest_installer()
+    print(f"downloading {launcher.installer_url(version)}")
+    return launcher.download(version)
+
+
+def _offer_update(nvda_dir: str | None) -> None:
+    """Before desktop mode starts its NVDA, say if NV Access has a newer one."""
+    release = launcher.update_for(launcher.folder_for(nvda_dir) / "nvda.exe")
+    if release is not None:
+        say_update(release, nvda_dir, input if sys.stdin.isatty() else None)
+
+
+def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None) -> None:
+    """At a terminal, offer to update asc's own NVDA. Without one, as when an
+    agent runs asc, a line says how. An NVDA the user named is never updated."""
+    news = f"NVDA {release.version} is available"
+    if nvda_dir is not None:
+        print(f"{news} (nvda_dir is older)")
+    elif ask is None:
+        print(f"{news}: asc get-nvda")
+    else:
+        _offer(ask, f"{news}. Update before starting?", _make_portable, "asc get-nvda")
 
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:
@@ -546,7 +575,7 @@ def _get_nvda_now(ask: Ask) -> None:
         return
     print()
     question = "asc has no portable NVDA yet. Download it now?"
-    _offer(ask, question, lambda: _make_portable(launcher.VERSION), "asc get-nvda")
+    _offer(ask, question, _make_portable, "asc get-nvda")
 
 
 def _firewall_now(ask: Ask) -> None:
@@ -779,11 +808,13 @@ examples:
         "make the portable NVDA that desktop mode launches",
         """\
 Download NVDA from NV Access and make a portable copy for desktop mode, in
-%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Refuses (exit 4) while any
-NVDA runs, because the NVDA installer would restart it.
+%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Without --version, the
+latest NVDA; offline, the installer asc downloaded last. Refuses (exit 4) while
+any NVDA runs, because the NVDA installer would restart it.
 
 examples:
   asc get-nvda
+  asc get-nvda --version 2026.2
   asc get-nvda --installer nvda_2026.2.exe""",
         cmd_get_nvda,
         _get_nvda_args,

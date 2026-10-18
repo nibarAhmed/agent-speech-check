@@ -407,8 +407,8 @@ class _FixedFileInfo(ctypes.Structure):
     )
 
 
-def file_version(path: Path) -> tuple[int, int] | None:
-    """The first two numbers of a file's version resource, or None if it has none."""
+def file_version(path: Path) -> tuple[int, int, int] | None:
+    """The first three numbers of a file's version resource, or None if it has none."""
     size = _version.GetFileVersionInfoSizeW(str(path), None)
     if not size:
         return None
@@ -422,7 +422,7 @@ def file_version(path: Path) -> tuple[int, int] | None:
     if length.value < ctypes.sizeof(_FixedFileInfo):
         return None
     info = ctypes.cast(pointer, ctypes.POINTER(_FixedFileInfo)).contents
-    return info.dwFileVersionMS >> 16, info.dwFileVersionMS & 0xFFFF
+    return info.dwFileVersionMS >> 16, info.dwFileVersionMS & 0xFFFF, info.dwFileVersionLS >> 16
 
 
 # ---------------------------------------------------------------- global hotkey
