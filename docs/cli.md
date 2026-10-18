@@ -115,8 +115,8 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   NVDA restarts the running one. Use watch mode next to your own NVDA.
 - Exits 7 if there is no portable NVDA or it is too old, with the hint
   `asc get-nvda`, or to check `nvda_dir` when you named the folder.
-- Before it starts, `asc start` asks NV Access for the latest NVDA (up to 5 s;
-  offline it says nothing). If that is newer than the portable NVDA, at a
+- Before it starts, `asc start` asks NV Access for the latest NVDA (a short
+  lookup; offline it says nothing). If that is newer than the portable NVDA, at a
   terminal it offers to update `asc`'s own copy first; a failed update keeps the
   old copy. Without a terminal, as when an agent runs it, it prints
   `NVDA <version> is available: asc get-nvda` and starts. An NVDA in `nvda_dir`
@@ -138,8 +138,8 @@ and your own NVDA keeps running undisturbed.
   NVDA's start script failing inside, exits 7: retrying won't help.
 - `asc start` downloads the latest NVDA installer if it has a newer one than
   the one it kept (only a file download, checked against the SHA-1 NV Access
-  lists). Offline, it uses the kept one. Then it starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
-  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
+  lists). Offline, it uses the kept one. Then it starts the sandbox, mutes it,
+  makes a portable NVDA inside, and returns once NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
   and so does the daemon ending any other way (even killed).
 - With `nvda_dir`, the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and

@@ -285,6 +285,14 @@ class PortableFailed(SetupNeeded):
         )
 
 
+class PortableNotReplaced(SetupNeeded):
+    def __init__(self, folder: str, reason: str) -> None:
+        super().__init__(
+            f"cannot replace the portable NVDA in {folder}: {reason}",
+            hint="close what has its files open, then asc get-nvda",
+        )
+
+
 class InstallerTimedOut(SetupNeeded):
     def __init__(self, seconds: float, left: Sequence[int] = ()) -> None:
         message = f"the NVDA installer did not finish within {seconds:g} s"

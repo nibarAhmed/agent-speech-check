@@ -74,6 +74,7 @@ SETUP = (
     errors.NvdaNotFound,
     errors.NvdaTooOld,
     errors.PortableFailed,
+    errors.PortableNotReplaced,
     errors.NoDefaultSwitch,
     errors.FirewallRuleMissing,
     errors.FirewallFailed,

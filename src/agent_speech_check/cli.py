@@ -14,6 +14,7 @@ import sys
 import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -430,22 +431,24 @@ def cmd_get_nvda(args: argparse.Namespace) -> int:
     return 0
 
 
-def _make_portable(version: str | None = None, installer: Path | None = None) -> None:
-    """asc's own portable NVDA, from `installer`, else a download of `version`,
-    else of the latest NVDA."""
+def _make_portable(
+    version: str | None = None, installer: Path | None = None, sha1: str | None = None
+) -> None:
+    """asc's own portable NVDA, from `installer`, else a download of `version`
+    (checked against `sha1` if given), else of the latest NVDA."""
     launcher.refuse_if_running()
     if installer is None:
-        installer = _download(version)
+        installer = _download(version, sha1)
     exe = launcher.create_portable(installer, launcher.managed_dir())
     print(f"portable NVDA ready: {exe} (from {installer.name})")
 
 
-def _download(version: str | None) -> Path:
+def _download(version: str | None, sha1: str | None) -> Path:
     if version is None:
         print("downloading the latest NVDA")
-        return launcher.latest_installer()
+        return launcher.latest_installer(print)
     print(f"downloading {launcher.installer_url(version)}")
-    return launcher.download(version)
+    return launcher.download(version, sha1)
 
 
 def _offer_update(nvda_dir: str | None) -> None:
@@ -464,7 +467,9 @@ def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None)
     elif ask is None:
         print(f"{news}: asc get-nvda")
     else:
-        _offer(ask, f"{news}. Update before starting?", _make_portable, "asc get-nvda")
+        # The release already looked up, so a second lookup can't pick another.
+        update = partial(_make_portable, release.version, sha1=release.sha1)
+        _offer(ask, f"{news}. Update before starting?", update, "asc get-nvda")
 
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:

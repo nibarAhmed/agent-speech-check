@@ -9,12 +9,15 @@ runs, and `asc` stops its NVDA by its own process handle, never with `nvda -q`.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import logging
 import re
 import shutil
 import subprocess
 import time
 import urllib.request
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,6 +28,7 @@ from agent_speech_check.errors import (
     NvdaNotFound,
     NvdaTooOld,
     PortableFailed,
+    PortableNotReplaced,
 )
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
@@ -43,7 +47,8 @@ VERSION_PATTERN = r"\d{4}\.\d+(\.\d+)?"
 MIN_VERSION = (2026, 2)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
-# The lookup runs before desktop and sandbox starts, so offline it gives up soon.
+# The lookup runs before desktop and sandbox starts, so offline it gives up soon
+# (name resolution aside, which this doesn't bound).
 LOOKUP_TIMEOUT_S = 5
 # The update check answers a few short lines.
 LOOKUP_MAX_BYTES = 4096
@@ -71,8 +76,14 @@ def installer_path(version: str) -> Path:
 
 
 def cached_installer() -> Path | None:
-    """The installer the last download left, or None. `download` keeps only one."""
-    return max(installers_dir().glob("nvda_*.exe"), key=lambda p: p.stat().st_mtime, default=None)
+    """The installer the last download left, or None. `download` keeps only one,
+    but if there are more, the highest version."""
+    found = {}
+    for path in installers_dir().glob("nvda_*.exe"):
+        version = path.stem.removeprefix("nvda_")
+        if re.fullmatch(VERSION_PATTERN, version):
+            found[tuple(int(n) for n in version.split("."))] = path
+    return found[max(found)] if found else None
 
 
 def installer_url(version: str) -> str:
@@ -104,13 +115,26 @@ def parse_release(text: str) -> Release | None:
     return None
 
 
+@contextmanager
+def _failing_as_download(url: str) -> Iterator[None]:
+    """Turn what a failed fetch of `url` raises into DownloadFailed."""
+    try:
+        yield
+    # URLError and HTTPError are OSErrors. A reply that isn't HTTP (a captive
+    # portal, a broken proxy) raises HTTPException, which is not.
+    except (OSError, http.client.HTTPException) as error:
+        raise DownloadFailed(
+            url, str(getattr(error, "reason", error)) or type(error).__name__
+        ) from None
+
+
 def latest() -> Release:
     """Ask NV Access for the latest stable NVDA."""
-    try:
-        with urllib.request.urlopen(UPDATE_URL, timeout=LOOKUP_TIMEOUT_S) as response:
-            text = response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace")
-    except OSError as error:  # URLError and HTTPError are OSErrors
-        raise DownloadFailed(UPDATE_URL, str(getattr(error, "reason", error))) from None
+    with (
+        _failing_as_download(UPDATE_URL),
+        urllib.request.urlopen(UPDATE_URL, timeout=LOOKUP_TIMEOUT_S) as response,
+    ):
+        text = response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace")
     release = parse_release(text)
     if release is None:
         raise DownloadFailed(UPDATE_URL, "the answer names no NVDA version")
@@ -135,9 +159,9 @@ def update_for(exe: Path) -> Release | None:
     return release if newer(release, have) else None
 
 
-def latest_installer() -> Path:
+def latest_installer(note: Callable[[str], object] = log.warning) -> Path:
     """The latest NVDA's installer, downloaded once. When NV Access can't be
-    reached, the installer an earlier download left."""
+    reached, the installer an earlier download left, said through `note`."""
     try:
         release = latest()
         return download(release.version, release.sha1)
@@ -145,8 +169,13 @@ def latest_installer() -> Path:
         cached = cached_installer()
         if cached is None:
             raise
-        log.warning("cannot get the latest NVDA, using %s", cached.name)
-        return cached
+    # Not checked by a lookup, so it could be one --version pinned below the minimum.
+    version = winapi.file_version(cached)
+    if version is not None and version < MIN_VERSION:
+        found, needed = (".".join(map(str, v[:2])) for v in (version, MIN_VERSION))
+        raise NvdaTooOld(str(cached), found, needed, "connect to the network, or asc get-nvda")
+    note(f"cannot get the latest NVDA, so using {cached.name}")
+    return cached
 
 
 def sha1_matches(path: Path, sha1: str) -> bool:
@@ -196,13 +225,14 @@ def download(version: str, sha1: str | None = None) -> Path:
         url = installer_url(version)
         try:
             with (
+                _failing_as_download(url),
                 urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response,  # noqa: S310 - fixed https URL
                 partial.open("wb") as file,
             ):
                 shutil.copyfileobj(response, file)
-        except OSError as error:  # URLError and HTTPError are OSErrors
+        except DownloadFailed:
             partial.unlink(missing_ok=True)
-            raise DownloadFailed(url, str(getattr(error, "reason", error))) from None
+            raise
         if sha1 is not None and not sha1_matches(partial, sha1):
             partial.unlink()
             raise DownloadFailed(url, "its SHA-1 is not the one NV Access lists")
@@ -229,6 +259,8 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
     covers the installer and the wait for its copy. The new copy replaces
     `dest` only once it is whole, so a failed update leaves the old one."""
     new, old = dest.with_name(f"{dest.name}.new"), dest.with_name(f"{dest.name}.old")
+    if old.exists() and not dest.exists():
+        old.rename(dest)  # an earlier swap stopped between its renames
     for stale in (new, old):
         if stale.exists():
             shutil.rmtree(stale)
@@ -246,10 +278,15 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         raise InstallerTimedOut(timeout_s, left) from None
     if not poll_until((new / "nvda.exe").is_file, max(0.0, deadline - time.monotonic()), 1):
         raise PortableFailed(str(new))
-    # Renames, so a crash between them leaves `old`, which the next run clears.
-    if dest.exists():
-        dest.rename(old)
-    new.rename(dest)
+    # Renames, so a crash between them leaves `old`, which the next run puts back.
+    try:
+        if dest.exists():
+            dest.rename(old)
+        new.rename(dest)
+    except OSError as error:  # a file in it is open
+        if old.exists() and not dest.exists():
+            old.rename(dest)
+        raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
     shutil.rmtree(old, ignore_errors=True)
     return dest / "nvda.exe"
 
