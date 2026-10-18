@@ -27,6 +27,7 @@ from agent_speech_check.daemon import ipc
 from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
+    FileUnusable,
     InstallerInUse,
     InstallerTimedOut,
     NoDefaultSwitch,
@@ -34,6 +35,7 @@ from agent_speech_check.errors import (
     NvdaNotFound,
     NvdaTooOld,
     PortableNotReplaced,
+    ProgramWontStart,
     SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
@@ -165,6 +167,23 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
     # A failed update leaves the old copy to start with.
     assert old.read_bytes() == b"the copy that works"
+
+
+def test_an_installer_that_is_not_a_program_needs_setup(tmp_path: Path) -> None:
+    installer = tmp_path / "nvda_2026.2.exe"
+    installer.write_text("not a program", encoding="utf-8")
+    with pytest.raises(ProgramWontStart) as exc:
+        launcher.run_installer(installer, tmp_path / "portable", timeout_s=30)
+    assert str(installer) in exc.value.message
+    assert "%1" not in exc.value.message
+
+
+def test_an_installer_windows_refuses_to_open_is_not_called_damaged(tmp_path: Path) -> None:
+    installer = tmp_path / "nvda_2026.2.exe"
+    installer.mkdir()  # access denied, like a locked file: the program may be fine
+    with pytest.raises(FileUnusable) as exc:
+        launcher.run_installer(installer, tmp_path / "portable", timeout_s=30)
+    assert str(installer) in exc.value.message
 
 
 # Makes the portable copy as the NVDA installer would. cmd splits
