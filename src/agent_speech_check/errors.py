@@ -280,11 +280,8 @@ class NvdaTooOld(SetupNeeded):
 class ProgramWontStart(SetupNeeded):
     """Windows won't run NVDA or its installer: the file is damaged or not a program."""
 
-    def __init__(self, program: str, reason: str) -> None:
-        super().__init__(
-            f"cannot start {program}: {reason}",
-            hint="replace it: asc get-nvda, or a working NVDA in nvda_dir",
-        )
+    def __init__(self, program: str, reason: str, hint: str) -> None:
+        super().__init__(f"cannot start {program}: {reason}", hint=hint)
 
 
 class PortableFailed(SetupNeeded):

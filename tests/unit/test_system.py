@@ -174,6 +174,7 @@ def test_an_installer_that_is_not_a_program_needs_setup(tmp_path: Path) -> None:
     with pytest.raises(SetupNeeded) as exc:
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=30)
     assert str(installer) in exc.value.message
+    assert "%1" not in exc.value.message
 
 
 # Makes the portable copy as the NVDA installer would. cmd splits

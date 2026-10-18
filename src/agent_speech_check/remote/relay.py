@@ -108,7 +108,9 @@ def fingerprint(cert_path: Path) -> str:
 def _check_key(cert_path: Path, key_path: Path) -> None:
     """The key loads as the cert's own, as the relay's TLS will load them."""
     try:
-        ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(cert_path, key_path)
+        # A password callback, so an encrypted key fails instead of OpenSSL asking on the console.
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(cert_path, key_path, password=lambda: b"")
     except ssl.SSLError:
         raise RelayKeyBroken(str(key_path)) from None
 
@@ -137,9 +139,9 @@ def _load_or_create(folder: Path) -> Credentials:
     if channel is None:
         channel = secrets.token_urlsafe(12)
         write_atomic(info, json.dumps({"channel": channel}))
-    credentials = Credentials(cert, key, fingerprint(cert), channel)
+    fp = fingerprint(cert)  # first, so a broken cert isn't reported as a broken key
     _check_key(cert, key)
-    return credentials
+    return Credentials(cert, key, fp, channel)
 
 
 class Relay:

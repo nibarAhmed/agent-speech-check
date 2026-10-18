@@ -295,7 +295,11 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         except OSError as error:  # a file in it is open
             raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
     deadline = time.monotonic() + timeout_s
-    process = _start([str(installer), "--create-portable-silent", f"--portable-path={new}"])
+    process = _start(
+        [str(installer), "--create-portable-silent", f"--portable-path={new}"],
+        # asc get-nvda --version and the offline fallback reuse a kept installer.
+        hint="delete it, then asc get-nvda",
+    )
     try:
         process.wait(timeout_s)
     except subprocess.TimeoutExpired:
@@ -319,12 +323,14 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
     return dest / "nvda.exe"
 
 
-def _start(args: list[str]) -> subprocess.Popen[bytes]:
+def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
     """Start NVDA or its installer. A file Windows won't run is a setup problem, not a bug."""
     try:
         return subprocess.Popen(args)  # noqa: S603 - NVDA, or the NVDA installer
     except OSError as error:
-        raise ProgramWontStart(args[0], error.strerror or str(error)) from None
+        # Windows' text names the program as a literal %1.
+        reason = (error.strerror or str(error)).replace("%1", "the program")
+        raise ProgramWontStart(args[0], reason, hint) from None
 
 
 @dataclass
@@ -358,7 +364,8 @@ def launch(
             f"--log-file={config_dir.parent / 'nvda.log'}",
             "-l",
             "20",
-        ]
+        ],
+        hint="replace it: asc get-nvda, or a working NVDA in nvda_dir",
     )
     try:
         job = winapi.kill_on_close_job(process.pid)
