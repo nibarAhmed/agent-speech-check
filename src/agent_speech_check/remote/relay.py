@@ -39,6 +39,7 @@ from agent_speech_check.errors import (
     ProtocolError,
     RelayCertBroken,
     RelayFileBroken,
+    RelayKeyBroken,
 )
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.remote import protocol
@@ -104,6 +105,14 @@ def fingerprint(cert_path: Path) -> str:
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
+def _check_key(cert_path: Path, key_path: Path) -> None:
+    """The key loads as the cert's own, as the relay's TLS will load them."""
+    try:
+        ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER).load_cert_chain(cert_path, key_path)
+    except ssl.SSLError:
+        raise RelayKeyBroken(str(key_path)) from None
+
+
 def load_or_create(folder: Path) -> Credentials:
     """The mode's relay cert and channel key, created on first use and then kept."""
     try:
@@ -128,7 +137,9 @@ def _load_or_create(folder: Path) -> Credentials:
     if channel is None:
         channel = secrets.token_urlsafe(12)
         write_atomic(info, json.dumps({"channel": channel}))
-    return Credentials(cert, key, fingerprint(cert), channel)
+    credentials = Credentials(cert, key, fingerprint(cert), channel)
+    _check_key(cert, key)
+    return credentials
 
 
 class Relay:

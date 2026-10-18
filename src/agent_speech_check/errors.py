@@ -277,6 +277,16 @@ class NvdaTooOld(SetupNeeded):
         )
 
 
+class ProgramWontStart(SetupNeeded):
+    """Windows won't run NVDA or its installer: the file is damaged or not a program."""
+
+    def __init__(self, program: str, reason: str) -> None:
+        super().__init__(
+            f"cannot start {program}: {reason}",
+            hint="replace it: asc get-nvda, or a working NVDA in nvda_dir",
+        )
+
+
 class PortableFailed(SetupNeeded):
     def __init__(self, folder: str) -> None:
         super().__init__(
@@ -357,6 +367,11 @@ class RelayFileBroken(SetupNeeded):
 class RelayCertBroken(RelayFileBroken):
     def __init__(self, path: str) -> None:
         super().__init__(f"{path} is not a PEM certificate")
+
+
+class RelayKeyBroken(RelayFileBroken):
+    def __init__(self, path: str) -> None:
+        super().__init__(f"{path} is not the private key of the relay certificate")
 
 
 class FileUnusable(SetupNeeded):

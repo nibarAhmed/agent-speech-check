@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 import ssl
 import time
 from pathlib import Path
@@ -97,3 +98,21 @@ def test_a_broken_relay_cert_needs_deleting(tmp_path: Path) -> None:
     with pytest.raises(RelayFileBroken) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay_cert.pem") in exc.value.message
+
+
+def test_a_broken_relay_key_needs_deleting(tmp_path: Path) -> None:
+    relay.load_or_create(tmp_path)
+    (tmp_path / "relay_key.pem").write_text("not a key", encoding="utf-8")
+    with pytest.raises(RelayFileBroken) as exc:
+        relay.load_or_create(tmp_path)
+    assert str(tmp_path / "relay_key.pem") in exc.value.message
+
+
+def test_a_relay_key_from_another_cert_needs_deleting(tmp_path: Path) -> None:
+    relay.load_or_create(tmp_path)
+    other = tmp_path / "other"
+    relay.load_or_create(other)
+    shutil.copy(other / "relay_key.pem", tmp_path / "relay_key.pem")
+    with pytest.raises(RelayFileBroken) as exc:
+        relay.load_or_create(tmp_path)
+    assert str(tmp_path / "relay_key.pem") in exc.value.message

@@ -37,6 +37,7 @@ from agent_speech_check.errors import (
     SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
+    SetupNeeded,
     WsbMissing,
 )
 from agent_speech_check.nvda import launcher
@@ -165,6 +166,14 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
     # A failed update leaves the old copy to start with.
     assert old.read_bytes() == b"the copy that works"
+
+
+def test_an_installer_that_is_not_a_program_needs_setup(tmp_path: Path) -> None:
+    installer = tmp_path / "nvda_2026.2.exe"
+    installer.write_text("not a program", encoding="utf-8")
+    with pytest.raises(SetupNeeded) as exc:
+        launcher.run_installer(installer, tmp_path / "portable", timeout_s=30)
+    assert str(installer) in exc.value.message
 
 
 # Makes the portable copy as the NVDA installer would. cmd splits
