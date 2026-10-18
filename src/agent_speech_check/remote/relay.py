@@ -320,7 +320,9 @@ class Relay:
         try:
             await writer.drain()
         except OSError:  # ConnectionError or ssl.SSLError
-            self.disconnect()
+            # NVDA may have joined again during the drain: keep its new connection.
+            if self._writer is writer:
+                self.disconnect()
             raise NvdaNotConnected from None
 
     async def keepalive(self) -> None:
