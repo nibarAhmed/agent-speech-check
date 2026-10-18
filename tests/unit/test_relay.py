@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import ssl
 import time
@@ -20,13 +21,18 @@ from agent_speech_check.remote import relay
 from agent_speech_check.remote.speech_log import SpeechLog
 
 
+def _client_context() -> ssl.SSLContext:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
+
+
 @pytest.mark.asyncio
 async def test_connection_that_never_joins_is_dropped(tmp_path: Path) -> None:
     r = relay.Relay(relay.load_or_create(tmp_path), SpeechLog(), join_timeout_s=0.5)
     server = await r.start(0)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    context = _client_context()
     async with server:
         reader, writer = await asyncio.open_connection(r.host, r.port, ssl=context)
         started = time.monotonic()
@@ -99,6 +105,22 @@ def test_a_broken_relay_cert_needs_deleting(tmp_path: Path) -> None:
     with pytest.raises(RelayFileBroken) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay_cert.pem") in exc.value.message
+
+
+@pytest.mark.asyncio
+async def test_a_flood_of_blank_lines_before_the_join_is_skipped(tmp_path: Path) -> None:
+    credentials = relay.load_or_create(tmp_path)
+    r = relay.Relay(credentials, SpeechLog())
+    server = await r.start(0)
+    context = _client_context()
+    join = {"type": "join", "channel": credentials.channel, "connection_type": "slave"}
+    async with server:
+        reader, writer = await asyncio.open_connection(r.host, r.port, ssl=context)
+        writer.write(b"\n" * 5000 + json.dumps(join).encode() + b"\n")
+        reply = json.loads(await asyncio.wait_for(reader.readline(), 5))
+        writer.close()
+        await writer.wait_closed()
+    assert reply["type"] == "channel_joined"
 
 
 def test_a_broken_relay_key_needs_deleting(tmp_path: Path) -> None:
