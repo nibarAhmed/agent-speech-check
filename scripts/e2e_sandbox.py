@@ -96,7 +96,8 @@ def prepare(nvda_version: str, sha1: str | None) -> None:
         "pytest-asyncio",
     )
     installer = IN / f"nvda_{nvda_version}.exe"
-    if not installer.exists():
+    # With a SHA-1, copied again from the checked download: a damaged copy would hang the run.
+    if sha1 is not None or not installer.exists():
         shutil.copy2(launcher.download(nvda_version, sha1), installer)
     if OUT.exists():
         shutil.rmtree(OUT)
