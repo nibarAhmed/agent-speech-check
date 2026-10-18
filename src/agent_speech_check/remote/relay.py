@@ -105,14 +105,15 @@ def fingerprint(cert_path: Path) -> str:
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
-def _check_key(cert_path: Path, key_path: Path) -> None:
-    """The key loads as the cert's own, as the relay's TLS will load them."""
+def server_context(cert_path: Path, key_path: Path) -> ssl.SSLContext:
+    """The relay's TLS context. Fails if the key isn't the cert's own."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     try:
         # A password callback, so an encrypted key fails instead of OpenSSL asking on the console.
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert_path, key_path, password=lambda: b"")
     except ssl.SSLError:
         raise RelayKeyBroken(str(key_path)) from None
+    return context
 
 
 def load_or_create(folder: Path) -> Credentials:
@@ -140,7 +141,7 @@ def _load_or_create(folder: Path) -> Credentials:
         channel = secrets.token_urlsafe(12)
         write_atomic(info, json.dumps({"channel": channel}))
     fp = fingerprint(cert)  # first, so a broken cert isn't reported as a broken key
-    _check_key(cert, key)
+    server_context(cert, key)
     return Credentials(cert, key, fp, channel)
 
 
@@ -163,8 +164,7 @@ class Relay:
         self.credentials = credentials
         self.speech = speech
         self.on_join: Callable[[], None] = lambda: None
-        self._ssl = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self._ssl.load_cert_chain(credentials.cert, credentials.key)
+        self._ssl = server_context(credentials.cert, credentials.key)
         self._writer: asyncio.StreamWriter | None = None
         # Any failed connection, for `asc status`. Cleared when NVDA joins.
         self.last_error: str | None = None
