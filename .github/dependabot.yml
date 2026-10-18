@@ -1,6 +1,6 @@
-# GitHub's standard setup: weekly, one PR per update. Security updates come as soon as an
-# advisory is out. Other updates wait a week after a release (cooldown), so a compromised
-# release is usually pulled before we take it. The prefixes make Dependabot's PR titles
+# GitHub's standard setup: weekly, one PR per update. Updates wait a week after a
+# release (cooldown), so a compromised release is usually pulled before we take it. Security
+# updates are not delayed by the cooldown. The prefixes make Dependabot's PR titles
 # conventional commits, which the pr-title check requires.
 version: 2
 updates:
