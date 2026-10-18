@@ -23,6 +23,7 @@ from pathlib import Path
 
 from agent_speech_check.errors import (
     DownloadFailed,
+    InstallerInUse,
     InstallerTimedOut,
     NvdaAlreadyRunning,
     NvdaNotFound,
@@ -221,9 +222,13 @@ def download(version: str, sha1: str | None = None) -> Path:
     installer = installer_path(version)
     installer.parent.mkdir(parents=True, exist_ok=True)
     # A kept installer can be damaged, or not ours: an e2e test puts one there.
-    with _failing_as_download(installer_url(version)):  # it may be held open
-        if installer.exists() and sha1 is not None and not sha1_matches(installer, sha1):
+    if installer.exists() and sha1 is not None and not sha1_matches(installer, sha1):
+        try:
             installer.unlink()
+        # Held open, as by a running sandbox. Not DownloadFailed: the offline
+        # fallback would then take this same file.
+        except OSError as error:
+            raise InstallerInUse(str(installer), error.strerror or str(error)) from None
     if not installer.exists():
         partial = installer.with_suffix(".part")
         url = installer_url(version)

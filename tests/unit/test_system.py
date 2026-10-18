@@ -27,6 +27,7 @@ from agent_speech_check.daemon import ipc
 from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
+    InstallerInUse,
     InstallerTimedOut,
     NoDefaultSwitch,
     NvdaAlreadyRunning,
@@ -399,17 +400,18 @@ def test_a_damaged_cached_installer_is_downloaded_again(
     assert not damaged.exists()
 
 
-def test_a_held_cached_installer_is_a_failed_download(
+def test_a_held_damaged_installer_is_not_a_failed_download(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Held open, as a sandbox running it would, so it can't be deleted.
+    # Held open, as a sandbox running it would, so it can't be deleted. Not a
+    # DownloadFailed, which the offline fallback catches and would return it.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     held = launcher.installer_path("2026.2")
     held.parent.mkdir(parents=True)
     with held.open("wb") as file:
         file.write(b"not the listed file")
         file.flush()
-        with pytest.raises(DownloadFailed):
+        with pytest.raises(InstallerInUse, match=r"nvda_2026\.2\.exe"):
             launcher.download("2026.2", SHA1)
 
 
