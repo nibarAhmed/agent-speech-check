@@ -31,6 +31,12 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 - `asc sandbox-setup` shows an admin prompt: ask the user to run it.
 - Shared and desktop mode send keys to the user's desktop. Tell the user the
   panic key from `asc status` before you send any.
+- If the user names their own portable NVDA, set it for desktop or sandbox mode
+  (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
+  It runs with a copy of their settings; `asc` never writes their copy.
+- A mode with `launch = false` (NVDA started elsewhere, which connects by itself)
+  starts no NVDA and no sandbox: none of the desktop or sandbox notes here apply,
+  it has no panic key, and `launch` runs the command on this computer.
 
 ## Workflow
 
@@ -43,8 +49,11 @@ asc speech                        # everything since the mark
 asc stop                          # when done
 ```
 
-- If `asc start` exits 4, `asc status` shows which mode runs. Another session
-  may own it: stop it only if it's the wrong mode.
+- If `asc start` exits 4 because `asc` already runs, `asc status` shows which
+  mode. Another session may own it: stop it only if it's the wrong mode.
+- If `asc start` prints `NVDA <version> is available: asc get-nvda`, it still
+  started. To update: `asc stop`, `asc get-nvda`, `asc start` (`get-nvda`
+  refuses while desktop mode's NVDA runs).
 - If presses keep missing speech or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` with `asc config set`.
 
@@ -79,7 +88,7 @@ asc keys heading                  # look NVDA commands up instead of guessing
 |---|---|---|
 | 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say before retrying |
 | 2 | usage | fix the arguments or setting |
-| 3 | not connected or not running | `asc status` says how to connect |
+| 3 | not connected or not running | follow the hint: `asc start` if not running, else `asc status` says how to connect |
 | 4 | refused or busy | read the message |
 | 5 | protocol error | report it |
 | 6 | bug in asc | report it; the message says where the log is |
