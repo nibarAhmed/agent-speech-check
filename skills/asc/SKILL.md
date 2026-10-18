@@ -61,9 +61,9 @@ asc stop                          # when done
 
 `asc start` prints a host, a key and a certificate fingerprint. Ask the user to
 open NVDA's Tools menu, Remote Access, Connect, choose "allow this computer to be
-controlled", enter that host and key, and trust the certificate. It reconnects by
-itself after that. Watch mode records everything NVDA says, typed text included,
-so `asc stop` when you're done.
+controlled", enter that host and key, and trust the certificate. After that it
+reconnects by itself whenever watch mode runs. Watch mode records everything NVDA
+says, typed text included, so `asc stop` when you're done.
 
 ## Apps and keys
 
