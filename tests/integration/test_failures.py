@@ -75,5 +75,12 @@ def test_a_rejected_message_from_nvda_keeps_its_values_out_of_the_log(
     # Speech in the wrong shape: a string where NVDA sends a list.
     nvda.send({"type": "speak", "sequence": "my password"})
     log = env.folder("desktop") / "daemon.log"
-    assert wait_until(lambda: "dropped a connection" in log.read_text(encoding="utf-8"))
-    assert "my password" not in log.read_text(encoding="utf-8")
+    text = ""
+
+    def dropped() -> bool:
+        nonlocal text
+        text = log.read_text(encoding="utf-8")
+        return "dropped a connection" in text
+
+    assert wait_until(dropped)
+    assert "my password" not in text
