@@ -43,7 +43,8 @@ SECOND = """<!doctype html><html><head><title>asc second</title></head><body>
 def _with_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A state folder under `tmp_path` that already has the NVDA installer."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    installer = launcher.installer_path(launcher.VERSION)
+    # Named as NV Access names it, so asc takes it as the latest or, offline, the cached one.
+    installer = launcher.installers_dir() / Path(os.environ["ASC_E2E_INSTALLER"]).name
     installer.parent.mkdir(parents=True)
     shutil.copy(os.environ["ASC_E2E_INSTALLER"], installer)
     return tmp_path / "agent-speech-check"

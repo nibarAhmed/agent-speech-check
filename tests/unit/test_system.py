@@ -11,6 +11,7 @@ import ctypes
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -26,11 +27,13 @@ from agent_speech_check.daemon import ipc
 from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
+    InstallerInUse,
     InstallerTimedOut,
     NoDefaultSwitch,
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
+    PortableNotReplaced,
     SandboxBroken,
     SandboxFailed,
     SandboxNeedsPro,
@@ -155,8 +158,73 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
     installer = tmp_path / "hangs.cmd"
     # Waits about 3 s, long past the timeout, and makes no portable copy.
     installer.write_text("@ping -n 4 127.0.0.1 > nul\r\n", encoding="utf-8")
+    old = tmp_path / "portable" / "nvda.exe"
+    old.parent.mkdir()
+    old.write_bytes(b"the copy that works")
     with pytest.raises(InstallerTimedOut, match=r"within 0.5 s, so asc ended it"):
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
+    # A failed update leaves the old copy to start with.
+    assert old.read_bytes() == b"the copy that works"
+
+
+# Makes the portable copy as the NVDA installer would. cmd splits
+# --portable-path=DIR at the "=", so the folder arrives as %3.
+FAKE_INSTALLER = '@mkdir "%3" && type nul > "%3\\nvda.exe"\r\n'
+
+
+def test_a_new_portable_copy_replaces_the_old_one(tmp_path: Path) -> None:
+    installer = tmp_path / "installer.cmd"
+    installer.write_text(FAKE_INSTALLER, encoding="utf-8")
+    dest = tmp_path / "portable"
+    dest.mkdir()
+    (dest / "nvda.exe").write_bytes(b"old")
+    (dest / "only-old").write_bytes(b"")
+    assert launcher.run_installer(installer, dest, timeout_s=30) == dest / "nvda.exe"
+    assert (dest / "nvda.exe").read_bytes() == b""
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["installer.cmd", "portable"]
+
+
+def test_a_copy_left_mid_swap_is_put_back(tmp_path: Path) -> None:
+    # A crash between the two renames leaves only portable.old.
+    installer = tmp_path / "hangs.cmd"
+    installer.write_text("@ping -n 4 127.0.0.1 > nul\r\n", encoding="utf-8")
+    left = tmp_path / "portable.old" / "nvda.exe"
+    left.parent.mkdir()
+    left.write_bytes(b"the copy that works")
+    with pytest.raises(InstallerTimedOut):
+        launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
+    assert (tmp_path / "portable" / "nvda.exe").read_bytes() == b"the copy that works"
+
+
+def test_a_copy_in_use_is_not_replaced(tmp_path: Path) -> None:
+    installer = tmp_path / "installer.cmd"
+    installer.write_text(FAKE_INSTALLER, encoding="utf-8")
+    dest = tmp_path / "portable"
+    dest.mkdir()
+    # An open file in the folder, as NVDA or an editor would hold, stops its rename.
+    with (dest / "nvda.exe").open("wb") as held:
+        held.write(b"old")
+        held.flush()
+        with pytest.raises(PortableNotReplaced, match="cannot replace the portable NVDA"):
+            launcher.run_installer(installer, dest, timeout_s=30)
+    assert (dest / "nvda.exe").read_bytes() == b"old"
+
+
+def test_a_leftover_copy_in_use_is_reported(tmp_path: Path) -> None:
+    installer = tmp_path / "installer.cmd"
+    installer.write_text(FAKE_INSTALLER, encoding="utf-8")
+    dest = tmp_path / "portable"
+    (dest / "nvda.exe").parent.mkdir()
+    (dest / "nvda.exe").write_bytes(b"old")
+    # An earlier update could not delete portable.old because a file in it was open.
+    stale = tmp_path / "portable.old" / "nvda.exe"
+    stale.parent.mkdir()
+    with (
+        stale.open("wb"),
+        pytest.raises(PortableNotReplaced, match="cannot replace the portable NVDA"),
+    ):
+        launcher.run_installer(installer, dest, timeout_s=30)
+    assert (dest / "nvda.exe").read_bytes() == b"old"
 
 
 def test_firewall_reads_are_harmless() -> None:
@@ -183,6 +251,9 @@ def test_sandbox_session_prepares_its_folders(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    installer = launcher.installer_path("2026.2")
+    installer.parent.mkdir(parents=True)
+    installer.write_bytes(b"")  # what the precheck downloaded
     target = replace(
         defaults("sandbox"),
         share=("C:/src/app",),
@@ -202,6 +273,16 @@ def test_sandbox_session_prepares_its_folders(
     assert "<Networking>Enable</Networking>" in config
     assert str(folder / "config") in config
     assert session.state == "starting"
+
+
+def test_sandbox_session_without_an_installer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    (tmp_path / "agent-speech-check" / "nvda").mkdir(parents=True)
+    session = SandboxSession(tmp_path / "t", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
+    with pytest.raises(NvdaNotFound, match="the NVDA installer"):
+        session._prepare()
 
 
 def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
@@ -228,7 +309,9 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("LOCALAPPDATA", str(root))
     try:
         state = root / "agent-speech-check"
-        launcher.installer_path(launcher.VERSION).parent.mkdir(parents=True)
+        installer = launcher.installer_path("2026.2")
+        installer.parent.mkdir(parents=True)
+        installer.write_bytes(b"")
         session = SandboxSession(state / "x", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
         config = session._prepare()
         hosts = [part.split("</HostFolder>")[0] for part in config.split("<HostFolder>")[1:]]
@@ -311,8 +394,42 @@ def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.Monkey
     installer = launcher.installer_path("2026.2")
     installer.parent.mkdir(parents=True)
     installer.write_bytes(b"already here")
+    stale = launcher.installer_path("2027.1")
+    stale.write_bytes(b"")
     assert launcher.download("2026.2") == installer
     assert installer.read_bytes() == b"already here"
+    # Else sandbox mode, which takes the highest cached version, would take it.
+    assert not stale.exists()
+    sha1 = "629d8889d129c48627f6629b2d0e640a9bb12541"  # of b"already here"
+    assert launcher.download("2026.2", sha1) == installer
+
+
+def test_a_damaged_cached_installer_is_downloaded_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    damaged = launcher.installer_path("0.0-asc-no-such-version")
+    damaged.parent.mkdir(parents=True)
+    damaged.write_bytes(b"half a file")
+    # Its SHA-1 doesn't match, so it goes; the download then fails, as there is no such release.
+    with pytest.raises(DownloadFailed):
+        launcher.download("0.0-asc-no-such-version", SHA1)
+    assert not damaged.exists()
+
+
+def test_a_held_damaged_installer_is_not_a_failed_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Held open, as a sandbox running it would, so it can't be deleted. Not a
+    # DownloadFailed, which the offline fallback catches and would return it.
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    held = launcher.installer_path("2026.2")
+    held.parent.mkdir(parents=True)
+    with held.open("wb") as file:
+        file.write(b"not the listed file")
+        file.flush()
+        with pytest.raises(InstallerInUse, match=r"nvda_2026\.2\.exe"):
+            launcher.download("2026.2", SHA1)
 
 
 def test_a_new_installer_replaces_the_old_ones(
@@ -359,10 +476,165 @@ def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.Mo
     assert old.exists()  # only a finished download replaces the old installers
 
 
+# What api.nvaccess.org/nvdaUpdateCheck?versionType=stable answered on 2026-10-18.
+NV_ACCESS_ANSWER = """\
+apiCompatTo: 2026.1.0
+apiVersion: 2026.2.0
+launcherHash: a5b01592f4e2355432848d3ad82f5bd214f25947
+launcherUrl: https://download.nvaccess.org/releases/2026.2/nvda_2026.2.exe
+version: 2026.2
+"""
+SHA1 = "a5b01592f4e2355432848d3ad82f5bd214f25947"
+# Nothing listens on port 1, so a lookup there fails at once, as offline.
+NOWHERE = "http://127.0.0.1:1/"
+
+
+def test_parse_release() -> None:
+    assert launcher.parse_release(NV_ACCESS_ANSWER) == launcher.Release("2026.2", SHA1)
+    assert launcher.parse_release(f"version: 2026.2.1\nlauncherHash: {SHA1.upper()}") == (
+        launcher.Release("2026.2.1", SHA1)
+    )
+    # The version goes into a URL and a file name, so anything odd is no answer.
+    for text in (
+        "",
+        "<html>maintenance</html>",
+        f"version: 2026.2&calc\nlauncherHash: {SHA1}",
+        "version: 2026.2\nlauncherHash: abc",
+        f"launcherHash: {SHA1}",
+    ):
+        assert launcher.parse_release(text) is None
+
+
+def test_newer() -> None:
+    release = launcher.Release("2026.2", SHA1)
+    assert launcher.newer(release, (2026, 1, 0))
+    assert not launcher.newer(release, (2026, 2, 0))
+    assert not launcher.newer(release, (2027, 1, 0))
+    assert launcher.newer(launcher.Release("2026.2.1", SHA1), (2026, 2, 0))
+    assert not launcher.newer(release, None)
+
+
+def test_a_failed_lookup_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
+    with pytest.raises(DownloadFailed, match="cannot download NVDA"):
+        launcher.latest()
+    # A start never fails because NV Access can't be reached.
+    kernel32 = Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll"
+    assert launcher.update_for(kernel32) is None
+
+
+def test_no_update_for_a_file_without_a_version(tmp_path: Path) -> None:
+    empty = tmp_path / "nvda.exe"
+    empty.write_bytes(b"")
+    assert launcher.update_for(empty) is None
+
+
+def test_offline_the_cached_installer_is_used(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
+    with pytest.raises(DownloadFailed):
+        launcher.latest_installer()  # nothing cached to fall back on
+    assert launcher.cached_installer() is None
+    cached = launcher.installer_path("2026.1")
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"")
+    assert launcher.cached_installer() == cached
+    notes: list[str] = []
+    assert launcher.latest_installer(notes.append) == cached
+    # Said, so nobody takes the cached NVDA for the latest.
+    assert notes == [f"cannot get the latest NVDA, so using {cached.name}"]
+
+
+def test_offline_a_cached_installer_too_old_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
+    cached = launcher.installer_path("2025.1")
+    cached.parent.mkdir(parents=True)
+    # Any file with a version resource older than MIN_VERSION will do.
+    shutil.copy(Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll", cached)
+    with pytest.raises(NvdaTooOld) as exc:
+        launcher.latest_installer()
+    assert exc.value.hint == "connect to the network, or asc get-nvda"
+
+
+def test_cached_installer_is_the_highest_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    old, new = launcher.installer_path("2026.2"), launcher.installer_path("2026.10")
+    old.parent.mkdir(parents=True)
+    for path in (new, old, old.with_suffix(".part"), old.with_name("nvda_x.exe")):
+        path.write_bytes(b"")
+    assert launcher.cached_installer() == new
+
+
+def test_a_garbled_answer_is_a_failed_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Like a captive portal: not HTTP at all, which http.client raises as no OSError.
+    server = socket.create_server(("127.0.0.1", 0))
+
+    def answer() -> None:
+        conn, _ = server.accept()
+        with conn:
+            conn.recv(4096)
+            conn.sendall(b"garbage\r\n\r\n")
+
+    thread = threading.Thread(target=answer, daemon=True)
+    thread.start()
+    monkeypatch.setattr(launcher, "UPDATE_URL", f"http://127.0.0.1:{server.getsockname()[1]}/")
+    try:
+        with pytest.raises(DownloadFailed):
+            launcher.latest()
+    finally:
+        thread.join(5)
+        server.close()
+
+
+def test_the_lookup_has_one_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A byte at a time, each sooner than the socket timeout, so only a limit on
+    # the whole lookup stops it, as it must for slow name resolution.
+    server = socket.create_server(("127.0.0.1", 0))
+    done = threading.Event()
+
+    def trickle() -> None:
+        conn, _ = server.accept()
+        with conn:
+            conn.recv(4096)
+            for byte in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"x" * 1000:
+                if done.wait(0.1):  # the slowness is what this test is about
+                    return
+                conn.sendall(bytes([byte]))
+
+    thread = threading.Thread(target=trickle, daemon=True)
+    thread.start()
+    monkeypatch.setattr(launcher, "UPDATE_URL", f"http://127.0.0.1:{server.getsockname()[1]}/")
+    monkeypatch.setattr(launcher, "LOOKUP_TIMEOUT_S", 1)
+    started = time.monotonic()
+    try:
+        with pytest.raises(DownloadFailed, match="no answer within 1 s"):
+            launcher.latest()
+        assert time.monotonic() - started < 3
+    finally:
+        done.set()
+        thread.join(5)
+        server.close()
+
+
+def test_sha1_matches(tmp_path: Path) -> None:
+    file = tmp_path / "nvda.exe"
+    file.write_bytes(b"asc")
+    assert launcher.sha1_matches(file, "43f0af343451be62bc8bdc64c292c7166d48491f")
+    assert not launcher.sha1_matches(file, SHA1)
+
+
 def test_file_version(tmp_path: Path) -> None:
     kernel32 = Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll"
     version = winapi.file_version(kernel32)
     assert version is not None
+    assert len(version) == 3
     assert version[0] == 10  # Windows 10 and 11 both report 10
     empty = tmp_path / "nvda.exe"
     empty.write_bytes(b"")

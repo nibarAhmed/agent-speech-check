@@ -36,7 +36,7 @@ jobs:
         run: |
           $nvda = "$env:RUNNER_TEMP\nvda"
           $out = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\e2e-out"
-          $installer = uv run python -c "from agent_speech_check.nvda import launcher as l; print(l.download(l.VERSION))"
+          $installer = uv run python -c "from agent_speech_check.nvda import launcher as l; print(l.latest_installer())"
           if ($LASTEXITCODE -ne 0) { throw "download exit $LASTEXITCODE" }
           uv run python -c "import sys; from pathlib import Path; from agent_speech_check.nvda import launcher; launcher.create_portable(Path(sys.argv[1]), Path(sys.argv[2]))" $installer $nvda
           if ($LASTEXITCODE -ne 0) { throw "portable exit $LASTEXITCODE" }

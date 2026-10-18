@@ -115,6 +115,12 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   NVDA restarts the running one. Use watch mode next to your own NVDA.
 - Exits 7 if there is no portable NVDA or it is too old, with the hint
   `asc get-nvda`, or to check `nvda_dir` when you named the folder.
+- Before it starts, `asc start` asks NV Access for the latest NVDA (at most
+  5 s; offline it says nothing). If that is newer than the portable NVDA, at a
+  terminal it offers to update `asc`'s own copy first; a failed update keeps the
+  old copy. Without a terminal, as when an agent runs it, it prints
+  `NVDA <version> is available: asc get-nvda` and starts. An NVDA in `nvda_dir`
+  is never updated: the line says `(nvda_dir is older)`.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
   connects to the relay itself. No portable NVDA is needed, and `nvda_dir` is
   refused with exit 2, as in watch and shared mode.
@@ -130,9 +136,10 @@ and your own NVDA keeps running undisturbed.
 - If the sandbox fails to start, a retry may help when wsb timed out or the
   last sandbox was still shutting down (exit 3). An error from wsb itself, or
   NVDA's start script failing inside, exits 7: retrying won't help.
-- `asc start` downloads the NVDA installer if needed (only a file download),
-  starts the sandbox, mutes it, makes a portable NVDA inside, and returns once
-  NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
+- `asc start` downloads the latest NVDA installer if it has a newer one than
+  the one it kept (only a file download, checked against the SHA-1 NV Access
+  lists). Offline, it uses the kept one. Then it starts the sandbox, mutes it,
+  makes a portable NVDA inside, and returns once NVDA is connected. That takes about a minute. `asc stop` ends the sandbox,
   and so does the daemon ending any other way (even killed).
 - With `nvda_dir`, the sandbox runs your own portable
   NVDA instead: the folder is mapped read-only, copied to `C:\nvda` inside, and
@@ -505,19 +512,24 @@ asc get-nvda [--version NVDA_VERSION] [--installer FILE]
 
 Downloads the NVDA installer from NV Access and makes a portable copy in
 `%LOCALAPPDATA%\agent-speech-check\nvda\portable` for desktop mode. A finished
-download deletes the kept installers of other versions.
+download deletes the kept installers of other versions. The new copy replaces
+the old one only once it is complete, so a failed run keeps the old one.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--version NVDA_VERSION` | 2026.2 | the NVDA version, shaped like `2026.2` (else exit 2) |
+| `--version NVDA_VERSION` | the latest | the NVDA version, shaped like `2026.2` (else exit 2) |
 | `--installer FILE` | none | use this local installer, no download |
 
 - It refuses with exit 4 while any `nvda.exe` runs, because the installer
   would restart it.
+- Without `--version`, it asks NV Access for the latest stable NVDA and checks
+  the download against the SHA-1 NV Access lists. If NV Access can't be
+  reached, it uses the installer it kept from the last download.
 - A failed download exits 3.
 
 ```shell
 asc get-nvda
+asc get-nvda --version 2026.2
 asc get-nvda --installer nvda_2026.2.exe
 ```
 

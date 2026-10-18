@@ -17,7 +17,13 @@ import shutil
 from pathlib import Path
 
 from agent_speech_check.config.targets import Target
-from agent_speech_check.errors import AscError, LaunchFailed, SandboxBroken, SandboxFailed
+from agent_speech_check.errors import (
+    AscError,
+    LaunchFailed,
+    NvdaNotFound,
+    SandboxBroken,
+    SandboxFailed,
+)
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress
 from agent_speech_check.sandbox import wsb
@@ -47,7 +53,11 @@ class SandboxSession:
         in_dir, config_dir = self.folder / "in", self.folder / "config"
         in_dir.mkdir(parents=True)
         if self.nvda_dir is None:
-            installer = launcher.installer_path(launcher.VERSION)
+            # The one the CLI's precheck downloaded, or the cached one offline.
+            installer = launcher.cached_installer()
+            if installer is None:
+                looked = [f"the NVDA installer ({launcher.installers_dir()})"]
+                raise NvdaNotFound(looked, hint="run asc start again")
             script = wsb.nvda_script(installer.name)
             mapped, source = installer.parent, None
         else:

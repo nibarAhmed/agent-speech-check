@@ -63,7 +63,7 @@ def python_exe() -> Path | None:
     return None
 
 
-def prepare(nvda_version: str) -> None:
+def prepare(nvda_version: str, sha1: str | None) -> None:
     IN.mkdir(parents=True, exist_ok=True)
     py_root = IN / "py"
     if python_exe() is None:
@@ -96,8 +96,9 @@ def prepare(nvda_version: str) -> None:
         "pytest-asyncio",
     )
     installer = IN / f"nvda_{nvda_version}.exe"
-    if not installer.exists():
-        shutil.copy2(launcher.download(nvda_version), installer)
+    # With a SHA-1, copied again from the checked download: a damaged copy would hang the run.
+    if sha1 is not None or not installer.exists():
+        shutil.copy2(launcher.download(nvda_version, sha1), installer)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()
@@ -150,16 +151,20 @@ def mapped() -> list[wsb.Mapped]:
 def main() -> int:
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser.add_argument("--show", action="store_true")
-    parser.add_argument("--nvda-version", default=launcher.VERSION)
+    parser.add_argument("--nvda-version", help="default: the latest")
     ours, pytest_args = parser.parse_known_args()
-    if not re.fullmatch(launcher.VERSION_PATTERN, ours.nvda_version):
+    sha1 = None
+    if ours.nvda_version is None:
+        latest = launcher.latest()
+        ours.nvda_version, sha1 = latest.version, latest.sha1
+    elif not re.fullmatch(launcher.VERSION_PATTERN, ours.nvda_version):
         parser.error(f"--nvda-version: not an NVDA version: {ours.nvda_version}")
     wsb.require_available()
     if wsb.running():
         print("a Windows Sandbox is already running; stop it first")
         return 3
     print(f"NVDA {ours.nvda_version}")
-    prepare(ours.nvda_version)
+    prepare(ours.nvda_version, sha1)
     cmd = write_cmd(ours.nvda_version, pytest_args)
     tooltip = "asc e2e sandbox: show or hide"
     with wsb.SandboxWindow("show" if ours.show else "tray", tooltip) as window:

@@ -121,6 +121,8 @@ asc type "hello"
   field); add Shift to go back.
 - Desktop mode: `asc get-nvda` must have been run once (exit 7 says so). With
   `nvda_dir`, exit 7 means that NVDA is missing or too old: tell the user.
+  If `asc start` prints `NVDA <version> is available: asc get-nvda`, it still
+  started. To update, `asc stop`, `asc get-nvda`, then `asc start` again.
 - Sandbox mode: one sandbox at a time, and `asc start` takes about a minute.
   `asc sandbox-setup` must have been run once (exit 7 says so). It shows an
   admin prompt, so ask the user to run it.
