@@ -183,11 +183,14 @@ def test_desktop_mode_end_to_end(
             assert app_title in said.stdout, said.stdout
     finally:
         subprocess.run(["taskkill", "/f", "/im", "mshta.exe"], check=False)  # noqa: S607
-        stopped = run_asc("stop")
-        # asc's own NVDA logs into its mode folder, which goes with tmp_path.
-        log = paths.mode_dir("desktop") / "nvda.log"
-        if log.exists():
-            shutil.copy(log, nvda_log(request, tmp_path))
+        try:
+            stopped = run_asc("stop")
+        finally:
+            # asc's own NVDA logs into its mode folder, which goes with tmp_path.
+            # Kept even when stop hangs, the case the log is most wanted for.
+            log = paths.mode_dir("desktop") / "nvda.log"
+            if log.exists():
+                shutil.copy(log, nvda_log(request, tmp_path))
     assert stopped.returncode == 0
     assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()
