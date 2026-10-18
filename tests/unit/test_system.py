@@ -210,6 +210,23 @@ def test_a_copy_in_use_is_not_replaced(tmp_path: Path) -> None:
     assert (dest / "nvda.exe").read_bytes() == b"old"
 
 
+def test_a_leftover_copy_in_use_is_reported(tmp_path: Path) -> None:
+    installer = tmp_path / "installer.cmd"
+    installer.write_text(FAKE_INSTALLER, encoding="utf-8")
+    dest = tmp_path / "portable"
+    (dest / "nvda.exe").parent.mkdir()
+    (dest / "nvda.exe").write_bytes(b"old")
+    # An earlier update could not delete portable.old because a file in it was open.
+    stale = tmp_path / "portable.old" / "nvda.exe"
+    stale.parent.mkdir()
+    with (
+        stale.open("wb"),
+        pytest.raises(PortableNotReplaced, match="cannot replace the portable NVDA"),
+    ):
+        launcher.run_installer(installer, dest, timeout_s=30)
+    assert (dest / "nvda.exe").read_bytes() == b"old"
+
+
 def test_firewall_reads_are_harmless() -> None:
     assert Path(firewall.daemon_program()).is_file()
     try:

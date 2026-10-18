@@ -288,8 +288,11 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
     if old.exists() and not dest.exists():
         old.rename(dest)  # an earlier swap stopped between its renames
     for stale in (new, old):
-        if stale.exists():
-            shutil.rmtree(stale)
+        try:
+            if stale.exists():
+                shutil.rmtree(stale)
+        except OSError as error:  # a file in it is open
+            raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
     deadline = time.monotonic() + timeout_s
     process = subprocess.Popen(  # noqa: S603 - the official NVDA installer
         [str(installer), "--create-portable-silent", f"--portable-path={new}"]
