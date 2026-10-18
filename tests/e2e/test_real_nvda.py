@@ -186,8 +186,7 @@ def test_desktop_mode_end_to_end(
         try:
             stopped = run_asc("stop")
         finally:
-            # asc's own NVDA logs into its mode folder, which goes with tmp_path.
-            # Kept even when stop hangs, the case the log is most wanted for.
+            # asc's own NVDA log, kept even when stop hangs (run_asc raises).
             log = paths.mode_dir("desktop") / "nvda.log"
             if log.exists():
                 shutil.copy(log, nvda_log(request, tmp_path))
