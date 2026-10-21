@@ -34,10 +34,10 @@ def test_timeout_setting_used_by_wait(env: Env) -> None:
     fake = env.fake("watch")
     try:
         assert run_asc("config", "set", "timeout_ms", "300").returncode == 0
-        waited = run_asc("wait", "never")
+        waited = run_asc("wait", "never", "--since", "0")
         assert waited.returncode == 1
         assert "within 300 ms" in waited.stderr
-        flagged = run_asc("wait", "never", "--timeout", "200")
+        flagged = run_asc("wait", "never", "--since", "0", "--timeout", "200")
         assert "within 200 ms" in flagged.stderr
     finally:
         fake.close()

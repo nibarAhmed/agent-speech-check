@@ -36,6 +36,7 @@ from agent_speech_check.errors import (
     UnrecognizedArguments,
     UsageError,
     bad_field,
+    numbered_lines,
 )
 from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import keyref, launcher, nvda_config
@@ -51,9 +52,9 @@ typical use:
   asc setup                    choose your settings (once)
   asc start                    start recording (watch mode: your own NVDA)
   asc status                   how NVDA should connect, and whether it is
-  asc mark                     remember where the speech log is now
-  asc wait "OK button"         block until NVDA says it (regex)
-  asc speech                   what NVDA said since the mark
+  asc mark                     print the latest line number, N
+  asc wait --since N "OK"      block until NVDA says it after line N (regex)
+  asc speech --since N         what NVDA said after line N
   asc stop
 
 Speech is kept in memory only. Run asc COMMAND --help for details.
@@ -116,7 +117,7 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _since(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--since", type=int, metavar="N", help="lines after N")
+    parser.add_argument("--since", type=int, metavar="N", required=True, help="lines after N")
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
@@ -253,7 +254,7 @@ def _show_status(status: dict[str, Any]) -> None:
     if not status["connected"]:
         print(_connect_line(status))
     print(f"browse/focus: {status['nvda_mode']}")
-    print(f"speech: {status['lines']} lines kept, latest {status['latest']}, mark {status['mark']}")
+    print(f"speech: {status['lines']} lines kept, latest {status['latest']}")
     if status.get("panic_key"):
         print(f"panic key: {status['panic_key']} stops asc and releases keys")
     if status.get("sandbox"):
@@ -266,8 +267,8 @@ def _show_lines(lines: list[str], empty: str) -> None:
     print("\n".join(lines) if lines else empty)
 
 
-def _show_said(lines: list[str]) -> None:
-    _show_lines(lines, "(nothing said)")
+def _show_reply(reply: dict[str, Any]) -> None:
+    print(numbered_lines(reply["lines"], reply["after"], reply["dropped"]))
 
 
 # ---------------------------------------------------------------- commands
@@ -335,10 +336,7 @@ def cmd_status(_: argparse.Namespace) -> int:
 
 def cmd_speech(args: argparse.Namespace) -> int:
     result = _call("speech", {"since": args.since})
-    if result["dropped"]:
-        print(f"({result['dropped']} earlier lines dropped)")
-    lines = [f"{n} {text}" for n, text in result["lines"]]
-    _show_said(lines)
+    print(numbered_lines(result["lines"], args.since, result["dropped"]))
     return 0
 
 
@@ -366,14 +364,14 @@ def cmd_press(args: argparse.Namespace) -> int:
         "settle_ms": args.settle,
         "timeout_ms": args.timeout,
     }
-    _show_said(_call("press", raw, args.timeout)["lines"])
+    _show_reply(_call("press", raw, args.timeout))
     return 0
 
 
 def cmd_type(args: argparse.Namespace) -> int:
     _with_defaults(args, _TIMINGS)
     raw = {"text": args.text, "settle_ms": args.settle, "timeout_ms": args.timeout}
-    _show_said(_call("type", raw, args.timeout)["lines"])
+    _show_reply(_call("type", raw, args.timeout))
     return 0
 
 
@@ -401,7 +399,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
 def cmd_launch(args: argparse.Namespace) -> int:
     _with_defaults(args, {"timeout": "launch_timeout_ms"})
     raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
-    _show_said(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
+    _show_reply(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS))
     return 0
 
 
@@ -720,13 +718,12 @@ examples:
         cmd_status,
     ),
     "speech": Command(
-        "print what NVDA said since the mark",
+        "print what NVDA said after a line",
         """\
-Print what NVDA said, one numbered line per utterance, plus mode changes.
-By default, lines after the last asc mark.
+Print what NVDA said after line N, one numbered line per utterance, plus
+mode changes. Take N from asc mark, or from the last line you read.
 
 examples:
-  asc speech
   asc speech --since 0       everything still kept
   asc speech --since 41      lines after 41""",
         cmd_speech,
@@ -735,26 +732,29 @@ examples:
     "wait": Command(
         "wait until NVDA says something matching REGEX",
         """\
-Return as soon as an utterance after the mark (or --since) matches REGEX
-(Python syntax, searched anywhere in the line; use (?i) to ignore case).
-Exits 1 with what NVDA did say if nothing matched in time.
+Return as soon as an utterance after line N matches REGEX (Python syntax,
+searched anywhere in the line; use (?i) to ignore case), and print it with
+its number, the next N. Exits 1 with what NVDA did say if nothing matched
+in time.
 
 examples:
-  asc wait "OK button"
-  asc wait "(?i)saved" --timeout 10000""",
+  asc wait --since 40 "OK button"
+  asc wait --since 40 "(?i)saved" --timeout 10000""",
         cmd_wait,
         _wait_args,
     ),
     "mark": Command(
-        "remember the current end of the speech log",
-        "Print and set the mark.",
+        "print the latest line number",
+        "Print the number of the latest line: mark: N. Run it before the action, then\n"
+        "pass N to wait or speech as --since N. Nothing is stored.",
         cmd_mark,
     ),
     "press": Command(
         "press keys and print what NVDA said",
         """\
 Send each gesture, wait until NVDA is quiet for --settle ms, and print only
-the new speech: said: "..." lines, mode: lines, or (nothing said).
+the new speech as numbered lines, or (nothing said after N). The last
+number, or N, is the next --since for wait or speech.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
 Watch mode refuses keys (exit 4).
 
@@ -772,6 +772,7 @@ examples:
 Type TEXT one character at a time, using this computer's keyboard layout.
 Every character is checked first; if any can't be typed, nothing is (exit 2).
 NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
+Prints the new speech numbered like press, or (nothing said after N).
 
 examples:
   asc type "hello world"
@@ -802,7 +803,8 @@ examples:
         "start an app and wait until NVDA speaks",
         """\
 Start CMD and wait until NVDA says something matching --title (a regex), or
-anything at all if --title is left out. Prints what NVDA said.
+anything at all if --title is left out. Prints what NVDA said, numbered
+like press.
 Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
 inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
 

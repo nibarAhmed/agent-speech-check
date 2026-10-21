@@ -16,7 +16,7 @@ from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_c
 from agent_speech_check.cli import run_setup
 from agent_speech_check.config.targets import SANDBOX_PORT, Target
 from agent_speech_check.daemon import ipc, session, state
-from agent_speech_check.errors import AlreadyRunning, DaemonNoReply
+from agent_speech_check.errors import IPC_VERSION, AlreadyRunning, DaemonNoReply
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.windows import winapi
 
@@ -98,7 +98,7 @@ def test_garbage_from_daemon_is_internal_error() -> None:
 def test_old_daemon_version() -> None:
     result = run_asc("status")
     assert result.returncode == 3
-    assert "speaks IPC version 99, not 1" in result.stderr
+    assert f"speaks IPC version 99, not {IPC_VERSION}" in result.stderr
     assert "hint: asc stop, then asc start" in result.stderr
 
 
@@ -129,7 +129,7 @@ def _ipc_port(env: Env) -> int:
 @pytest.mark.parametrize(
     "request_line",
     [
-        b'{"v":1,"token":"wrong","cmd":"status","args":{}}\n',
+        f'{{"v":{IPC_VERSION},"token":"wrong","cmd":"status","args":{{}}}}\n'.encode(),
         b"not json at all\n",
         b"[1,2,3]\n",
     ],
@@ -199,7 +199,9 @@ def test_stop_clears_a_state_file_without_a_pid(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
 
 
-@pytest.mark.parametrize("daemon_reply", [b'{"v":1,"ok":true,"result":{}}\n'], indirect=True)
+@pytest.mark.parametrize(
+    "daemon_reply", [f'{{"v":{IPC_VERSION},"ok":true,"result":{{}}}}\n'.encode()], indirect=True
+)
 @pytest.mark.usefixtures("daemon_reply")
 def test_stop_ends_a_daemon_that_agrees_but_stays(env: Env) -> None:
     """In-process with a short wait: the real one is 30 s."""

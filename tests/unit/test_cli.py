@@ -43,6 +43,15 @@ def test_bad_arguments_are_a_short_usage_error(capsys: pytest.CaptureFixture[str
     assert err == "error: unrecognized arguments: --no-such-flag\nhint: asc press --help\n"
 
 
+@pytest.mark.parametrize("argv", [["speech"], ["wait", "OK"]])
+def test_reading_speech_needs_since(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    assert main(argv) == 2
+    err = capsys.readouterr().err
+    assert (
+        err == f"error: the following arguments are required: --since\nhint: asc {argv[0]} --help\n"
+    )
+
+
 def test_bad_arguments_without_a_command_point_at_asc_help(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

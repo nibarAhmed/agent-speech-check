@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 
 import pytest
-from tests.integration.conftest import Env, run_asc
+from tests.integration.conftest import Env, run_asc, wait_until
 
 from agent_speech_check.inputs.keys import parse_hotkey
 from agent_speech_check.windows import winapi
@@ -21,22 +22,28 @@ def test_watch_session(env: Env) -> None:
     assert "nvda: not connected" in started.stdout
     assert f"host 127.0.0.1:{env.port}, key " in started.stdout
 
-    assert run_asc("speech").stdout == "(nothing said)\n"
-    not_connected = run_asc("wait", "x")
+    assert run_asc("speech", "--since", "0").stdout == "(nothing said after 0)\n"
+    # A number from an earlier session: numbering restarts with each start.
+    for command in (("speech",), ("wait", "x")):
+        ahead = run_asc(*command, "--since", "5")
+        assert ahead.returncode == 2
+        assert "--since 5 is after the latest line, 0" in ahead.stderr
+        assert "hint: asc mark" in ahead.stderr
+    not_connected = run_asc("wait", "x", "--since", "0")
     assert not_connected.returncode == 3
     assert "NVDA is not connected" in not_connected.stderr
 
     fake = env.fake("watch")
     try:
         fake.say("Recycle Bin ", "list item ", "focused ")
-        waited = run_asc("wait", "Recycle")
+        waited = run_asc("wait", "Recycle", "--since", "0")
         assert waited.returncode == 0, waited.stderr
         assert waited.stdout == '1 said: "Recycle Bin list item focused"\n'
 
         assert run_asc("mark").stdout == "mark: 1\n"
         fake.say("second")
-        assert run_asc("wait", "second").returncode == 0
-        assert run_asc("speech").stdout == '2 said: "second"\n'
+        assert run_asc("wait", "second", "--since", "1").returncode == 0
+        assert run_asc("speech", "--since", "1").stdout == '2 said: "second"\n'
         everything = run_asc("speech", "--since", "0").stdout
         assert everything.splitlines() == [
             '1 said: "Recycle Bin list item focused"',
@@ -46,16 +53,17 @@ def test_watch_session(env: Env) -> None:
         status = run_asc("status")
         assert "nvda: connected" in status.stdout
         assert "browse/focus: unknown" in status.stdout
+        assert "speech: 2 lines kept, latest 2\n" in status.stdout
 
         refused = run_asc("press", "Tab")
         assert refused.returncode == 4
         assert "watch mode, which never sends keys" in refused.stderr
         assert not any(m.get("type") == "key" for m in fake.received)
 
-        missed = run_asc("wait", "nope", "--timeout", "200")
+        missed = run_asc("wait", "nope", "--since", "1", "--timeout", "200")
         assert missed.returncode == 1
         assert 'no speech matched "nope" within 200 ms' in missed.stderr
-        assert 'said: "second"' in missed.stderr
+        assert 'NVDA said:\n2 said: "second"' in missed.stderr
 
     finally:
         fake.close()
@@ -69,6 +77,29 @@ def test_watch_session(env: Env) -> None:
     assert "not recording" in gone.stderr
 
 
+def test_speech_too_big_for_one_reply_keeps_the_newest(env: Env) -> None:
+    # 70 lines of about 1 MB (NVDA's message limit) are more than one 64 MB reply.
+    assert run_asc("start", "--mode", "watch").returncode == 0
+    fake = env.fake("watch")
+    try:
+        for _ in range(70):
+            fake.say("x" * 1_000_000)
+        # A ceiling, not a guess: 70 MB through TLS can be slow on a CI runner.
+        assert wait_until(lambda: "latest 70\n" in run_asc("status").stdout, timeout_s=120)
+        shown = run_asc("speech", "--since", "0")
+        assert shown.returncode == 0, shown.stderr[:500]
+        missed = run_asc("wait", "nowhere", "--since", "0", "--timeout", "200")
+        assert missed.returncode == 1, missed.stderr[:500]
+    finally:
+        fake.close()
+    lines = shown.stdout.splitlines()
+    dropped = re.fullmatch(r"\(([0-9]+) earlier lines dropped\)", lines[0])
+    assert dropped, lines[0][:100]
+    assert int(dropped[1]) + len(lines) - 1 == 70
+    assert lines[-1].startswith('70 said: "xxx')
+    assert f"NVDA said:\n{lines[0]}\n" in missed.stderr
+
+
 # Built with chr() so linters don't flag look-alike characters in the source.
 SAMPLE = f"Caf{chr(0xE9)} {chr(0x2019)}q{chr(0x2019)} {chr(0x2026)} {chr(0x4E2D)} {chr(0x1F600)}"
 
@@ -78,7 +109,7 @@ def test_any_unicode_speech_prints_as_utf8(env: Env) -> None:
     fake = env.fake("watch")
     try:
         fake.say(SAMPLE)
-        waited = run_asc("wait", SAMPLE[:4])
+        waited = run_asc("wait", SAMPLE[:4], "--since", "0")
         assert waited.returncode == 0, waited.stderr
         assert waited.stdout == f'1 said: "{SAMPLE}"' + chr(10)
     finally:
@@ -142,7 +173,7 @@ def test_commands_find_the_daemon_without_a_mode() -> None:
     assert "asc is not running (not recording)" in nothing.stderr
     assert "hint: asc start" in nothing.stderr
     assert run_asc("stop").returncode == 3
-    named = run_asc("speech", "--mode", "watch")
+    named = run_asc("speech", "--since", "0", "--mode", "watch")
     assert named.returncode == 2
     assert "unrecognized arguments: --mode" in named.stderr
     old = run_asc("start", "--target", "w")

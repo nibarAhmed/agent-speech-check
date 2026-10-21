@@ -102,11 +102,21 @@ def test_failed_download_exits_3_so_agents_retry() -> None:
 
 def test_no_match_after_launch_says_which_windows_opened() -> None:
     # The agent can then tell a failed start from a window Windows kept behind.
-    plain = errors.NoMatch("x", 5, [])
-    assert plain.message.endswith("NVDA said:\n(nothing said)")
-    opened = errors.NoMatch("x", 5, [], windows=["asc field"])
-    assert opened.message.endswith('(nothing said)\nNew windows: "asc field"')
-    assert errors.NoMatch("x", 5, [], windows=[]).message.endswith("\nNew windows: (none)")
+    said = errors.numbered_lines([], 3)
+    plain = errors.NoMatch("x", 5, said)
+    assert plain.message.endswith("NVDA said:\n(nothing said after 3)")
+    opened = errors.NoMatch("x", 5, said, windows=["asc field"])
+    assert opened.message.endswith('(nothing said after 3)\nNew windows: "asc field"')
+    assert errors.NoMatch("x", 5, said, windows=[]).message.endswith("\nNew windows: (none)")
+
+
+def test_numbered_lines() -> None:
+    # The last number, or the one in "(nothing said after N)", is the next --since.
+    lines = [(4, 'said: "OK button"'), (5, "mode: focus")]
+    assert errors.numbered_lines(lines, 3) == '4 said: "OK button"\n5 mode: focus'
+    assert errors.numbered_lines([], 3) == "(nothing said after 3)"
+    dropped = errors.numbered_lines([(9, 'said: "late"')], 3, dropped=5)
+    assert dropped == '(5 earlier lines dropped)\n9 said: "late"'
 
 
 def test_an_unreadable_user_config_names_the_line_when_known() -> None:

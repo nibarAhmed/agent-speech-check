@@ -9,6 +9,7 @@ its process is untouched.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import signal
 import time
@@ -211,7 +212,7 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
         assert "synth = silence" in ini
         title = run_asc("press", "NVDA+T", "--settle", "800")
         assert title.returncode == 0, title.stderr
-        assert title.stdout.startswith('said: "'), title.stdout
+        assert re.match(r'[0-9]+ said: "', title.stdout), title.stdout
     finally:
         stopped = run_asc("stop", timeout=120)
     assert stopped.returncode == 0

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from os import PathLike
-from typing import ClassVar
+from typing import Any, ClassVar
 
 
 class AscError(Exception):
@@ -114,16 +114,14 @@ def bad_field(
     return category(f"{where}: expected {expected}, got {shown}")
 
 
-def said_lines(said: Sequence[str]) -> str:
-    """What NVDA said, as `asc` prints it, for messages that report it."""
-    if not said:
-        return "(nothing said)"
-    return "\n".join(said_line(text) for text in said)
+def numbered_lines(lines: Sequence[Sequence[Any]], after: int, dropped: int = 0) -> str:
+    """`[n, line]` pairs as `asc` prints them, in output and in errors alike.
 
-
-def said_line(text: str) -> str:
-    """One utterance as `asc` prints it. Lives here so error messages match output."""
-    return f"said: {json.dumps(text, ensure_ascii=False)}"
+    With no lines it names `after`, so the caller still has its next --since.
+    """
+    shown = [f"({dropped} earlier lines dropped)"] if dropped else []
+    shown += [f"{n} {line}" for n, line in lines] or [f"(nothing said after {after})"]
+    return "\n".join(shown)
 
 
 class BadArguments(UsageError):
@@ -140,6 +138,16 @@ class BadRegex(UsageError):
     def __init__(self, pattern: str, reason: str, position: int | None) -> None:
         at = f" at position {position}" if position is not None else ""
         super().__init__(f"bad regex {_show(pattern)}: {reason}{at}")
+
+
+class SinceAhead(UsageError):
+    """`--since` names a line not said yet, likely a number from an earlier session."""
+
+    def __init__(self, since: int, latest: int) -> None:
+        super().__init__(
+            f"--since {since} is after the latest line, {latest}",
+            hint="asc mark (line numbers restart with each asc start)",
+        )
 
 
 class UnknownKey(UsageError):
@@ -518,12 +526,14 @@ class NoMatch(ExpectationFailed):
         self,
         pattern: str,
         timeout_ms: int,
-        said: Sequence[str],
+        said: str,
         windows: Sequence[str] | None = None,
     ) -> None:
-        """`windows`: titles of the windows that opened during a launch, when known."""
+        """`said`: what NVDA said, from `numbered_lines`, so the agent has its
+        next --since. `windows`: titles of the windows that opened during a
+        launch, when known."""
         message = f"no speech matched {_show(pattern)} within {timeout_ms} ms. "
-        message += f"NVDA said:\n{said_lines(said)}"
+        message += f"NVDA said:\n{said}"
         if windows is not None:
             shown = ", ".join(_show(title) for title in windows) or "(none)"
             message += f"\nNew windows: {shown}"
@@ -570,7 +580,7 @@ _BY_KIND = {category.kind: category for category in CATEGORIES}
 EXIT_INTERRUPTED = 130
 
 # The IPC version lives here so `DaemonVersionMismatch` can name it.
-IPC_VERSION = 1
+IPC_VERSION = 2
 
 
 def from_kind(kind: str, message: str, hint: str | None = None) -> AscError:

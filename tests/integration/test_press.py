@@ -6,12 +6,15 @@ connects by itself, so keys are allowed without launching a real NVDA.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 import pytest
 from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
-from tests.integration.conftest import Env, run_asc, wait_until
+from tests.integration.conftest import Env, run_asc, start_asc, wait_until
+
+from agent_speech_check.remote.speech_log import CAP
 
 
 @pytest.fixture
@@ -37,7 +40,7 @@ def test_press_prints_new_speech_and_releases(nvda: FakeNvda) -> None:
     nvda.replies["NVDA+T"] = [f.CANCEL, f.speak("Program Manager ")]
     result = run_asc("press", "NVDA+T")
     assert result.returncode == 0, result.stderr
-    assert result.stdout == 'said: "Program Manager"\n'
+    assert result.stdout == '1 said: "Program Manager"\n'
     assert nvda.gestures == ["NVDA+T"]
     assert nvda.held == set()
     keys = [(m["vk_code"], m["pressed"]) for m in nvda.received if m["type"] == "key"]
@@ -50,9 +53,9 @@ def test_several_gestures_and_mode_line(nvda: FakeNvda) -> None:
     result = run_asc("press", "Tab", "Esc")
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        'said: "Your name edit blank"',
-        "mode: focus",
-        "mode: browse",
+        '1 said: "Your name edit blank"',
+        "2 mode: focus",
+        "3 mode: browse",
     ]
     assert "browse/focus: browse" in run_asc("status").stdout
 
@@ -65,22 +68,47 @@ def test_expect(nvda: FakeNvda) -> None:
     failed = run_asc("press", "H", "--expect", "level 3", "--timeout", "800")
     assert failed.returncode == 1
     assert 'no speech matched "level 3" within 800 ms' in failed.stderr
-    assert 'said: "no next heading"' in failed.stderr
+    assert 'NVDA said:\n2 said: "no next heading"' in failed.stderr
     assert nvda.held == set()
 
 
-def test_silence(nvda: FakeNvda) -> None:
+def _flooded_press(nvda: FakeNvda, *args: str) -> tuple[int, str, str]:
+    """Press H, then say five lines more than the log keeps while the press settles."""
+    nvda.replies["H"] = f.SILENCE
+    nvda.gestures.clear()
+    # The settle outlasts the flood, so every line comes after the key.
+    press = start_asc("press", "H", "--settle", "3000", *args)
+    assert wait_until(lambda: bool(nvda.gestures)), "the press never reached NVDA"
+    for n in range(1, CAP + 6):
+        nvda.send(f.speak(f"line {n}"))
+    out, err = press.communicate(timeout=60)
+    return press.returncode, out, err
+
+
+def test_a_press_that_outruns_the_log_says_lines_were_dropped(nvda: FakeNvda) -> None:
+    code, _, err = _flooded_press(nvda, "--expect", "nowhere", "--timeout", "6000")
+    assert code == 1, err
+    assert 'NVDA said:\n(5 earlier lines dropped)\n6 said: "line 6"\n' in err
+    code, out, err = _flooded_press(nvda)
+    assert code == 0, err
+    assert out.startswith(f'(5 earlier lines dropped)\n{CAP + 11} said: "line 6"\n')
+
+
+def test_silence_names_the_line_to_read_after(nvda: FakeNvda) -> None:
     nvda.replies["Space"] = f.SILENCE
     result = run_asc("press", "Space")
     assert result.returncode == 0
-    assert result.stdout == "(nothing said)\n"
+    assert result.stdout == "(nothing said after 0)\n"
+    nvda.replies["Tab"] = [f.speak("OK button")]
+    assert run_asc("press", "Tab").stdout == '1 said: "OK button"\n'
+    assert run_asc("press", "Space").stdout == "(nothing said after 1)\n"
 
 
 def test_unknown_type_is_ignored(nvda: FakeNvda) -> None:
     nvda.replies["Down"] = f.UNKNOWN
     result = run_asc("press", "Down")
     assert result.returncode == 0
-    assert result.stdout == 'said: "after unknown"\n'
+    assert result.stdout == '1 said: "after unknown"\n'
 
 
 @pytest.mark.parametrize(
@@ -102,7 +130,7 @@ def test_protocol_faults_exit_5_and_recover(nvda: FakeNvda, fault: str, message:
     status = run_asc("status").stdout
     assert "nvda: connected" in status
     del nvda.replies["Up"]
-    assert run_asc("press", "Up").stdout == 'said: "pressed Up"\n'
+    assert re.fullmatch(r'[0-9]+ said: "pressed Up"\n', run_asc("press", "Up").stdout)
 
 
 def test_disconnect_mid_gesture_releases_after_reconnect(nvda: FakeNvda) -> None:

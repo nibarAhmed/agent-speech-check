@@ -13,14 +13,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import itertools
+import json
 import re
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
-
-from agent_speech_check.errors import said_line
 
 CAP = 10_000
 MODE_SOUNDS = {"focusmode.wav": "focus", "browsemode.wav": "browse"}
@@ -39,7 +38,7 @@ class Entry:
         """The line as `asc` prints it, without the number."""
         if self.kind == "mode":
             return f"mode: {self.text}"
-        return said_line(self.text)
+        return f"said: {json.dumps(self.text, ensure_ascii=False)}"
 
 
 @dataclass(frozen=True)
@@ -55,7 +54,6 @@ class SpeechLog:
         # Lines below this number fell off the end of the log.
         self._dropped_below = 1
         self._changed = asyncio.Event()
-        self.mark = 0
         self.mode = "unknown"
         self.last_activity = time.monotonic()
 
@@ -103,10 +101,6 @@ class SpeechLog:
     def _set_mode(self, mode: str) -> None:
         self.mode = mode
         self._add("mode", mode)
-
-    def set_mark(self) -> int:
-        self.mark = self.latest
-        return self.mark
 
     def since(self, n: int) -> Since:
         """Lines numbered above `n`, and how many of those fell off the log."""

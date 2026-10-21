@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -98,7 +99,7 @@ def test_real_nvda_joins_speaks_and_releases() -> None:
 
     pressed = run_asc("press", "NVDA+T", "--settle", "800")
     assert pressed.returncode == 0, pressed.stderr
-    assert pressed.stdout.startswith('said: "'), pressed.stdout
+    assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
     assert not insert_held()
 
 
@@ -110,7 +111,7 @@ def test_mode_sounds_arrive_with_volume_zero(tmp_path: Path) -> None:
         [r"C:\Windows\System32\mshta.exe", str(page)]
     )
     try:
-        loaded = run_asc("wait", "asc test page", "--timeout", "30000")
+        loaded = run_asc("wait", "asc test page", "--since", "0", "--timeout", "30000")
         assert loaded.returncode == 0, loaded.stderr
         heading = run_asc("press", "H", "--expect", "Second heading", "--settle", "800")
         assert heading.returncode == 0, heading.stdout + heading.stderr
@@ -161,7 +162,7 @@ def test_desktop_mode_end_to_end(
         assert ok.returncode == 0, ok.stdout + ok.stderr
         wrong = run_asc("press", "NVDA+T", "--expect", "Cancel button", "--timeout", "2000")
         assert wrong.returncode == 1
-        assert "said: " in wrong.stderr
+        assert re.search(r'NVDA said:\n[0-9]+ said: "', wrong.stderr), wrong.stderr
 
         field = run_asc("press", "Tab", "--settle", "800")
         assert "mode: focus" in field.stdout, field.stdout

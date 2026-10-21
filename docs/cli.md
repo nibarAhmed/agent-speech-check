@@ -35,9 +35,9 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Recording | [`start`](#asc-start) | start recording in a mode |
 | | [`stop`](#asc-stop) | stop recording and forget the speech |
 | | [`status`](#asc-status) | show whether `asc` is recording and NVDA is connected |
-| Speech | [`speech`](#asc-speech) | print what NVDA said since the mark |
+| Speech | [`speech`](#asc-speech) | print what NVDA said after a line |
 | | [`wait`](#asc-wait) | wait until NVDA says something matching `REGEX` |
-| | [`mark`](#asc-mark) | remember the current end of the speech log |
+| | [`mark`](#asc-mark) | print the latest line number |
 | Input | [`press`](#asc-press) | press keys and print what NVDA said |
 | | [`type`](#asc-type) | type text and print what NVDA said |
 | | [`keys`](#asc-keys) | look up NVDA commands in NVDA's own reference |
@@ -315,7 +315,7 @@ mode: watch (keys refused)
 recording: yes
 nvda: connected
 browse/focus: unknown
-speech: 12 lines kept, latest 12, mark 10
+speech: 12 lines kept, latest 12
 ```
 
 - When NVDA isn't connected it prints how to connect it.
@@ -328,10 +328,10 @@ speech: 12 lines kept, latest 12, mark 10
 ### `asc speech`
 
 ```
-asc speech [--since N]
+asc speech --since N
 ```
 
-Prints what NVDA said after the mark, one numbered line per utterance, and
+Prints what NVDA said after line `N`, one numbered line per utterance, and
 mode changes:
 
 ```
@@ -341,34 +341,40 @@ mode changes:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--since N` | the mark | lines after line `N` (`0` for everything still kept) |
+| `--since N` | (required) | lines after line `N` (`0` for everything still kept) |
 
-Prints `(nothing said)` when there is nothing. If lines after `N` were dropped
-(the log keeps 10,000), it first prints `(K earlier lines dropped)`.
+Prints `(nothing said after N)` when there is nothing. If lines after `N` were dropped
+(the log keeps 10,000, and one reply about 32 MB of speech), it first prints
+`(K earlier lines dropped)`. An `N` after the latest line exits 2: line numbers
+restart with each `asc start`, so it can only come from an earlier session.
 
 ### `asc wait`
 
 ```
-asc wait [--timeout MS] [--since N] REGEX
+asc wait --since N [--timeout MS] REGEX
 ```
 
-Returns as soon as an utterance after the mark matches `REGEX`, and prints it.
+Returns as soon as an utterance after line `N` matches `REGEX`, and prints it
+with its number. Pass that number as the next `--since`, so the next `wait`
+can't match the same line.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `REGEX` | (required) | Python syntax, searched anywhere in the line; use `(?i)` to ignore case |
 | `--timeout MS` | `timeout_ms`, 5000 | how long to wait, at most 600000 |
-| `--since N` | the mark | look at lines after line `N` |
+| `--since N` | (required) | look at lines after line `N` |
 
-- On timeout it exits 1 and prints what NVDA did say.
+- On timeout it exits 1 and prints what NVDA did say, numbered like `speech`,
+  so its last number is still the next `--since`.
+- An `N` after the latest line exits 2, as in `speech`.
 - If NVDA disconnects meanwhile, `wait` keeps waiting, since NVDA reconnects by
   itself. If it's still gone at the timeout, `wait` exits 3 instead of 1, with
   the last connection error if there was one. A connection that never joins
   (not NVDA, as far as `asc` can tell) never fails a `wait`.
 
 ```shell
-asc wait "OK button"
-asc wait "(?i)saved" --timeout 10000
+asc wait --since 40 "OK button"
+asc wait --since 40 "(?i)saved" --timeout 10000
 ```
 
 ### `asc mark`
@@ -377,8 +383,26 @@ asc wait "(?i)saved" --timeout 10000
 asc mark
 ```
 
-Sets the mark to the latest line and prints it: `mark: 12`. `speech` and `wait`
-look at lines after the mark.
+Prints the number of the latest line: `mark: 12`. Run it before an action, then
+pass the number to `speech` or `wait` as `--since`. Nothing is stored, so callers
+can't move each other's position:
+
+```shell
+asc mark                      # mark: 40
+# ...act...
+asc wait --since 40 "Saved"   # 43 said: "File saved"
+asc wait --since 43 "Done"    # waits for speech after line 43
+```
+
+`press`, `type` and `launch` take no `--since`: they print only what NVDA said
+while they ran, numbered the same way. Their last number, or `N` in
+`(nothing said after N)`, is the next `--since`:
+
+```shell
+asc press Tab                 # 41 said: "OK button"
+asc press Enter               # 42 said: "Saving"
+asc wait --since 42 "Saved"   # 43 said: "File saved"
+```
 
 ### `asc press`
 
@@ -387,12 +411,15 @@ asc press [--expect REGEX] [--settle MS] [--timeout MS] KEY [KEY ...]
 ```
 
 Sends each gesture, waits for `--settle` ms of quiet, and prints only the new
-speech as `said: "..."` and `mode: ...` lines, or `(nothing said)`.
+speech as numbered `said: "..."` and `mode: ...` lines, like `speech`, or
+`(nothing said after N)`, where `N` is the latest line before the first key.
+Like `speech`, it notes `(K earlier lines dropped)` when the log or one reply
+could not hold them all.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `KEY` | (required) | a gesture: key names joined by `+` |
-| `--expect REGEX` | none | unless the new speech matches, exit 1 and print what was said |
+| `--expect REGEX` | none | unless the new speech matches, exit 1 and print what was said, numbered |
 | `--settle MS` | `settle_ms`, 400 | quiet period, 50 to 10000 |
 | `--timeout MS` | `timeout_ms`, 5000 | deadline for the whole command, including waiting for the keyboard |
 
@@ -478,7 +505,7 @@ asc launch [--title REGEX] [--timeout MS] CMD
 
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA
-said. Works in every mode.
+said, numbered like `press`. Works in every mode.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
@@ -486,7 +513,7 @@ said. Works in every mode.
 | `--title REGEX` | anything | wait until NVDA says this |
 | `--timeout MS` | `launch_timeout_ms`, 30000 | how long to wait, at most 600000 |
 
-- On timeout it exits 1 with what NVDA did say. Outside sandbox mode the
+- On timeout it exits 1 with what NVDA did say, numbered. Outside sandbox mode the
   message ends with `New windows:`, the titles of windows that opened
   meanwhile, or `(none)`.
 - A command that can't start exits 2. NVDA disconnecting meanwhile is handled

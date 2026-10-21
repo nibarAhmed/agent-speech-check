@@ -50,7 +50,7 @@ To uninstall, run `asc stop`, then `uv tool uninstall agent-speech-check`, and d
 ## Get started
 
 1. Run `asc setup` to pick a mode and create the configuration. It offers to download NVDA for desktop mode and to add the firewall rule sandbox mode needs (that step asks for admin). You can change settings later with `asc config`.
-2. Start a session, launch your app, and press keys, as in the [Example](#example). Use `asc speech` to see everything NVDA said so far. The first sandbox start takes about a minute.
+2. Start a session, launch your app, and press keys, as in the [Example](#example). Use `asc speech --since 0` to see everything NVDA said so far. The first sandbox start takes about a minute.
 3. Run `asc stop` when you're done.
 
 Use `asc status` to check the connection and `asc COMMAND --help` for a command's options.

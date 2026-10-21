@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import logging
 import os
 import re
@@ -33,6 +34,8 @@ from agent_speech_check.errors import (
     NvdaNotConnected,
     PanicKeyTaken,
     SharedNeedsConsent,
+    SinceAhead,
+    numbered_lines,
 )
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
@@ -40,7 +43,7 @@ from agent_speech_check.inputs.keys import Hotkey
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import Relay
-from agent_speech_check.remote.speech_log import Entry, SpeechLog
+from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.windows import winapi
@@ -139,8 +142,31 @@ def new_windows(before: set[int]) -> list[str]:
     return [title for title in titles if title]
 
 
-def _said(entries: tuple[Entry, ...]) -> list[str]:
-    return [e.text for e in entries if e.kind == "said"]
+# Half a reply for speech lines leaves the rest for the envelope around them.
+SPEECH_BUDGET = ipc.MAX_RESPONSE // 2
+
+
+def _fit(since: Since) -> tuple[list[list[Any]], int]:
+    """The newest lines that fit in one reply as `[n, line]` pairs, and how many
+    lines count as dropped: those the log lost, plus the older ones left out."""
+    lines: list[list[Any]] = []
+    size = 0
+    for entry in reversed(since.entries):
+        pair = [entry.n, entry.line()]
+        # As the reply's JSON escapes it, with its separator. An error message
+        # holds the same text with less around it, so this covers both.
+        size += len(json.dumps(pair)) + 2
+        if size > SPEECH_BUDGET:
+            break
+        lines.append(pair)
+    lines.reverse()
+    return lines, since.dropped + len(since.entries) - len(lines)
+
+
+def _new_speech(since: Since, after: int) -> dict[str, Any]:
+    """A command's own speech, and the line it came after for when there is none."""
+    lines, dropped = _fit(since)
+    return {"lines": lines, "after": after, "dropped": dropped}
 
 
 class Daemon:
@@ -186,11 +212,17 @@ class Daemon:
         return {}
 
     async def _mark(self, _args: ipc.NoArgs) -> dict[str, Any]:
-        return {"mark": self.speech.set_mark()}
+        return {"mark": self.speech.latest}
+
+    def _check_since(self, since: int) -> None:
+        """A line not said yet can only be a number from an earlier session."""
+        if since > self.speech.latest:
+            raise SinceAhead(since, self.speech.latest)
 
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
-        result = self.speech.since(self.speech.mark if args.since is None else args.since)
-        return {"lines": [[e.n, e.line()] for e in result.entries], "dropped": result.dropped}
+        self._check_since(args.since)
+        lines, dropped = _fit(self.speech.since(args.since))
+        return {"lines": lines, "dropped": dropped}
 
     def status(self) -> dict[str, Any]:
         return {
@@ -203,7 +235,6 @@ class Daemon:
             "nvda_mode": self.speech.mode,
             "lines": len(self.speech),
             "latest": self.speech.latest,
-            "mark": self.speech.mark,
             "last_error": self.relay.last_error,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
             "sandbox_failure": self._sandbox_failure(),
@@ -216,13 +247,13 @@ class Daemon:
         return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
+        self._check_since(args.since)
         if not self.relay.connected:
             raise NvdaNotConnected
-        after = self.speech.mark if args.since is None else args.since
         losses_before = len(self.relay.losses)
-        entry = await self._wait_match(args.regex, after, args.timeout_ms, losses_before)
+        entry = await self._wait_match(args.regex, args.since, args.timeout_ms, losses_before)
         if entry is None:
-            raise self._no_match(args.pattern, args.timeout_ms, after)
+            raise self._no_match(args.pattern, args.timeout_ms, args.since)
         return {"line": [entry.n, entry.line()]}
 
     async def _wait_match(
@@ -242,22 +273,24 @@ class Daemon:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
             return NvdaNotConnected(timeout_ms, self.relay.last_error)
-        return NoMatch(pattern, timeout_ms, _said(self.speech.since(after).entries), windows)
+        lines, dropped = _fit(self.speech.since(after))
+        said = numbered_lines(lines, after, dropped)
+        return NoMatch(pattern, timeout_ms, said, windows)
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:
         pressed = await self.keyboard.press(
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, args.regex
         )
         if not pressed.matched:
-            # A drop fails a press before this, so NVDA is still connected here.
-            raise NoMatch(args.expect or "", args.timeout_ms, _said(pressed.entries))
-        return {"lines": [e.line() for e in pressed.entries]}
+            # A drop fails a press before this, so this lists speech, not a lost NVDA.
+            raise self._no_match(args.expect or "", args.timeout_ms, pressed.after)
+        return _new_speech(pressed.since, pressed.after)
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
         )
-        return {"lines": [e.line() for e in typed.entries]}
+        return _new_speech(typed.since, typed.after)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if not self.relay.connected:
@@ -287,7 +320,7 @@ class Daemon:
             raise self._no_match(args.title or ".", args.timeout_ms, start, windows)
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
-        return {"lines": [e.line() for e in self.speech.since(start).entries]}
+        return _new_speech(self.speech.since(start), start)
 
     def _relay_info(self) -> nvda_config.RelayAddress:
         credentials = self.relay.credentials

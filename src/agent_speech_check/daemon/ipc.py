@@ -1,8 +1,9 @@
 """CLI to daemon: JSON lines over 127.0.0.1 TCP, one request per connection.
 
-Request:  {"v": 1, "token": "...", "cmd": "press", "args": {...}}
-Response: {"v": 1, "ok": true, "result": {...}}
-       or {"v": 1, "ok": false, "error": {"kind": "refused", "message": "...", "hint": "..."}}
+Request:  {"v": IPC_VERSION, "token": "...", "cmd": "press", "args": {...}}
+Response: {"v": IPC_VERSION, "ok": true, "result": {...}}
+       or {"v": IPC_VERSION, "ok": false,
+           "error": {"kind": "refused", "message": "...", "hint": "..."}}
 
 The CLI and the daemon parse requests with the same `parse_request`: the CLI for
 a fast, friendly error, the daemon because it is the authority. A wrong token
@@ -79,13 +80,13 @@ def _settle(f: Fields) -> int:
     return f.number("settle_ms", low=SETTLE_MS[0], high=SETTLE_MS[1])
 
 
-def _since(f: Fields) -> int | None:
-    return f.opt_number("since", low=0, high=2**53)
+def _since(f: Fields) -> int:
+    return f.number("since", low=0, high=2**53)
 
 
 @dataclass(frozen=True)
 class SpeechArgs:
-    since: int | None
+    since: int
 
     @classmethod
     def parse(cls, f: Fields) -> SpeechArgs:
@@ -96,7 +97,7 @@ class SpeechArgs:
 class WaitArgs:
     pattern: str
     timeout_ms: int
-    since: int | None
+    since: int
 
     @property
     def regex(self) -> re.Pattern[str]:
@@ -283,7 +284,9 @@ def error_detail(error: AscError) -> dict[str, Any]:
 
 def error_from(raw: object, where: str) -> AscError:
     error = Fields(raw, where, InternalError)
-    return from_kind(error.text("kind"), error.text("message"), error.opt_text("hint"))
+    # A failed match lists the speech, which can be as long as any reply.
+    message = error.text("message", max_len=MAX_RESPONSE)
+    return from_kind(error.text("kind"), message, error.opt_text("hint"))
 
 
 # ---------------------------------------------------------------- server

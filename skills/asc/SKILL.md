@@ -42,12 +42,18 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 
 ```
 asc start                         # the mode setting, or --mode M
-asc mark                          # before each step, so old speech can't match
-...act (click, navigate, press keys, run the test)...
-asc wait "(?i)saved"              # Python regex, searched
-asc speech                        # everything since the mark
+asc mark                          # mark: 40, before each step
+...act (click, navigate, run the test)...
+asc wait --since 40 "(?i)saved"   # Python regex, searched; prints 43 said: ...
+asc speech --since 40             # everything after line 40
 asc stop                          # when done
 ```
+
+- `--since` is required. Use the number from `asc mark` or the last line you
+  read, never an older one, or old speech can match. Numbers restart with each
+  `asc start`. `press`, `type` and `launch` print their own speech, numbered,
+  and take no `--since`. Their last number, or `N` in `(nothing said after N)`,
+  is the next `--since`.
 
 - If `asc start` exits 4 because `asc` already runs, `asc status` shows which
   mode. Another session may own it: stop it only if it's the wrong mode.
@@ -86,7 +92,7 @@ asc keys heading                  # look NVDA commands up instead of guessing
 
 | Code | Meaning | Next step |
 |---|---|---|
-| 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say before retrying |
+| 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say; its last line number, or N in `(nothing said after N)`, is the next `--since` |
 | 2 | usage | fix the arguments or setting |
 | 3 | not connected or not running | follow the hint: `asc start` if not running, else `asc status` says how to connect |
 | 4 | refused or busy | read the message |
