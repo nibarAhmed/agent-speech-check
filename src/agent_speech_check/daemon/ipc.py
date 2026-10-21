@@ -79,13 +79,13 @@ def _settle(f: Fields) -> int:
     return f.number("settle_ms", low=SETTLE_MS[0], high=SETTLE_MS[1])
 
 
-def _since(f: Fields) -> int | None:
-    return f.opt_number("since", low=0, high=2**53)
+def _since(f: Fields) -> int:
+    return f.number("since", low=0, high=2**53)
 
 
 @dataclass(frozen=True)
 class SpeechArgs:
-    since: int | None
+    since: int
 
     @classmethod
     def parse(cls, f: Fields) -> SpeechArgs:
@@ -96,7 +96,7 @@ class SpeechArgs:
 class WaitArgs:
     pattern: str
     timeout_ms: int
-    since: int | None
+    since: int
 
     @property
     def regex(self) -> re.Pattern[str]:

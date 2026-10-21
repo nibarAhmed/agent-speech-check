@@ -35,9 +35,9 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Recording | [`start`](#asc-start) | start recording in a mode |
 | | [`stop`](#asc-stop) | stop recording and forget the speech |
 | | [`status`](#asc-status) | show whether `asc` is recording and NVDA is connected |
-| Speech | [`speech`](#asc-speech) | print what NVDA said since the mark |
+| Speech | [`speech`](#asc-speech) | print what NVDA said after a line |
 | | [`wait`](#asc-wait) | wait until NVDA says something matching `REGEX` |
-| | [`mark`](#asc-mark) | remember the current end of the speech log |
+| | [`mark`](#asc-mark) | print the latest line number |
 | Input | [`press`](#asc-press) | press keys and print what NVDA said |
 | | [`type`](#asc-type) | type text and print what NVDA said |
 | | [`keys`](#asc-keys) | look up NVDA commands in NVDA's own reference |
@@ -315,7 +315,7 @@ mode: watch (keys refused)
 recording: yes
 nvda: connected
 browse/focus: unknown
-speech: 12 lines kept, latest 12, mark 10
+speech: 12 lines kept, latest 12
 ```
 
 - When NVDA isn't connected it prints how to connect it.
@@ -328,10 +328,10 @@ speech: 12 lines kept, latest 12, mark 10
 ### `asc speech`
 
 ```
-asc speech [--since N]
+asc speech --since N
 ```
 
-Prints what NVDA said after the mark, one numbered line per utterance, and
+Prints what NVDA said after line `N`, one numbered line per utterance, and
 mode changes:
 
 ```
@@ -341,7 +341,7 @@ mode changes:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--since N` | the mark | lines after line `N` (`0` for everything still kept) |
+| `--since N` | (required) | lines after line `N` (`0` for everything still kept) |
 
 Prints `(nothing said)` when there is nothing. If lines after `N` were dropped
 (the log keeps 10,000), it first prints `(K earlier lines dropped)`.
@@ -349,16 +349,18 @@ Prints `(nothing said)` when there is nothing. If lines after `N` were dropped
 ### `asc wait`
 
 ```
-asc wait [--timeout MS] [--since N] REGEX
+asc wait --since N [--timeout MS] REGEX
 ```
 
-Returns as soon as an utterance after the mark matches `REGEX`, and prints it.
+Returns as soon as an utterance after line `N` matches `REGEX`, and prints it
+with its number. Pass that number as the next `--since`, so the next `wait`
+can't match the same line.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `REGEX` | (required) | Python syntax, searched anywhere in the line; use `(?i)` to ignore case |
 | `--timeout MS` | `timeout_ms`, 5000 | how long to wait, at most 600000 |
-| `--since N` | the mark | look at lines after line `N` |
+| `--since N` | (required) | look at lines after line `N` |
 
 - On timeout it exits 1 and prints what NVDA did say.
 - If NVDA disconnects meanwhile, `wait` keeps waiting, since NVDA reconnects by
@@ -367,8 +369,8 @@ Returns as soon as an utterance after the mark matches `REGEX`, and prints it.
   (not NVDA, as far as `asc` can tell) never fails a `wait`.
 
 ```shell
-asc wait "OK button"
-asc wait "(?i)saved" --timeout 10000
+asc wait --since 40 "OK button"
+asc wait --since 40 "(?i)saved" --timeout 10000
 ```
 
 ### `asc mark`
@@ -377,8 +379,19 @@ asc wait "(?i)saved" --timeout 10000
 asc mark
 ```
 
-Sets the mark to the latest line and prints it: `mark: 12`. `speech` and `wait`
-look at lines after the mark.
+Prints the number of the latest line: `mark: 12`. Run it before an action, then
+pass the number to `speech` or `wait` as `--since`. Nothing is stored, so callers
+can't move each other's position:
+
+```shell
+asc mark                      # mark: 40
+# ...act...
+asc wait --since 40 "Saved"   # 43 said: "File saved"
+asc wait --since 43 "Done"    # waits for speech after line 43
+```
+
+`press`, `type` and `launch` need no number: they print only what NVDA said
+while they ran.
 
 ### `asc press`
 

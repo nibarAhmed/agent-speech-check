@@ -42,12 +42,16 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 
 ```
 asc start                         # the mode setting, or --mode M
-asc mark                          # before each step, so old speech can't match
-...act (click, navigate, press keys, run the test)...
-asc wait "(?i)saved"              # Python regex, searched
-asc speech                        # everything since the mark
+asc mark                          # mark: 40, before each step
+...act (click, navigate, run the test)...
+asc wait --since 40 "(?i)saved"   # Python regex, searched; prints 43 said: ...
+asc speech --since 40             # everything after line 40
 asc stop                          # when done
 ```
+
+- `--since` is required. Use the number from `asc mark` or the last line you
+  read, never an older one, or old speech can match. `press`, `type` and
+  `launch` print their own speech and need no number.
 
 - If `asc start` exits 4 because `asc` already runs, `asc status` shows which
   mode. Another session may own it: stop it only if it's the wrong mode.

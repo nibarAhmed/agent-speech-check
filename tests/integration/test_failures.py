@@ -25,7 +25,7 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
 
 def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None:
     assert env.running("desktop") == []
-    waiting = start_asc("wait", "later", "--timeout", "8000")
+    waiting = start_asc("wait", "later", "--since", "0", "--timeout", "8000")
     env.wait_running("desktop", "wait")
     assert env.running("desktop") == ["wait"]
     nvda.say("later")
@@ -34,7 +34,7 @@ def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None
 
 
 def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvda) -> None:
-    waiting = start_asc("wait", "later", "--timeout", "8000")
+    waiting = start_asc("wait", "later", "--since", "0", "--timeout", "8000")
     env.wait_running("desktop", "wait")
     with tls_client(env.port) as sock:
         sock.sendall(b"{not json\n")
@@ -48,9 +48,11 @@ def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvd
 
 
 @pytest.mark.xdist_group("desktop")
-@pytest.mark.parametrize("command", [("wait", "never"), ("launch", f'"{sys.executable}" -c pass')])
+@pytest.mark.parametrize(
+    "command", [("wait", "never", "--since", "0"), ("launch", f'"{sys.executable}" -c pass')]
+)
 def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
-    env: Env, nvda: FakeNvda, command: tuple[str, str]
+    env: Env, nvda: FakeNvda, command: tuple[str, ...]
 ) -> None:
     running = start_asc(*command, "--timeout", "8000")
     env.wait_running("desktop", command[0])
@@ -61,7 +63,7 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
 
 
 def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeNvda) -> None:
-    waiting = start_asc("wait", "never", "--timeout", "3000")
+    waiting = start_asc("wait", "never", "--since", "0", "--timeout", "3000")
     env.wait_running("desktop", "wait")
     nvda.close()
     _, err = waiting.communicate(timeout=30)

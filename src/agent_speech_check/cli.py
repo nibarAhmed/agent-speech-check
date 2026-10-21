@@ -51,9 +51,9 @@ typical use:
   asc setup                    choose your settings (once)
   asc start                    start recording (watch mode: your own NVDA)
   asc status                   how NVDA should connect, and whether it is
-  asc mark                     remember where the speech log is now
-  asc wait "OK button"         block until NVDA says it (regex)
-  asc speech                   what NVDA said since the mark
+  asc mark                     print the latest line number, N
+  asc wait --since N "OK"      block until NVDA says it after line N (regex)
+  asc speech --since N         what NVDA said after line N
   asc stop
 
 Speech is kept in memory only. Run asc COMMAND --help for details.
@@ -116,7 +116,7 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _since(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--since", type=int, metavar="N", help="lines after N")
+    parser.add_argument("--since", type=int, metavar="N", required=True, help="lines after N")
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
@@ -253,7 +253,7 @@ def _show_status(status: dict[str, Any]) -> None:
     if not status["connected"]:
         print(_connect_line(status))
     print(f"browse/focus: {status['nvda_mode']}")
-    print(f"speech: {status['lines']} lines kept, latest {status['latest']}, mark {status['mark']}")
+    print(f"speech: {status['lines']} lines kept, latest {status['latest']}")
     if status.get("panic_key"):
         print(f"panic key: {status['panic_key']} stops asc and releases keys")
     if status.get("sandbox"):
@@ -720,13 +720,12 @@ examples:
         cmd_status,
     ),
     "speech": Command(
-        "print what NVDA said since the mark",
+        "print what NVDA said after a line",
         """\
-Print what NVDA said, one numbered line per utterance, plus mode changes.
-By default, lines after the last asc mark.
+Print what NVDA said after line N, one numbered line per utterance, plus
+mode changes. Take N from asc mark, or from the last line you read.
 
 examples:
-  asc speech
   asc speech --since 0       everything still kept
   asc speech --since 41      lines after 41""",
         cmd_speech,
@@ -735,19 +734,21 @@ examples:
     "wait": Command(
         "wait until NVDA says something matching REGEX",
         """\
-Return as soon as an utterance after the mark (or --since) matches REGEX
-(Python syntax, searched anywhere in the line; use (?i) to ignore case).
-Exits 1 with what NVDA did say if nothing matched in time.
+Return as soon as an utterance after line N matches REGEX (Python syntax,
+searched anywhere in the line; use (?i) to ignore case), and print it with
+its number, the next N. Exits 1 with what NVDA did say if nothing matched
+in time.
 
 examples:
-  asc wait "OK button"
-  asc wait "(?i)saved" --timeout 10000""",
+  asc wait --since 40 "OK button"
+  asc wait --since 40 "(?i)saved" --timeout 10000""",
         cmd_wait,
         _wait_args,
     ),
     "mark": Command(
-        "remember the current end of the speech log",
-        "Print and set the mark.",
+        "print the latest line number",
+        "Print the number of the latest line: mark: N. Run it before the action, then\n"
+        "pass N to wait or speech as --since N. Nothing is stored.",
         cmd_mark,
     ),
     "press": Command(

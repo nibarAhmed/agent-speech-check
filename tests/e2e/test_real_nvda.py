@@ -110,7 +110,7 @@ def test_mode_sounds_arrive_with_volume_zero(tmp_path: Path) -> None:
         [r"C:\Windows\System32\mshta.exe", str(page)]
     )
     try:
-        loaded = run_asc("wait", "asc test page", "--timeout", "30000")
+        loaded = run_asc("wait", "asc test page", "--since", "0", "--timeout", "30000")
         assert loaded.returncode == 0, loaded.stderr
         heading = run_asc("press", "H", "--expect", "Second heading", "--settle", "800")
         assert heading.returncode == 0, heading.stdout + heading.stderr

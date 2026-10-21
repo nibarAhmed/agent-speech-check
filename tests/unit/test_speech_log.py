@@ -32,14 +32,6 @@ async def test_empty_speech_is_only_activity() -> None:
     assert log.last_activity > before
 
 
-async def test_mark() -> None:
-    log = SpeechLog()
-    log.said("a")
-    assert log.set_mark() == 1
-    log.said("b")
-    assert [e.text for e in log.since(log.mark).entries] == ["b"]
-
-
 async def test_cap_reports_dropped() -> None:
     log = SpeechLog(cap=3)
     for word in "abcde":
@@ -67,7 +59,7 @@ async def test_mode_from_sounds_and_words() -> None:
 async def test_wait_match_returns_as_soon_as_words_arrive() -> None:
     log = SpeechLog()
     log.said("old OK")
-    after = log.set_mark()
+    after = log.latest
 
     async def speak_later() -> None:
         await asyncio.sleep(0.05)

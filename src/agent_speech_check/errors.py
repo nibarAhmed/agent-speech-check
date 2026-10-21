@@ -570,7 +570,7 @@ _BY_KIND = {category.kind: category for category in CATEGORIES}
 EXIT_INTERRUPTED = 130
 
 # The IPC version lives here so `DaemonVersionMismatch` can name it.
-IPC_VERSION = 1
+IPC_VERSION = 2
 
 
 def from_kind(kind: str, message: str, hint: str | None = None) -> AscError:

@@ -21,22 +21,22 @@ def test_watch_session(env: Env) -> None:
     assert "nvda: not connected" in started.stdout
     assert f"host 127.0.0.1:{env.port}, key " in started.stdout
 
-    assert run_asc("speech").stdout == "(nothing said)\n"
-    not_connected = run_asc("wait", "x")
+    assert run_asc("speech", "--since", "0").stdout == "(nothing said)\n"
+    not_connected = run_asc("wait", "x", "--since", "0")
     assert not_connected.returncode == 3
     assert "NVDA is not connected" in not_connected.stderr
 
     fake = env.fake("watch")
     try:
         fake.say("Recycle Bin ", "list item ", "focused ")
-        waited = run_asc("wait", "Recycle")
+        waited = run_asc("wait", "Recycle", "--since", "0")
         assert waited.returncode == 0, waited.stderr
         assert waited.stdout == '1 said: "Recycle Bin list item focused"\n'
 
         assert run_asc("mark").stdout == "mark: 1\n"
         fake.say("second")
-        assert run_asc("wait", "second").returncode == 0
-        assert run_asc("speech").stdout == '2 said: "second"\n'
+        assert run_asc("wait", "second", "--since", "1").returncode == 0
+        assert run_asc("speech", "--since", "1").stdout == '2 said: "second"\n'
         everything = run_asc("speech", "--since", "0").stdout
         assert everything.splitlines() == [
             '1 said: "Recycle Bin list item focused"',
@@ -46,13 +46,14 @@ def test_watch_session(env: Env) -> None:
         status = run_asc("status")
         assert "nvda: connected" in status.stdout
         assert "browse/focus: unknown" in status.stdout
+        assert "speech: 2 lines kept, latest 2\n" in status.stdout
 
         refused = run_asc("press", "Tab")
         assert refused.returncode == 4
         assert "watch mode, which never sends keys" in refused.stderr
         assert not any(m.get("type") == "key" for m in fake.received)
 
-        missed = run_asc("wait", "nope", "--timeout", "200")
+        missed = run_asc("wait", "nope", "--since", "1", "--timeout", "200")
         assert missed.returncode == 1
         assert 'no speech matched "nope" within 200 ms' in missed.stderr
         assert 'said: "second"' in missed.stderr
@@ -78,7 +79,7 @@ def test_any_unicode_speech_prints_as_utf8(env: Env) -> None:
     fake = env.fake("watch")
     try:
         fake.say(SAMPLE)
-        waited = run_asc("wait", SAMPLE[:4])
+        waited = run_asc("wait", SAMPLE[:4], "--since", "0")
         assert waited.returncode == 0, waited.stderr
         assert waited.stdout == f'1 said: "{SAMPLE}"' + chr(10)
     finally:
@@ -142,7 +143,7 @@ def test_commands_find_the_daemon_without_a_mode() -> None:
     assert "asc is not running (not recording)" in nothing.stderr
     assert "hint: asc start" in nothing.stderr
     assert run_asc("stop").returncode == 3
-    named = run_asc("speech", "--mode", "watch")
+    named = run_asc("speech", "--since", "0", "--mode", "watch")
     assert named.returncode == 2
     assert "unrecognized arguments: --mode" in named.stderr
     old = run_asc("start", "--target", "w")

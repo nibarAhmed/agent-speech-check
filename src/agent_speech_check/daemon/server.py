@@ -186,10 +186,10 @@ class Daemon:
         return {}
 
     async def _mark(self, _args: ipc.NoArgs) -> dict[str, Any]:
-        return {"mark": self.speech.set_mark()}
+        return {"mark": self.speech.latest}
 
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
-        result = self.speech.since(self.speech.mark if args.since is None else args.since)
+        result = self.speech.since(args.since)
         return {"lines": [[e.n, e.line()] for e in result.entries], "dropped": result.dropped}
 
     def status(self) -> dict[str, Any]:
@@ -203,7 +203,6 @@ class Daemon:
             "nvda_mode": self.speech.mode,
             "lines": len(self.speech),
             "latest": self.speech.latest,
-            "mark": self.speech.mark,
             "last_error": self.relay.last_error,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
             "sandbox_failure": self._sandbox_failure(),
@@ -218,11 +217,10 @@ class Daemon:
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
         if not self.relay.connected:
             raise NvdaNotConnected
-        after = self.speech.mark if args.since is None else args.since
         losses_before = len(self.relay.losses)
-        entry = await self._wait_match(args.regex, after, args.timeout_ms, losses_before)
+        entry = await self._wait_match(args.regex, args.since, args.timeout_ms, losses_before)
         if entry is None:
-            raise self._no_match(args.pattern, args.timeout_ms, after)
+            raise self._no_match(args.pattern, args.timeout_ms, args.since)
         return {"line": [entry.n, entry.line()]}
 
     async def _wait_match(
