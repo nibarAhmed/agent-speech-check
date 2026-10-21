@@ -29,6 +29,13 @@ def test_command_help_leaves_out_exit_codes(capsys: pytest.CaptureFixture[str]) 
     assert "exit codes" not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("command", ["wait", "speech"])
+def test_since_help_warns_of_an_old_n(command: str, capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        main([command, "--help"])
+    assert "an older N brings back old speech" in " ".join(capsys.readouterr().out.split())
+
+
 def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 2
     captured = capsys.readouterr()

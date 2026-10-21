@@ -190,7 +190,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
         if silent is not None:
             raise DaemonNotAnswering(silent.message)
         if running:
-            raise AlreadyRunning
+            raise AlreadyRunning(other.name)
     process = _spawn(target, folder)
     if not poll_until(
         lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S

@@ -48,12 +48,10 @@ asc speech --since 40
 asc stop                          # when done
 ```
 
-- For `--since`, pass the last number you read, or N from `(nothing said after N)`.
-  Never an older one, or old speech can match. Numbers restart with each `asc start`.
-- If `asc start` exits 4 because `asc` already runs, `asc status` shows which
-  mode. Another session may own it: stop it only if it's the wrong mode.
-- If `asc start` prints `NVDA <version> is available: asc get-nvda`, it still
-  started. To update: `asc stop`, `asc get-nvda`, `asc start`.
+- For `--since`, N from `(nothing said after N)` counts too. Numbers restart
+  with each `asc start`.
+- If `asc start` says `asc` already runs, another session may own it: stop it
+  only if it's the wrong mode.
 - If presses keep missing speech or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` with `asc config set`.
 

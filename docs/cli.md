@@ -119,8 +119,9 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   5 s; offline it says nothing). If that is newer than the portable NVDA, at a
   terminal it offers to update `asc`'s own copy first; a failed update keeps the
   old copy. Without a terminal, as when an agent runs it, it prints
-  `NVDA <version> is available: asc get-nvda` and starts. An NVDA in `nvda_dir`
-  is never updated: the line says `(nvda_dir is older)`.
+  `NVDA <version> is available. To update: asc stop, asc get-nvda, asc start`
+  and starts. An NVDA in `nvda_dir` is never updated: the line says
+  `(nvda_dir is older)`.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
   connects to the relay itself. No portable NVDA is needed, and `nvda_dir` is
   refused with exit 2, as in watch and shared mode.
@@ -277,8 +278,8 @@ checks depends on the mode: see [Modes](#modes).
   nested sections. Settings `asc` writes itself (`remote`, the synth, sound
   volume, keyboard layout, the mode sounds) are refused with exit 2, and so is
   a setting for an NVDA `asc` doesn't launch.
-- Exits 4 if `asc` is already running, in this mode or another, and 3 with
-  the last daemon log lines if it fails to start.
+- Exits 4 if `asc` is already running, in this mode or another (the message
+  names that mode), and 3 with the last daemon log lines if it fails to start.
 
 ```shell
 asc start

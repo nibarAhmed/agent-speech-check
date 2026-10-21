@@ -117,7 +117,13 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _since(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--since", type=int, metavar="N", required=True, help="lines after N")
+    parser.add_argument(
+        "--since",
+        type=int,
+        metavar="N",
+        required=True,
+        help="lines after N, the last number you read (an older N brings back old speech)",
+    )
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
@@ -463,7 +469,7 @@ def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None)
     if nvda_dir is not None:
         print(f"{news} (nvda_dir is older)")
     elif ask is None:
-        print(f"{news}: asc get-nvda")
+        print(f"{news}. To update: asc stop, asc get-nvda, asc start")
     else:
         # The release already looked up, so a second lookup can't pick another.
         update = partial(_make_portable, release.version, sha1=release.sha1)

@@ -337,9 +337,10 @@ NEWER = Release("2027.1", "a5b01592f4e2355432848d3ad82f5bd214f25947")
 
 
 def test_without_a_terminal_a_newer_nvda_is_one_line(capsys: pytest.CaptureFixture[str]) -> None:
-    # Agents have no terminal: they read this and run asc get-nvda themselves.
+    # Agents have no terminal: start goes on, and get-nvda refuses while its NVDA runs.
     say_update(NEWER, None, None)
-    assert capsys.readouterr().out == "NVDA 2027.1 is available: asc get-nvda\n"
+    out = capsys.readouterr().out
+    assert out == "NVDA 2027.1 is available. To update: asc stop, asc get-nvda, asc start\n"
 
 
 def test_an_nvda_dir_is_never_updated(capsys: pytest.CaptureFixture[str]) -> None:
