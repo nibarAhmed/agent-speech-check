@@ -116,8 +116,8 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _since(parser: argparse.ArgumentParser, help: str = "lines after N") -> None:
-    parser.add_argument("--since", type=int, metavar="N", required=True, help=help)
+def _since(parser: argparse.ArgumentParser, text: str = "lines after N") -> None:
+    parser.add_argument("--since", type=int, metavar="N", required=True, help=text)
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
@@ -461,18 +461,18 @@ def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None)
     agent runs asc, a line says how. An NVDA the user named is never updated."""
     news = f"NVDA {release.version} is available"
     # get-nvda refuses while asc's NVDA runs, and start may have failed by then.
-    later = "asc get-nvda when asc is stopped"
+    when = "when asc is stopped"
     if nvda_dir is not None:
         print(f"{news} (nvda_dir is older)")
     elif ask is None:
-        print(f"{news}: {later}")
+        print(f"{news}: asc get-nvda {when}")
     else:
         # The release already looked up, so a second lookup can't pick another.
         update = partial(_make_portable, release.version, sha1=release.sha1)
         try:
-            _offer(ask, f"{news}. Update before starting?", update, later)
+            _offer(ask, f"{news}. Update before starting?", update, "asc get-nvda", when)
         except EOFError:  # no answer: start with the NVDA it has
-            print(f"\nRun {later}.")
+            print(f"\nRun asc get-nvda {when}.")
 
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:
@@ -565,9 +565,11 @@ def _sentence(error: AscError) -> str:
     return f"{text[:1].upper()}{text[1:]}."
 
 
-def _offer(ask: Ask, question: str, action: Callable[[], None], later: str) -> None:
+def _offer(
+    ask: Ask, question: str, action: Callable[[], None], later: str, when: str = "later"
+) -> None:
     """Do `action` now if the user agrees. Otherwise, or if it fails, name the
-    command `later` that does it."""
+    command `later` that does it, and `when`."""
     if _ask_yes(ask, question, default=True):
         try:
             action()
@@ -575,7 +577,7 @@ def _offer(ask: Ask, question: str, action: Callable[[], None], later: str) -> N
             print(f"Not done. {_sentence(error)}")
         else:
             return
-    print(f"Run {later}.")
+    print(f"Run {later} {when}.")
 
 
 def _get_nvda_now(ask: Ask) -> None:
@@ -583,7 +585,7 @@ def _get_nvda_now(ask: Ask) -> None:
         return
     print()
     question = "asc has no portable NVDA yet. Download it now?"
-    _offer(ask, question, _make_portable, "asc get-nvda later")
+    _offer(ask, question, _make_portable, "asc get-nvda")
 
 
 def _firewall_now(ask: Ask) -> None:
@@ -592,9 +594,7 @@ def _firewall_now(ask: Ask) -> None:
         return
     _section("Sandbox mode needs one firewall rule, so the sandbox's NVDA can reach asc.")
     question = "Add it now? Windows asks for admin rights."
-    _offer(
-        ask, question, lambda: _add_firewall_rule(SANDBOX_PORT, program), "asc sandbox-setup later"
-    )
+    _offer(ask, question, lambda: _add_firewall_rule(SANDBOX_PORT, program), "asc sandbox-setup")
 
 
 def _ask_mode(ask: Ask) -> str:
