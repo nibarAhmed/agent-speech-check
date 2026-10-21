@@ -26,10 +26,7 @@
     <Launch Condition="Installed OR (MSIINSTALLPERUSER = 1 AND ALLUSERS &lt;&gt; 1)"
             Message="Agent Speech Check installs per user only. Run it without ALLUSERS=1 or MSIINSTALLPERUSER=&quot;&quot;." />
     <MediaTemplate EmbedCab="yes" />
-    <!-- Nothing to change, and running the MSI again fixes a damaged install, so the
-         maintenance wizard only removes. -->
     <Property Id="ARPNOMODIFY" Value="1" />
-    <Property Id="ARPNOREPAIR" Value="1" />
     <!-- Control Panel and Settings uninstall an MSI's own entry with basic UI, which shows
          none of the wizard, so the keep-data choice would never appear. Hide that entry and
          register our own (UninstallEntry) that opens the wizard. winget skips hidden entries
