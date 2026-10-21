@@ -2,6 +2,8 @@
 <WixLocalization Culture="en-US" xmlns="http://wixtoolset.org/schemas/v4/wxl">
   <String Id="WelcomeDlgDescription"
           Value="Setup will install [ProductName] in [INSTALLFOLDER] and add that folder to your PATH. Click Next to install, or Cancel to exit." />
+  <String Id="MaintenanceWelcomeDlgDescription"
+          Value="Setup will remove [ProductName] from your computer. Click Next to continue, or Cancel to exit." />
   <String Id="KeepDataDlg_Title" Value="[ProductName] Setup" />
   <String Id="KeepDataDlgTitle" Value="{\WixUI_Font_Title}Keep your settings?" />
   <String Id="KeepDataDlgDescription" Value="Choose what happens to the data of [ProductName]." />

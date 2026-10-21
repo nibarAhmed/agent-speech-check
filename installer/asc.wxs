@@ -6,8 +6,8 @@
   and that folder goes on the user PATH. Upgrade, repair and uninstall first stop every
   asc daemon. Uninstall removes both, and asc's state in %LOCALAPPDATA%\agent-speech-check
   too (settings, logs, relay keys, the portable NVDA), unless KEEPDATA=1. Upgrades keep it.
-  Uninstall in Control Panel or Settings opens the wizard, whose Remove path asks whether
-  to keep that state (see UninstallEntry).
+  Uninstall in Control Panel or Settings opens the wizard, which asks whether to keep that
+  state (see UninstallEntry).
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
@@ -26,7 +26,10 @@
     <Launch Condition="Installed OR (MSIINSTALLPERUSER = 1 AND ALLUSERS &lt;&gt; 1)"
             Message="Agent Speech Check installs per user only. Run it without ALLUSERS=1 or MSIINSTALLPERUSER=&quot;&quot;." />
     <MediaTemplate EmbedCab="yes" />
+    <!-- Nothing to change, and running the MSI again fixes a damaged install, so the
+         maintenance wizard only removes. -->
     <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
     <!-- Control Panel and Settings uninstall an MSI's own entry with basic UI, which shows
          none of the wizard, so the keep-data choice would never appear. Hide that entry and
          register our own (UninstallEntry) that opens the wizard. winget skips hidden entries
@@ -60,8 +63,8 @@
     <util:FailWhenDeferred />
 
     <!-- A short wizard: Welcome, then Next installs, then Finish. No licence page (MIT
-         needs no click-through) and no folder choice. Repair and remove use WiX's standard
-         maintenance dialogs. Silent installs (/qn) show none of this. -->
+         needs no click-through) and no folder choice. Uninstalling: Welcome, KeepDataDlg, then
+         WiX's confirmation. Silent installs and uninstalls (/qn) show none of this. -->
     <UI Id="AscUI">
       <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
       <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
@@ -81,16 +84,12 @@
       <Publish Dialog="WelcomeDlg" Control="Next" Event="EndDialog" Value="Return" Order="2" />
       <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
 
-      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="KeepDataDlg" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="KeepDataDlg"
-               Condition="WixUI_InstallMode = &quot;Remove&quot;" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg"
-               Condition="WixUI_InstallMode &lt;&gt; &quot;Remove&quot;" />
+      <!-- Remove is the only maintenance choice, so skip WiX's Change, Repair or Remove page. -->
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Property="WixUI_InstallMode" Value="Remove" Order="1" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="KeepDataDlg" Order="2" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="KeepDataDlg" />
 
-      <!-- Between Remove and the last confirmation: the checkbox sets KEEPDATA, as
+      <!-- Between Welcome and the last confirmation: the checkbox sets KEEPDATA, as
            KEEPDATA=1 on the command line does. It comes first in the tab order, so focus
            (and a screen reader) lands on it; Enter still means Next. -->
       <Dialog Id="KeepDataDlg" Width="370" Height="270" Title="!(loc.KeepDataDlg_Title)">
@@ -102,7 +101,7 @@
         </Control>
         <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
                  Text="!(loc.WixUIBack)">
-          <Publish Event="NewDialog" Value="MaintenanceTypeDlg" />
+          <Publish Event="NewDialog" Value="MaintenanceWelcomeDlg" />
         </Control>
         <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17"
                  Cancel="yes" Text="!(loc.WixUICancel)">
