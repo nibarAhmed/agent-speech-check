@@ -52,7 +52,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Code | Meaning |
 |---|---|
 | 0 | OK |
-| 1 | A `wait`, `--expect` or `launch` didn't match |
+| 1 | A `wait` or `--expect` didn't match, or `launch` timed out |
 | 2 | Usage error |
 | 3 | Not connected or not running: retry, or `asc start` |
 | 4 | Refused, or busy (the message says which) |
