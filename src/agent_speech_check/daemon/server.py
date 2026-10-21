@@ -142,30 +142,31 @@ def new_windows(before: set[int]) -> list[str]:
     return [title for title in titles if title]
 
 
-def _numbered(entries: tuple[Entry, ...]) -> list[list[Any]]:
-    return [[e.n, e.line()] for e in entries]
-
-
 # Half a reply for speech lines leaves the rest for the envelope around them.
 SPEECH_BUDGET = ipc.MAX_RESPONSE // 2
 
 
-def _fit(since: Since) -> Since:
-    """The newest lines that fit in one reply. Older ones count as dropped."""
+def _fit(since: Since) -> tuple[list[list[Any]], int]:
+    """The newest lines that fit in one reply as `[n, line]` pairs, and how many
+    lines count as dropped: those the log lost, plus the older ones left out."""
+    lines: list[list[Any]] = []
     size = 0
-    for index in range(len(since.entries) - 1, -1, -1):
-        entry = since.entries[index]
-        # As the reply's JSON will escape it, in a list or an error message alike.
-        size += len(json.dumps(f"{entry.n} {entry.line()}"))
+    for entry in reversed(since.entries):
+        pair = [entry.n, entry.line()]
+        # As the reply's JSON escapes it, with its separator. An error message
+        # holds the same text with less around it, so this covers both.
+        size += len(json.dumps(pair)) + 2
         if size > SPEECH_BUDGET:
-            return Since(since.entries[index + 1 :], since.dropped + index + 1)
-    return since
+            break
+        lines.append(pair)
+    lines.reverse()
+    return lines, since.dropped + len(since.entries) - len(lines)
 
 
 def _new_speech(since: Since, after: int) -> dict[str, Any]:
     """A command's own speech, and the line it came after for when there is none."""
-    since = _fit(since)
-    return {"lines": _numbered(since.entries), "after": after, "dropped": since.dropped}
+    lines, dropped = _fit(since)
+    return {"lines": lines, "after": after, "dropped": dropped}
 
 
 class Daemon:
@@ -220,8 +221,8 @@ class Daemon:
 
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
         self._check_since(args.since)
-        result = _fit(self.speech.since(args.since))
-        return {"lines": _numbered(result.entries), "dropped": result.dropped}
+        lines, dropped = _fit(self.speech.since(args.since))
+        return {"lines": lines, "dropped": dropped}
 
     def status(self) -> dict[str, Any]:
         return {
@@ -272,8 +273,8 @@ class Daemon:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
             return NvdaNotConnected(timeout_ms, self.relay.last_error)
-        since = _fit(self.speech.since(after))
-        said = numbered_lines(_numbered(since.entries), after, since.dropped)
+        lines, dropped = _fit(self.speech.since(after))
+        said = numbered_lines(lines, after, dropped)
         return NoMatch(pattern, timeout_ms, said, windows)
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:

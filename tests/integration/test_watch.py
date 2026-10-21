@@ -84,7 +84,8 @@ def test_speech_too_big_for_one_reply_keeps_the_newest(env: Env) -> None:
     try:
         for _ in range(70):
             fake.say("x" * 1_000_000)
-        assert wait_until(lambda: "latest 70\n" in run_asc("status").stdout)
+        # A ceiling, not a guess: 70 MB through TLS can be slow on a CI runner.
+        assert wait_until(lambda: "latest 70\n" in run_asc("status").stdout, timeout_s=120)
         shown = run_asc("speech", "--since", "0")
         assert shown.returncode == 0, shown.stderr[:500]
         missed = run_asc("wait", "nowhere", "--since", "0", "--timeout", "200")

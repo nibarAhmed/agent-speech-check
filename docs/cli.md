@@ -412,8 +412,9 @@ asc press [--expect REGEX] [--settle MS] [--timeout MS] KEY [KEY ...]
 
 Sends each gesture, waits for `--settle` ms of quiet, and prints only the new
 speech as numbered `said: "..."` and `mode: ...` lines, like `speech`, or
-`(nothing said after N)`, where `N` is the latest line before the first key. Like
-`speech`, it notes `(K earlier lines dropped)` when the log could not keep them all.
+`(nothing said after N)`, where `N` is the latest line before the first key.
+Like `speech`, it notes `(K earlier lines dropped)` when the log or one reply
+could not hold them all.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
