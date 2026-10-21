@@ -8,11 +8,16 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
 
 1. Install [uv](https://docs.astral.sh/uv/).
 2. `uv sync`
-3. `uv run poe check` must pass before you open a pull request.
+3. `uv run poe check` must pass before you open a pull request. While you work, `uv run poe
+   fast` is the quicker loop: everything but deps and the slow tests, with all failures at once.
 4. For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
    NVDA: `uv run python scripts/e2e_sandbox.py`. They run inside Windows Sandbox (Windows 11
    24H2 or later, Pro, Enterprise or Education), so your own NVDA is never touched. If you
    can't run them, say so in the pull request.
+5. For changes to the installer (`installer/` or `scripts/build_installer.py`), build the MSI:
+   `uv run python scripts/build_installer.py`. It needs the
+   [.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
+   CI's `installer` check builds it too, then installs, upgrades and uninstalls it.
 
 ## Pull requests
 
