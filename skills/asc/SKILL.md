@@ -30,15 +30,14 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 - `asc sandbox-setup` shows an admin prompt: ask the user to run it.
 - Shared and desktop mode send keys to the user's desktop. Tell the user the
   panic key from `asc status` before you send any.
-- Never set `launch` yourself. A desktop mode with `launch = false` has no panic
-  key, yet its keys reach an NVDA on this computer, maybe the user's own: send
-  keys there only if the user asked you to.
 - If the user names their own portable NVDA, set it for desktop or sandbox mode
   (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
   It runs with a copy of their settings; `asc` never writes their copy.
-- A mode with `launch = false` (the user starts NVDA and connects it)
-  starts no NVDA and no sandbox: none of the desktop or sandbox notes here apply,
-  and `launch` runs the command on this computer.
+- Never set `launch` yourself. A mode with `launch = false` starts no NVDA and
+  no sandbox (the user starts NVDA): none of the desktop or sandbox notes here
+  apply, and `launch` runs the command on this computer. In desktop mode it has
+  no panic key, yet its keys reach an NVDA on this computer, maybe the user's
+  own: send keys only if the user asked.
 
 ## Workflow
 

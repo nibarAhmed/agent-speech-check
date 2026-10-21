@@ -181,8 +181,7 @@ and stops `asc` at once (in desktop mode, its NVDA too).
   sends keys to this desktop without one.
 - `asc status` shows the panic key.
 - Sandbox mode has none: its keys land in the sandbox. Desktop mode with
-  `launch = false` has none either, even though its NVDA runs on this computer
-  (see [Desktop mode](#desktop-mode)).
+  `launch = false` has none either (see [Desktop mode](#desktop-mode)).
 
 ## Configuration
 
