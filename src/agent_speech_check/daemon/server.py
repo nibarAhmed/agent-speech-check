@@ -148,6 +148,11 @@ def _numbered(entries: tuple[Entry, ...]) -> list[list[Any]]:
     return [[e.n, e.line()] for e in entries]
 
 
+def _new_speech(entries: tuple[Entry, ...], after: int) -> dict[str, Any]:
+    """A command's own speech, and the line it came after for when there is none."""
+    return {"lines": _numbered(entries), "after": after}
+
+
 class Daemon:
     def __init__(self, target: Target, folder: Path) -> None:
         self.target = target
@@ -261,13 +266,13 @@ class Daemon:
         if not pressed.matched:
             # A drop fails a press before this, so NVDA is still connected here.
             raise NoMatch(args.expect or "", args.timeout_ms, _said(pressed.entries))
-        return {"lines": _numbered(pressed.entries), "after": pressed.after}
+        return _new_speech(pressed.entries, pressed.after)
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
         )
-        return {"lines": _numbered(typed.entries), "after": typed.after}
+        return _new_speech(typed.entries, typed.after)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if not self.relay.connected:
@@ -297,7 +302,7 @@ class Daemon:
             raise self._no_match(args.title or ".", args.timeout_ms, start, windows)
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
-        return {"lines": _numbered(self.speech.since(start).entries), "after": start}
+        return _new_speech(self.speech.since(start).entries, start)
 
     def _relay_info(self) -> nvda_config.RelayAddress:
         credentials = self.relay.credentials

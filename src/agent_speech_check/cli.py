@@ -778,6 +778,7 @@ examples:
 Type TEXT one character at a time, using this computer's keyboard layout.
 Every character is checked first; if any can't be typed, nothing is (exit 2).
 NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
+Prints the new speech numbered like press, or (nothing said after N).
 
 examples:
   asc type "hello world"
@@ -808,7 +809,8 @@ examples:
         "start an app and wait until NVDA speaks",
         """\
 Start CMD and wait until NVDA says something matching --title (a regex), or
-anything at all if --title is left out. Prints what NVDA said.
+anything at all if --title is left out. Prints what NVDA said, numbered
+like press.
 Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
 inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
 

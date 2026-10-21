@@ -6,6 +6,7 @@ connects by itself, so keys are allowed without launching a real NVDA.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 import pytest
@@ -105,7 +106,7 @@ def test_protocol_faults_exit_5_and_recover(nvda: FakeNvda, fault: str, message:
     status = run_asc("status").stdout
     assert "nvda: connected" in status
     del nvda.replies["Up"]
-    assert run_asc("press", "Up").stdout.endswith(' said: "pressed Up"\n')
+    assert re.fullmatch(r'[0-9]+ said: "pressed Up"\n', run_asc("press", "Up").stdout)
 
 
 def test_disconnect_mid_gesture_releases_after_reconnect(nvda: FakeNvda) -> None:
