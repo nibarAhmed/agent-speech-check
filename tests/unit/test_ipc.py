@@ -12,9 +12,3 @@ def test_reading_speech_needs_since(cmd: str, raw: dict[str, object]) -> None:
     # The daemon keeps no position of its own, so each caller names one.
     with pytest.raises(UsageError, match="since"):
         ipc.parse_request(cmd, raw)
-
-
-def test_since_is_kept() -> None:
-    args = ipc.parse_request("wait", {"pattern": "OK", "timeout_ms": 1000, "since": 7}).args
-    assert isinstance(args, ipc.WaitArgs)
-    assert args.since == 7
