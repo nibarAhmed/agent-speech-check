@@ -66,7 +66,7 @@ def test_expect(nvda: FakeNvda) -> None:
     failed = run_asc("press", "H", "--expect", "level 3", "--timeout", "800")
     assert failed.returncode == 1
     assert 'no speech matched "level 3" within 800 ms' in failed.stderr
-    assert 'said: "no next heading"' in failed.stderr
+    assert 'NVDA said:\n2 said: "no next heading"' in failed.stderr
     assert nvda.held == set()
 
 

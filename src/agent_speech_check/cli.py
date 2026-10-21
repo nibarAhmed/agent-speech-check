@@ -36,6 +36,7 @@ from agent_speech_check.errors import (
     UnrecognizedArguments,
     UsageError,
     bad_field,
+    numbered_lines,
 )
 from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import keyref, launcher, nvda_config
@@ -266,13 +267,8 @@ def _show_lines(lines: list[str], empty: str) -> None:
     print("\n".join(lines) if lines else empty)
 
 
-def _show_said(lines: list[list[Any]], after: int) -> None:
-    """Numbered lines, or the line to pass as the next --since if there are none."""
-    _show_lines([f"{n} {text}" for n, text in lines], f"(nothing said after {after})")
-
-
 def _show_reply(reply: dict[str, Any]) -> None:
-    _show_said(reply["lines"], reply["after"])
+    print(numbered_lines(reply["lines"], reply["after"]))
 
 
 # ---------------------------------------------------------------- commands
@@ -340,9 +336,7 @@ def cmd_status(_: argparse.Namespace) -> int:
 
 def cmd_speech(args: argparse.Namespace) -> int:
     result = _call("speech", {"since": args.since})
-    if result["dropped"]:
-        print(f"({result['dropped']} earlier lines dropped)")
-    _show_said(result["lines"], args.since)
+    print(numbered_lines(result["lines"], args.since, result["dropped"]))
     return 0
 
 

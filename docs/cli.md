@@ -364,7 +364,8 @@ can't match the same line.
 | `--timeout MS` | `timeout_ms`, 5000 | how long to wait, at most 600000 |
 | `--since N` | (required) | look at lines after line `N` |
 
-- On timeout it exits 1 and prints what NVDA did say.
+- On timeout it exits 1 and prints what NVDA did say, numbered like `speech`,
+  so its last number is still the next `--since`.
 - An `N` after the latest line exits 2, as in `speech`.
 - If NVDA disconnects meanwhile, `wait` keeps waiting, since NVDA reconnects by
   itself. If it's still gone at the timeout, `wait` exits 3 instead of 1, with
@@ -416,7 +417,7 @@ speech as numbered `said: "..."` and `mode: ...` lines, like `speech`, or
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `KEY` | (required) | a gesture: key names joined by `+` |
-| `--expect REGEX` | none | unless the new speech matches, exit 1 and print what was said |
+| `--expect REGEX` | none | unless the new speech matches, exit 1 and print what was said, numbered |
 | `--settle MS` | `settle_ms`, 400 | quiet period, 50 to 10000 |
 | `--timeout MS` | `timeout_ms`, 5000 | deadline for the whole command, including waiting for the keyboard |
 
@@ -510,7 +511,7 @@ said, numbered like `press`. Works in every mode.
 | `--title REGEX` | anything | wait until NVDA says this |
 | `--timeout MS` | `launch_timeout_ms`, 30000 | how long to wait, at most 600000 |
 
-- On timeout it exits 1 with what NVDA did say. Outside sandbox mode the
+- On timeout it exits 1 with what NVDA did say, numbered. Outside sandbox mode the
   message ends with `New windows:`, the titles of windows that opened
   meanwhile, or `(none)`.
 - A command that can't start exits 2. NVDA disconnecting meanwhile is handled

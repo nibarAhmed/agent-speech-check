@@ -34,6 +34,7 @@ from agent_speech_check.errors import (
     PanicKeyTaken,
     SharedNeedsConsent,
     SinceAhead,
+    numbered_lines,
 )
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
@@ -138,10 +139,6 @@ def new_windows(before: set[int]) -> list[str]:
     Windows kept behind (its focus rules) is listed, though NVDA never hears it."""
     titles = (winapi.window_title(h) for h in winapi.windows_titled("") if h not in before)
     return [title for title in titles if title]
-
-
-def _said(entries: tuple[Entry, ...]) -> list[str]:
-    return [e.text for e in entries if e.kind == "said"]
 
 
 def _numbered(entries: tuple[Entry, ...]) -> list[list[Any]]:
@@ -257,7 +254,9 @@ class Daemon:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
             return NvdaNotConnected(timeout_ms, self.relay.last_error)
-        return NoMatch(pattern, timeout_ms, _said(self.speech.since(after).entries), windows)
+        since = self.speech.since(after)
+        said = numbered_lines(_numbered(since.entries), after, since.dropped)
+        return NoMatch(pattern, timeout_ms, said, windows)
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:
         pressed = await self.keyboard.press(
@@ -265,7 +264,8 @@ class Daemon:
         )
         if not pressed.matched:
             # A drop fails a press before this, so NVDA is still connected here.
-            raise NoMatch(args.expect or "", args.timeout_ms, _said(pressed.entries))
+            said = numbered_lines(_numbered(pressed.entries), pressed.after)
+            raise NoMatch(args.expect or "", args.timeout_ms, said)
         return _new_speech(pressed.entries, pressed.after)
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:

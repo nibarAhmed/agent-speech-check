@@ -162,7 +162,7 @@ def test_desktop_mode_end_to_end(
         assert ok.returncode == 0, ok.stdout + ok.stderr
         wrong = run_asc("press", "NVDA+T", "--expect", "Cancel button", "--timeout", "2000")
         assert wrong.returncode == 1
-        assert "said: " in wrong.stderr
+        assert re.search(r'NVDA said:\n[0-9]+ said: "', wrong.stderr), wrong.stderr
 
         field = run_asc("press", "Tab", "--settle", "800")
         assert "mode: focus" in field.stdout, field.stdout

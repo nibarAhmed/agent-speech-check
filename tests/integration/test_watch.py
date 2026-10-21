@@ -62,7 +62,7 @@ def test_watch_session(env: Env) -> None:
         missed = run_asc("wait", "nope", "--since", "1", "--timeout", "200")
         assert missed.returncode == 1
         assert 'no speech matched "nope" within 200 ms' in missed.stderr
-        assert 'said: "second"' in missed.stderr
+        assert 'NVDA said:\n2 said: "second"' in missed.stderr
 
     finally:
         fake.close()

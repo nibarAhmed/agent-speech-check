@@ -92,7 +92,7 @@ asc keys heading                  # look NVDA commands up instead of guessing
 
 | Code | Meaning | Next step |
 |---|---|---|
-| 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say before retrying |
+| 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say; its last number is the next `--since` |
 | 2 | usage | fix the arguments or setting |
 | 3 | not connected or not running | follow the hint: `asc start` if not running, else `asc status` says how to connect |
 | 4 | refused or busy | read the message |
