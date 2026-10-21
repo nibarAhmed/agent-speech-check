@@ -31,6 +31,7 @@ from agent_speech_check.remote.speech_log import Entry, SpeechLog
 class Pressed:
     entries: tuple[Entry, ...]
     matched: bool
+    after: int  # the latest line before the first key
 
 
 class Keyboard:
@@ -84,7 +85,7 @@ class Keyboard:
                 remaining = max(0.0, deadline - time.monotonic())
                 found = await self.speech.wait_match(expect, start, remaining, check)
                 matched = found is not None
-            return Pressed(self.speech.since(start).entries, matched)
+            return Pressed(self.speech.since(start).entries, matched, start)
         finally:
             self._lock.release()
 

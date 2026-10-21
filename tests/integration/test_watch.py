@@ -21,7 +21,7 @@ def test_watch_session(env: Env) -> None:
     assert "nvda: not connected" in started.stdout
     assert f"host 127.0.0.1:{env.port}, key " in started.stdout
 
-    assert run_asc("speech", "--since", "0").stdout == "(nothing said)\n"
+    assert run_asc("speech", "--since", "0").stdout == "(nothing said after 0)\n"
     # A number from an earlier session: numbering restarts with each start.
     for command in (("speech",), ("wait", "x")):
         ahead = run_asc(*command, "--since", "5")

@@ -144,6 +144,10 @@ def _said(entries: tuple[Entry, ...]) -> list[str]:
     return [e.text for e in entries if e.kind == "said"]
 
 
+def _numbered(entries: tuple[Entry, ...]) -> list[list[Any]]:
+    return [[e.n, e.line()] for e in entries]
+
+
 class Daemon:
     def __init__(self, target: Target, folder: Path) -> None:
         self.target = target
@@ -197,7 +201,7 @@ class Daemon:
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
         self._check_since(args.since)
         result = self.speech.since(args.since)
-        return {"lines": [[e.n, e.line()] for e in result.entries], "dropped": result.dropped}
+        return {"lines": _numbered(result.entries), "dropped": result.dropped}
 
     def status(self) -> dict[str, Any]:
         return {
@@ -257,13 +261,13 @@ class Daemon:
         if not pressed.matched:
             # A drop fails a press before this, so NVDA is still connected here.
             raise NoMatch(args.expect or "", args.timeout_ms, _said(pressed.entries))
-        return {"lines": [e.line() for e in pressed.entries]}
+        return {"lines": _numbered(pressed.entries), "after": pressed.after}
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
         )
-        return {"lines": [e.line() for e in typed.entries]}
+        return {"lines": _numbered(typed.entries), "after": typed.after}
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if not self.relay.connected:
@@ -293,7 +297,7 @@ class Daemon:
             raise self._no_match(args.title or ".", args.timeout_ms, start, windows)
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
-        return {"lines": [e.line() for e in self.speech.since(start).entries]}
+        return {"lines": _numbered(self.speech.since(start).entries), "after": start}
 
     def _relay_info(self) -> nvda_config.RelayAddress:
         credentials = self.relay.credentials

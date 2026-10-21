@@ -37,7 +37,7 @@ def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
     nvda.replies["I"] = [f.speak("i")]
     typed = run_asc("type", "Hi")
     assert typed.returncode == 0, typed.stderr
-    assert typed.stdout == 'said: "i"\n'
+    assert typed.stdout == '1 said: "i"\n'
     assert nvda.gestures == ["Shift+H", "I"]
     assert nvda.held == set()
 
@@ -64,7 +64,7 @@ def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
     nvda.say("My App window")
     out, _ = launching.communicate(timeout=30)
     assert launching.returncode == 0
-    assert out.splitlines() == ['said: "Loading"', 'said: "My App window"']
+    assert out.splitlines() == ['1 said: "Loading"', '2 said: "My App window"']
 
 
 @pytest.mark.xdist_group("desktop")

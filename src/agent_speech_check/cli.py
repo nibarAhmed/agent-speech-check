@@ -266,8 +266,13 @@ def _show_lines(lines: list[str], empty: str) -> None:
     print("\n".join(lines) if lines else empty)
 
 
-def _show_said(lines: list[str]) -> None:
-    _show_lines(lines, "(nothing said)")
+def _show_said(lines: list[list[Any]], after: int) -> None:
+    """Numbered lines, or the line to pass as the next --since if there are none."""
+    _show_lines([f"{n} {text}" for n, text in lines], f"(nothing said after {after})")
+
+
+def _show_reply(reply: dict[str, Any]) -> None:
+    _show_said(reply["lines"], reply["after"])
 
 
 # ---------------------------------------------------------------- commands
@@ -337,8 +342,7 @@ def cmd_speech(args: argparse.Namespace) -> int:
     result = _call("speech", {"since": args.since})
     if result["dropped"]:
         print(f"({result['dropped']} earlier lines dropped)")
-    lines = [f"{n} {text}" for n, text in result["lines"]]
-    _show_said(lines)
+    _show_said(result["lines"], args.since)
     return 0
 
 
@@ -366,14 +370,14 @@ def cmd_press(args: argparse.Namespace) -> int:
         "settle_ms": args.settle,
         "timeout_ms": args.timeout,
     }
-    _show_said(_call("press", raw, args.timeout)["lines"])
+    _show_reply(_call("press", raw, args.timeout))
     return 0
 
 
 def cmd_type(args: argparse.Namespace) -> int:
     _with_defaults(args, _TIMINGS)
     raw = {"text": args.text, "settle_ms": args.settle, "timeout_ms": args.timeout}
-    _show_said(_call("type", raw, args.timeout)["lines"])
+    _show_reply(_call("type", raw, args.timeout))
     return 0
 
 
@@ -401,7 +405,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
 def cmd_launch(args: argparse.Namespace) -> int:
     _with_defaults(args, {"timeout": "launch_timeout_ms"})
     raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
-    _show_said(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS)["lines"])
+    _show_reply(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS))
     return 0
 
 
@@ -755,7 +759,8 @@ examples:
         "press keys and print what NVDA said",
         """\
 Send each gesture, wait until NVDA is quiet for --settle ms, and print only
-the new speech: said: "..." lines, mode: lines, or (nothing said).
+the new speech as numbered lines, or (nothing said after N). The last
+number, or N, is the next --since for wait or speech.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
 Watch mode refuses keys (exit 4).
 

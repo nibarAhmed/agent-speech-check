@@ -10,6 +10,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -98,7 +99,7 @@ def test_real_nvda_joins_speaks_and_releases() -> None:
 
     pressed = run_asc("press", "NVDA+T", "--settle", "800")
     assert pressed.returncode == 0, pressed.stderr
-    assert pressed.stdout.startswith('said: "'), pressed.stdout
+    assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
     assert not insert_held()
 
 

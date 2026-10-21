@@ -343,7 +343,7 @@ mode changes:
 |---|---|---|
 | `--since N` | (required) | lines after line `N` (`0` for everything still kept) |
 
-Prints `(nothing said)` when there is nothing. If lines after `N` were dropped
+Prints `(nothing said after N)` when there is nothing. If lines after `N` were dropped
 (the log keeps 10,000), it first prints `(K earlier lines dropped)`. An `N`
 after the latest line exits 2: line numbers restart with each `asc start`, so it
 can only come from an earlier session.
@@ -393,8 +393,15 @@ asc wait --since 40 "Saved"   # 43 said: "File saved"
 asc wait --since 43 "Done"    # waits for speech after line 43
 ```
 
-`press`, `type` and `launch` need no number: they print only what NVDA said
-while they ran.
+`press`, `type` and `launch` take no `--since`: they print only what NVDA said
+while they ran, numbered the same way. Their last number, or `N` in
+`(nothing said after N)`, is the next `--since`:
+
+```shell
+asc press Tab                 # 41 said: "OK button"
+asc press Enter               # 42 said: "Saving"
+asc wait --since 42 "Saved"   # 43 said: "File saved"
+```
 
 ### `asc press`
 
@@ -403,7 +410,8 @@ asc press [--expect REGEX] [--settle MS] [--timeout MS] KEY [KEY ...]
 ```
 
 Sends each gesture, waits for `--settle` ms of quiet, and prints only the new
-speech as `said: "..."` and `mode: ...` lines, or `(nothing said)`.
+speech as numbered `said: "..."` and `mode: ...` lines, like `speech`, or
+`(nothing said after N)`, where `N` is the latest line before the first key.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
@@ -494,7 +502,7 @@ asc launch [--title REGEX] [--timeout MS] CMD
 
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA
-said. Works in every mode.
+said, numbered like `press`. Works in every mode.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
