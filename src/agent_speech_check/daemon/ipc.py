@@ -284,7 +284,9 @@ def error_detail(error: AscError) -> dict[str, Any]:
 
 def error_from(raw: object, where: str) -> AscError:
     error = Fields(raw, where, InternalError)
-    return from_kind(error.text("kind"), error.text("message"), error.opt_text("hint"))
+    # A failed match lists the speech, which can be as long as any reply.
+    message = error.text("message", max_len=MAX_RESPONSE)
+    return from_kind(error.text("kind"), message, error.opt_text("hint"))
 
 
 # ---------------------------------------------------------------- server

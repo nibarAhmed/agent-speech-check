@@ -24,12 +24,12 @@ from agent_speech_check.config.targets import Target
 from agent_speech_check.errors import KeysBusy, KeysRefused, NvdaNotConnected
 from agent_speech_check.inputs.keys import Gesture, Key
 from agent_speech_check.remote.relay import Relay
-from agent_speech_check.remote.speech_log import Entry, SpeechLog
+from agent_speech_check.remote.speech_log import Since, SpeechLog
 
 
 @dataclass(frozen=True)
 class Pressed:
-    entries: tuple[Entry, ...]
+    since: Since
     matched: bool
     after: int  # the latest line before the first key
 
@@ -85,7 +85,7 @@ class Keyboard:
                 remaining = max(0.0, deadline - time.monotonic())
                 found = await self.speech.wait_match(expect, start, remaining, check)
                 matched = found is not None
-            return Pressed(self.speech.since(start).entries, matched, start)
+            return Pressed(self.speech.since(start), matched, start)
         finally:
             self._lock.release()
 

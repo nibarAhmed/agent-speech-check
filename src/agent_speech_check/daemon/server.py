@@ -42,7 +42,7 @@ from agent_speech_check.inputs.keys import Hotkey
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import Relay
-from agent_speech_check.remote.speech_log import Entry, SpeechLog
+from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.windows import winapi
@@ -145,9 +145,9 @@ def _numbered(entries: tuple[Entry, ...]) -> list[list[Any]]:
     return [[e.n, e.line()] for e in entries]
 
 
-def _new_speech(entries: tuple[Entry, ...], after: int) -> dict[str, Any]:
+def _new_speech(since: Since, after: int) -> dict[str, Any]:
     """A command's own speech, and the line it came after for when there is none."""
-    return {"lines": _numbered(entries), "after": after}
+    return {"lines": _numbered(since.entries), "after": after, "dropped": since.dropped}
 
 
 class Daemon:
@@ -263,16 +263,15 @@ class Daemon:
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, args.regex
         )
         if not pressed.matched:
-            # A drop fails a press before this, so NVDA is still connected here.
-            said = numbered_lines(_numbered(pressed.entries), pressed.after)
-            raise NoMatch(args.expect or "", args.timeout_ms, said)
-        return _new_speech(pressed.entries, pressed.after)
+            # A drop fails a press before this, so this lists speech, not a lost NVDA.
+            raise self._no_match(args.expect or "", args.timeout_ms, pressed.after)
+        return _new_speech(pressed.since, pressed.after)
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
             args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
         )
-        return _new_speech(typed.entries, typed.after)
+        return _new_speech(typed.since, typed.after)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if not self.relay.connected:
@@ -302,7 +301,7 @@ class Daemon:
             raise self._no_match(args.title or ".", args.timeout_ms, start, windows)
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
-        return _new_speech(self.speech.since(start).entries, start)
+        return _new_speech(self.speech.since(start), start)
 
     def _relay_info(self) -> nvda_config.RelayAddress:
         credentials = self.relay.credentials

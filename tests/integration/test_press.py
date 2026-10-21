@@ -12,7 +12,9 @@ from collections.abc import Iterator
 import pytest
 from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
-from tests.integration.conftest import Env, run_asc, wait_until
+from tests.integration.conftest import Env, run_asc, start_asc, wait_until
+
+from agent_speech_check.remote.speech_log import CAP
 
 
 @pytest.fixture
@@ -68,6 +70,28 @@ def test_expect(nvda: FakeNvda) -> None:
     assert 'no speech matched "level 3" within 800 ms' in failed.stderr
     assert 'NVDA said:\n2 said: "no next heading"' in failed.stderr
     assert nvda.held == set()
+
+
+def _flooded_press(nvda: FakeNvda, *args: str) -> tuple[int, str, str]:
+    """Press H, then say five lines more than the log keeps while the press settles."""
+    nvda.replies["H"] = f.SILENCE
+    nvda.gestures.clear()
+    # The settle outlasts the flood, so every line comes after the key.
+    press = start_asc("press", "H", "--settle", "3000", *args)
+    assert wait_until(lambda: bool(nvda.gestures)), "the press never reached NVDA"
+    for n in range(1, CAP + 6):
+        nvda.send(f.speak(f"line {n}"))
+    out, err = press.communicate(timeout=60)
+    return press.returncode, out, err
+
+
+def test_a_press_that_outruns_the_log_says_lines_were_dropped(nvda: FakeNvda) -> None:
+    code, _, err = _flooded_press(nvda, "--expect", "nowhere", "--timeout", "6000")
+    assert code == 1, err
+    assert 'NVDA said:\n(5 earlier lines dropped)\n6 said: "line 6"\n' in err
+    code, out, err = _flooded_press(nvda)
+    assert code == 0, err
+    assert out.startswith(f'(5 earlier lines dropped)\n{CAP + 11} said: "line 6"\n')
 
 
 def test_silence_names_the_line_to_read_after(nvda: FakeNvda) -> None:

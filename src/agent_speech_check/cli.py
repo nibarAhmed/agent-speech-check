@@ -268,7 +268,7 @@ def _show_lines(lines: list[str], empty: str) -> None:
 
 
 def _show_reply(reply: dict[str, Any]) -> None:
-    print(numbered_lines(reply["lines"], reply["after"]))
+    print(numbered_lines(reply["lines"], reply["after"], reply["dropped"]))
 
 
 # ---------------------------------------------------------------- commands
