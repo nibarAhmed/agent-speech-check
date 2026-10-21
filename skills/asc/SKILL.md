@@ -50,8 +50,9 @@ asc stop                          # when done
 ```
 
 - `--since` is required. Use the number from `asc mark` or the last line you
-  read, never an older one, or old speech can match. `press`, `type` and
-  `launch` print their own speech and need no number.
+  read, never an older one, or old speech can match. Numbers restart with each
+  `asc start`. `press`, `type` and `launch` print their own speech and need no
+  number.
 
 - If `asc start` exits 4 because `asc` already runs, `asc status` shows which
   mode. Another session may own it: stop it only if it's the wrong mode.

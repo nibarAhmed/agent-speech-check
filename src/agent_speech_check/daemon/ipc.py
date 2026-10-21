@@ -1,8 +1,10 @@
 """CLI to daemon: JSON lines over 127.0.0.1 TCP, one request per connection.
 
-Request:  {"v": 1, "token": "...", "cmd": "press", "args": {...}}
-Response: {"v": 1, "ok": true, "result": {...}}
-       or {"v": 1, "ok": false, "error": {"kind": "refused", "message": "...", "hint": "..."}}
+Request:  {"v": 2, "token": "...", "cmd": "press", "args": {...}}
+Response: {"v": 2, "ok": true, "result": {...}}
+       or {"v": 2, "ok": false, "error": {"kind": "refused", "message": "...", "hint": "..."}}
+
+`v` is `errors.IPC_VERSION`.
 
 The CLI and the daemon parse requests with the same `parse_request`: the CLI for
 a fast, friendly error, the daemon because it is the authority. A wrong token

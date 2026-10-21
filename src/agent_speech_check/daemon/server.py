@@ -33,6 +33,7 @@ from agent_speech_check.errors import (
     NvdaNotConnected,
     PanicKeyTaken,
     SharedNeedsConsent,
+    SinceAhead,
 )
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
@@ -188,7 +189,13 @@ class Daemon:
     async def _mark(self, _args: ipc.NoArgs) -> dict[str, Any]:
         return {"mark": self.speech.latest}
 
+    def _check_since(self, since: int) -> None:
+        """A line not said yet can only be a number from an earlier session."""
+        if since > self.speech.latest:
+            raise SinceAhead(since, self.speech.latest)
+
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
+        self._check_since(args.since)
         result = self.speech.since(args.since)
         return {"lines": [[e.n, e.line()] for e in result.entries], "dropped": result.dropped}
 
@@ -215,6 +222,7 @@ class Daemon:
         return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
+        self._check_since(args.since)
         if not self.relay.connected:
             raise NvdaNotConnected
         losses_before = len(self.relay.losses)

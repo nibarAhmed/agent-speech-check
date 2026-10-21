@@ -344,7 +344,9 @@ mode changes:
 | `--since N` | (required) | lines after line `N` (`0` for everything still kept) |
 
 Prints `(nothing said)` when there is nothing. If lines after `N` were dropped
-(the log keeps 10,000), it first prints `(K earlier lines dropped)`.
+(the log keeps 10,000), it first prints `(K earlier lines dropped)`. An `N`
+after the latest line exits 2: line numbers restart with each `asc start`, so it
+can only come from an earlier session.
 
 ### `asc wait`
 
@@ -363,6 +365,7 @@ can't match the same line.
 | `--since N` | (required) | look at lines after line `N` |
 
 - On timeout it exits 1 and prints what NVDA did say.
+- An `N` after the latest line exits 2, as in `speech`.
 - If NVDA disconnects meanwhile, `wait` keeps waiting, since NVDA reconnects by
   itself. If it's still gone at the timeout, `wait` exits 3 instead of 1, with
   the last connection error if there was one. A connection that never joins

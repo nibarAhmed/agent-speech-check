@@ -142,6 +142,16 @@ class BadRegex(UsageError):
         super().__init__(f"bad regex {_show(pattern)}: {reason}{at}")
 
 
+class SinceAhead(UsageError):
+    """`--since` names a line not said yet, likely a number from an earlier session."""
+
+    def __init__(self, since: int, latest: int) -> None:
+        super().__init__(
+            f"--since {since} is after the latest line, {latest}",
+            hint="asc mark (line numbers restart with each asc start)",
+        )
+
+
 class UnknownKey(UsageError):
     def __init__(self, name: str, suggestions: Sequence[str]) -> None:
         hint = f"did you mean {', '.join(suggestions)}?" if suggestions else "see asc keys"
