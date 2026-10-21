@@ -39,7 +39,8 @@ def test_keys_follow_the_mode() -> None:
 def test_panic_key_wherever_keys_reach_this_desktop() -> None:
     assert defaults("shared").takes_panic_key
     assert defaults("desktop").takes_panic_key
-    # NVDA runs elsewhere (a VM, the sandbox), or asc sends no keys at all.
+    # The sandbox's keys stay in the sandbox and watch sends none. launch = false
+    # has none either: whoever starts that NVDA takes the risk (docs/cli.md).
     assert not replace(defaults("desktop"), launch=False).takes_panic_key
     assert not defaults("sandbox").takes_panic_key
     assert not defaults("watch").takes_panic_key
