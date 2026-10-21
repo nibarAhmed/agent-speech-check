@@ -16,6 +16,9 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
    can't run them, say so in the pull request.
 5. CI's `installer` check builds the MSI, then installs, upgrades and uninstalls it. To build it
    yourself, for example to debug a failure there, see [Development](README.md#development).
+   The MSI hides its own Control Panel entry and registers `agent-speech-check` in its place,
+   so the uninstall wizard can ask whether to keep asc's data. A winget manifest must name
+   that entry: `AppsAndFeaturesEntries` with `ProductCode: agent-speech-check`.
 
 ## Pull requests
 
