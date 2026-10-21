@@ -30,7 +30,7 @@ class AscError(Exception):
 
 
 class ExpectationFailed(AscError):
-    """A `wait` or `--expect` timed out. Report what the app said; the message has it."""
+    """A `wait`, `--expect` or `launch` timed out. Report what the app said; the message has it."""
 
     exit_code = 1
     kind = "expectation"
