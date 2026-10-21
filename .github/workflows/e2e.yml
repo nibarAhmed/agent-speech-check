@@ -8,6 +8,10 @@ on:
     paths-ignore:
       - "**/*.md"
       - "docs/**"
+  # Weekly too: asc downloads the latest NVDA, so a new NVDA release can break it
+  # with no PR to run these. Monday 06:00 UTC.
+  schedule:
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 permissions:
