@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import json
 import logging
 import os
 import re
@@ -145,8 +146,25 @@ def _numbered(entries: tuple[Entry, ...]) -> list[list[Any]]:
     return [[e.n, e.line()] for e in entries]
 
 
+# Half a reply for speech lines leaves the rest for the envelope around them.
+SPEECH_BUDGET = ipc.MAX_RESPONSE // 2
+
+
+def _fit(since: Since) -> Since:
+    """The newest lines that fit in one reply. Older ones count as dropped."""
+    size = 0
+    for index in range(len(since.entries) - 1, -1, -1):
+        entry = since.entries[index]
+        # As the reply's JSON will escape it, in a list or an error message alike.
+        size += len(json.dumps(f"{entry.n} {entry.line()}"))
+        if size > SPEECH_BUDGET:
+            return Since(since.entries[index + 1 :], since.dropped + index + 1)
+    return since
+
+
 def _new_speech(since: Since, after: int) -> dict[str, Any]:
     """A command's own speech, and the line it came after for when there is none."""
+    since = _fit(since)
     return {"lines": _numbered(since.entries), "after": after, "dropped": since.dropped}
 
 
@@ -202,7 +220,7 @@ class Daemon:
 
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
         self._check_since(args.since)
-        result = self.speech.since(args.since)
+        result = _fit(self.speech.since(args.since))
         return {"lines": _numbered(result.entries), "dropped": result.dropped}
 
     def status(self) -> dict[str, Any]:
@@ -254,7 +272,7 @@ class Daemon:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
         if not self.relay.connected:
             return NvdaNotConnected(timeout_ms, self.relay.last_error)
-        since = self.speech.since(after)
+        since = _fit(self.speech.since(after))
         said = numbered_lines(_numbered(since.entries), after, since.dropped)
         return NoMatch(pattern, timeout_ms, said, windows)
 

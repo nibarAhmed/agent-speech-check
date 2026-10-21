@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 
 import pytest
-from tests.integration.conftest import Env, run_asc
+from tests.integration.conftest import Env, run_asc, wait_until
 
 from agent_speech_check.inputs.keys import parse_hotkey
 from agent_speech_check.windows import winapi
@@ -74,6 +75,28 @@ def test_watch_session(env: Env) -> None:
     assert gone.returncode == 3
     assert "not running" in gone.stderr
     assert "not recording" in gone.stderr
+
+
+def test_speech_too_big_for_one_reply_keeps_the_newest(env: Env) -> None:
+    # 70 lines of about 1 MB (NVDA's message limit) are more than one 64 MB reply.
+    assert run_asc("start", "--mode", "watch").returncode == 0
+    fake = env.fake("watch")
+    try:
+        for _ in range(70):
+            fake.say("x" * 1_000_000)
+        assert wait_until(lambda: "latest 70\n" in run_asc("status").stdout)
+        shown = run_asc("speech", "--since", "0")
+        assert shown.returncode == 0, shown.stderr[:500]
+        missed = run_asc("wait", "nowhere", "--since", "0", "--timeout", "200")
+        assert missed.returncode == 1, missed.stderr[:500]
+    finally:
+        fake.close()
+    lines = shown.stdout.splitlines()
+    dropped = re.fullmatch(r"\(([0-9]+) earlier lines dropped\)", lines[0])
+    assert dropped, lines[0][:100]
+    assert int(dropped[1]) + len(lines) - 1 == 70
+    assert lines[-1].startswith('70 said: "xxx')
+    assert f"NVDA said:\n{lines[0]}\n" in missed.stderr
 
 
 # Built with chr() so linters don't flag look-alike characters in the source.

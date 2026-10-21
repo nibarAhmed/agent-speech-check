@@ -344,9 +344,9 @@ mode changes:
 | `--since N` | (required) | lines after line `N` (`0` for everything still kept) |
 
 Prints `(nothing said after N)` when there is nothing. If lines after `N` were dropped
-(the log keeps 10,000), it first prints `(K earlier lines dropped)`. An `N`
-after the latest line exits 2: line numbers restart with each `asc start`, so it
-can only come from an earlier session.
+(the log keeps 10,000, and one reply about 32 MB of speech), it first prints
+`(K earlier lines dropped)`. An `N` after the latest line exits 2: line numbers
+restart with each `asc start`, so it can only come from an earlier session.
 
 ### `asc wait`
 
