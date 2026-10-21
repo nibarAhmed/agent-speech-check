@@ -72,11 +72,12 @@ jobs:
           function PathFolders($path) { ($path -split ';' | Where-Object { $_ }) -join ';' }
           function Products { @($installer.RelatedProducts($upgradeCode)).Count }
           # Exit code 3010 (reboot needed) fails too: it means files were still in use.
-          function Msiexec($arguments, $expected = 0) {
+          function Run($exe, $arguments, $expected = 0) {
             $script:run++
-            $p = Start-Process msiexec "$arguments /qn /l*v `"$logs\$script:run.log`"" -Wait -PassThru
-            if ($p.ExitCode -ne $expected) { throw "msiexec $arguments exit $($p.ExitCode), expected $expected" }
+            $p = Start-Process $exe "$arguments /l*v `"$logs\$script:run.log`"" -Wait -PassThru
+            if ($p.ExitCode -ne $expected) { throw "$exe $arguments exit $($p.ExitCode), expected $expected" }
           }
+          function Msiexec($arguments, $expected = 0) { Run msiexec "$arguments /qn" $expected }
           # A watch-mode daemon from the installed asc, and its pid.
           function StartDaemon {
             & "$dir\asc.exe" start | Out-Null
@@ -128,9 +129,7 @@ jobs:
           Msiexec "/i `"$msi`""
           $daemon = StartDaemon
           $exe, $quietArgs = (Get-ItemProperty "$arp\agent-speech-check").QuietUninstallString -split ' ', 2
-          $script:run++
-          $p = Start-Process $exe "$quietArgs /l*v `"$logs\$script:run.log`"" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "QuietUninstallString exit $($p.ExitCode), expected 0" }
+          Run $exe $quietArgs
           AssertGone $daemon 'uninstall'
           if ((Products) -ne 0) { throw "$(Products) products left" }
           if ((PathFolders (UserPath)) -cne (PathFolders $pathBefore)) { throw "user PATH changed`nbefore: $pathBefore`nafter:  $(UserPath)" }
