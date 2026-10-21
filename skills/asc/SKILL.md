@@ -23,8 +23,7 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 
 - Never run an NVDA binary or installer on the host yourself: a second NVDA
   restarts the user's screen reader. `asc get-nvda` and `asc start` are safe.
-- Desktop mode refuses while any NVDA runs. Use sandbox mode then; never stop the
-  user's NVDA.
+- Desktop mode refuses while any NVDA runs; never stop the user's NVDA.
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
@@ -36,7 +35,7 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
   It runs with a copy of their settings; `asc` never writes their copy.
 - A mode with `launch = false` (NVDA started elsewhere, which connects by itself)
   starts no NVDA and no sandbox: none of the desktop or sandbox notes here apply,
-  it has no panic key, and `launch` runs the command on this computer.
+  and `launch` runs the command on this computer.
 
 ## Workflow
 
@@ -49,8 +48,8 @@ asc speech --since 40
 asc stop                          # when done
 ```
 
-- Use the number from `asc mark` or the last line you read, never an older one,
-  or old speech can match. Numbers restart with each `asc start`.
+- For `--since`, pass the last number you read, or N from `(nothing said after N)`.
+  Never an older one, or old speech can match. Numbers restart with each `asc start`.
 - If `asc start` exits 4 because `asc` already runs, `asc status` shows which
   mode. Another session may own it: stop it only if it's the wrong mode.
 - If `asc start` prints `NVDA <version> is available: asc get-nvda`, it still
@@ -61,13 +60,13 @@ asc stop                          # when done
 ## Watch mode
 
 `asc start` prints a host, a key and a certificate fingerprint. Ask the user to
-connect NVDA as `asc start --help` describes; after that it reconnects by itself
-whenever watch mode runs. Watch mode records everything NVDA says, typed text
-included, so `asc stop` when you're done.
+connect in NVDA: Tools, Remote Access, Connect, allow this computer to be
+controlled, that host and key, and trust the certificate. After that it
+reconnects by itself whenever watch mode runs. Watch mode records everything
+NVDA says, typed text included, so `asc stop` when you're done.
 
-## Apps and keys
+## Apps
 
-- Look NVDA commands up with `asc keys` instead of guessing.
 - A `launch` that times out but lists a title under `New windows:` started
   anyway. In watch mode the user may need to switch to that window.
 - Sandbox mode: your app must come from a folder in sandbox mode's `share`
