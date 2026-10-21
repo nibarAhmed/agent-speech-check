@@ -13,14 +13,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import itertools
+import json
 import re
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
-
-from agent_speech_check.errors import said_line
 
 CAP = 10_000
 MODE_SOUNDS = {"focusmode.wav": "focus", "browsemode.wav": "browse"}
@@ -39,7 +38,7 @@ class Entry:
         """The line as `asc` prints it, without the number."""
         if self.kind == "mode":
             return f"mode: {self.text}"
-        return said_line(self.text)
+        return f"said: {json.dumps(self.text, ensure_ascii=False)}"
 
 
 @dataclass(frozen=True)

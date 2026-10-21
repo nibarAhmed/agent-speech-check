@@ -124,11 +124,6 @@ def numbered_lines(lines: Sequence[Sequence[Any]], after: int, dropped: int = 0)
     return "\n".join(shown)
 
 
-def said_line(text: str) -> str:
-    """One utterance as `asc` prints it. Lives here so error messages match output."""
-    return f"said: {json.dumps(text, ensure_ascii=False)}"
-
-
 class BadArguments(UsageError):
     def __init__(self, reason: str, prog: str) -> None:
         super().__init__(reason, hint=f"{prog} --help")
