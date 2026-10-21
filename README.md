@@ -45,7 +45,7 @@ uv tool install .
 
 If `asc` is not found, check that `uv`'s tool bin directory is on `PATH`, then open a new terminal.
 
-To uninstall, run `asc stop`, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself ([details](docs/cli.md#files)).
+To uninstall, run `asc stop`, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself, and asks whether to keep that folder ([details](docs/cli.md#files)).
 
 ## Get started
 

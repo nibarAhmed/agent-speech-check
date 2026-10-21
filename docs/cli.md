@@ -73,8 +73,10 @@ The certificate and key are created once and kept, because NVDA pins the
 certificate.
 
 The MSI installer stops every `asc` daemon before it upgrades, repairs or
-removes `asc`. Removing it also deletes this whole folder, unless you run
-`msiexec /x FILE.msi KEEPDATA=1`; an upgrade keeps it. The firewall rule from
+removes `asc`. Removing it also deletes this whole folder, unless you keep it:
+uninstalling from Control Panel or Settings opens a wizard with a "Keep my
+settings and data" checkbox, and a silent uninstall keeps it only with
+`KEEPDATA=1` (`msiexec /x FILE.msi /qn KEEPDATA=1`). An upgrade keeps it. The firewall rule from
 `asc sandbox-setup` (`agent-speech-check sandbox relay`) stays: delete it in
 Windows Defender Firewall.
 

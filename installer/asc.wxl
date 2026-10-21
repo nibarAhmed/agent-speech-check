@@ -1,5 +1,11 @@
-<!-- The wizard's own text, replacing WiX's defaults. -->
+<!-- The wizard's own text, replacing WiX's defaults, and the text of KeepDataDlg. -->
 <WixLocalization Culture="en-US" xmlns="http://wixtoolset.org/schemas/v4/wxl">
   <String Id="WelcomeDlgDescription"
           Value="Setup will install [ProductName] in [INSTALLFOLDER] and add that folder to your PATH. Click Next to install, or Cancel to exit." />
+  <String Id="KeepDataDlg_Title" Value="[ProductName] Setup" />
+  <String Id="KeepDataDlgTitle" Value="{\WixUI_Font_Title}Keep your settings?" />
+  <String Id="KeepDataDlgDescription" Value="Choose what happens to the data of [ProductName]." />
+  <String Id="KeepDataDlgBody"
+          Value="Removing [ProductName] also deletes its data folder, %LOCALAPPDATA%\agent-speech-check. It holds your settings, the logs, the relay certificate that NVDA trusts, and the portable NVDA that asc get-nvda made. Keep it to find everything again when you reinstall." />
+  <String Id="KeepDataDlgCheckBox" Value="&amp;Keep my settings and data" />
 </WixLocalization>
