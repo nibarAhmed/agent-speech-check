@@ -119,9 +119,8 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   5 s; offline it says nothing). If that is newer than the portable NVDA, at a
   terminal it offers to update `asc`'s own copy first; a failed update keeps the
   old copy. Without a terminal, as when an agent runs it, it prints
-  `NVDA <version> is available. To update: asc stop, asc get-nvda, asc start`
-  and starts. An NVDA in `nvda_dir` is never updated: the line says
-  `(nvda_dir is older)`.
+  `NVDA <version> is available: asc get-nvda when asc is stopped` and starts.
+  An NVDA in `nvda_dir` is never updated: the line says `(nvda_dir is older)`.
 - With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
   connects to the relay itself. No portable NVDA is needed, and `nvda_dir` is
   refused with exit 2, as in watch and shared mode.
@@ -363,7 +362,7 @@ can't match the same line.
 |---|---|---|
 | `REGEX` | (required) | Python syntax, searched anywhere in the line; use `(?i)` to ignore case |
 | `--timeout MS` | `timeout_ms`, 5000 | how long to wait, at most 600000 |
-| `--since N` | (required) | look at lines after line `N` |
+| `--since N` | (required) | look at lines after line `N`: this step's mark, or old speech can match |
 
 - On timeout it exits 1 and prints what NVDA did say, numbered like `speech`,
   so its last number is still the next `--since`.

@@ -29,11 +29,14 @@ def test_command_help_leaves_out_exit_codes(capsys: pytest.CaptureFixture[str]) 
     assert "exit codes" not in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("command", ["wait", "speech"])
-def test_since_help_warns_of_an_old_n(command: str, capsys: pytest.CaptureFixture[str]) -> None:
+def test_only_wait_warns_of_an_old_since(capsys: pytest.CaptureFixture[str]) -> None:
+    # wait can match speech from before the step; speech --since the mark is the point.
     with pytest.raises(SystemExit):
-        main([command, "--help"])
-    assert "an older N brings back old speech" in " ".join(capsys.readouterr().out.split())
+        main(["wait", "--help"])
+    assert "this step's mark, or old speech can match" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        main(["speech", "--help"])
+    assert "old speech" not in capsys.readouterr().out
 
 
 def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:

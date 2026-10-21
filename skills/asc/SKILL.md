@@ -48,8 +48,8 @@ asc speech --since 40             # everything after the mark
 asc stop                          # when done
 ```
 
-- For `--since`, N from `(nothing said after N)` counts too. Numbers restart
-  with each `asc start`.
+- For `--since`, pass this step's mark, or N from `(nothing said after N)`.
+  Numbers restart with each `asc start`.
 - If `asc start` says `asc` already runs, another session may own it: stop it
   only if it's the wrong mode.
 - If presses keep missing speech or a slow app times out, raise `settle_ms`,

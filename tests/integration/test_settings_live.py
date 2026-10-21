@@ -25,7 +25,7 @@ def test_changes_while_running(env: Env) -> None:
     assert panic.returncode == 0, panic.stderr
     assert panic.stdout.endswith("applies at the next asc start\n")
 
-    with pytest.raises(AlreadyRunning, match="asc is already running"):
+    with pytest.raises(AlreadyRunning, match="asc is already running in watch mode"):
         run_setup(lambda _: "", replace_without_asking=True)
 
 
