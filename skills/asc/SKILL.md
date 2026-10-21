@@ -70,7 +70,7 @@ NVDA says, typed text included, so `asc stop` when you're done.
 - A `launch` that times out but lists a title under `New windows:` started
   anyway. In watch mode the user may need to switch to that window.
 - Sandbox mode: your app must come from a folder in sandbox mode's `share`
-  (`asc config set share DIR --mode sandbox`).
+  (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
 - Shared mode needs `asc start --mode shared --i-understand` every time.
 
 ## Exit codes
