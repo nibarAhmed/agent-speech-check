@@ -116,14 +116,14 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _since(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--since", type=int, metavar="N", required=True, help="lines after N")
+def _since(parser: argparse.ArgumentParser, text: str = "lines after N") -> None:
+    parser.add_argument("--since", type=int, metavar="N", required=True, help=text)
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("regex", metavar="REGEX")
     _timeout(parser)
-    _since(parser)
+    _since(parser, "lines after N: this step's mark, or old speech can match")
 
 
 def _press_args(parser: argparse.ArgumentParser) -> None:
@@ -460,17 +460,19 @@ def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None)
     """At a terminal, offer to update asc's own NVDA. Without one, as when an
     agent runs asc, a line says how. An NVDA the user named is never updated."""
     news = f"NVDA {release.version} is available"
+    # get-nvda refuses while asc's NVDA runs, and start may have failed by then.
+    when = "when asc is stopped"
     if nvda_dir is not None:
         print(f"{news} (nvda_dir is older)")
     elif ask is None:
-        print(f"{news}: asc get-nvda")
+        print(f"{news}: asc get-nvda {when}")
     else:
         # The release already looked up, so a second lookup can't pick another.
         update = partial(_make_portable, release.version, sha1=release.sha1)
         try:
-            _offer(ask, f"{news}. Update before starting?", update, "asc get-nvda")
+            _offer(ask, f"{news}. Update before starting?", update, "asc get-nvda", when)
         except EOFError:  # no answer: start with the NVDA it has
-            print("\nRun asc get-nvda later.")
+            print(f"\nRun asc get-nvda {when}.")
 
 
 def _config_change(settings: Config, args: argparse.Namespace) -> int:
@@ -486,7 +488,7 @@ def _config_change(settings: Config, args: argparse.Namespace) -> int:
     # and the panic key, which the daemon takes at its start, wait.
     # Asked before saving, so a failed look leaves the file as it was.
     if pref.name == "panic_key":
-        waiting = session.any_running(state_root())
+        waiting = session.running_mode(state_root()) is not None
     else:
         waiting = where is not None and session.is_running(mode_dir(where))
     edit.save(config_file(), data)
@@ -563,9 +565,11 @@ def _sentence(error: AscError) -> str:
     return f"{text[:1].upper()}{text[1:]}."
 
 
-def _offer(ask: Ask, question: str, action: Callable[[], None], later: str) -> None:
+def _offer(
+    ask: Ask, question: str, action: Callable[[], None], later: str, when: str = "later"
+) -> None:
     """Do `action` now if the user agrees. Otherwise, or if it fails, name the
-    command `later` that does it."""
+    command `later` that does it, and `when`."""
     if _ask_yes(ask, question, default=True):
         try:
             action()
@@ -573,7 +577,7 @@ def _offer(ask: Ask, question: str, action: Callable[[], None], later: str) -> N
             print(f"Not done. {_sentence(error)}")
         else:
             return
-    print(f"Run {later} later.")
+    print(f"Run {later} {when}.")
 
 
 def _get_nvda_now(ask: Ask) -> None:
@@ -654,8 +658,8 @@ def _answers(ask: Ask) -> setup.Answers:
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
-    if session.any_running(state_root()):
-        raise AlreadyRunning
+    if (mode := session.running_mode(state_root())) is not None:
+        raise AlreadyRunning(mode)
     path = config_file()
     print("asc setup")
     if path.exists() and not replace_without_asking:

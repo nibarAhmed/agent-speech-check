@@ -130,7 +130,7 @@ def test_second_start_is_refused() -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     again = run_asc("start", "--mode", "watch")
     assert again.returncode == 4
-    assert "asc is already running" in again.stderr
+    assert "asc is already running in watch mode" in again.stderr
     assert again.stderr.endswith("hint: asc stop, then try again\n")
 
 
@@ -158,7 +158,7 @@ def test_one_daemon_at_a_time(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     second = run_asc("start", "--mode", "desktop")
     assert second.returncode == 4
-    assert "asc is already running" in second.stderr
+    assert "asc is already running in watch mode" in second.stderr
     assert "hint: asc stop" in second.stderr
     assert not (env.folder("desktop") / "state.json").exists()
     assert run_asc("stop").stdout == "stopped: watch\n"

@@ -337,9 +337,9 @@ NEWER = Release("2027.1", "a5b01592f4e2355432848d3ad82f5bd214f25947")
 
 
 def test_without_a_terminal_a_newer_nvda_is_one_line(capsys: pytest.CaptureFixture[str]) -> None:
-    # Agents have no terminal: they read this and run asc get-nvda themselves.
+    # Agents have no terminal: start goes on, and get-nvda refuses while its NVDA runs.
     say_update(NEWER, None, None)
-    assert capsys.readouterr().out == "NVDA 2027.1 is available: asc get-nvda\n"
+    assert capsys.readouterr().out == "NVDA 2027.1 is available: asc get-nvda when asc is stopped\n"
 
 
 def test_an_nvda_dir_is_never_updated(capsys: pytest.CaptureFixture[str]) -> None:
@@ -353,7 +353,7 @@ def test_at_a_terminal_the_update_is_offered(capsys: pytest.CaptureFixture[str])
     ask = Asker("n")
     say_update(NEWER, None, ask)
     assert "NVDA 2027.1 is available. Update before starting?" in ask.prompts[0]
-    assert "Run asc get-nvda later." in capsys.readouterr().out
+    assert "Run asc get-nvda when asc is stopped." in capsys.readouterr().out
 
 
 def test_no_answer_to_the_update_is_a_no(capsys: pytest.CaptureFixture[str]) -> None:
@@ -362,4 +362,4 @@ def test_no_answer_to_the_update_is_a_no(capsys: pytest.CaptureFixture[str]) -> 
         raise EOFError
 
     say_update(NEWER, None, eof)
-    assert "Run asc get-nvda later." in capsys.readouterr().out
+    assert "Run asc get-nvda when asc is stopped." in capsys.readouterr().out

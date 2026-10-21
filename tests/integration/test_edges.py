@@ -299,7 +299,8 @@ def test_the_named_mutex_refuses_a_second_daemon() -> None:
     target = Target("desktop", free_port(), launch=False)
     second = run_asc("_daemon", target.to_json())
     assert second.returncode == 4
-    assert "asc is already running" in second.stderr
+    # The mutex doesn't know the first daemon's mode.
+    assert "error: asc is already running\n" in second.stderr
 
 
 @pytest.mark.parametrize("daemon_reply", [HANG], indirect=True)

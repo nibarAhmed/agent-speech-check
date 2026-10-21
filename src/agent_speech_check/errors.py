@@ -474,8 +474,9 @@ class KeysRefused(Refused):
 
 
 class AlreadyRunning(Refused):
-    def __init__(self) -> None:
-        super().__init__("asc is already running", hint="asc stop, then try again")
+    def __init__(self, mode: str | None = None) -> None:
+        where = f" in {mode} mode" if mode else ""
+        super().__init__(f"asc is already running{where}", hint="asc stop, then try again")
 
 
 class DaemonNotAnswering(Refused):

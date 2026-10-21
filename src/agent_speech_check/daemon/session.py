@@ -80,10 +80,10 @@ def is_running(folder: Path) -> bool:
     return _probe(folder)[0]
 
 
-def any_running(root: Path) -> bool:
-    """A daemon runs, answering or not. Only one can, but an older asc may have
-    left another in its own folder."""
-    return any(is_running(folder) for folder in state.folders(root))
+def running_mode(root: Path) -> str | None:
+    """The mode whose daemon runs, answering or not. Only one can, but an older
+    asc may have left another in its own folder."""
+    return next((folder.name for folder in state.folders(root) if is_running(folder)), None)
 
 
 def _end(folder: Path) -> None:
@@ -190,7 +190,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
         if silent is not None:
             raise DaemonNotAnswering(silent.message)
         if running:
-            raise AlreadyRunning
+            raise AlreadyRunning(other.name)
     process = _spawn(target, folder)
     if not poll_until(
         lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S

@@ -16,7 +16,7 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 |---|---|
 | Hear the user's own NVDA while you act some other way (browser tools, tests, the user) | `watch` (default, never sends keys) |
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
-| Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox; `asc start` takes about a minute) |
+| Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation |
 
 ## Rules
@@ -44,16 +44,14 @@ asc start                         # the mode setting, or --mode M
 asc mark                          # mark: 40, before each step
 ...act (click, navigate, run the test)...
 asc wait --since 40 "(?i)saved"
-asc speech --since 40
+asc speech --since 40             # everything after the mark
 asc stop                          # when done
 ```
 
-- For `--since`, pass the last number you read, or N from `(nothing said after N)`.
-  Never an older one, or old speech can match. Numbers restart with each `asc start`.
-- If `asc start` exits 4 because `asc` already runs, `asc status` shows which
-  mode. Another session may own it: stop it only if it's the wrong mode.
-- If `asc start` prints `NVDA <version> is available: asc get-nvda`, it still
-  started. To update: `asc stop`, `asc get-nvda`, `asc start`.
+- For `--since`, pass this step's mark, or N from `(nothing said after N)`.
+  Numbers restart with each `asc start`.
+- If `asc start` says `asc` already runs, another session may own it: stop it
+  only if it's the wrong mode.
 - If presses keep missing speech or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` with `asc config set`.
 
@@ -61,7 +59,7 @@ asc stop                          # when done
 
 `asc start` prints a host, a key and a certificate fingerprint. Ask the user to
 connect in NVDA: Tools, Remote Access, Connect, allow this computer to be
-controlled, that host and key, and trust the certificate. After that it
+controlled, enter that host and key, and trust the certificate. After that it
 reconnects by itself whenever watch mode runs. Watch mode records everything
 NVDA says, typed text included, so `asc stop` when you're done.
 
@@ -69,7 +67,7 @@ NVDA says, typed text included, so `asc stop` when you're done.
 
 - A `launch` that times out but lists a title under `New windows:` started
   anyway. In watch mode the user may need to switch to that window.
-- Sandbox mode: your app must come from a folder in sandbox mode's `share`
+- Sandbox mode: your own app must come from a folder in sandbox mode's `share`
   (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
 - Shared mode needs `asc start --mode shared --i-understand` every time.
 
