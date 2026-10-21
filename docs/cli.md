@@ -121,7 +121,8 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   old copy. Without a terminal, as when an agent runs it, it prints
   `NVDA <version> is available: asc get-nvda when asc is stopped` and starts.
   An NVDA in `nvda_dir` is never updated: the line says `(nvda_dir is older)`.
-- With `launch = false`, `asc` doesn't start NVDA. You start an NVDA yourself
+- With `launch = false`, `asc` doesn't start NVDA, so the notes above don't
+  apply (no check for a running `nvda.exe`). You start an NVDA yourself
   on this computer and connect it to `asc`. It has to be on this computer
   because the relay only accepts connections from this computer (127.0.0.1).
   `nvda_dir` is refused with exit 2, as in watch and shared mode.
