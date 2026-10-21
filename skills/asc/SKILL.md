@@ -23,8 +23,7 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 
 - Never run an NVDA binary or installer on the host yourself: a second NVDA
   restarts the user's screen reader. `asc get-nvda` and `asc start` are safe.
-- Desktop mode refuses while any NVDA runs. Use sandbox mode then; never stop the
-  user's NVDA.
+- Desktop mode refuses while any NVDA runs; never stop the user's NVDA.
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
@@ -36,7 +35,7 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
   It runs with a copy of their settings; `asc` never writes their copy.
 - A mode with `launch = false` (NVDA started elsewhere, which connects by itself)
   starts no NVDA and no sandbox: none of the desktop or sandbox notes here apply,
-  it has no panic key, and `launch` runs the command on this computer.
+  and `launch` runs the command on this computer.
 
 ## Workflow
 
@@ -44,47 +43,33 @@ the agent-speech-check repository, `uv tool install .`. `asc --help` and
 asc start                         # the mode setting, or --mode M
 asc mark                          # mark: 40, before each step
 ...act (click, navigate, run the test)...
-asc wait --since 40 "(?i)saved"   # Python regex, searched; prints 43 said: ...
-asc speech --since 40             # everything after line 40
+asc wait --since 40 "(?i)saved"
+asc speech --since 40
 asc stop                          # when done
 ```
 
-- `--since` is required. Use the number from `asc mark` or the last line you
-  read, never an older one, or old speech can match. Numbers restart with each
-  `asc start`. `press`, `type` and `launch` print their own speech, numbered,
-  and take no `--since`. Their last number, or `N` in `(nothing said after N)`,
-  is the next `--since`.
-
+- For `--since`, pass the last number you read, or N from `(nothing said after N)`.
+  Never an older one, or old speech can match. Numbers restart with each `asc start`.
 - If `asc start` exits 4 because `asc` already runs, `asc status` shows which
   mode. Another session may own it: stop it only if it's the wrong mode.
 - If `asc start` prints `NVDA <version> is available: asc get-nvda`, it still
-  started. To update: `asc stop`, `asc get-nvda`, `asc start` (`get-nvda`
-  refuses while desktop mode's NVDA runs).
+  started. To update: `asc stop`, `asc get-nvda`, `asc start`.
 - If presses keep missing speech or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` with `asc config set`.
 
-## Watch mode: first connection
+## Watch mode
 
 `asc start` prints a host, a key and a certificate fingerprint. Ask the user to
-open NVDA's Tools menu, Remote Access, Connect, choose "allow this computer to be
-controlled", enter that host and key, and trust the certificate. After that it
-reconnects by itself whenever watch mode runs. Watch mode records everything NVDA
-says, typed text included, so `asc stop` when you're done.
+connect in NVDA: Tools, Remote Access, Connect, allow this computer to be
+controlled, that host and key, and trust the certificate. After that it
+reconnects by itself whenever watch mode runs. Watch mode records everything
+NVDA says, typed text included, so `asc stop` when you're done.
 
-## Apps and keys
-
-```
-asc launch "C:\share\app\run.cmd" --title "My App"
-asc press Tab
-asc press NVDA+Tab --expect "(?i)button"
-asc type "hello"
-asc keys heading                  # look NVDA commands up instead of guessing
-```
+## Apps
 
 - A `launch` that times out but lists a title under `New windows:` started
   anyway. In watch mode the user may need to switch to that window.
-- Sandbox mode: commands run inside the sandbox, which has no Edge and no
-  Notepad. Your app must come from a folder in sandbox mode's `share`
+- Sandbox mode: your app must come from a folder in sandbox mode's `share`
   (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
 - Shared mode needs `asc start --mode shared --i-understand` every time.
 
@@ -92,11 +77,10 @@ asc keys heading                  # look NVDA commands up instead of guessing
 
 | Code | Meaning | Next step |
 |---|---|---|
-| 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say; its last line number, or N in `(nothing said after N)`, is the next `--since` |
+| 1 | `wait`, `--expect` or `launch` didn't match | read what NVDA did say |
 | 2 | usage | fix the arguments or setting |
 | 3 | not connected or not running | follow the hint: `asc start` if not running, else `asc status` says how to connect |
 | 4 | refused or busy | read the message |
 | 5 | protocol error | report it |
 | 6 | bug in asc | report it; the message says where the log is |
 | 7 | setup needed | tell the user the hint; retrying won't help |
-| 130 | interrupted | |
