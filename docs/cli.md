@@ -121,9 +121,13 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
   old copy. Without a terminal, as when an agent runs it, it prints
   `NVDA <version> is available: asc get-nvda when asc is stopped` and starts.
   An NVDA in `nvda_dir` is never updated: the line says `(nvda_dir is older)`.
-- With `launch = false`, NVDA is started elsewhere (a VM, another machine) and
-  connects to the relay itself. No portable NVDA is needed, and `nvda_dir` is
-  refused with exit 2, as in watch and shared mode.
+- With `launch = false`, `asc` doesn't start NVDA, so the notes above don't
+  apply (no check for a running `nvda.exe`). You start an NVDA yourself
+  on this computer and connect it to `asc`. It has to be on this computer
+  because the relay only accepts connections from this computer (127.0.0.1).
+  `nvda_dir` is refused with exit 2, as in watch and shared mode.
+- If that NVDA is your own, `asc`'s keys land on your desktop with no panic key
+  and no `--i-understand`. To drive your own NVDA, use shared mode.
 
 ### Sandbox mode
 
@@ -177,8 +181,8 @@ and stops `asc` at once (in desktop mode, its NVDA too).
 - If another program owns the hotkey, `asc start` refuses (exit 4): `asc` never
   sends keys to this desktop without one.
 - `asc status` shows the panic key.
-- Desktop mode with `launch = false`, and sandbox mode, have none: their keys
-  land in another session.
+- Sandbox mode has none: its keys land in the sandbox. Desktop mode with
+  `launch = false` has none either (see [Desktop mode](#desktop-mode)).
 
 ## Configuration
 
@@ -242,7 +246,7 @@ context.
 | Setting | Default | Meaning |
 |---|---|---|
 | `port` | watch and shared 6837, sandbox 16837, desktop a free one | relay port |
-| `launch` | true in desktop and sandbox mode | false if NVDA is started elsewhere and connects itself |
+| `launch` | true in desktop and sandbox mode | false: `asc` starts no NVDA; you start one and connect it (in desktop mode, on this computer) |
 | `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
 | `share` | none | sandbox: folders mapped read-only to `C:\share\<name>`, full paths |
 | `window` | tray | sandbox: its window in the tray, taskbar or show |

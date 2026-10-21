@@ -22,7 +22,7 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
     started = run_asc("start", "--mode", "desktop")
     assert started.returncode == 0, started.stderr
     assert "mode: desktop (keys allowed)" in started.stdout
-    # launch = false: NVDA runs elsewhere, so asc's keys don't reach this desktop.
+    # launch = false: the test starts NVDA (the fake, which takes no real keys).
     assert "panic key" not in started.stdout
     fake = env.fake("desktop")
     yield fake
