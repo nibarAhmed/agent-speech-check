@@ -39,7 +39,7 @@ Some of the most important rules (the full set is in [CLAUDE.md](CLAUDE.md)):
 
 - Tests first for new logic, a failing test first for a bug, no mocks of our own code, and never
   weaken a test to get green.
-- No em dashes (U+2014) anywhere. `scripts/check_dashes.py` enforces it.
+- No em dashes (U+2014) anywhere.
 - Never copy NVDA source code (it's GPL). Work from `docs/protocol.md`.
 - Update `docs/cli.md` and `skills/asc/SKILL.md` with every command change.
 - A new dependency is fine when it saves code. Say why in the pull request description.

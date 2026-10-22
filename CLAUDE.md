@@ -23,7 +23,7 @@ These can break the user's own machine or the project, so no task overrides them
 ## Commands
 
 - `uv sync`
-- `uv run poe check` (everything: dashes, spelling, format, lint, types, dead code, deps, tests)
+- `uv run poe check` (everything: spelling, format, lint, types, dead code, deps, tests)
 - `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
 - `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox)
 

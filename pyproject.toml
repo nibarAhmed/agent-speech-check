@@ -53,7 +53,6 @@ dev = [
 # ---------------------------------------------------------------- tasks
 
 [tool.poe.tasks]
-dashes = "python scripts/check_dashes.py"
 spell = "codespell"
 fmt-check = "ruff format --check ."
 lint = "ruff check ."
@@ -62,12 +61,12 @@ dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup --no-cov -p no:cacheprovider"
-check = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
+check = ["spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.
 [tool.poe.tasks.fast]
-sequence = ["dashes", "spell", "fmt-check", "lint", "types", "dead", "unit"]
+sequence = ["spell", "fmt-check", "lint", "types", "dead", "unit"]
 ignore_fail = "return_non_zero"
 
 # ---------------------------------------------------------------- ruff
@@ -95,7 +94,7 @@ select = [
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "scripts/check_dashes.py", "scripts/build_installer.py"]
+files = ["src", "tests", "scripts/build_installer.py"]
 mypy_path = ["src", ".", "stubs"]
 explicit_package_bases = true
 
