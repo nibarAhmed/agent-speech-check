@@ -14,7 +14,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 5. Build the installer only when you change `installer/` or debug CI's `installer` check, which
    builds, installs, upgrades and uninstalls the MSI.
 
-## Where things are
+## Documentation
 
 - [docs/cli.md](docs/cli.md): every command and setting.
 - [docs/protocol.md](docs/protocol.md): how `asc` talks to NVDA, with the evidence.
