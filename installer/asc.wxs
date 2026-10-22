@@ -30,7 +30,8 @@
     <!-- Control Panel and Settings uninstall an MSI's own entry with basic UI, which shows
          none of the wizard, so the keep-data choice would never appear. Hide that entry and
          register our own (UninstallEntry) that opens the wizard. winget skips hidden entries
-         too, so a winget manifest must name ours in AppsAndFeaturesEntries. -->
+         too, so a winget manifest must name ours in AppsAndFeaturesEntries, with
+         ProductCode: agent-speech-check. -->
     <Property Id="ARPSYSTEMCOMPONENT" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
               Value="Open a new terminal, then run asc setup. Terminals that were already open don't see the new PATH." />
