@@ -6,6 +6,8 @@
   and that folder goes on the user PATH. Upgrade, repair and uninstall first stop every
   asc daemon. Uninstall removes both, and asc's state in %LOCALAPPDATA%\agent-speech-check
   too (settings, logs, relay keys, the portable NVDA), unless KEEPDATA=1. Upgrades keep it.
+  Uninstall in Control Panel or Settings opens the wizard, which asks whether to keep that
+  state (see UninstallEntry).
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
@@ -25,6 +27,11 @@
             Message="Agent Speech Check installs per user only. Run it without ALLUSERS=1 or MSIINSTALLPERUSER=&quot;&quot;." />
     <MediaTemplate EmbedCab="yes" />
     <Property Id="ARPNOMODIFY" Value="1" />
+    <!-- Control Panel and Settings uninstall an MSI's own entry with basic UI, which shows
+         none of the wizard, so the keep-data choice would never appear. Hide that entry and
+         register our own (UninstallEntry) that opens the wizard. winget skips hidden entries
+         too, so a winget manifest must name ours in AppsAndFeaturesEntries. -->
+    <Property Id="ARPSYSTEMCOMPONENT" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
               Value="Open a new terminal, then run asc setup. Terminals that were already open don't see the new PATH." />
 
@@ -53,8 +60,8 @@
     <util:FailWhenDeferred />
 
     <!-- A short wizard: Welcome, then Next installs, then Finish. No licence page (MIT
-         needs no click-through) and no folder choice. Repair and remove use WiX's standard
-         maintenance dialogs. Silent installs (/qn) show none of this. -->
+         needs no click-through) and no folder choice. Uninstalling: Welcome, KeepDataDlg, then
+         WiX's confirmation. Silent installs and uninstalls (/qn) show none of this. -->
     <UI Id="AscUI">
       <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
       <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
@@ -74,11 +81,40 @@
       <Publish Dialog="WelcomeDlg" Control="Next" Event="EndDialog" Value="Return" Order="2" />
       <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
 
-      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
-      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
-      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <!-- Remove is the only maintenance choice, so skip WiX's Change, Repair or Remove page. -->
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Property="WixUI_InstallMode" Value="Remove" Order="1" />
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="KeepDataDlg" Order="2" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="KeepDataDlg" />
+
+      <!-- Between Welcome and the last confirmation: the checkbox sets KEEPDATA, as
+           KEEPDATA=1 on the command line does. It comes first in the tab order, so focus
+           (and a screen reader) lands on it; Enter still means Next. -->
+      <Dialog Id="KeepDataDlg" Width="370" Height="270" Title="!(loc.KeepDataDlg_Title)">
+        <Control Id="KeepData" Type="CheckBox" X="20" Y="150" Width="330" Height="18"
+                 Property="KEEPDATA" CheckBoxValue="1" Text="!(loc.KeepDataDlgCheckBox)" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
+        </Control>
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)">
+          <Publish Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="!(loc.KeepDataDlgTitle)" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="340" Height="20"
+                 Transparent="yes" NoPrefix="yes" Text="!(loc.KeepDataDlgDescription)" />
+        <Control Id="Body" Type="Text" X="20" Y="60" Width="330" Height="80" NoPrefix="yes"
+                 Text="!(loc.KeepDataDlgBody)" />
+      </Dialog>
     </UI>
     <UIRef Id="WixUI_Common" />
 
@@ -99,6 +135,22 @@
                              Condition="NOT UPGRADINGPRODUCTCODE AND NOT KEEPDATA" />
         <RegistryValue Root="HKCU" Key="Software\agent-speech-check" Name="StateFolder"
                        Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <!-- The Control Panel and Settings entry, in place of the hidden one. Uninstall runs
+           the wizard in maintenance mode; winget and other silent tools run
+           QuietUninstallString, which removes the state unless they add KEEPDATA=1. -->
+      <Component Id="UninstallEntry" Directory="INSTALLFOLDER">
+        <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\agent-speech-check">
+          <RegistryValue Name="DisplayName" Type="string" Value="[ProductName]" KeyPath="yes" />
+          <RegistryValue Name="DisplayVersion" Type="string" Value="[ProductVersion]" />
+          <RegistryValue Name="Publisher" Type="string" Value="[Manufacturer]" />
+          <RegistryValue Name="InstallLocation" Type="string" Value="[INSTALLFOLDER]" />
+          <RegistryValue Name="DisplayIcon" Type="string" Value="[INSTALLFOLDER]asc.exe" />
+          <RegistryValue Name="UninstallString" Type="string" Value="MsiExec.exe /I[ProductCode]" />
+          <RegistryValue Name="QuietUninstallString" Type="string" Value="MsiExec.exe /X[ProductCode] /qn" />
+          <RegistryValue Name="NoModify" Type="integer" Value="1" />
+          <RegistryValue Name="NoRepair" Type="integer" Value="1" />
+        </RegistryKey>
       </Component>
     </Feature>
   </Package>

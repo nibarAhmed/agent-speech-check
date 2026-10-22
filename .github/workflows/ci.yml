@@ -72,11 +72,12 @@ jobs:
           function PathFolders($path) { ($path -split ';' | Where-Object { $_ }) -join ';' }
           function Products { @($installer.RelatedProducts($upgradeCode)).Count }
           # Exit code 3010 (reboot needed) fails too: it means files were still in use.
-          function Msiexec($arguments, $expected = 0) {
+          function Run($exe, $arguments, $expected = 0) {
             $script:run++
-            $p = Start-Process msiexec "$arguments /qn /l*v `"$logs\$script:run.log`"" -Wait -PassThru
-            if ($p.ExitCode -ne $expected) { throw "msiexec $arguments exit $($p.ExitCode), expected $expected" }
+            $p = Start-Process $exe "$arguments /l*v `"$logs\$script:run.log`"" -Wait -PassThru
+            if ($p.ExitCode -ne $expected) { throw "$exe $arguments exit $($p.ExitCode), expected $expected" }
           }
+          function Msiexec($arguments, $expected = 0) { Run msiexec "$arguments /qn" $expected }
           # A watch-mode daemon from the installed asc, and its pid.
           function StartDaemon {
             & "$dir\asc.exe" start | Out-Null
@@ -97,6 +98,17 @@ jobs:
           if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
           if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
           if (-not (Test-Path "$data\watch\relay_cert.pem")) { throw "upgrade removed $data" }
+          # The MSI's own entry is hidden, and ours points at the product the upgrade installed.
+          $arp = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+          $productCode = @($installer.RelatedProducts($upgradeCode))[0]
+          $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          $own = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\$sid\Products" |
+            ForEach-Object { Get-ItemProperty "$($_.PSPath)\InstallProperties" -ErrorAction SilentlyContinue } |
+            Where-Object { $_.UninstallString -like "*$productCode*" }
+          if ($own.SystemComponent -ne 1) { throw "the MSI's own entry is not hidden" }
+          $entry = Get-ItemProperty "$arp\agent-speech-check"
+          if ($entry.UninstallString -ne "MsiExec.exe /I$productCode") { throw "UninstallString is $($entry.UninstallString)" }
+          if ($entry.QuietUninstallString -ne "MsiExec.exe /X$productCode /qn") { throw "QuietUninstallString is $($entry.QuietUninstallString)" }
           foreach ($flag in '--help', '--version') {
             & "$dir\asc.exe" $flag
             if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
@@ -112,15 +124,18 @@ jobs:
           Msiexec "/x `"$msi`" KEEPDATA=1"
           if ((Products) -ne 0) { throw "$(Products) products left" }
           if (-not (Test-Path "$data\watch\relay_cert.pem")) { throw "KEEPDATA=1 removed $data" }
-          # A plain uninstall stops the daemon and removes everything.
+          # A plain uninstall, run as winget runs it from our entry, stops the daemon and
+          # removes everything.
           Msiexec "/i `"$msi`""
           $daemon = StartDaemon
-          Msiexec "/x `"$msi`""
+          $exe, $quietArgs = (Get-ItemProperty "$arp\agent-speech-check").QuietUninstallString -split ' ', 2
+          Run $exe $quietArgs
           AssertGone $daemon 'uninstall'
           if ((Products) -ne 0) { throw "$(Products) products left" }
           if ((PathFolders (UserPath)) -cne (PathFolders $pathBefore)) { throw "user PATH changed`nbefore: $pathBefore`nafter:  $(UserPath)" }
           if (Test-Path $dir) { throw "$dir left behind" }
           if (Test-Path $data) { throw "$data left behind" }
+          if (Test-Path "$arp\agent-speech-check") { throw "the uninstall entry was left behind" }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: msi
