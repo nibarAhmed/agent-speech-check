@@ -35,8 +35,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 ## Rules
 
-The full testing policy, code rules and writing rules are in [CLAUDE.md](CLAUDE.md). The
-important ones:
+Some of the most important rules (the full set is in [CLAUDE.md](CLAUDE.md)):
 
 - Tests first for new logic, a failing test first for a bug, no mocks of our own code, and never
   weaken a test to get green.
