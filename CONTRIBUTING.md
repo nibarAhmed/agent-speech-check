@@ -35,9 +35,8 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 ## Rules
 
-The full testing policy, code rules and writing rules are in `CLAUDE.md`. It's written for coding
-agents, but the Never, Testing policy, Code, Security promises and Writing sections apply to people
-too. The ones people trip on most:
+The full testing policy, code rules and writing rules are in [CLAUDE.md](CLAUDE.md). The
+important ones:
 
 - Tests first for new logic, a failing test first for a bug, no mocks of our own code, and never
   weaken a test to get green.
