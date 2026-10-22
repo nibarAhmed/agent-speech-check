@@ -72,7 +72,7 @@ You need Windows: `asc` and its tests drive Windows APIs. With [`uv`](https://do
 
 ```shell
 uv sync
-uv run poe check     # everything: dashes, spelling, format, lint, types, dead code, deps, tests
+uv run poe check     # everything: spelling, format, lint, types, dead code, deps, tests
 uv run poe fast      # the quick loop: everything but deps and the slow tests
 ```
 
