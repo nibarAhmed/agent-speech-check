@@ -29,7 +29,8 @@ These can break the user's own machine or the project, so no task overrides them
 
 ## Testing policy
 
-- You're not done until `uv run poe check` passes. Paste the command and its output as evidence.
+- You're not done until `uv run poe check` passes. Paste the command and its final summary lines
+  as evidence.
 - For a bug: first write a test that reproduces it and see it fail, then fix it.
 - For new logic (parsing, waits, protocol): tests first.
 - Wait for a condition, never a fixed time: a sleep that guesses how long something takes fails
@@ -58,7 +59,15 @@ These can break the user's own machine or the project, so no task overrides them
   (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
   processes) and `configobj` (`nvda.ini`, read and written by the same library NVDA uses). Add
   a library when it saves code; say why in the PR description.
-- The rule that watch mode refuses keys lives in the daemon.
+- Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
+  side effect.
+- Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
+  release; `Keyboard` alone tracks which keys may be held.
+- A one-way door is a bug: whatever `asc` starts, holds or changes, it can also stop, release or
+  undo, including after a crash or a timeout.
+
+### Errors
+
 - Raise only `AscError` subclasses from `errors.py` for expected failures (bad input, daemon down, NVDA
   unreachable). Exit codes are decided there and nowhere else. Don't wrap bugs or broken invariants:
   let them crash, and `cli.main` reports them as exit 6.
@@ -71,12 +80,6 @@ These can break the user's own machine or the project, so no task overrides them
   (`raise X from None`). Built-ins may stay inside low-level modules like `winapi.py`.
 - An error from the daemon reaches the CLI as its bare category (`errors.from_kind`). Around
   `ipc.call`, catch a concrete class only if the client raises it itself (like `NotRunning`).
-- Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
-  side effect.
-- Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
-  release; `Keyboard` alone tracks which keys may be held.
-- A one-way door is a bug: whatever `asc` starts, holds or changes, it can also stop, release or
-  undo, including after a crash or a timeout.
 
 ## Security promises
 
@@ -86,7 +89,7 @@ These can break the user's own machine or the project, so no task overrides them
   tokens: log a length or a type, never the text. Command output and error messages may show
   speech (`NoMatch` lists what NVDA said), because they go to the caller, not to a log.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
-- Watch mode never sends keys.
+- Watch mode never sends keys; the daemon enforces this.
 - `asc` never writes the user's own NVDA configuration (also under Never, above).
 
 ## Writing
