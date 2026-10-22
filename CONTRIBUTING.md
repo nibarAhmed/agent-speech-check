@@ -10,12 +10,14 @@ You need Windows: `asc` and its tests drive Windows APIs, so they don't run on m
 2. Install [uv](https://docs.astral.sh/uv/).
 3. `uv sync`
 
+Then, to check your work:
+
 ```shell
 uv run poe check     # everything: dashes, spelling, format, lint, types, dead code, deps, tests
-uv run poe fast      # the quick loop: everything but deps and the slow tests
+uv run poe fast      # the quick loop: everything but deps and the slow tests, all failures at once
 ```
 
-`uv run poe check` must pass before you open a pull request.
+Loop on `poe fast` while you work. `poe check` must pass before you open a pull request.
 
 ### End-to-end tests
 
@@ -30,6 +32,7 @@ sandbox-mode tests (`ASC_E2E_SANDBOX=1`) run on your machine and leave your NVDA
 
 ### The installer
 
+You need this only when you change `installer/` or debug CI's `installer` check.
 `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the
 [.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
 CI's `installer` check builds it too, then installs, upgrades and uninstalls it.
@@ -42,13 +45,13 @@ CI's `installer` check builds it too, then installs, upgrades and uninstalls it.
 
 ## Pull requests
 
-- Push a branch to your fork and open a pull request against `main`. Changes reach `main` only
-  through a pull request.
+- Push a branch to your fork and open a pull request against `main`.
 - Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
   Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
   Keep pull requests small.
-- CI must pass. The `e2e` check runs the real-NVDA tests on a throwaway runner, but GitHub's
-  runners have no Windows Sandbox, so run `scripts/e2e_sandbox.py` yourself when it applies.
+- CI must pass. The `e2e` check skips PRs that change only docs. It runs the real-NVDA tests on
+  a throwaway runner, but GitHub's runners have no Windows Sandbox, so run the sandbox tests
+  yourself when they apply (see End-to-end tests).
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
@@ -74,8 +77,8 @@ or daemon), those tests can meet it and fail. Check for a running sandbox or `as
 blaming your change, and don't stop processes you didn't start. When a test clashes, give it its
 own names, titles and hotkeys instead of skipping it: skips can push coverage under the 90% floor.
 Tests never use the default panic key (they set `panic_key`), and each test that registers a
-hotkey uses its own (Control+Shift+Alt with F21, F22 or F23), because test workers run in
-parallel.
+hotkey uses one no other test uses (Control+Shift+Alt with F21, F22 or F23), because test
+workers run in parallel.
 
 ## Issues
 
