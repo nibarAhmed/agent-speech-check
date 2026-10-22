@@ -89,7 +89,7 @@ These can break the user's own machine or the project, so no task overrides them
   tokens: log a length or a type, never the text. Command output and error messages may show
   speech (`NoMatch` lists what NVDA said), because they go to the caller, not to a log.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
-- Watch mode never sends keys. The daemon enforces it.
+- Watch mode never sends keys; the daemon enforces this.
 - `asc` never writes the user's own NVDA configuration (also under Never, above).
 
 ## Writing
