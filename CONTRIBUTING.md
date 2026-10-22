@@ -4,38 +4,15 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 ## Setup
 
-You need Windows: `asc` and its tests drive Windows APIs, so they don't run on macOS or Linux.
-
 1. Fork the repository and clone your fork.
-2. Install [uv](https://docs.astral.sh/uv/).
-3. `uv sync`
-
-Then, to check your work:
-
-```shell
-uv run poe check     # everything: dashes, spelling, format, lint, types, dead code, deps, tests
-uv run poe fast      # the quick loop: everything but deps and the slow tests, all failures at once
-```
-
-Loop on `poe fast` while you work. `poe check` must pass before you open a pull request.
-
-### End-to-end tests
-
-For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
-NVDA: `uv run python scripts/e2e_sandbox.py`. They run inside Windows Sandbox (Windows 11 24H2
-or later, Pro, Enterprise or Education), so your own NVDA is never touched. If you can't run
-them, say so in the pull request.
-
-Never set `ASC_E2E_NVDA` on your own machine: those tests start that NVDA, which replaces your
-running one, and nothing starts yours again. Without it, `pytest -m e2e` skips them. The
-sandbox-mode tests (`ASC_E2E_SANDBOX=1`) run on your machine and leave your NVDA alone.
-
-### The installer
-
-You need this only when you change `installer/` or debug CI's `installer` check.
-`uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the
-[.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
-CI's `installer` check builds it too, then installs, upgrades and uninstalls it.
+2. Set it up as [Development](README.md#development) in the README explains.
+3. `uv run poe check` must pass before you open a pull request. While you work,
+   `uv run poe fast` is the quicker loop.
+4. For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
+   NVDA: `uv run python scripts/e2e_sandbox.py`. They need Windows Sandbox (Windows 11 24H2 or
+   later, Pro, Enterprise or Education). If you can't run them, say so in the pull request.
+5. Build the installer only when you change `installer/` or debug CI's `installer` check, which
+   builds, installs, upgrades and uninstalls the MSI.
 
 ## Where things are
 
@@ -51,7 +28,7 @@ CI's `installer` check builds it too, then installs, upgrades and uninstalls it.
   Keep pull requests small.
 - CI must pass. The `e2e` check skips PRs that change only docs. It runs the real-NVDA tests on
   a throwaway runner, but GitHub's runners have no Windows Sandbox, so run the sandbox tests
-  yourself when they apply (see End-to-end tests).
+  yourself when they apply (Setup, step 4).
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
