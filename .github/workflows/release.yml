@@ -76,13 +76,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        # A re-run finishes a release (or its draft) that a failed run left behind.
+        # gh publishes a release only after uploading every asset, so a failed run can leave a
+        # draft, which a re-run finishes. A published release is already complete.
         run: |
-          if gh release view "$TAG" > /dev/null 2>&1; then
+          if ! draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null); then
+            gh release create "$TAG" assets/* --verify-tag --title "$TAG" --generate-notes
+          elif [ "$draft" = true ]; then
             gh release upload "$TAG" assets/* --clobber
             gh release edit "$TAG" --draft=false
           else
-            gh release create "$TAG" assets/* --verify-tag --title "$TAG" --generate-notes
+            echo "$TAG is already released"
           fi
 
   # Trusted Publishing: PyPI trusts this workflow in the pypi environment, so no token is
