@@ -1,0 +1,108 @@
+name: Release
+
+# Pushing a tag like v1.2.3 releases that commit: the MSI, wheel and sdist go on a GitHub
+# Release, and the wheel and sdist go to PyPI. The tag must equal the version in
+# pyproject.toml, so bump that first (CONTRIBUTING.md, Releasing).
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      # Full history, so the next step can see whether main contains the tagged commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # No cache: a release must not build from what an earlier run left behind.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: false
+      - name: Check the tag is the package version
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = uv version --short
+          if ($env:TAG -cne "v$version") { throw "tag $env:TAG, but pyproject.toml has version $version" }
+      # Only main's commits passed review and CI, so a tag on any other commit is refused.
+      - name: Check main contains the tagged commit
+        run: git merge-base --is-ancestor HEAD origin/main
+      - name: Install
+        run: uv sync --locked
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build the MSI
+        run: uv run python scripts/build_installer.py
+      - name: Build the wheel and sdist
+        run: uv build --out-dir python-dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: msi
+          path: dist/*.msi
+          if-no-files-found: error
+      # Apart from the MSI: the PyPI upload sends every file in its folder.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: python
+          path: python-dist/*
+          if-no-files-found: error
+
+  # A PyPI upload can't be redone, a GitHub Release can, so the release waits for PyPI.
+  github-release:
+    needs: [build, pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        # gh publishes a release only after uploading every asset, so a failed run can leave a
+        # draft, which a re-run finishes. A published release is already complete.
+        run: |
+          if ! draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null); then
+            gh release create "$TAG" assets/* --verify-tag --title "$TAG" --generate-notes
+          elif [ "$draft" = true ]; then
+            gh release upload "$TAG" assets/* --clobber
+            gh release edit "$TAG" --draft=false
+          else
+            echo "$TAG is already released"
+          fi
+
+  # Trusted Publishing: PyPI trusts this workflow in the pypi environment, so no token is
+  # stored. Set up once on pypi.org (CONTRIBUTING.md, Releasing).
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/agent-speech-check/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: python
+          path: python-dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: python-dist

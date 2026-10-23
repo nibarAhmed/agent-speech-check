@@ -69,5 +69,6 @@ body:
       label: Installed from
       options:
         - MSI installer
-        - source (uv tool install)
+        - PyPI (uv tool install agent-speech-check)
+        - source (uv tool install .)
         - a clone, with uv run

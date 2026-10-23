@@ -6,8 +6,9 @@ description: Check what the NVDA screen reader actually says, or drive an app wi
 # asc: hear what NVDA says
 
 `asc` connects to NVDA over NVDA Remote Access and records every utterance as
-numbered lines. If `asc` isn't on PATH, ask the user to install it: in a clone of
-the agent-speech-check repository, `uv tool install .`. `asc --help` and
+numbered lines. If `asc` isn't on PATH, ask the user to install it:
+`uv tool install agent-speech-check`, or the MSI from
+https://github.com/nibarAhmed/agent-speech-check/releases/latest. `asc --help` and
 `asc <command> --help` are short and exact; trust them over this file.
 
 ## Pick the mode
