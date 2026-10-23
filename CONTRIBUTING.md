@@ -47,7 +47,8 @@ Some of the most important rules (the full set is in [CLAUDE.md](CLAUDE.md)):
 ## Releasing
 
 Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI, the
-wheel and the sdist, attaches them to a GitHub Release, and uploads the wheel and sdist to PyPI.
+wheel, the sdist and the winget manifests, attaches them to a GitHub Release, and uploads the
+wheel and sdist to PyPI.
 
 1. In a pull request, set the new version in `pyproject.toml` and in both
    `plugins/agent-speech-check/.claude-plugin/plugin.json` and
@@ -56,6 +57,12 @@ wheel and the sdist, attaches them to a GitHub Release, and uploads the wheel an
 2. Once it's merged, tag that commit on `main` and push the tag:
    `git tag -a v1.2.3 -m "v1.2.3"`, then `git push origin v1.2.3`. The workflow refuses a tag
    that isn't `v` plus the version in `pyproject.toml`, or that isn't on `main`.
+3. Once the release is out, submit it to winget: download its three
+   `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
+   `wingetcreate submit FOLDER`. Store a GitHub token first with `wingetcreate token --store`,
+   which signs you in through the browser, so the token stays out of your shell history. That
+   opens a pull request on `microsoft/winget-pkgs`. CI's `installer` check already installs,
+   lists and uninstalls the MSI with winget from these manifests.
 
 A PyPI version can never be uploaded twice, so a broken release gets a new version, not a
 second try at the same one.

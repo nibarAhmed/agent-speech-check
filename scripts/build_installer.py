@@ -15,6 +15,7 @@ import sys
 import sysconfig
 import tomllib
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build"
@@ -48,10 +49,19 @@ def msi_version(version: str) -> str:
     return version
 
 
+def msi_name(version: str) -> str:
+    return f"agent-speech-check-{version}.msi"
+
+
+def project() -> dict[str, Any]:
+    """The [project] table of pyproject.toml."""
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return dict(pyproject["project"])
+
+
 def main() -> None:
     require_x64(sysconfig.get_platform())
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    version = msi_version(pyproject["project"]["version"])
+    version = msi_version(project()["version"])
     subprocess.run(
         [
             "uv", "run", "--group", "build", "pyinstaller", "--noconfirm", "--onedir",
@@ -70,7 +80,7 @@ def main() -> None:
         check=True,
         cwd=ROOT,
     )
-    msi = DIST / f"agent-speech-check-{version}.msi"
+    msi = DIST / msi_name(version)
     subprocess.run(
         [
             "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),
