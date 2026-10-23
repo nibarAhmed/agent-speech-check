@@ -57,14 +57,23 @@ Use `asc status` to check the connection and `asc COMMAND --help` for a command'
 
 ## AI agent skill
 
-The repository includes an [agent skill](skills/asc/SKILL.md) for Claude Code and Codex, so the agent knows how to start a session, inspect speech, handle failures, and stop cleanly.
+The repository includes an [agent skill](plugins/agent-speech-check/skills/asc/SKILL.md) for Claude Code and Codex, so the agent knows how to start a session, inspect speech, handle failures, and stop cleanly.
 
-To install it manually for all your projects, copy the `skills/asc` folder to:
+This repository is a plugin marketplace for both. To install the skill for all your projects:
 
-- Claude Code: `~/.claude/skills/`
-- Codex: `~/.agents/skills/`
+```shell
+# Claude Code
+claude plugin marketplace add nibarAhmed/agent-speech-check
+claude plugin install agent-speech-check@agent-speech-check
 
-Copy it again after it changes.
+# Codex
+codex plugin marketplace add nibarAhmed/agent-speech-check
+codex plugin add agent-speech-check@agent-speech-check
+```
+
+If you copied the `skills/asc` folder by hand before, delete that copy from `~/.claude/skills/` and `~/.agents/skills/` first, so the old skill doesn't load next to the plugin's.
+
+In Claude Code the skill is `/agent-speech-check:asc`. To update it, run `claude plugin update agent-speech-check@agent-speech-check`, or in Codex, `codex plugin marketplace upgrade` and then the `codex plugin add` command again.
 
 ## Development
 
@@ -94,7 +103,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
 - [CLI reference](docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
 - [NVDA Remote Access protocol](docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
 - [Findings](docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
-- [Agent skill](skills/asc/SKILL.md): the recommended workflow for coding agents.
+- [Agent skill](plugins/agent-speech-check/skills/asc/SKILL.md): the recommended workflow for coding agents.
 
 ## License
 
