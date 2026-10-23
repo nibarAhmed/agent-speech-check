@@ -33,13 +33,13 @@ def test_every_manifest_names_the_package_and_its_type() -> None:
         f"{ID}.locale.en-US.yaml": "defaultLocale",
     }
     for name, text in lines().items():
-        schema = f"https://aka.ms/winget-manifest.{types[name]}.1.12.0.schema.json"
+        schema = f"https://aka.ms/winget-manifest.{types[name]}.1.10.0.schema.json"
         assert text[:3] == [
             f"# yaml-language-server: $schema={schema}",
             f'PackageIdentifier: "{ID}"',
             'PackageVersion: "1.2.3"',
         ]
-        assert text[-2:] == [f"ManifestType: {types[name]}", "ManifestVersion: 1.12.0"]
+        assert text[-2:] == [f"ManifestType: {types[name]}", "ManifestVersion: 1.10.0"]
 
 
 def test_installer_points_at_the_release_msi_by_its_hash() -> None:
