@@ -1,0 +1,11 @@
+{
+  "name": "agent-speech-check",
+  "plugins": [
+    {
+      "name": "agent-speech-check",
+      "source": { "source": "local", "path": "./plugins/agent-speech-check" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Developer Tools"
+    }
+  ]
+}

@@ -102,4 +102,4 @@ These can break the user's own machine or the project, so no task overrides them
 
 - PRs are squash-merged: the PR title becomes the commit on `main` and the PR description its
   message. Write the title as a conventional commit. Small PRs.
-- Update `docs/cli.md` and `skills/asc/SKILL.md` with every command change.
+- Update `docs/cli.md` and `plugins/agent-speech-check/skills/asc/SKILL.md` with every command change.

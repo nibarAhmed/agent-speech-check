@@ -1,0 +1,12 @@
+{
+  "name": "agent-speech-check",
+  "description": "The asc skill: hear what NVDA says and drive apps with NVDA keys.",
+  "owner": { "name": "nibarAhmed" },
+  "plugins": [
+    {
+      "name": "agent-speech-check",
+      "source": "./plugins/agent-speech-check",
+      "description": "Hear what NVDA says and drive apps with NVDA keys, using asc."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "agent-speech-check",
+  "displayName": "Agent Speech Check",
+  "version": "0.0.1",
+  "description": "Hear what the NVDA screen reader says and drive apps with NVDA keys, using the asc CLI.",
+  "author": { "name": "nibarAhmed" },
+  "homepage": "https://github.com/nibarAhmed/agent-speech-check",
+  "repository": "https://github.com/nibarAhmed/agent-speech-check",
+  "license": "MIT",
+  "keywords": ["accessibility", "nvda", "screen-reader", "testing"]
+}
