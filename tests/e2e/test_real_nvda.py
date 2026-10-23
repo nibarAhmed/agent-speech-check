@@ -51,6 +51,10 @@ def wait_connected(timeout_s: float = 90) -> None:
     raise AssertionError("NVDA did not connect")
 
 
+def in_focus_mode() -> bool:
+    return "browse/focus: focus" in run_asc("status").stdout
+
+
 def nvda_log(request: pytest.FixtureRequest, tmp_path: Path) -> Path:
     """This test's own NVDA log, where the e2e runs collect it."""
     return Path(os.environ.get("ASC_E2E_OUT", tmp_path)) / f"{request.node.name}.nvda.log"
@@ -164,8 +168,10 @@ def test_desktop_mode_end_to_end(
         assert wrong.returncode == 1
         assert re.search(r'NVDA said:\n[0-9]+ said: "', wrong.stderr), wrong.stderr
 
-        field = run_asc("press", "Tab", "--settle", "800")
-        assert "mode: focus" in field.stdout, field.stdout
+        # NVDA can switch modes later than any settle on a slow runner, so wait for it.
+        assert not in_focus_mode(), run_asc("status").stdout
+        assert run_asc("press", "Tab").returncode == 0
+        assert poll_until(in_focus_mode, 10, 0.2), run_asc("status").stdout
         assert run_asc("type", "hi").returncode == 0
         line = run_asc("press", "NVDA+Up", "--expect", "hi")
         assert line.returncode == 0, line.stdout + line.stderr
