@@ -11,12 +11,11 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
 
-from scripts.build_installer import DIST, ROOT, project_version
+from scripts.build_installer import DIST, ROOT, msi_version, project
 
 # Permanent once winget-pkgs accepts it: winget users install and upgrade by this.
 ID = "nibarAhmed.AgentSpeechCheck"
@@ -101,16 +100,16 @@ def manifests(product: Product, version: str, sha: str, description: str) -> dic
 
 
 def main() -> None:
-    version = project_version()
+    table = project()
+    version = msi_version(table["version"])
     msi = DIST / f"agent-speech-check-{version}.msi"
     if not msi.is_file():
         sys.exit(f"No {msi}: run scripts/build_installer.py first")
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     files = manifests(
         read_product(ROOT / "installer" / "asc.wxs"),
         version,
         sha256(msi),
-        pyproject["project"]["description"],
+        table["description"],
     )
     out = DIST / "winget"
     out.mkdir(exist_ok=True)

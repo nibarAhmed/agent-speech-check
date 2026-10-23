@@ -59,7 +59,8 @@ wheel and sdist to PyPI.
    that isn't `v` plus the version in `pyproject.toml`, or that isn't on `main`.
 3. Once the release is out, submit it to winget: download its three
    `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
-   `wingetcreate submit --token TOKEN FOLDER`, with a GitHub token that has `public_repo`. That
+   `wingetcreate submit FOLDER`. Store a GitHub token first with `wingetcreate token --store`,
+   which signs you in through the browser, so the token stays out of your shell history. That
    opens a pull request on `microsoft/winget-pkgs`. CI's `installer` check already installs,
    lists and uninstalls the MSI with winget from these manifests.
 
