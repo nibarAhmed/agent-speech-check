@@ -49,6 +49,10 @@ def msi_version(version: str) -> str:
     return version
 
 
+def msi_name(version: str) -> str:
+    return f"agent-speech-check-{version}.msi"
+
+
 def project() -> dict[str, Any]:
     """The [project] table of pyproject.toml."""
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -76,7 +80,7 @@ def main() -> None:
         check=True,
         cwd=ROOT,
     )
-    msi = DIST / f"agent-speech-check-{version}.msi"
+    msi = DIST / msi_name(version)
     subprocess.run(
         [
             "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),

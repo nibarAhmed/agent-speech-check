@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
 
-from scripts.build_installer import DIST, ROOT, msi_version, project
+from scripts.build_installer import DIST, ROOT, msi_name, msi_version, project
 
 # Permanent once winget-pkgs accepts it: winget users install and upgrade by this.
 ID = "nibarAhmed.AgentSpeechCheck"
@@ -64,7 +64,7 @@ def manifests(product: Product, version: str, sha: str, description: str) -> dic
         tail = [f"ManifestType: {kind}", f"ManifestVersion: {MANIFEST_VERSION}"]
         return "\n".join([*head, *body, *tail]) + "\n"
 
-    msi = f"{REPO}/releases/download/v{version}/agent-speech-check-{version}.msi"
+    msi = f"{REPO}/releases/download/v{version}/{msi_name(version)}"
     return {
         f"{ID}.yaml": manifest("version", 'DefaultLocale: "en-US"'),
         f"{ID}.installer.yaml": manifest(
@@ -102,7 +102,7 @@ def manifests(product: Product, version: str, sha: str, description: str) -> dic
 def main() -> None:
     table = project()
     version = msi_version(table["version"])
-    msi = DIST / f"agent-speech-check-{version}.msi"
+    msi = DIST / msi_name(version)
     if not msi.is_file():
         sys.exit(f"No {msi}: run scripts/build_installer.py first")
     files = manifests(
