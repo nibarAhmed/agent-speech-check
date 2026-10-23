@@ -166,8 +166,9 @@ jobs:
             $dir = "$env:LOCALAPPDATA\Programs\agent-speech-check"
             & "$dir\asc.exe" --version
             Check 'asc --version'
+            # Once winget-pkgs has the package, winget may list it by its ID instead.
             $listed = @(winget list --name 'Agent Speech Check' --exact @flags |
-              Select-String -SimpleMatch 'ARP\User\X64\agent-speech-check')
+              Select-String -Pattern 'nibarAhmed\.AgentSpeechCheck|ARP\\User\\X64\\agent-speech-check')
             if ($listed.Count -ne 1) { throw "winget lists $($listed.Count) entries, expected our one" }
             winget uninstall --name 'Agent Speech Check' --exact --silent @flags
             Check 'winget uninstall'
