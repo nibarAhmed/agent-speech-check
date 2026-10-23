@@ -1,6 +1,6 @@
 [project]
 name = "agent-speech-check"
-version = "0.0.1"
+version = "0.1.0"
 description = "Let AI agents test your app with a real NVDA: press keys, read what NVDA says, check it."
 readme = "README.md"
 license = "MIT"
