@@ -16,12 +16,12 @@ asc press Shift+Tab --expect "expected accessible name"
 asc stop
 ```
 
-Replace the app path and expected speech with values from your application. `asc press` prints what NVDA said; `--expect` makes the command fail when the expected text is not present. See the [CLI reference](docs/cli.md) for exact behavior and options.
+Replace the app path and expected speech with values from your application. `asc press` prints what NVDA said; `--expect` makes the command fail when the expected text is not present. See the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md) for exact behavior and options.
 
 ## Requirements
 
 - Windows 11.
-- NVDA 2026.2 or later. Earlier versions with Remote Access built in (2025.1 onwards) send no speech when there is no audio device ([details](docs/findings.md#nvda-20251)).
+- NVDA 2026.2 or later. Earlier versions with Remote Access built in (2025.1 onwards) send no speech when there is no audio device ([details](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
 - For sandbox mode: Windows 11 24H2 or later (for the `wsb` command), Pro, Enterprise, or Education, with Windows Sandbox turned on, plus the one-time `asc sandbox-setup` step.
 
 ## Choose a mode
@@ -33,7 +33,7 @@ Replace the app path and expected speech with values from your application. `asc
 | `watch` | Listening to an NVDA you already run | Captures speech from your existing NVDA. `asc` does not send keys in this mode. |
 | `shared` | Driving an existing NVDA session | Sends keys to your real Windows session. Requires an explicit `--i-understand` on each start and provides a panic hotkey. Use with care. |
 
-If you are unsure, prefer **sandbox** for isolation or **desktop** when you want a simpler local setup. Read the mode-specific restrictions in the [CLI reference](docs/cli.md#modes) before automating tests.
+If you are unsure, prefer **sandbox** for isolation or **desktop** when you want a simpler local setup. Read the mode-specific restrictions in the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) before automating tests.
 
 ## Install
 
@@ -45,7 +45,7 @@ Pick one:
 
 Open a new terminal afterwards: terminals that were already open don't see the new `PATH`. If `asc` is still not found after a `uv` install, check that `uv`'s tool bin directory is on `PATH`.
 
-To uninstall the MSI, use Settings > Apps, or run the MSI again. To uninstall a `uv` install, run `asc stop`, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself, and its uninstall wizard asks whether to keep that folder ([details](docs/cli.md#files)).
+To uninstall the MSI, use Settings > Apps, or run the MSI again. To uninstall a `uv` install, run `asc stop`, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check` (settings, logs, relay keys and the portable NVDA). The MSI installer does all of this itself, and its uninstall wizard asks whether to keep that folder ([details](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#files)).
 
 ## Get started
 
@@ -57,7 +57,7 @@ Use `asc status` to check the connection and `asc COMMAND --help` for a command'
 
 ## AI agent skill
 
-The repository includes an [agent skill](plugins/agent-speech-check/skills/asc/SKILL.md) for Claude Code and Codex, so the agent knows how to start a session, inspect speech, handle failures, and stop cleanly.
+The repository includes an [agent skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md) for Claude Code and Codex, so the agent knows how to start a session, inspect speech, handle failures, and stop cleanly.
 
 This repository is a plugin marketplace for both. To install the skill for all your projects:
 
@@ -88,11 +88,11 @@ uv run poe fast      # the quick loop: everything but deps and the slow tests
 - **End-to-end tests** run NVDA inside Windows Sandbox, so your own NVDA is never touched: `uv run python scripts/e2e_sandbox.py`. Never set `ASC_E2E_NVDA` on your own machine: those tests start that NVDA, which replaces your running one, and nothing starts yours again. Without it, `pytest -m e2e` skips them. CI sets it on a throwaway runner and runs the real-NVDA tests on every PR that changes more than docs, and weekly against the latest NVDA (`.github/workflows/e2e.yml`). The sandbox-mode tests (`ASC_E2E_SANDBOX=1`) run on the host and leave your NVDA alone.
 - **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download), for WiX, which `dotnet-tools.json` pins.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
+See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/CONTRIBUTING.md) for pull requests and the rules.
 
 ## Security and safety
 
-`asc` handles speech that can include passwords and private messages, and it can press keys. [SECURITY.md](SECURITY.md) lists what it promises and how to report a problem privately.
+`asc` handles speech that can include passwords and private messages, and it can press keys. [SECURITY.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/SECURITY.md) lists what it promises and how to report a problem privately.
 
 - `shared` mode, and `desktop` mode when it launches its NVDA on your computer, send keys into your real Windows session. Their panic hotkey, `Control+Shift+Alt+F12` unless the `panic_key` setting changes it, releases held keys and stops `asc` at once.
 - The relay certificate and channel key are stored in each mode's folder. Keep that folder private.
@@ -100,11 +100,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for pull requests and the rules.
 
 ## Documentation
 
-- [CLI reference](docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
-- [NVDA Remote Access protocol](docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
-- [Findings](docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
-- [Agent skill](plugins/agent-speech-check/skills/asc/SKILL.md): the recommended workflow for coding agents.
+- [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
+- [NVDA Remote Access protocol](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
+- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
+- [Agent skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md): the recommended workflow for coding agents.
 
 ## License
 
-MIT (see [LICENSE](LICENSE)), except one test fixture copied from NVDA, which is GPL-2: see [tests/fixtures/README.md](tests/fixtures/README.md). NVDA is a trademark of NV Access. This project is not affiliated with NV Access.
+MIT (see [LICENSE](https://github.com/nibarAhmed/agent-speech-check/blob/main/LICENSE)), except one test fixture copied from NVDA, which is GPL-2: see [tests/fixtures/README.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/tests/fixtures/README.md). NVDA is a trademark of NV Access. This project is not affiliated with NV Access.

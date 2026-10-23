@@ -50,11 +50,12 @@ Maintainers release by pushing a tag. `.github/workflows/release.yml` then build
 wheel and the sdist, attaches them to a GitHub Release, and uploads the wheel and sdist to PyPI.
 
 1. In a pull request, set the new version in `pyproject.toml` and in both
-   `plugins/agent-speech-check/*/plugin.json` (a test checks they match), then run `uv lock`.
+   `plugins/agent-speech-check/.claude-plugin/plugin.json` and
+   `plugins/agent-speech-check/.codex-plugin/plugin.json` (a test checks they match), then run `uv lock`.
    Plugin users get the new skill only when this version changes.
 2. Once it's merged, tag that commit on `main` and push the tag:
    `git tag -a v1.2.3 -m "v1.2.3"`, then `git push origin v1.2.3`. The workflow refuses a tag
-   that isn't `v` plus the version in `pyproject.toml`.
+   that isn't `v` plus the version in `pyproject.toml`, or that isn't on `main`.
 
 A PyPI version can never be uploaded twice, so a broken release gets a new version, not a
 second try at the same one.

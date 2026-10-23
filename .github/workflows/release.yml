@@ -19,9 +19,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # Full history, so the next step can see whether main contains the tagged commit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       # No cache: a release must not build from what an earlier run left behind.
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
@@ -34,6 +36,9 @@ jobs:
         run: |
           $version = uv version --short
           if ($env:TAG -cne "v$version") { throw "tag $env:TAG, but pyproject.toml has version $version" }
+      # Only main's commits passed review and CI, so a tag on any other commit is refused.
+      - name: Check main contains the tagged commit
+        run: git merge-base --is-ancestor HEAD origin/main
       - name: Install
         run: uv sync --locked
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -55,8 +60,10 @@ jobs:
           path: python-dist/*
           if-no-files-found: error
 
+  # After PyPI: a PyPI upload can't be redone, a GitHub Release can, so a failed upload
+  # leaves no release behind that points at a version PyPI doesn't have.
   github-release:
-    needs: build
+    needs: [build, pypi]
     runs-on: ubuntu-latest
     permissions:
       contents: write
