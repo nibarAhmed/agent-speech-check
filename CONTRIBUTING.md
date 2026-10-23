@@ -44,6 +44,25 @@ Some of the most important rules (the full set is in [CLAUDE.md](CLAUDE.md)):
 - Update `docs/cli.md` and `plugins/agent-speech-check/skills/asc/SKILL.md` with every command change.
 - A new dependency is fine when it saves code. Say why in the pull request description.
 
+## Releasing
+
+Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI, the
+wheel and the sdist, attaches them to a GitHub Release, and uploads the wheel and sdist to PyPI.
+
+1. In a pull request, set the new version in `pyproject.toml` and in both
+   `plugins/agent-speech-check/*/plugin.json` (a test checks they match), then run `uv lock`.
+   Plugin users get the new skill only when this version changes.
+2. Once it's merged, tag that commit on `main` and push the tag:
+   `git tag -a v1.2.3 -m "v1.2.3"`, then `git push origin v1.2.3`. The workflow refuses a tag
+   that isn't `v` plus the version in `pyproject.toml`.
+
+A PyPI version can never be uploaded twice, so a broken release gets a new version, not a
+second try at the same one.
+
+Once, before the first release: on pypi.org, add a pending Trusted Publisher for the project
+`agent-speech-check`, with owner `nibarAhmed`, repository `agent-speech-check`, workflow
+`release.yml` and environment `pypi`. The workflow then publishes with no stored token.
+
 ## Tests next to a real `asc`
 
 Some tests touch machine-wide state: window titles, the foreground window, global hotkeys and

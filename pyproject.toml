@@ -22,6 +22,11 @@ dependencies = [
     "tomlkit>=0.15.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/nibarAhmed/agent-speech-check"
+Documentation = "https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md"
+Issues = "https://github.com/nibarAhmed/agent-speech-check/issues"
+
 [project.scripts]
 asc = "agent_speech_check.cli:main"
 
@@ -31,6 +36,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_speech_check"]
+
+# Only what builds the wheel, root-anchored (a bare README.md matches at any depth). The default
+# takes the whole repo, tests/fixtures too, and one fixture there is GPL-2
+# (tests/fixtures/README.md), in a package that says MIT.
+[tool.hatch.build.targets.sdist]
+include = ["/src/agent_speech_check", "/LICENSE", "/README.md", "/pyproject.toml"]
 
 [dependency-groups]
 build = [
