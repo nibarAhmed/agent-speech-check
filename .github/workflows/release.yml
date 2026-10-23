@@ -76,7 +76,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" assets/* --verify-tag --title "$TAG" --generate-notes
+        # A re-run finishes a release (or its draft) that a failed run left behind.
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" assets/* --clobber
+            gh release edit "$TAG" --draft=false
+          else
+            gh release create "$TAG" assets/* --verify-tag --title "$TAG" --generate-notes
+          fi
 
   # Trusted Publishing: PyPI trusts this workflow in the pypi environment, so no token is
   # stored. Set up once on pypi.org (CONTRIBUTING.md, Releasing).
