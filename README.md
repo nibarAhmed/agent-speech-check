@@ -71,6 +71,8 @@ codex plugin marketplace add nibarAhmed/agent-speech-check
 codex plugin add agent-speech-check@agent-speech-check
 ```
 
+If you copied the `skills/asc` folder by hand before, delete that copy from `~/.claude/skills/` and `~/.agents/skills/` first, so the old skill doesn't load next to the plugin's.
+
 In Claude Code the skill is `/agent-speech-check:asc`. To update it, run `claude plugin update agent-speech-check@agent-speech-check`, or in Codex, `codex plugin marketplace upgrade` and then the `codex plugin add` command again.
 
 ## Development

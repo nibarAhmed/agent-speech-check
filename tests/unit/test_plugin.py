@@ -1,7 +1,7 @@
 """The Claude Code and Codex plugin manifests agree with each other and with pyproject.toml.
 
-Both tools update an installed plugin only when its version changes, so a release that forgets
-a manifest leaves users on the old skill.
+Claude Code updates an installed plugin only when its version changes, so a release that forgets
+a manifest leaves Claude Code users on the old skill.
 """
 
 from __future__ import annotations

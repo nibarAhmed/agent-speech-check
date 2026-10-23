@@ -7,3 +7,10 @@ navigation.
 
 The skill needs the `asc` CLI on PATH. See the
 [main README](https://github.com/nibarAhmed/agent-speech-check#install) to install it.
+
+Install the plugin from this repository's marketplace:
+
+- Claude Code: `claude plugin marketplace add nibarAhmed/agent-speech-check`, then
+  `claude plugin install agent-speech-check@agent-speech-check`
+- Codex: `codex plugin marketplace add nibarAhmed/agent-speech-check`, then
+  `codex plugin add agent-speech-check@agent-speech-check`
