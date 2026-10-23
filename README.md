@@ -40,7 +40,7 @@ If you are unsure, prefer **sandbox** for isolation or **desktop** when you want
 Pick one:
 
 - **The MSI installer**, no Python needed: download `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest) and run it. It installs for your user only, without admin, and puts `asc` on your `PATH`.
-- **From PyPI**, with [`uv`](https://docs.astral.sh/uv/): `uv tool install agent-speech-check`. Update with `uv tool upgrade agent-speech-check`.
+- **From GitHub**, with [`uv`](https://docs.astral.sh/uv/): `uv tool install git+https://github.com/nibarAhmed/agent-speech-check`. Update with `uv tool upgrade agent-speech-check`.
 - **From a clone** of this repository, for the latest unreleased code: `uv tool install .` in its root.
 
 Open a new terminal afterwards: terminals that were already open don't see the new `PATH`. If `asc` is still not found after a `uv` install, check that `uv`'s tool bin directory is on `PATH`.
