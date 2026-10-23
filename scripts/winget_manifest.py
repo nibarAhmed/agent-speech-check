@@ -20,7 +20,7 @@ from scripts.build_installer import DIST, ROOT, msi_name, msi_version, project
 # Permanent once winget-pkgs accepts it: winget users install and upgrade by this.
 ID = "nibarAhmed.AgentSpeechCheck"
 REPO = "https://github.com/nibarAhmed/agent-speech-check"
-MANIFEST_VERSION = "1.10.0"
+MANIFEST_VERSION = "1.12.0"
 WIX = "{http://wixtoolset.org/schemas/v4/wxs}"
 
 
