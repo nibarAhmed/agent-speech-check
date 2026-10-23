@@ -60,8 +60,11 @@ the winget manifests and attaches them to a GitHub Release.
    `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
    `wingetcreate submit FOLDER`. Store a GitHub token first with `wingetcreate token --store`,
    which signs you in through the browser, so the token stays out of your shell history. That
-   opens a pull request on `microsoft/winget-pkgs`. CI's `installer` check already installs,
-   lists and uninstalls the MSI with winget from these manifests.
+   opens a pull request on `microsoft/winget-pkgs`. Without wingetcreate, open that pull request
+   from your fork of it, adding the three files under
+   `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`. Your first one asks you to sign Microsoft's
+   CLA, by replying `@microsoft-github-policy-service agree` on it. CI's `installer` check
+   already installs, lists and uninstalls the MSI with winget from these manifests.
 
 ## Tests next to a real `asc`
 
