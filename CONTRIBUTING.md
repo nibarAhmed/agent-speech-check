@@ -56,20 +56,15 @@ the winget manifests and attaches them to a GitHub Release.
 2. Once it's merged, tag that commit on `main` and push the tag:
    `git tag -a v1.2.3 -m "v1.2.3"`, then `git push origin v1.2.3`. The workflow refuses a tag
    that isn't `v` plus the version in `pyproject.toml`, or that isn't on `main`.
-3. Once the release is out, submit it to winget: open a pull request on `microsoft/winget-pkgs`
-   that adds the release's three `nibarAhmed.AgentSpeechCheck*.yaml` files under
-   `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`. With `gh`, no clone of that large repo needed:
-   1. `gh repo fork microsoft/winget-pkgs --clone=false` the first time, then
-      `gh repo sync YOU/winget-pkgs` before each submission.
-   2. Make a branch on your fork from `master` and add the three files to it, with
-      `gh api repos/YOU/winget-pkgs/git/refs` and then `.../contents/PATH` for each file.
-   3. `gh pr create --repo microsoft/winget-pkgs --head YOU:BRANCH`, with the description
-      filled in from the repo's pull request template.
-
-   `wingetcreate submit FOLDER` does the same in one step, from a folder holding the three files.
-   Your first submission also asks you to sign Microsoft's CLA, by replying
-   `@microsoft-github-policy-service agree` on the pull request. CI's `installer` check already
-   installs, lists and uninstalls the MSI with winget from these manifests.
+3. Once the release is out, submit it to winget: download its three
+   `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
+   `wingetcreate submit FOLDER`. Store a GitHub token first with `wingetcreate token --store`,
+   which signs you in through the browser, so the token stays out of your shell history. That
+   opens a pull request on `microsoft/winget-pkgs`. Without wingetcreate, open that pull request
+   from your fork of it, adding the three files under
+   `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`. Your first one asks you to sign Microsoft's
+   CLA, by replying `@microsoft-github-policy-service agree` on it. CI's `installer` check
+   already installs, lists and uninstalls the MSI with winget from these manifests.
 
 ## Tests next to a real `asc`
 
