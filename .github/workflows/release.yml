@@ -60,8 +60,7 @@ jobs:
           path: python-dist/*
           if-no-files-found: error
 
-  # After PyPI: a PyPI upload can't be redone, a GitHub Release can, so a failed upload
-  # leaves no release behind that points at a version PyPI doesn't have.
+  # A PyPI upload can't be redone, a GitHub Release can, so the release waits for PyPI.
   github-release:
     needs: [build, pypi]
     runs-on: ubuntu-latest
