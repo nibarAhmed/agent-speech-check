@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v1.2.3 releases that commit: the MSI, wheel and sdist go on a GitHub
-# Release, and the wheel and sdist go to PyPI. The tag must equal the version in
+# Pushing a tag like v1.2.3 releases that commit: the MSI, wheel, sdist and winget manifests
+# go on a GitHub Release, and the wheel and sdist go to PyPI. The tag must equal the version in
 # pyproject.toml, so bump that first (CONTRIBUTING.md, Releasing).
 on:
   push:
@@ -46,6 +46,8 @@ jobs:
           dotnet-version: "10.0.x"
       - name: Build the MSI
         run: uv run python scripts/build_installer.py
+      - name: Write the winget manifests
+        run: uv run python -m scripts.winget_manifest
       - name: Build the wheel and sdist
         run: uv build --out-dir python-dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -53,7 +55,12 @@ jobs:
           name: msi
           path: dist/*.msi
           if-no-files-found: error
-      # Apart from the MSI: the PyPI upload sends every file in its folder.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: winget
+          path: dist/winget/*
+          if-no-files-found: error
+      # Apart from the others: the PyPI upload sends every file in its folder.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python

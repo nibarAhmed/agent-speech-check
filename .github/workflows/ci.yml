@@ -136,6 +136,48 @@ jobs:
           if (Test-Path $dir) { throw "$dir left behind" }
           if (Test-Path $data) { throw "$data left behind" }
           if (Test-Path "$arp\agent-speech-check") { throw "the uninstall entry was left behind" }
+      # The release's winget manifests, with the MSI served from here: its release URL
+      # doesn't exist yet. Shows winget installs per user and finds our uninstall entry.
+      - name: Install, list and uninstall with winget
+        shell: pwsh
+        run: |
+          $flags = '--accept-source-agreements', '--disable-interactivity'
+          function Check($what) { if ($LASTEXITCODE -ne 0) { throw "$what exit $LASTEXITCODE" } }
+          uv run python -m scripts.winget_manifest
+          Check 'winget_manifest'
+          winget validate --manifest dist\winget --disable-interactivity
+          Check 'winget validate'
+          $msi = (Get-Item dist\agent-speech-check-*.msi).Name
+          $manifest = "$env:RUNNER_TEMP\winget"
+          Copy-Item -Recurse dist\winget $manifest
+          $installer = Get-Item "$manifest\*.installer.yaml"
+          (Get-Content $installer) -replace 'InstallerUrl: ".*"', "InstallerUrl: `"http://127.0.0.1:8765/$msi`"" |
+            Set-Content $installer
+          $server = Start-Process (Get-Command python).Source '-m http.server 8765 --bind 127.0.0.1 --directory dist' -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(30)
+            while (-not (Test-NetConnection 127.0.0.1 -Port 8765 -InformationLevel Quiet -WarningAction SilentlyContinue)) {
+              if ((Get-Date) -gt $deadline) { throw 'the MSI server did not start' }
+            }
+            winget settings --enable LocalManifestFiles
+            Check 'winget settings'
+            winget install --manifest $manifest --silent --accept-package-agreements @flags
+            Check 'winget install'
+            $dir = "$env:LOCALAPPDATA\Programs\agent-speech-check"
+            & "$dir\asc.exe" --version
+            Check 'asc --version'
+            $listed = @(winget list --name 'Agent Speech Check' --exact @flags |
+              Select-String -SimpleMatch 'ARP\User\X64\agent-speech-check')
+            if ($listed.Count -ne 1) { throw "winget lists $($listed.Count) entries, expected our one" }
+            winget uninstall --name 'Agent Speech Check' --exact --silent @flags
+            Check 'winget uninstall'
+            if (Test-Path $dir) { throw "$dir left behind" }
+            if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\agent-speech-check') {
+              throw 'the uninstall entry was left behind'
+            }
+          } finally {
+            Stop-Process -Id $server.Id
+          }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: msi

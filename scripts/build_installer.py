@@ -48,10 +48,15 @@ def msi_version(version: str) -> str:
     return version
 
 
+def project_version() -> str:
+    """The version in pyproject.toml, checked by msi_version."""
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    return msi_version(pyproject["project"]["version"])
+
+
 def main() -> None:
     require_x64(sysconfig.get_platform())
-    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    version = msi_version(pyproject["project"]["version"])
+    version = project_version()
     subprocess.run(
         [
             "uv", "run", "--group", "build", "pyinstaller", "--noconfirm", "--onedir",

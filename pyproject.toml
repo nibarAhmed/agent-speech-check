@@ -105,7 +105,7 @@ select = [
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "scripts/build_installer.py"]
+files = ["src", "tests", "scripts/build_installer.py", "scripts/winget_manifest.py"]
 mypy_path = ["src", ".", "stubs"]
 explicit_package_bases = true
 
