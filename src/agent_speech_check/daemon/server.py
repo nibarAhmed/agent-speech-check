@@ -47,7 +47,7 @@ from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.windows import winapi
-from agent_speech_check.windows.paths import mode_dir, state_root
+from agent_speech_check.windows.paths import mode_dir, relay_dir, state_root
 
 log = logging.getLogger(__name__)
 
@@ -174,7 +174,7 @@ class Daemon:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        self.relay = Relay(relay.load_or_create(folder), self.speech)
+        self.relay = Relay(relay.load_or_create(relay_dir(target.mode)), self.speech)
         self.keyboard = Keyboard(target, self.relay, self.speech)
         self.stopping = asyncio.Event()
         self.nvda: launcher.Running | None = None

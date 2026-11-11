@@ -174,7 +174,9 @@ def test_shared_mode_with_consent_sends_keys_and_has_a_panic_key(env: Env) -> No
     assert started.returncode == 0, started.stderr
     assert "mode: shared (keys allowed)" in started.stdout
     assert "panic key: Control+Shift+Alt+F21 stops asc and releases keys" in started.stdout
-    fake = env.fake("shared", {"Tab": [f.speak("OK button")]})
+    # Your own NVDA joins both modes with one key and certificate: watch mode's.
+    assert not (env.folder("shared") / "relay.json").exists()
+    fake = env.fake("watch", {"Tab": [f.speak("OK button")]})
     try:
         pressed = run_asc("press", "Tab", "--expect", "OK")
         assert pressed.returncode == 0, pressed.stderr

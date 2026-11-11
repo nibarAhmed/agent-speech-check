@@ -95,7 +95,7 @@ See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main
 `asc` handles speech that can include passwords and private messages, and it can press keys. [SECURITY.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/SECURITY.md) lists what it promises and how to report a problem privately.
 
 - `shared` mode, and `desktop` mode when it launches its NVDA on your computer, send keys into your real Windows session. Their panic hotkey, `Control+Shift+Alt+F12` unless the `panic_key` setting changes it, releases held keys and stops `asc` at once.
-- The relay certificate and channel key are stored in each mode's folder. Keep that folder private.
+- The relay certificate and channel key are stored in each mode's folder (shared mode uses watch mode's). Keep that folder private.
 - Speech is kept in memory only and never written to a log. Command output can contain it, so treat that output as sensitive if your app shows private data.
 
 ## Documentation

@@ -66,7 +66,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Path | Holds |
 |---|---|
 | `%LOCALAPPDATA%\agent-speech-check\config.toml` | the settings (see [Configuration](#configuration)) |
-| `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key |
+| `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key (shared mode uses watch mode's) |
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
 
 The certificate and key are created once and kept, because NVDA pins the
@@ -99,11 +99,10 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
   and returns after those 10 s. Connect in NVDA instead:
   Tools, Remote Access, Connect; choose to allow this computer to be
   controlled, and enter the host and key `asc status` prints. The host, key
-  and certificate stay the same for the mode.
-- If NVDA is busy with another Remote Access session, it refuses the link. So
-  can an NVDA that still tries the other of watch and shared mode, which has
-  its own key (not observed). Disconnect in NVDA (Tools, Remote Access,
-  Disconnect), then `asc stop` and `asc start`.
+  and certificate stay the same, and shared mode uses them too.
+- If NVDA is busy with another Remote Access session, it refuses the link
+  (not observed). Disconnect in NVDA (Tools, Remote Access, Disconnect), then
+  `asc stop` and `asc start`.
 - `asc config set connect false` turns the asking off, for example when NVDA's
   own Remote Access settings connect it at startup.
 - `asc` never writes your NVDA config.
@@ -180,7 +179,10 @@ and your own NVDA keeps running undisturbed.
 ### Shared mode
 
 `asc` drives your own NVDA, so keys go into your real Windows session. Your
-NVDA connects to `asc` as in watch mode.
+NVDA connects to `asc` as in watch mode, with the same key and certificate
+(and the same port, unless you set one). So an NVDA that joined watch mode
+joins shared mode without asking again: your consent to its keys is
+`--i-understand`.
 
 - It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
 - It has a [panic key](#panic-key).
