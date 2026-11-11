@@ -669,9 +669,11 @@ asc sandbox-setup
 Creates the one Windows Firewall rule sandbox mode needs, after a Windows admin
 prompt. Sandbox mode's NVDA connects to `asc` on this computer's Hyper-V
 Default Switch address, which Windows Firewall blocks until this rule allows
-it. The rule is inbound TCP, only on the `vEthernet (Default Switch)`
-interface, only sandbox mode's relay port (16837 unless its `port` says another), only for the
-program that runs `asc`.
+it. The rule is inbound TCP, only from this computer's local subnets, only
+sandbox mode's relay port (16837 unless its `port` says another), only for the
+program that runs `asc`. It does not name the Default Switch, because Windows
+replaces that switch between sandboxes; the relay itself listens only on the
+Default Switch address.
 
 - If the rule is already in place it says so and changes nothing.
 - Run it again after updating Python or `asc`, since the rule names the
