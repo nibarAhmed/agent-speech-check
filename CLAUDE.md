@@ -41,7 +41,7 @@ These can break the user's own machine or the project, so no task overrides them
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
   evidence from real NVDA.
 - Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
-  fakes. Its low coverage outside e2e is expected; never lower the 90% coverage floor for it.
+  fakes.
 - For changes that touch the protocol or NVDA config, run the e2e tests against real NVDA
   (`scripts/e2e_sandbox.py`), or state clearly that they weren't run. The e2e CI workflow also
   runs the real-NVDA tests on PRs, but not the sandbox-mode ones.

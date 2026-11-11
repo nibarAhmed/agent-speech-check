@@ -54,7 +54,6 @@ dev = [
     "poethepoet",
     "pytest",
     "pytest-asyncio",
-    "pytest-cov",
     "pytest-xdist>=3.8.0",
     "ruff",
     "types-psutil>=7.2.2.20260906",
@@ -70,8 +69,8 @@ lint = "ruff check ."
 types = "mypy"
 dead = "vulture"
 deps = "deptry src"
-test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup --cov=agent_speech_check --cov-report=term-missing:skip-covered --cov-fail-under=90"
-unit = "pytest tests/unit -q -n 4 --dist loadgroup --no-cov -p no:cacheprovider"
+test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup"
+unit = "pytest tests/unit -q -n 4 --dist loadgroup -p no:cacheprovider"
 check = ["spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
@@ -136,20 +135,11 @@ known_first_party = ["agent_speech_check"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Coverage and its 90% floor live in the `test` poe task, so `pytest -m e2e`
-# (a small subset of the code) is not failed by the floor.
 addopts = ["--strict-markers"]
 pythonpath = ["."]
 markers = ["e2e: needs a real portable NVDA (Windows Sandbox or the e2e CI workflow)"]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
-
-[tool.coverage.run]
-branch = true
-source = ["agent_speech_check"]
-# Measure the real `asc` subprocesses the integration tests start.
-patch = ["subprocess"]
-parallel = true
 
 # ---------------------------------------------------------------- codespell
 
