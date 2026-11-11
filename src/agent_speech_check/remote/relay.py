@@ -7,7 +7,7 @@ channel with the mode's key. Before it joins it makes two throwaway connections
 accepts and forgets connections that fail or close early.
 
 The certificate and channel key are kept per mode, because NVDA pins the
-certificate's fingerprint and a user in watch mode types the key once.
+certificate's fingerprint and a user in watch mode trusts it once.
 """
 
 from __future__ import annotations

@@ -15,12 +15,15 @@ import shutil
 import subprocess
 import time
 from collections.abc import Iterator
+from ctypes import wintypes
 from pathlib import Path
 
 import pytest
-from tests.integration.conftest import free_port, run_asc
+from tests.integration.conftest import free_port, run_asc, start_asc
 
+from agent_speech_check.nvda import invite
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
+from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import fingerprint
 from agent_speech_check.windows import paths, winapi
 from agent_speech_check.windows.wait import poll_until
@@ -200,3 +203,92 @@ def test_desktop_mode_end_to_end(
     assert stopped.returncode == 0
     assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()
+
+
+# NVDA's question when it is handed a link.
+REQUEST_TITLE = "Remote Access Connection Request"
+WM_COMMAND = 0x0111
+
+
+def buttons(dialog: int) -> dict[str, int]:
+    """The dialog's child windows by their text, without the `&` of a mnemonic."""
+    user32 = ctypes.windll.user32
+    found: dict[str, int] = {}
+
+    def visit(child: int, _param: int) -> bool:
+        found[winapi.window_title(child).replace("&", "")] = child
+        return True
+
+    callback = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)(visit)
+    user32.EnumChildWindows(wintypes.HWND(dialog), callback, 0)
+    return found
+
+
+def click(dialog: int, name: str) -> None:
+    """Press one of the dialog's buttons as the dialog itself hears it: the
+    button's id in WM_COMMAND, with BN_CLICKED (0) in the high word."""
+    children = buttons(dialog)
+    assert name in children, list(children)
+    user32 = ctypes.windll.user32
+    button = children[name]
+    user32.PostMessageW(
+        wintypes.HWND(dialog),
+        WM_COMMAND,
+        user32.GetDlgCtrlID(wintypes.HWND(button)),
+        wintypes.HWND(button),
+    )
+
+
+def test_watch_start_gets_a_running_nvda_to_join(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`asc start` hands a running NVDA the link, the user says Yes, and after a
+    stop that NVDA comes back by itself."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    port = free_port()
+    root = tmp_path / "agent-speech-check"
+    folder = root / "watch"
+    folder.mkdir(parents=True)
+    (root / "config.toml").write_text(f"[watch]\nport = {port}\n", encoding="utf-8")
+    made = relay.load_or_create(folder)
+    # Like a user's NVDA that trusted the certificate before: Remote Access is on,
+    # but nothing tells it to connect.
+    ini = render(RelayAddress("127.0.0.1", port, made.channel, made.fingerprint))
+    assert "autoconnect = True" in ini
+    config = tmp_path / "nvda_config"
+    config.mkdir()
+    (config / "nvda.ini").write_text(
+        ini.replace("autoconnect = True", "autoconnect = False"), encoding="utf-8"
+    )
+    nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
+    log = nvda_log(request, tmp_path)
+    process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
+        [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
+    )
+    try:
+        # NVDA registers the link scheme once Remote Access is up.
+        assert poll_until(invite.registered, 90, 0.5)
+        starting = start_asc("start", "--mode", "watch")
+        try:
+            assert poll_until(lambda: bool(winapi.windows_titled(REQUEST_TITLE)), 60, 0.2)
+            assert "nvda: connected" not in run_asc("status").stdout
+            question = winapi.windows_titled(REQUEST_TITLE)[0]
+            # The user's answer: asc itself never gives it.
+            click(question, "Yes")
+            out, err = starting.communicate(timeout=120)
+        finally:
+            starting.kill()
+        assert starting.returncode == 0, err
+        assert "asked NVDA to connect" in out
+        assert "nvda: connected" in out
+
+        assert run_asc("stop").returncode == 0
+        again = run_asc("start", "--mode", "watch")
+        assert again.returncode == 0, again.stderr
+        assert "nvda: connected" in again.stdout
+        assert "asked NVDA to connect" not in again.stdout
+        assert not winapi.windows_titled(REQUEST_TITLE)
+    finally:
+        run_asc("stop")
+        process.kill()
+        process.wait(30)

@@ -88,9 +88,19 @@ The `mode` setting (or `asc start --mode`) picks one of four.
 
 Your own NVDA, installed or portable, as it runs now. `asc` listens and never sends keys.
 
-- Connect once in NVDA: Tools, Remote Access, Connect; choose to allow this computer to be controlled, enter the host and key `asc start` printed, and
-  trust the certificate when NVDA asks. The host, key and certificate stay the
-  same for the mode.
+- `asc start` asks your running NVDA to connect. NVDA then asks you "Do you
+  wish to allow this computer to be controlled", and the first time also to
+  trust the certificate: answer Yes. `asc` can't answer for you. It prints
+  `asked NVDA to connect: ...` and waits up to a minute for your answer.
+- An NVDA that connected before reconnects by itself until it restarts, so
+  `asc start` first waits up to 10 s for that and asks only if it doesn't come.
+- If no NVDA runs, or it doesn't take the link (it must have Remote Access
+  on), `asc start` asks nothing and returns at once. Connect in NVDA instead:
+  Tools, Remote Access, Connect; choose to allow this computer to be
+  controlled, and enter the host and key `asc status` prints. The host, key
+  and certificate stay the same for the mode.
+- `asc config set connect false` turns the asking off, for example when NVDA's
+  own Remote Access settings connect it at startup.
 - `asc` never writes your NVDA config.
 - `asc` never launches your installed NVDA: a second NVDA restarts the running
   one.
@@ -164,8 +174,8 @@ and your own NVDA keeps running undisturbed.
 
 ### Shared mode
 
-`asc` drives your own NVDA, so keys go into your real Windows session. Connect
-your NVDA to `asc` as in watch mode.
+`asc` drives your own NVDA, so keys go into your real Windows session. Your
+NVDA connects to `asc` as in watch mode.
 
 - It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
 - It has a [panic key](#panic-key).
@@ -239,6 +249,7 @@ built-in default.
 | `timeout_ms` | 5000 (at most 600000) | `wait`, `press`, `type --timeout` |
 | `launch_timeout_ms` | 30000 (at most 600000) | `launch --timeout` |
 | `keys_layout` | desktop | `keys --layout` (desktop or laptop) |
+| `connect` | true | none: `start` in watch and shared mode asks your running NVDA to connect |
 
 ### Mode settings
 
@@ -283,6 +294,10 @@ checks depends on the mode: see [Modes](#modes).
   nested sections. Settings `asc` writes itself (`remote`, the synth, sound
   volume, keyboard layout, the mode sounds) are refused with exit 2, and so is
   a setting for an NVDA `asc` doesn't launch.
+- In watch and shared mode it asks your running NVDA to connect and waits for
+  your answer in NVDA: up to 10 s for NVDA to come back by itself, then up to
+  a minute (see [Watch mode](#watch-mode)). If NVDA still isn't connected it
+  says so and exits 0: `asc status` shows when it is.
 - Exits 4 if `asc` is already running, in this mode or another (the message
   names that mode), and 3 with the last daemon log lines if it fails to start.
 

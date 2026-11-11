@@ -98,6 +98,11 @@ class Target:
         return self.mode != "watch"
 
     @property
+    def own_nvda(self) -> bool:
+        """The user's own running NVDA joins (watch and shared mode)."""
+        return self.mode in ("watch", "shared")
+
+    @property
     def launches_portable(self) -> bool:
         """asc starts a portable NVDA on this computer (desktop mode)."""
         return self.mode == "desktop" and self.launch
