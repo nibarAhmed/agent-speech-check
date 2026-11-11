@@ -100,9 +100,10 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
   Tools, Remote Access, Connect; choose to allow this computer to be
   controlled, and enter the host and key `asc status` prints. The host, key
   and certificate stay the same, and shared mode uses them too.
-- If NVDA is busy with another Remote Access session, it refuses the link
-  (not observed). Disconnect in NVDA (Tools, Remote Access, Disconnect), then
-  `asc stop` and `asc start`.
+- If NVDA is busy with another Remote Access session, it refuses the link. So
+  can an NVDA that still tries the other of watch and shared mode, when their
+  `port` settings differ (not observed). Disconnect in NVDA (Tools, Remote
+  Access, Disconnect), then `asc stop` and `asc start`.
 - `asc config set connect false` turns the asking off, for example when NVDA's
   own Remote Access settings connect it at startup.
 - `asc` never writes your NVDA config.

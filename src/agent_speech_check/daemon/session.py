@@ -18,6 +18,7 @@ from agent_speech_check.errors import (
     DaemonNotAnswering,
     DaemonStartFailed,
     DaemonUnstoppable,
+    FileUnusable,
     FirewallRuleMissing,
     NotConnected,
     NotRunning,
@@ -119,8 +120,12 @@ def log_tail(folder: Path) -> str:
 
 def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
     # Shared mode keeps its relay files in watch mode's folder, so its own may not exist yet.
-    folder.mkdir(parents=True, exist_ok=True)
-    with (folder / ERR_FILE).open("wb") as err:
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        err = (folder / ERR_FILE).open("wb")
+    except OSError as error:
+        raise FileUnusable.from_os(error.filename or folder, error) from None
+    with err:
         return spawn.detached(spawn.asc_command("_daemon", target.to_json()), err, folder)
 
 
