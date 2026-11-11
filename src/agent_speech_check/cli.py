@@ -314,20 +314,19 @@ def _connect_own_nvda(folder: Path, status: dict[str, Any]) -> dict[str, Any]:
         return status
 
     def joined() -> bool:
-        connected: bool = session.status(folder)["connected"]
-        return connected
+        return bool(session.status(folder)["connected"])
 
-    if (
-        not poll_until(joined, REJOIN_S, JOIN_POLL_S)
-        and invite.registered()
-        and invite.send(invite.link(status["host"], status["channel"]))
-    ):
-        # Now, not at exit: the user has to act while this command waits.
-        print(
-            "asked NVDA to connect: answer Yes in NVDA, and trust the certificate the first time",
-            flush=True,
-        )
-        poll_until(joined, ANSWER_S, JOIN_POLL_S)
+    if poll_until(joined, REJOIN_S, JOIN_POLL_S):
+        return session.status(folder)
+    link = invite.link(status["host"], status["channel"])
+    if not (invite.registered() and invite.send(link)):
+        return status
+    # Now, not at exit: the user has to act while this command waits.
+    print(
+        "sent NVDA a link: answer Yes in NVDA, and trust the certificate the first time",
+        flush=True,
+    )
+    poll_until(joined, ANSWER_S, JOIN_POLL_S)
     return session.status(folder)
 
 

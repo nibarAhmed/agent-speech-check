@@ -7,6 +7,7 @@ restarts the running one. They skip unless ASC_E2E_NVDA names a portable NVDA.
 
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import json
 import os
@@ -14,6 +15,7 @@ import re
 import shutil
 import subprocess
 import time
+import winreg
 from collections.abc import Iterator
 from ctypes import wintypes
 from pathlib import Path
@@ -262,6 +264,12 @@ def test_watch_start_gets_a_running_nvda_to_join(
     )
     nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
     log = nvda_log(request, tmp_path)
+    # An earlier test's NVDA, killed, leaves the link scheme behind: without it,
+    # the scheme being there means this NVDA is up.
+    scheme = invite.HANDLER.removesuffix(r"\shell\open\command")
+    for key in (invite.HANDLER, rf"{scheme}\shell\open", rf"{scheme}\shell", scheme):
+        with contextlib.suppress(FileNotFoundError):
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
     process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
         [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
     )
@@ -279,14 +287,14 @@ def test_watch_start_gets_a_running_nvda_to_join(
         finally:
             starting.kill()
         assert starting.returncode == 0, err
-        assert "asked NVDA to connect" in out
+        assert "sent NVDA a link" in out
         assert "nvda: connected" in out
 
         assert run_asc("stop").returncode == 0
         again = run_asc("start", "--mode", "watch")
         assert again.returncode == 0, again.stderr
         assert "nvda: connected" in again.stdout
-        assert "asked NVDA to connect" not in again.stdout
+        assert "sent NVDA a link" not in again.stdout
         assert not winapi.windows_titled(REQUEST_TITLE)
     finally:
         run_asc("stop")

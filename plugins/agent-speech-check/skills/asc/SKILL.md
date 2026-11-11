@@ -61,7 +61,7 @@ asc stop                          # when done
 ## Watch mode
 
 `asc start` asks the user's running NVDA to connect and can take over a minute:
-when it prints `asked NVDA to connect`, tell the user to answer Yes in NVDA
+when it prints `sent NVDA a link`, tell the user to answer Yes in NVDA
 (and to trust the certificate the first time). If it ends with
 `nvda: not connected`, the user didn't answer or NVDA couldn't be asked: have
 them connect in NVDA (Tools, Remote Access, Connect, allow this computer to be

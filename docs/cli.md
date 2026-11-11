@@ -91,14 +91,19 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
 - `asc start` asks your running NVDA to connect. NVDA then asks you "Do you
   wish to allow this computer to be controlled", and the first time also to
   trust the certificate: answer Yes. `asc` can't answer for you. It prints
-  `asked NVDA to connect: ...` and waits up to a minute for your answer.
+  `sent NVDA a link: ...` and waits up to a minute for your answer.
 - An NVDA that connected before reconnects by itself until it restarts, so
   `asc start` first waits up to 10 s for that and asks only if it doesn't come.
-- If no NVDA runs, or it doesn't take the link (it must have Remote Access
-  on), `asc start` asks nothing and returns at once. Connect in NVDA instead:
+- If no NVDA runs, `asc start` asks nothing and returns at once. If NVDA runs
+  but doesn't take the link (it must have Remote Access on), it asks nothing
+  and returns after those 10 s. Connect in NVDA instead:
   Tools, Remote Access, Connect; choose to allow this computer to be
   controlled, and enter the host and key `asc status` prints. The host, key
   and certificate stay the same for the mode.
+- If NVDA is busy with another Remote Access session, it refuses the link. So
+  can an NVDA that still tries the other of watch and shared mode, which has
+  its own key (not observed). Disconnect in NVDA (Tools, Remote Access,
+  Disconnect), then `asc stop` and `asc start`.
 - `asc config set connect false` turns the asking off, for example when NVDA's
   own Remote Access settings connect it at startup.
 - `asc` never writes your NVDA config.
