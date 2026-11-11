@@ -1,6 +1,7 @@
-# GitHub's standard setup: weekly, one PR per update. Updates wait a week after a
+# GitHub's standard setup: weekly, one PR per ecosystem (groups). Updates wait a week after a
 # release (cooldown), so a compromised release is usually pulled before we take it. Security
-# updates are not delayed by the cooldown. The prefixes make Dependabot's PR titles
+# updates are not delayed by the cooldown, and groups apply only to version updates, so each
+# security update still gets its own PR. The prefixes make Dependabot's PR titles
 # conventional commits, which the pr-title check requires.
 version: 2
 updates:
@@ -10,6 +11,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
     commit-message:
       prefix: ci
 
@@ -19,6 +23,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      python:
+        patterns: ["*"]
     commit-message:
       prefix: build
 
@@ -29,5 +36,8 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      wix:
+        patterns: ["*"]
     commit-message:
       prefix: build
