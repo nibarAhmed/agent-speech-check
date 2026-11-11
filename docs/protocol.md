@@ -232,6 +232,10 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
   So the relay listens on 127.0.0.1, or for sandbox mode on the host's
   Hyper-V Default Switch address, never on all interfaces, and the key is
   random.
+- Watch and shared mode use one key and certificate, so an NVDA that joined
+  watch mode can also be sent keys once the user starts shared mode. NVDA's
+  question is the same for both ("allow this computer to be controlled"), so
+  the guard is `asc`'s: shared mode starts only with `--i-understand`.
 - **Pinning is silent on 2026.2**, which already has the fix for
   GHSA-m268-mc77-j2cr (fixed in 2026.1.1). A pre-seeded matching fingerprint
   connected with no dialog. Since the fix, NVDA checks the pinned fingerprint on

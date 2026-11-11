@@ -30,8 +30,8 @@ Replace the app path and expected speech with values from your application. `asc
 |---|---|---|
 | `sandbox` | Isolated tests | Runs NVDA inside Windows Sandbox so test input stays away from your normal desktop. Requires a supported Windows edition and one-time setup. |
 | `desktop` | Local development and CI | Starts a portable NVDA with a private configuration. It will not start while another `nvda.exe` is running. Its keys go to your desktop, so it provides a panic hotkey. |
-| `watch` | Listening to an NVDA you already run | Captures speech from your existing NVDA. `asc` does not send keys in this mode. |
-| `shared` | Driving an existing NVDA session | Sends keys to your real Windows session. Requires an explicit `--i-understand` on each start and provides a panic hotkey. Use with care. |
+| `watch` | Listening to an NVDA you already run | Captures speech from your existing NVDA. `asc` does not send keys in this mode. On start, your NVDA asks you to allow the connection: answer Yes. |
+| `shared` | Driving an existing NVDA session | Sends keys to your real Windows session. Requires an explicit `--i-understand` on each start and provides a panic hotkey. Your NVDA connects as in watch mode. Use with care. |
 
 If you are unsure, prefer **sandbox** for isolation or **desktop** when you want a simpler local setup. Read the mode-specific restrictions in the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) before automating tests.
 
