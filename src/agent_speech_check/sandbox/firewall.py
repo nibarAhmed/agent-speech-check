@@ -3,7 +3,7 @@
 NVDA inside Windows Sandbox connects out to the relay on the host's Hyper-V
 Default Switch address. Inbound connections there are blocked unless a rule
 allows them. `asc sandbox-setup` creates one rule, with your consent (a UAC
-prompt), as narrow as stays true: inbound TCP, only from this computer's local
+prompt), as narrow as keeps working: inbound TCP, only from this computer's local
 subnets, only the relay port, only for the program that runs the daemon.
 
 The rule names neither the Default Switch nor its address. Windows removes the
