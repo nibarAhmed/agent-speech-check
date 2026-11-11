@@ -30,8 +30,8 @@ Replace the app path and expected speech with values from your application. `asc
 |---|---|---|
 | `sandbox` | Isolated tests | Runs NVDA inside Windows Sandbox so test input stays away from your normal desktop. Requires a supported Windows edition and one-time setup. |
 | `desktop` | Local development and CI | Starts a portable NVDA with a private configuration. It will not start while another `nvda.exe` is running. Its keys go to your desktop, so it provides a panic hotkey. |
-| `watch` | Listening to an NVDA you already run | Captures speech from your existing NVDA. `asc` does not send keys in this mode. |
-| `shared` | Driving an existing NVDA session | Sends keys to your real Windows session. Requires an explicit `--i-understand` on each start and provides a panic hotkey. Use with care. |
+| `watch` | Listening to an NVDA you already run | Captures speech from your existing NVDA. `asc` does not send keys in this mode. On start, your NVDA asks you to allow the connection: answer Yes. |
+| `shared` | Driving an existing NVDA session | Sends keys to your real Windows session. Requires an explicit `--i-understand` on each start and provides a panic hotkey. Your NVDA connects as in watch mode. Use with care. |
 
 If you are unsure, prefer **sandbox** for isolation or **desktop** when you want a simpler local setup. Read the mode-specific restrictions in the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) before automating tests.
 
@@ -95,7 +95,7 @@ See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main
 `asc` handles speech that can include passwords and private messages, and it can press keys. [SECURITY.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/SECURITY.md) lists what it promises and how to report a problem privately.
 
 - `shared` mode, and `desktop` mode when it launches its NVDA on your computer, send keys into your real Windows session. Their panic hotkey, `Control+Shift+Alt+F12` unless the `panic_key` setting changes it, releases held keys and stops `asc` at once.
-- The relay certificate and channel key are stored in each mode's folder. Keep that folder private.
+- The relay certificate and channel key are stored in each mode's folder (shared mode uses watch mode's). Keep that folder private.
 - Speech is kept in memory only and never written to a log. Command output can contain it, so treat that output as sensitive if your app shows private data.
 
 ## Documentation

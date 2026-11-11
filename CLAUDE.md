@@ -50,6 +50,9 @@ These can break the user's own machine or the project, so no task overrides them
   one before blaming your change. When a test clashes, give it its own names, titles and hotkeys
   instead of skipping it. Tests never use the default panic key, and each test that registers a
   hotkey uses its own (Control+Shift+Alt with F21, F22 or F23), because workers run in parallel.
+- A test's `asc start` in watch or shared mode must never ask the NVDA that runs on this machine
+  to connect: write its `config.toml` through `Env.config`, which sets `connect = false`. Only the
+  e2e tests leave it on.
 
 ## Code
 

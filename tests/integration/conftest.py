@@ -78,6 +78,14 @@ def free_port() -> int:
     pytest.fail(f"no free port in {block}-{block + PORTS_PER_WORKER - 1}")
 
 
+def _never_invite(config: str) -> str:
+    """The config with `connect` off: a test's `asc start` must never ask the NVDA
+    that runs on this machine to connect."""
+    table = "[defaults]\n"
+    off = table + "connect = false\n"
+    return config.replace(table, off, 1) if table in config else off + config
+
+
 @dataclass
 class Env:
     root: Path
@@ -87,7 +95,9 @@ class Env:
         return self.root / "agent-speech-check" / mode
 
     def config(self, text: str) -> None:
-        (self.root / "agent-speech-check" / "config.toml").write_text(text, encoding="utf-8")
+        (self.root / "agent-speech-check" / "config.toml").write_text(
+            _never_invite(text), encoding="utf-8"
+        )
 
     def channel(self, mode: str) -> str:
         relay = (self.folder(mode) / "relay.json").read_text(encoding="utf-8")
@@ -117,11 +127,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     port = free_port()
     config = tmp_path / "agent-speech-check"
     config.mkdir()
-    (config / "config.toml").write_text(
-        f"[watch]\nport = {port}\n[desktop]\nport = {port}\nlaunch = false\n",
-        encoding="utf-8",
-    )
-    yield Env(tmp_path, port)
+    made = Env(tmp_path, port)
+    made.config(f"[watch]\nport = {port}\n[desktop]\nport = {port}\nlaunch = false\n")
+    yield made
     # Never leave a daemon behind, even when a test failed half way. 3: none ran.
     if run_asc("stop").returncode not in (0, 3):
         for folder in state.folders(config):

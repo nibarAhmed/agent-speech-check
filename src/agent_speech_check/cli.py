@@ -39,10 +39,11 @@ from agent_speech_check.errors import (
     numbered_lines,
 )
 from agent_speech_check.inputs import keys
-from agent_speech_check.nvda import keyref, launcher, nvda_config
+from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.windows.paths import config_file, mode_dir, state_root
+from agent_speech_check.windows.wait import poll_until
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
@@ -295,8 +296,43 @@ def _call(cmd: str, raw: dict[str, Any], timeout_ms: int = 0) -> dict[str, Any]:
     return session.call(state_root(), request, timeout_s)
 
 
+# NVDA tries a relay it lost again every 5 s, and Windows takes about 2 s more to
+# refuse a connection while nothing listens.
+REJOIN_S = 10.0
+# For the user to answer NVDA's question.
+ANSWER_S = 60.0
+JOIN_POLL_S = 0.5
+
+
+def _connect_own_nvda(folder: Path, status: dict[str, Any]) -> dict[str, Any]:
+    """Get the user's running NVDA to join without its Connect dialog.
+
+    An NVDA that joined this relay before comes back by itself. Otherwise asc
+    hands it a link, and NVDA asks the user to confirm.
+    """
+    if not launcher.running():
+        return status
+
+    def joined() -> bool:
+        return bool(session.status(folder)["connected"])
+
+    if poll_until(joined, REJOIN_S, JOIN_POLL_S):
+        return session.status(folder)
+    link = invite.link(status["host"], status["channel"])
+    if not (invite.registered() and invite.send(link)):
+        return status
+    # Now, not at exit: the user has to act while this command waits.
+    print(
+        "sent NVDA a link: answer Yes in NVDA, and trust the certificate the first time",
+        flush=True,
+    )
+    poll_until(joined, ANSWER_S, JOIN_POLL_S)
+    return session.status(folder)
+
+
 def cmd_start(args: argparse.Namespace) -> int:
-    target = _target(args).with_window(args.window)
+    config = load(config_file())
+    target = _target(args, config).with_window(args.window)
     given = tuple(Setting.parse(text) for text in args.nvda_setting)
     if given and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
@@ -305,8 +341,11 @@ def cmd_start(args: argparse.Namespace) -> int:
     target = target.with_settings(settings).with_consent(args.i_understand)
     if target.launches_portable and not launcher.running():
         _offer_update(target.nvda_dir)
-    status = session.start(target, mode_dir(target.mode))
-    print(f"started: {target.mode}")
+    folder = mode_dir(target.mode)
+    status = session.start(target, folder)
+    print(f"started: {target.mode}", flush=True)
+    if target.own_nvda and config.value("connect")[0]:
+        status = _connect_own_nvda(folder, status)
     _show_status(status)
     return 0
 
@@ -698,9 +737,10 @@ with that mode's settings from config.toml (see asc config). One daemon runs
 at a time: the other commands talk to it.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
-keys. Connect once in NVDA (Tools, Remote Access, Connect): allow this computer
-to be controlled, host and key as printed, and trust the certificate when asked.
-The host, key and certificate stay the same for the mode.
+keys. asc start asks your running NVDA to connect: answer Yes in NVDA, and trust
+the certificate the first time. It waits up to a minute for that. Until NVDA
+restarts, it then reconnects by itself. Turn the asking off with
+asc config set connect false, and connect in NVDA instead (asc status says how).
 
 examples:
   asc start

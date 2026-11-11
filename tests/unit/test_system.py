@@ -23,7 +23,7 @@ import psutil
 import pytest
 
 from agent_speech_check.config.targets import defaults
-from agent_speech_check.daemon import ipc
+from agent_speech_check.daemon import ipc, session
 from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
     DownloadFailed,
@@ -752,3 +752,12 @@ def test_sandbox_window_puts_a_real_window_away() -> None:
             assert winapi.window_pid(hwnd) == os.getpid()
         finally:
             user32.DestroyWindow(hwnd)
+
+
+def test_a_mode_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
+    # Shared mode's relay files live in watch mode's folder, so its own is made at the spawn.
+    blocked = tmp_path / "shared"
+    blocked.write_text("a file where the folder should be", encoding="utf-8")
+    with pytest.raises(FileUnusable) as exc:
+        session._spawn(defaults("shared"), blocked)
+    assert str(blocked) in exc.value.message

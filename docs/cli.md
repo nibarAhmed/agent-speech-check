@@ -66,7 +66,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Path | Holds |
 |---|---|
 | `%LOCALAPPDATA%\agent-speech-check\config.toml` | the settings (see [Configuration](#configuration)) |
-| `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key |
+| `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key (shared mode uses watch mode's) |
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
 
 The certificate and key are created once and kept, because NVDA pins the
@@ -88,9 +88,24 @@ The `mode` setting (or `asc start --mode`) picks one of four.
 
 Your own NVDA, installed or portable, as it runs now. `asc` listens and never sends keys.
 
-- Connect once in NVDA: Tools, Remote Access, Connect; choose to allow this computer to be controlled, enter the host and key `asc start` printed, and
-  trust the certificate when NVDA asks. The host, key and certificate stay the
-  same for the mode.
+- `asc start` asks your running NVDA to connect. NVDA then asks you "Do you
+  wish to allow this computer to be controlled", and the first time also to
+  trust the certificate: answer Yes. `asc` can't answer for you. It prints
+  `sent NVDA a link: ...` and waits up to a minute for your answer.
+- An NVDA that connected before reconnects by itself until it restarts, so
+  `asc start` first waits up to 10 s for that and asks only if it doesn't come.
+- If no NVDA runs, `asc start` asks nothing and returns at once. If NVDA runs
+  but doesn't take the link (it must have Remote Access on), it asks nothing
+  and returns after those 10 s. Connect in NVDA instead:
+  Tools, Remote Access, Connect; choose to allow this computer to be
+  controlled, and enter the host and key `asc status` prints. The host, key
+  and certificate stay the same, and shared mode uses them too.
+- If NVDA is busy with another Remote Access session, it refuses the link. So
+  can an NVDA that still tries the other of watch and shared mode, when their
+  `port` settings differ (not observed). Disconnect in NVDA (Tools, Remote
+  Access, Disconnect), then `asc stop` and `asc start`.
+- `asc config set connect false` turns the asking off, for example when NVDA's
+  own Remote Access settings connect it at startup.
 - `asc` never writes your NVDA config.
 - `asc` never launches your installed NVDA: a second NVDA restarts the running
   one.
@@ -164,8 +179,11 @@ and your own NVDA keeps running undisturbed.
 
 ### Shared mode
 
-`asc` drives your own NVDA, so keys go into your real Windows session. Connect
-your NVDA to `asc` as in watch mode.
+`asc` drives your own NVDA, so keys go into your real Windows session. Your
+NVDA connects to `asc` as in watch mode, with the same key and certificate
+(and the same port, unless you set one). So an NVDA that joined watch mode
+joins shared mode without asking again: your consent to its keys is
+`--i-understand`.
 
 - It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
 - It has a [panic key](#panic-key).
@@ -239,6 +257,7 @@ built-in default.
 | `timeout_ms` | 5000 (at most 600000) | `wait`, `press`, `type --timeout` |
 | `launch_timeout_ms` | 30000 (at most 600000) | `launch --timeout` |
 | `keys_layout` | desktop | `keys --layout` (desktop or laptop) |
+| `connect` | true | none: `start` in watch and shared mode asks your running NVDA to connect |
 
 ### Mode settings
 
@@ -283,6 +302,10 @@ checks depends on the mode: see [Modes](#modes).
   nested sections. Settings `asc` writes itself (`remote`, the synth, sound
   volume, keyboard layout, the mode sounds) are refused with exit 2, and so is
   a setting for an NVDA `asc` doesn't launch.
+- In watch and shared mode it asks your running NVDA to connect and waits for
+  your answer in NVDA: up to 10 s for NVDA to come back by itself, then up to
+  a minute (see [Watch mode](#watch-mode)). If NVDA still isn't connected it
+  says so and exits 0: `asc status` shows when it is.
 - Exits 4 if `asc` is already running, in this mode or another (the message
   names that mode), and 3 with the last daemon log lines if it fails to start.
 

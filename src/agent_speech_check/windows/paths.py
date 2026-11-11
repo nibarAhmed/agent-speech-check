@@ -22,8 +22,15 @@ def config_file() -> Path:
 
 
 def mode_dir(mode: str) -> Path:
-    """One folder per mode: state file, daemon log, relay cert and credentials."""
+    """One folder per mode: state file and daemon log."""
     return state_root() / mode
+
+
+def relay_dir(mode: str) -> Path:
+    """Where the mode's relay certificate and channel key are kept. Shared mode
+    uses watch mode's: both are joined by the user's own NVDA, which then trusts
+    one certificate and comes back by itself whichever of the two starts."""
+    return mode_dir("watch" if mode == "shared" else mode)
 
 
 def write_atomic(path: Path, data: str | bytes) -> None:

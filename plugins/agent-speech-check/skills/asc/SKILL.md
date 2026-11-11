@@ -58,12 +58,17 @@ asc stop                          # when done
 - If presses keep missing speech or a slow app times out, raise `settle_ms`,
   `timeout_ms` or `launch_timeout_ms` with `asc config set`.
 
-## Watch mode
+## Watch and shared mode
 
-`asc start` prints a host, a key and a certificate fingerprint. Ask the user to
-connect in NVDA: Tools, Remote Access, Connect, allow this computer to be
-controlled, enter that host and key, and trust the certificate. After that it
-reconnects by itself whenever watch mode runs. Watch mode records everything
+`asc start` asks the user's running NVDA to connect and can take over a minute,
+so give the command a timeout of two minutes or more:
+when it prints `sent NVDA a link`, tell the user to answer Yes in NVDA
+(and to trust the certificate the first time). If it ends with
+`nvda: not connected`, the user didn't answer or NVDA couldn't be asked: have
+them connect in NVDA (Tools, Remote Access, Connect, allow this computer to be
+controlled, the host and key `asc status` prints), then check `asc status`.
+Until NVDA restarts it reconnects by itself, in watch and in shared mode: they
+use the same key. Watch mode records everything
 NVDA says, typed text included, so `asc stop` when you're done.
 
 ## Apps
