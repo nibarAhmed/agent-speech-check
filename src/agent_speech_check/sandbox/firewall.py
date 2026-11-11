@@ -3,10 +3,14 @@
 NVDA inside Windows Sandbox connects out to the relay on the host's Hyper-V
 Default Switch address. Inbound connections there are blocked unless a rule
 allows them. `asc sandbox-setup` creates one rule, with your consent (a UAC
-prompt), as narrow as Windows allows: inbound TCP, only on the Default Switch
-interface, only the relay port, only for the program that runs the daemon.
-The address can change at reboot, so it is looked up at every start and the
-rule never names it.
+prompt), as narrow as stays true: inbound TCP, only from this computer's local
+subnets, only the relay port, only for the program that runs the daemon.
+
+The rule names neither the Default Switch nor its address. Windows removes the
+switch when no sandbox runs and makes a new one, with a new id and address, for
+the next sandbox, and a rule on an interface keeps the id of the old one (see
+docs/findings.md). The relay itself listens only on the Default Switch address,
+which is looked up at every start.
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ def create_script(port: int, program: str) -> str:
         f"Remove-NetFirewallRule -DisplayName {quote(RULE_NAME)} -ErrorAction SilentlyContinue; "
         f"New-NetFirewallRule -DisplayName {quote(RULE_NAME)} -Direction Inbound "
         f"-Action Allow -Protocol TCP -LocalPort {int(port)} "
-        f"-InterfaceAlias {quote(INTERFACE)} -Program {quote(program)} -Profile Any "
+        f"-RemoteAddress LocalSubnet -Program {quote(program)} -Profile Any "
         "| Out-Null"
     )
 

@@ -456,7 +456,7 @@ def cmd_sandbox_setup(_: argparse.Namespace) -> int:
 def _add_firewall_rule(port: int, program: str) -> None:
     print("asking Windows for admin rights to add one firewall rule")
     firewall.create_rule(port, program)
-    print(f"firewall rule added: {firewall.RULE_NAME}, TCP {port}, {firewall.INTERFACE}")
+    print(f"firewall rule added: {firewall.RULE_NAME}, TCP {port}, local subnets only")
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
@@ -907,10 +907,10 @@ examples:
         """Sandbox mode runs NVDA in Windows Sandbox, which connects to asc on this
 computer's Hyper-V Default Switch address. Windows Firewall blocks that until
 one rule allows it. This command creates that rule after a Windows admin
-prompt: inbound TCP only, only on the Default Switch, only the relay port
-(16837 unless the port setting of sandbox mode says another), only for the
-program running asc. Run it again after updating Python or asc, since the rule
-names the program.
+prompt: inbound TCP only, only from this computer's local subnets, only the
+relay port (16837 unless the port setting of sandbox mode says another), only
+for the program running asc. Run it again after updating Python or asc, since
+the rule names the program.
 
 examples:
   asc sandbox-setup""",
