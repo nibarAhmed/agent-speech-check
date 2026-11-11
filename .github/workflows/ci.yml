@@ -50,11 +50,16 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       # Two builds of one version, as during development: the second must replace the first.
+      # The first is built with a newer Python, so its files have higher versions: Windows
+      # Installer must still put the second build's files in their place.
       - name: Build the MSI twice
         shell: pwsh
         run: |
+          $python = $env:UV_PYTHON
+          $env:UV_PYTHON = '3.13'
           uv run python scripts/build_installer.py
           Copy-Item (Get-Item dist\agent-speech-check-*.msi).FullName "$env:RUNNER_TEMP\first.msi"
+          $env:UV_PYTHON = $python
           uv run python scripts/build_installer.py
       - name: Install, upgrade, run and uninstall the MSI
         shell: pwsh
@@ -98,6 +103,9 @@ jobs:
           if ((Products) -ne 1) { throw "$(Products) products installed, expected 1" }
           if ((UserPath) -notlike "*$dir*") { throw "not on the user PATH" }
           if (-not (Test-Path "$data\watch\relay_cert.pem")) { throw "upgrade removed $data" }
+          $built = @(Get-ChildItem -Recurse -File dist\asc).Count
+          $installed = @(Get-ChildItem -Recurse -File $dir).Count
+          if ($installed -ne $built) { throw "upgrade installed $installed files of $built" }
           # The MSI's own entry is hidden, and ours points at the product the upgrade installed.
           $arp = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
           $productCode = @($installer.RelatedProducts($upgradeCode))[0]
