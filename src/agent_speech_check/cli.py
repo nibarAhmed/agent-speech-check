@@ -643,8 +643,7 @@ def _get_nvda_now(ask: Ask) -> None:
     _offer(ask, question, _make_portable, "asc get-nvda")
 
 
-def _firewall_now(ask: Ask, mode: str) -> None:
-    port = defaults(mode).port
+def _firewall_now(ask: Ask, mode: str, port: int) -> None:
     if firewall.rule_ok(mode, port):
         return
     _section(f"{mode.capitalize()} mode needs one firewall rule, so NVDA there can reach asc.")
@@ -689,6 +688,27 @@ def _ask_share(ask: Ask, _mode: str) -> tuple[str, ...]:
     return tuple(share)
 
 
+def _free_port(_ask: Ask, mode: str) -> int:
+    """The first port from the mode's default that no other instance's config
+    gives this mode, so their relays can run side by side."""
+    taken = set()
+    for root in paths.every_root():
+        if root == state_root():
+            continue
+        try:
+            target = load(root / "config.toml").resolve(None)
+        except AscError:
+            continue
+        if target.mode == mode:
+            taken.add(target.port)
+    first = port = defaults(mode).port
+    while port in taken:
+        port += 1
+    if port != first:
+        print(f"Note: port {port}, as another instance's {mode} mode has {first}.")
+    return port
+
+
 def _asking(question: str, choices: tuple[setup.Choice, ...]) -> Callable[[Ask, str], str]:
     return lambda ask, _mode: _ask_choice(ask, question, choices)
 
@@ -700,6 +720,7 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
         "share": _ask_share,
         "window": _asking("How should the sandbox window appear?", setup.WINDOWS),
         "keys_layout": _asking("Which keyboard layout does your NVDA use?", setup.LAYOUTS),
+        "port": _free_port,
     }[field]
     for field in setup.LABELS
 }
@@ -707,10 +728,10 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
 
 def _answers(ask: Ask) -> setup.Answers:
     mode = _ask_mode(ask)
-    given = {field: _ASKERS[field](ask, mode) for field in setup.QUESTIONS[mode]}
+    answers = setup.Answers(mode, **{f: _ASKERS[f](ask, mode) for f in setup.QUESTIONS[mode]})
     if defaults(mode).listens_outside:
-        _firewall_now(ask, mode)
-    return setup.Answers(mode, **given)
+        _firewall_now(ask, mode, answers.port or defaults(mode).port)
+    return answers
 
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 import subprocess
 import time
 from collections.abc import Iterator
@@ -24,6 +25,7 @@ from agent_speech_check.errors import (
     NotRunning,
     NvdaDidNotConnect,
     OwnNvdaInInstance,
+    PortInUse,
     SandboxBusy,
     SharedNeedsConsent,
 )
@@ -168,8 +170,6 @@ def precheck(target: Target) -> None:
         _check_sandbox(target)
     if target.mode == "remote":
         _check_firewall(target)
-        if target.host is None:
-            firewall.default_switch_address()
     # Last: it holds the hotkey for a moment, so only once nothing else refuses.
     if target.takes_panic_key:
         server.check_panic_key(target.panic_key)
@@ -210,6 +210,8 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
             raise DaemonNotAnswering(silent.message)
         if running:
             raise AlreadyRunning(other.name)
+    if target.port:
+        _check_port_free(target)
     process = _spawn(target, folder)
     if not poll_until(
         lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S
@@ -221,6 +223,20 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     if target.launches_nvda:
         return _wait_connected(target, folder)
     return status(folder)
+
+
+def _check_port_free(target: Target) -> None:
+    """Another instance's relay may hold the port, which the daemon could only
+    report as a failed start. Probed on the relay's own address: on Windows a
+    socket on 127.0.0.1 doesn't clash with one on the Default Switch."""
+    host = target.host or relay.HOST
+    if target.listens_outside and target.host is None:
+        host = firewall.default_switch_address()
+    try:
+        socket.create_server((host, target.port)).close()
+    except OSError:
+        command = f"asc config set port PORT --mode {target.mode}{paths.instance_flag()}"
+        raise PortInUse(target.port, command) from None
 
 
 def stop(folder: Path, *, timeout_s: float = STOP_TIMEOUT_S) -> None:

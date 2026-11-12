@@ -512,6 +512,14 @@ class AlreadyRunning(Refused):
         super().__init__(f"asc is already running{where}", hint="asc stop, then try again")
 
 
+class PortInUse(Refused):
+    def __init__(self, port: int, command: str) -> None:
+        super().__init__(
+            f"port {port} is in use, maybe by another asc instance",
+            hint=f"{command} (a free one)",
+        )
+
+
 class DaemonNotAnswering(Refused):
     def __init__(self, reason: str) -> None:
         super().__init__(

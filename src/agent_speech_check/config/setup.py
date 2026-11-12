@@ -15,6 +15,7 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from agent_speech_check.config import prefs
+from agent_speech_check.config.targets import defaults
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,7 @@ class Answers:
     share: tuple[str, ...] = ()
     window: str = default_of(WINDOWS)
     keys_layout: str = default_of(LAYOUTS)
+    port: int | None = None  # None: the mode's default
 
 
 def _every_answer(labels: dict[str, str]) -> dict[str, str]:
@@ -141,6 +143,7 @@ LABELS = _every_answer(
         "share": "Shared folders",
         "window": "Window",
         "keys_layout": "Keyboard layout",
+        "port": "Port",
     }
 )
 
@@ -158,7 +161,7 @@ QUESTIONS = _per_mode(
         "desktop": ("nvda_dir",),
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
-        "remote": ("keys_layout",),
+        "remote": ("keys_layout", "port"),
     }
 )
 
@@ -173,6 +176,8 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["share"] = list(answers.share)
     if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
+    if answers.port not in (None, defaults(answers.mode).port):
+        table["port"] = answers.port
     data: dict[str, Any] = {"mode": answers.mode}
     if table:
         data[answers.mode] = table
@@ -192,11 +197,11 @@ def summary_lines(answers: Answers) -> list[str]:
     return ["Your settings:", *_columns(rows)]
 
 
-def _shown(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
+def _shown(value: str | tuple[str, ...] | int | None) -> tuple[str, ...]:
     """An answer as the summary says it, one line per folder. No NVDA folder
     means asc's own NVDA."""
     if value is None:
         return (default_of(NVDA_SOURCES),)
     if isinstance(value, tuple):
         return value or ("none",)
-    return (value,)
+    return (str(value),)

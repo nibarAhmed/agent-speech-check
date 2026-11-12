@@ -46,7 +46,7 @@ def instance_flag() -> str:
 
 
 def every_root() -> list[Path]:
-    """The default instance's home and each named one's, for stopping them all."""
+    """The default instance's home, then each named one's."""
     named = sorted(p for p in (base_root() / INSTANCES_DIR).glob("*") if p.is_dir())
     return [base_root(), *named]
 

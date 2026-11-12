@@ -41,8 +41,8 @@ the MSI from https://github.com/nibarAhmed/agent-speech-check/releases/latest, o
   on this computer, maybe the user's own: send keys only if the user asked.
 - When several agents share this computer, each may use its own instance:
   `--instance NAME` (or `ASC_INSTANCE=NAME`) on every command gives it its own
-  config and daemon. Instances can't use watch or shared mode, and need their
-  own `port`.
+  config and daemon. Instances can't use watch or shared mode. A port another
+  instance holds makes `asc start` exit 4; its hint says how to pick another.
 
 ## Workflow
 

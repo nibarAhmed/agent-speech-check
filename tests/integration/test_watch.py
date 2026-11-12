@@ -145,13 +145,13 @@ def test_stale_state_file_is_removed(env: Env) -> None:
     assert not (folder / "state.json").exists()
 
 
-def test_daemon_that_cannot_bind_reports_its_log(env: Env) -> None:
-    # Something else holds the relay port, so the daemon can't listen.
+def test_start_refuses_a_relay_port_in_use(env: Env) -> None:
     with socket.create_server(("127.0.0.1", env.port)):
         failed = run_asc("start", "--mode", "watch")
-    assert failed.returncode == 3
-    assert "the asc daemon did not start: it exited with code" in failed.stderr
-    assert "could not start" in failed.stderr
+    assert failed.returncode == 4
+    assert f"port {env.port} is in use" in failed.stderr
+    assert failed.stderr.endswith("hint: asc config set port PORT --mode watch (a free one)\n")
+    assert not (env.folder("watch") / "daemon.log").exists()
 
 
 def test_one_daemon_at_a_time(env: Env) -> None:

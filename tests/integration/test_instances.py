@@ -23,6 +23,11 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
         assert run_asc("press", "Tab").stdout == '1 said: "first"\n'
         # The flag goes after the command too, and ASC_INSTANCE does the same.
         assert run_asc("press", "Tab", "--instance", "vm1").stdout == '1 said: "second"\n'
+        # A third on vm1's port is refused before its daemon starts.
+        env.config(f"[desktop]\nport = {port}\nlaunch = false\n", instance="vm2")
+        clash = run_asc("start", "--mode", "desktop", "--instance", "vm2")
+        assert clash.returncode == 4, clash.stderr
+        assert "--mode desktop --instance vm2 (a free one)" in clash.stderr
         monkeypatch.setenv("ASC_INSTANCE", "vm1")
         stopped = run_asc("stop")
         assert (stopped.returncode, stopped.stdout) == (0, "stopped: instances/vm1/desktop\n")
