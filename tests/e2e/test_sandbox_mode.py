@@ -166,13 +166,13 @@ def _make_portable(config: str, window: wsb.SandboxWindow, installer: Path, port
             f"cmd /c {wsb.NVDA_IN}\\{installer.name} --create-portable-silent "
             r"--portable-path=C:\out\portable",
         )
-        counts = [-1]
+        last = [-1]
 
         def settled() -> bool:
             """nvda.exe is there and no file came since the last check."""
             count = len(list(portable.rglob("*"))) if portable.exists() else -1
-            done = (portable / "nvda.exe").is_file() and count == counts[-1]
-            counts.append(count)
+            done = (portable / "nvda.exe").is_file() and count == last[0]
+            last[0] = count
             return done
 
         assert poll_until(settled, 180, 3), "no portable NVDA within 180 s"
