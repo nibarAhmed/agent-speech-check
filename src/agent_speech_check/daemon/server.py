@@ -122,6 +122,13 @@ def check_panic_key(key: Hotkey) -> None:
     take_panic_key(key, lambda: None).stop()
 
 
+def relay_host(target: Target) -> str:
+    """A sandbox or VM reaches the host only on the Default Switch, unless told otherwise."""
+    if target.host is not None:
+        return target.host
+    return firewall.default_switch_address() if target.listens_outside else relay.HOST
+
+
 def start_app(command: str) -> None:
     """Start the app under test, detached. Popen returns at once."""
     try:
@@ -358,10 +365,7 @@ class Daemon:
 
     async def run(self) -> None:
         self._start_panic_key()
-        host = self.target.host or relay.HOST
-        if self.target.listens_outside and self.target.host is None:
-            # A sandbox or VM reaches the host only on the Default Switch, unless told otherwise.
-            host = await asyncio.to_thread(firewall.default_switch_address)
+        host = await asyncio.to_thread(relay_host, self.target)
         relay_server = await self.relay.start(self.target.port, host)
         token = secrets.token_urlsafe(32)
         ipc_server = await asyncio.start_server(

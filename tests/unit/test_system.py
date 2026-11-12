@@ -761,3 +761,8 @@ def test_a_mode_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
     with pytest.raises(FileUnusable) as exc:
         session._spawn(defaults("shared"), blocked)
     assert str(blocked) in exc.value.message
+
+
+def test_a_relay_address_that_is_not_ours_is_left_to_the_daemon() -> None:
+    # 192.0.2.1 is reserved for documentation, so no interface here has it.
+    session._check_port_free(replace(defaults("remote"), host="192.0.2.1"))

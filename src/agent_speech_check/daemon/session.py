@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import socket
 import subprocess
 import time
@@ -229,12 +230,12 @@ def _check_port_free(target: Target) -> None:
     """Another instance's relay may hold the port, which the daemon could only
     report as a failed start. Probed on the relay's own address: on Windows a
     socket on 127.0.0.1 doesn't clash with one on the Default Switch."""
-    host = target.host or relay.HOST
-    if target.listens_outside and target.host is None:
-        host = firewall.default_switch_address()
     try:
-        socket.create_server((host, target.port)).close()
-    except OSError:
+        socket.create_server((server.relay_host(target), target.port)).close()
+    except OSError as error:
+        # Any other failure, like an address not ours, is the daemon's to report.
+        if error.errno not in (errno.WSAEADDRINUSE, errno.WSAEACCES):
+            return
         command = f"asc config set port PORT --mode {target.mode}{paths.instance_flag()}"
         raise PortInUse(target.port, command) from None
 

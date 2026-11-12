@@ -696,11 +696,11 @@ def _free_port(_ask: Ask, mode: str) -> int:
         if root == state_root():
             continue
         try:
-            target = load(root / "config.toml").resolve(None)
+            config = load(root / "config.toml")
         except AscError:
             continue
-        if target.mode == mode:
-            taken.add(target.port)
+        if config.mode == mode or mode in config.modes:
+            taken.add(config.resolve(mode).port)
     first = port = defaults(mode).port
     while port in taken:
         port += 1

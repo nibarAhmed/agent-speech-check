@@ -276,8 +276,7 @@ own VM with remote mode.
   may join: an instance refuses them (exit 4).
 - Ports must differ between running instances: `asc start` refuses one in use
   (exit 4). Desktop mode picks a free one, and `asc setup` gives remote mode the
-  first port from 26837 that no other instance's config uses. Set `port` for
-  sandbox mode.
+  first port from 26837 that no other instance's config uses.
 - `asc stop` stops only its own instance.
 
 ### Global settings

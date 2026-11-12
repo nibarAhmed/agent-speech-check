@@ -175,15 +175,19 @@ def test_setup_remote_takes_a_port_no_other_instance_has(
     other = root / "instances" / "vm1"
     other.mkdir(parents=True)
     (other / "config.toml").write_text('mode = "remote"\n', encoding="utf-8")
+    # Another starts remote mode only with --mode, on a port of its own.
+    third = root / "instances" / "vm3"
+    third.mkdir()
+    (third / "config.toml").write_text("[remote]\nport = 26838\n", encoding="utf-8")
     monkeypatch.setenv("ASC_INSTANCE", "vm2")
     # Mode, keyboard layout, no firewall rule now, save.
     run_setup(Asker("remote", "", "n", "y"), replace_without_asking=False)
     out = capsys.readouterr().out
-    assert "Note: port 26838, as another instance's remote mode has 26837." in out
-    assert "  Port:             26838\n" in out
+    assert "Note: port 26839, as another instance's remote mode has 26837." in out
+    assert "  Port:             26839\n" in out
     # The firewall rule offered is for that port.
     assert "Run asc firewall-setup --mode remote --instance vm2 later." in out
-    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).port == 26838
+    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).port == 26839
 
 
 def test_setup_without_sandbox_says_how_to_get_it(
