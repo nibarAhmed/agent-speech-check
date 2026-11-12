@@ -62,9 +62,10 @@ async def test_wait_match_returns_as_soon_as_words_arrive() -> None:
     after = log.latest
 
     async def speak_later() -> None:
-        await asyncio.sleep(0.05)
+        # Speech that arrives while wait_match waits is the behavior under test.
+        await asyncio.sleep(0.05)  # noqa: TID251
         log.said("Cancel button")
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.05)  # noqa: TID251
         log.said("OK button")
 
     task = asyncio.create_task(speak_later())
@@ -91,7 +92,7 @@ async def test_wait_quiet() -> None:
 
     async def chatter() -> None:
         for _ in range(10):
-            await asyncio.sleep(0.02)
+            await asyncio.sleep(0.02)  # noqa: TID251 (steady chatter is the behavior under test)
             log.activity()
 
     task = asyncio.create_task(chatter())

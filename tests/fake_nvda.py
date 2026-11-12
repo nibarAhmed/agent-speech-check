@@ -231,6 +231,6 @@ class FakeNvda:
             case list():
                 for message in reply:
                     self.send(message)
-                    time.sleep(0.01)
+                    time.sleep(0.01)  # noqa: TID251 (the peer's pacing, not a test waiting)
             case _:
                 raise AssertionError(reply)

@@ -12,7 +12,6 @@ import os
 import re
 import shutil
 import signal
-import time
 from pathlib import Path
 
 import pytest
@@ -22,6 +21,7 @@ from agent_speech_check.daemon import state
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
 from agent_speech_check.windows import winapi
+from agent_speech_check.windows.wait import poll_until
 
 pytestmark = [
     pytest.mark.e2e,
@@ -116,7 +116,6 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert stopped.returncode == 0
     assert wsb.wait_gone(120)
     assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
-    time.sleep(1)
 
 
 def test_sandbox_goes_when_its_daemon_is_killed(
@@ -131,15 +130,11 @@ def test_sandbox_goes_when_its_daemon_is_killed(
         # A hard kill (TerminateProcess on Windows): the daemon gets no chance
         # to stop its sandbox.
         os.kill(daemon_pid, signal.SIGTERM)
-        deadline = time.monotonic() + 120
-        while wsb.running():
-            assert time.monotonic() < deadline, "the sandbox outlived its daemon"
-            time.sleep(2)
+        assert poll_until(lambda: not wsb.running(), 120, 2), "the sandbox outlived its daemon"
     finally:
         for sandbox_id in wsb.running():
             wsb.stop(sandbox_id)
     assert wsb.wait_gone(120)
-    time.sleep(1)
 
 
 def _portable_from_a_sandbox(installer: Path, out: Path) -> Path:
@@ -171,12 +166,16 @@ def _make_portable(config: str, window: wsb.SandboxWindow, installer: Path, port
             f"cmd /c {wsb.NVDA_IN}\\{installer.name} --create-portable-silent "
             r"--portable-path=C:\out\portable",
         )
-        deadline = time.monotonic() + 180
-        count = -1
-        while not (portable / "nvda.exe").is_file() or count != len(list(portable.rglob("*"))):
-            assert time.monotonic() < deadline, "no portable NVDA within 180 s"
+        last = [-1]
+
+        def settled() -> bool:
+            """nvda.exe is there and no file came since the last check."""
             count = len(list(portable.rglob("*"))) if portable.exists() else -1
-            time.sleep(3)
+            done = (portable / "nvda.exe").is_file() and count == last[0]
+            last[0] = count
+            return done
+
+        assert poll_until(settled, 180, 3), "no portable NVDA within 180 s"
     finally:
         wsb.stop(sandbox_id)
 

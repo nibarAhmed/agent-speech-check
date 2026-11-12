@@ -40,6 +40,8 @@ human's sign-off before breaking it.
 - Wait for a condition, never a fixed time: a sleep that guesses how long something takes fails
   on a slow CI runner. Poll what you need (`wait_until`, `Env.wait_running`), with a timeout.
   Sleeping is fine only when the sleep is the behavior under test, like a peer that hangs.
+  Ruff enforces this: `time.sleep` and `asyncio.sleep` are banned outside `src/`, so mark such a
+  sleep `# noqa: TID251` and say why.
 - Never weaken, skip, delete or `xfail` a test to get green. If a test seems wrong, say why and ask.
 - No mocks of our own code. The one fake sits at the system boundary: `tests/fake_nvda.py`, which
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
