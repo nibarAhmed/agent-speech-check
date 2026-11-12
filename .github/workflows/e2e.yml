@@ -3,8 +3,7 @@ name: e2e
 # The real-NVDA tests, on a hosted runner: a throwaway VM with no one's NVDA to
 # replace, so the tests start a portable NVDA here, as they do in Windows Sandbox.
 on:
-  # Every PR, docs too: a required check from a workflow skipped by a path filter
-  # never reports, so the PR could never merge.
+  # Every PR, docs too: a required check skipped by a path filter never reports.
   pull_request:
   # Weekly too: asc downloads the latest NVDA, so a new NVDA release can break it
   # with no PR to run these. Monday 06:00 UTC.

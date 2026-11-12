@@ -7,8 +7,9 @@ evidence, is in `docs/protocol.md`; how Windows and NVDA behaved around it is in
 
 ## Never
 
-These can break the user's own machine or the project, so no task overrides them. The rest of
-this file is defaults: if one fights the task, say so and get a human's sign-off before breaking it.
+These can break the user's own machine or the project, so no task overrides them or the security
+promises below. The rest of this file is defaults: if one fights the task, say so and get a
+human's sign-off before breaking it.
 
 - Never set `ASC_E2E_NVDA` on the host: those e2e tests start that NVDA, which replaces the
   user's running one, and nothing starts it again. Use `scripts/e2e_sandbox.py`. The
@@ -34,9 +35,8 @@ this file is defaults: if one fights the task, say so and get a human's sign-off
   as evidence.
 - For a bug: first write a test that reproduces it and see it fail, then fix it.
 - For new logic (parsing, waits, protocol): tests first.
-- Test what can break. Leave out tests for what types already guarantee and for trivial logic.
-- Test once, at the lowest layer that fails without the change. Extend an existing case before
-  adding a new test.
+- Test what can break, once, at the lowest layer that fails without the change. Extend an existing
+  case before adding a new test. Skip what types already guarantee and trivial logic.
 - Wait for a condition, never a fixed time: a sleep that guesses how long something takes fails
   on a slow CI runner. Poll what you need (`wait_until`, `Env.wait_running`), with a timeout.
   Sleeping is fine only when the sleep is the behavior under test, like a peer that hangs.

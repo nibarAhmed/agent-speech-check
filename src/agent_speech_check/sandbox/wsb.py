@@ -201,9 +201,8 @@ LAUNCH_PATH = f"{IN}\\{LAUNCH_SCRIPT}"
 NO_WINDOW_EXIT = 3
 
 # An app started through `wsb exec` doesn't get the foreground, so NVDA never hears of it. This
-# script lifts the foreground lock as `mouse.nudge` does, starts the app, and brings its topmost
-# visible titled window forward. A batch file runs with `call`, not `start`. Why each step, as
-# observed: docs/findings.md, "Starting an app" and the Windows Sandbox section before it.
+# script lifts the foreground lock as `mouse.nudge` does. Why each step, as observed:
+# docs/findings.md, "Windows Sandbox" and "Starting an app: the foreground lock".
 LAUNCH_PS1 = r"""param([string]$Command, [switch]$Batch)
 Add-Type @"
 using System;
