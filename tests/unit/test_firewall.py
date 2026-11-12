@@ -11,10 +11,12 @@ def test_create_script_is_narrow() -> None:
     script = firewall.create_script(16837, r"C:\Program Files\asc\asc.exe")
     assert "-Direction Inbound" in script
     assert "-Protocol TCP -LocalPort 16837" in script
-    assert "-InterfaceAlias 'vEthernet (Default Switch)'" in script
+    assert "-RemoteAddress LocalSubnet" in script
     assert r"-Program 'C:\Program Files\asc\asc.exe'" in script
     assert "-Action Allow" in script
-    assert "RemoteAddress" not in script
+    # Windows replaces the Default Switch between sandboxes, and a rule on an
+    # interface keeps the old one's id, so it would match nothing.
+    assert "InterfaceAlias" not in script
     # Re-running replaces the rule instead of adding a second one.
     assert script.startswith(
         "Remove-NetFirewallRule -DisplayName 'agent-speech-check sandbox relay'"

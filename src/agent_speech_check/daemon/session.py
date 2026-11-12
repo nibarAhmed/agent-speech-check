@@ -18,6 +18,7 @@ from agent_speech_check.errors import (
     DaemonNotAnswering,
     DaemonStartFailed,
     DaemonUnstoppable,
+    FileUnusable,
     FirewallRuleMissing,
     NotConnected,
     NotRunning,
@@ -29,6 +30,7 @@ from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.windows import winapi
+from agent_speech_check.windows.paths import relay_dir
 from agent_speech_check.windows.wait import poll_until
 
 START_TIMEOUT_S = 15.0
@@ -117,7 +119,13 @@ def log_tail(folder: Path) -> str:
 
 
 def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
-    with (folder / ERR_FILE).open("wb") as err:
+    # Shared mode keeps its relay files in watch mode's folder, so its own may not exist yet.
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        err = (folder / ERR_FILE).open("wb")
+    except OSError as error:
+        raise FileUnusable.from_os(error.filename or folder, error) from None
+    with err:
         return spawn.detached(spawn.asc_command("_daemon", target.to_json()), err, folder)
 
 
@@ -183,7 +191,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
-    relay.load_or_create(folder)
+    relay.load_or_create(relay_dir(target.mode))
     # Only one daemon runs, whatever its mode, even one that no longer answers.
     for other in state.folders(folder.parent):
         running, silent = _probe(other)

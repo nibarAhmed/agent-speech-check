@@ -38,6 +38,17 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
   address (172.24.80.1). NVDA inside reaches a relay bound to that address once
   one inbound firewall rule allows it (`asc sandbox-setup`). No firewall dialog
   appears with the rule in place.
+- **The Default Switch does not last** (Windows 11 Pro, build 26300). About half
+  an hour after the last sandbox closed, `vEthernet (Default Switch)` was gone.
+  Starting a sandbox made it again with a new interface id (`3B811EAC...` became
+  `DCBD0D9D...`) and, on other days, a new address.
+- **A firewall rule on that interface dies with it.** A rule made with
+  `-InterfaceAlias 'vEthernet (Default Switch)'` is stored with the id the
+  interface had then (`IF={...}` in the registry), not the name. After the
+  switch was made again the rule was still enabled but matched nothing: NVDA in
+  the sandbox timed out connecting. So the rule names no interface. It is
+  limited to `-RemoteAddress LocalSubnet` instead, which Windows works out from
+  the subnets the computer is on at the time.
 
 **The sandbox window and focus**
 - A visible sandbox window takes keyboard focus on the host: keys typed on the

@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.errors import SetupNeeded
+from agent_speech_check.windows import paths
 from agent_speech_check.windows.paths import write_atomic
 
 
@@ -52,3 +53,10 @@ def test_a_missing_folder_needs_setup_and_names_the_target(tmp_path: Path) -> No
     with pytest.raises(SetupNeeded) as exc:
         write_atomic(path, "new")
     assert exc.value.message.startswith(f"cannot use {path}: ")
+
+
+def test_shared_mode_uses_watch_modes_relay_files() -> None:
+    # Your own NVDA joins both, so it trusts one certificate and knows one key.
+    assert paths.relay_dir("shared") == paths.relay_dir("watch") == paths.mode_dir("watch")
+    for mode in ("desktop", "sandbox"):
+        assert paths.relay_dir(mode) == paths.mode_dir(mode)

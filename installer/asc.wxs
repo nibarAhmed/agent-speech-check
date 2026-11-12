@@ -20,6 +20,11 @@
          one version install side by side and uninstalling one leaves the files. -->
     <MajorUpgrade AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer Agent Speech Check is already installed." />
+    <!-- Windows Installer keeps the file with the higher version, then removes the old
+         product: a file that was newer in the old build (a newer Python's DLLs) would end
+         up missing. "a" installs every file whatever its version. The folder holds only
+         asc's own files, so nothing shared is overwritten. -->
+    <Property Id="REINSTALLMODE" Value="amus" />
     <!-- perUserOrMachine is only there for the Program Files redirect above. PATH is set for
          the installing user alone, so a per-machine install would leave everyone else
          without asc: refuse it. -->

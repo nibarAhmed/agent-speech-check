@@ -46,9 +46,8 @@ Some of the most important rules (the full set is in [CLAUDE.md](CLAUDE.md)):
 
 ## Releasing
 
-Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI, the
-wheel, the sdist and the winget manifests, attaches them to a GitHub Release, and uploads the
-wheel and sdist to PyPI.
+Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI and
+the winget manifests and attaches them to a GitHub Release.
 
 1. In a pull request, set the new version in `pyproject.toml` and in both
    `plugins/agent-speech-check/.claude-plugin/plugin.json` and
@@ -61,15 +60,11 @@ wheel and sdist to PyPI.
    `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
    `wingetcreate submit FOLDER`. Store a GitHub token first with `wingetcreate token --store`,
    which signs you in through the browser, so the token stays out of your shell history. That
-   opens a pull request on `microsoft/winget-pkgs`. CI's `installer` check already installs,
-   lists and uninstalls the MSI with winget from these manifests.
-
-A PyPI version can never be uploaded twice, so a broken release gets a new version, not a
-second try at the same one.
-
-Once, before the first release: on pypi.org, add a pending Trusted Publisher for the project
-`agent-speech-check`, with owner `nibarAhmed`, repository `agent-speech-check`, workflow
-`release.yml` and environment `pypi`. The workflow then publishes with no stored token.
+   opens a pull request on `microsoft/winget-pkgs`. Without wingetcreate, open that pull request
+   from your fork of it, adding the three files under
+   `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`. Your first one asks you to sign Microsoft's
+   CLA, by replying `@microsoft-github-policy-service agree` on it. CI's `installer` check
+   already installs, lists and uninstalls the MSI with winget from these manifests.
 
 ## Tests next to a real `asc`
 

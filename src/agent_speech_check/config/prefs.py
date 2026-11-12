@@ -121,6 +121,7 @@ PREFS: tuple[Pref, ...] = (
     Pref("timeout_ms", GLOBAL, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
     Pref("launch_timeout_ms", GLOBAL, "int", ipc.DEFAULT_LAUNCH_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
     Pref("keys_layout", GLOBAL, "choice", "desktop", choices=LAYOUTS),
+    Pref("connect", GLOBAL, "bool", True),
 )
 BY_NAME = {pref.name: pref for pref in PREFS}
 
