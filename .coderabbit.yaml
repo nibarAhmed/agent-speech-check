@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit reviews every PR. The project rules live in CLAUDE.md, which CodeRabbit
+# CodeRabbit settings. The project rules live in CLAUDE.md, which CodeRabbit
 # reads by default, so they aren't repeated here.
 language: en-US
 
@@ -35,8 +35,9 @@ reviews:
       mode: "off"
     description:
       mode: "off"
+  # Off for now: turn it back on with `enabled: true`.
   auto_review:
-    enabled: true
+    enabled: false
     drafts: false
   path_filters:
     - "!uv.lock"

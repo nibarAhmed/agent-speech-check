@@ -72,7 +72,7 @@ Some tests touch machine-wide state: window titles, the foreground window, globa
 Windows Sandbox. If you also use `asc` for real on the same machine (another project's sandbox
 or daemon), those tests can meet it and fail. Check for a running sandbox or `asc` daemon before
 blaming your change, and don't stop processes you didn't start. When a test clashes, give it its
-own names, titles and hotkeys instead of skipping it: skips can push coverage under the 90% floor.
+own names, titles and hotkeys instead of skipping it: a skipped test checks nothing.
 Tests never use the default panic key (they set `panic_key`), and each test that registers a
 hotkey uses one no other test uses (Control+Shift+Alt with F21, F22 or F23), because test
 workers run in parallel.

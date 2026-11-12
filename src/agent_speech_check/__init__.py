@@ -4,5 +4,5 @@ from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("agent-speech-check")
-except PackageNotFoundError:  # pragma: no cover - an exe built without --copy-metadata
+except PackageNotFoundError:  # an exe built without --copy-metadata
     __version__ = "unknown"

@@ -70,5 +70,4 @@ body:
       options:
         - MSI installer
         - GitHub (uv tool install git+https://github.com/nibarAhmed/agent-speech-check)
-        - source (uv tool install .)
         - a clone, with uv run
