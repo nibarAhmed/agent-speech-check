@@ -139,10 +139,8 @@ def _check_nvda(target: Target) -> None:
 
 
 def _check_firewall(target: Target) -> None:
-    rule = firewall.rule_name(target.mode, target.port)
-    if not firewall.rule_ok(rule, target.port, firewall.daemon_program()):
-        command = f"asc firewall-setup --mode {target.mode}{paths.instance_flag()}"
-        raise FirewallRuleMissing(target.port, command)
+    if not firewall.rule_ok(target.mode, target.port):
+        raise FirewallRuleMissing(target.port, firewall.setup_command(target.mode))
 
 
 def _check_sandbox(target: Target) -> None:

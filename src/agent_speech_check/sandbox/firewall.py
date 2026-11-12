@@ -21,7 +21,7 @@ import os
 import sys
 
 from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch, PowerShellTimedOut
-from agent_speech_check.windows import winapi
+from agent_speech_check.windows import paths, winapi
 from agent_speech_check.windows.powershell import encoded, quote, run
 
 SANDBOX_RULE = "agent-speech-check sandbox relay"
@@ -33,6 +33,11 @@ def rule_name(mode: str, port: int) -> str:
     """Sandbox mode keeps one rule, whatever its port. Remote mode has one per
     port, so each instance can have its own."""
     return SANDBOX_RULE if mode == "sandbox" else f"agent-speech-check remote relay {int(port)}"
+
+
+def setup_command(mode: str) -> str:
+    """The command that adds the mode's rule, for this instance."""
+    return f"asc firewall-setup --mode {mode}{paths.instance_flag()}"
 
 
 def create_script(rule: str, port: int, program: str) -> str:
@@ -92,13 +97,15 @@ def default_switch_address() -> str:
     return address
 
 
-def rule_ok(rule: str, port: int, program: str) -> bool:
-    return run(check_script(rule, port, program)).strip() == "ok"
+def rule_ok(mode: str, port: int) -> bool:
+    script = check_script(rule_name(mode, port), port, daemon_program())
+    return run(script).strip() == "ok"
 
 
-def create_rule(rule: str, port: int, program: str) -> None:
+def create_rule(mode: str, port: int) -> None:
     """Create the rule in an elevated PowerShell. Windows shows a UAC prompt."""
-    inner = encoded(create_script(rule, port, program))
+    rule = rule_name(mode, port)
+    inner = encoded(create_script(rule, port, daemon_program()))
     outer = (
         "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList "
         f"'-NoProfile','-NonInteractive','-EncodedCommand','{inner}'"
@@ -108,5 +115,5 @@ def create_rule(rule: str, port: int, program: str) -> None:
         run(outer, timeout_s=UAC_TIMEOUT_S)
     except PowerShellTimedOut:
         raise FirewallFailed(rule) from None
-    if not rule_ok(rule, port, program):
+    if not rule_ok(mode, port):
         raise FirewallFailed(rule)

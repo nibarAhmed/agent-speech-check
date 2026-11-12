@@ -442,7 +442,7 @@ class OwnNvdaInInstance(Refused):
         )
 
 
-class LaunchElsewhere(UsageError):
+class LaunchElsewhere(Refused):
     def __init__(self) -> None:
         super().__init__(
             "remote mode can't start apps: NVDA runs on another machine",

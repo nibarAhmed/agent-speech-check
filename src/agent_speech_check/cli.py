@@ -462,19 +462,17 @@ def cmd_firewall_setup(args: argparse.Namespace) -> int:
         raise NoFirewallNeeded(target.mode)
     if target.mode == "sandbox":
         wsb.require_available()
-    rule = firewall.rule_name(target.mode, target.port)
-    program = firewall.daemon_program()
-    if firewall.rule_ok(rule, target.port, program):
+    if firewall.rule_ok(target.mode, target.port):
         print(f"firewall rule already in place for port {target.port}")
         return 0
-    _add_firewall_rule(rule, target.port, program)
+    _add_firewall_rule(target.mode, target.port)
     return 0
 
 
-def _add_firewall_rule(rule: str, port: int, program: str) -> None:
+def _add_firewall_rule(mode: str, port: int) -> None:
     print("asking Windows for admin rights to add one firewall rule")
-    firewall.create_rule(rule, port, program)
-    print(f"firewall rule added: {rule}, TCP {port}, local subnets only")
+    firewall.create_rule(mode, port)
+    print(f"firewall rule added: {firewall.rule_name(mode, port)}, TCP {port}, local subnets only")
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
@@ -647,14 +645,11 @@ def _get_nvda_now(ask: Ask) -> None:
 
 def _firewall_now(ask: Ask, mode: str) -> None:
     port = defaults(mode).port
-    rule = firewall.rule_name(mode, port)
-    program = firewall.daemon_program()
-    if firewall.rule_ok(rule, port, program):
+    if firewall.rule_ok(mode, port):
         return
     _section(f"{mode.capitalize()} mode needs one firewall rule, so NVDA there can reach asc.")
     question = "Add it now? Windows asks for admin rights."
-    later = f"asc firewall-setup --mode {mode}{paths.instance_flag()}"
-    _offer(ask, question, lambda: _add_firewall_rule(rule, port, program), later)
+    _offer(ask, question, lambda: _add_firewall_rule(mode, port), firewall.setup_command(mode))
 
 
 def _ask_mode(ask: Ask) -> str:
@@ -713,7 +708,7 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
 def _answers(ask: Ask) -> setup.Answers:
     mode = _ask_mode(ask)
     given = {field: _ASKERS[field](ask, mode) for field in setup.QUESTIONS[mode]}
-    if mode in ("sandbox", "remote"):
+    if defaults(mode).listens_outside:
         _firewall_now(ask, mode)
     return setup.Answers(mode, **given)
 
@@ -879,7 +874,7 @@ anything at all if --title is left out. Prints what NVDA said, numbered
 like press.
 Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
 inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
-Remote mode refuses (exit 2): start the app on that machine, then asc wait.
+Remote mode refuses (exit 4): start the app on that machine, then asc wait.
 
 examples:
   asc launch "C:\\share\\app\\run.cmd" --title "My App"

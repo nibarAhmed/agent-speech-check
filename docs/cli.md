@@ -192,7 +192,7 @@ Its keys land on that machine, so there is no panic key.
   Hyper-V Default Switch address (looked up at every start; exit 7 if there is
   none), on port 26837 unless remote mode's `port` says another. `host` must be
   an IPv4 address of this computer; loopback and `0.0.0.0` are refused (exit 2).
-- `asc launch` is refused (exit 2): start the app on that machine, then
+- `asc launch` is refused (exit 4): start the app on that machine, then
   `asc wait`.
 - To give each agent its own VM, run one [instance](#instances) per VM, each
   with its own `port`.
@@ -577,7 +577,7 @@ asc launch [--title REGEX] [--timeout MS] CMD
 
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA
-said, numbered like `press`. Works in every mode but remote, where it exits 2:
+said, numbered like `press`. Works in every mode but remote, where it exits 4:
 start the app on that machine and use `asc wait`.
 
 | Argument or option | Default | Meaning |
@@ -644,7 +644,7 @@ Asks a few questions and saves the answers in `config.toml`:
 1. The mode.
 2. Desktop and sandbox mode: which NVDA.
 3. Sandbox mode: the shared folders and the window.
-4. Watch and shared mode: your NVDA's keyboard layout.
+4. Watch, shared and remote mode: your NVDA's keyboard layout.
 
 When they are missing, it offers to download NVDA for desktop mode and to add
 the firewall rule sandbox or remote mode needs. Timings are not asked; change them with

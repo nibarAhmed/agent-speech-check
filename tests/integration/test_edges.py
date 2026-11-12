@@ -248,7 +248,7 @@ def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
 
 
 @pytest.mark.skipif(
-    not firewall.rule_ok(firewall.SANDBOX_RULE, SANDBOX_PORT, firewall.daemon_program()),
+    not firewall.rule_ok("sandbox", SANDBOX_PORT),
     reason="needs the sandbox mode firewall rule on this machine",
 )
 @pytest.mark.usefixtures("env")

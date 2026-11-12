@@ -134,7 +134,6 @@ class Env:
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.delenv("ASC_INSTANCE", raising=False)
     port = free_port()
     config = tmp_path / "agent-speech-check"
     config.mkdir()
