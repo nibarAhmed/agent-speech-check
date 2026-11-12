@@ -1,20 +1,59 @@
-"""Where `asc` keeps its state and logs: `%LOCALAPPDATA%\\agent-speech-check`."""
+"""Where `asc` keeps its state and logs: `%LOCALAPPDATA%\\agent-speech-check`.
+
+A named instance (`ASC_INSTANCE`, or `--instance`) is a whole separate home in
+`instances\\<name>`: its own config, daemon and relay certificate.
+"""
 
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from pathlib import Path
 
-from agent_speech_check.errors import FileUnusable
+from agent_speech_check.errors import BadInstance, FileUnusable
 
 APP_DIR_NAME = "agent-speech-check"
+INSTANCE_VAR = "ASC_INSTANCE"
+INSTANCES_DIR = "instances"
+_DEVICES = re.compile(r"con|prn|aux|nul|com\d|lpt\d")
 
 
-def state_root() -> Path:
+def base_root() -> Path:
+    """The default instance's home. It also keeps the NVDA every instance shares."""
     local = os.environ.get("LOCALAPPDATA")
     base = Path(local) if local else Path.home() / "AppData" / "Local"
     return base / APP_DIR_NAME
+
+
+def check_instance(name: str) -> str:
+    # It names a folder, so neither ..\ nor a Windows device name may get in.
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", name) or _DEVICES.fullmatch(name):
+        raise BadInstance(name)
+    return name
+
+
+def instance() -> str | None:
+    """The named instance this process works on, or None for the default one."""
+    name = os.environ.get(INSTANCE_VAR)
+    return check_instance(name) if name else None
+
+
+def instance_flag() -> str:
+    """` --instance NAME`, for a hint that must reach this instance, else nothing."""
+    name = instance()
+    return f" --instance {name}" if name else ""
+
+
+def every_root() -> list[Path]:
+    """The default instance's home and each named one's, for stopping them all."""
+    named = sorted(p for p in (base_root() / INSTANCES_DIR).glob("*") if p.is_dir())
+    return [base_root(), *named]
+
+
+def state_root() -> Path:
+    name = instance()
+    return base_root() if name is None else base_root() / INSTANCES_DIR / name
 
 
 def config_file() -> Path:

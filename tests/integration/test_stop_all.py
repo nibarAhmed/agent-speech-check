@@ -52,6 +52,9 @@ def _listening(port: int) -> bool:
 
 def test_stop_all_stops_every_daemon(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
+    # And a named instance's.
+    env.config(f"[desktop]\nport = {free_port()}\nlaunch = false\n", instance="vm1")
+    assert run_asc("start", "--mode", "desktop", "--instance", "vm1").returncode == 0
     # One that doesn't answer, as an older asc's daemon wouldn't.
     pids = [_pid(env, "watch"), _silent_daemon(env, "old-target")]
     # And a file no daemon of this asc wrote.
@@ -66,10 +69,12 @@ def test_stop_all_stops_every_daemon(env: Env) -> None:
 
     result = run_asc("_stop_all")
     assert result.returncode == 0, result.stderr
-    assert result.stdout == "stopped: old-target\nstopped: watch\n"
+    assert result.stdout == (
+        "stopped: old-target\nstopped: watch\nstopped: instances/vm1/desktop\n"
+    )
     # Run from source it has no asc.exe to wait for, so it may return a moment early.
     assert wait_until(lambda: [winapi.image_path(pid) for pid in pids] == [None, None])
-    assert list(env.root.glob("agent-speech-check/*/state.json")) == []
+    assert list(env.root.glob("agent-speech-check/**/state.json")) == []
 
 
 @pytest.mark.usefixtures("env")
@@ -91,7 +96,7 @@ def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[byte
 def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 2)
     try:
-        assert list(session.stop_all(env.root / "agent-speech-check", image)) == []
+        assert list(session.stop_all([env.root / "agent-speech-check"], image)) == []
         assert process.poll() is not None
     finally:
         process.kill()
@@ -101,7 +106,7 @@ def test_stop_all_names_processes_that_stay(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 60)
     try:
         with pytest.raises(AscStillRunning, match=rf"asc is still running \(pid {process.pid}\)"):
-            list(session.stop_all(env.root / "agent-speech-check", image, timeout_s=0.5))
+            list(session.stop_all([env.root / "agent-speech-check"], image, timeout_s=0.5))
         # Only waited on: never ended.
         assert process.poll() is None
     finally:

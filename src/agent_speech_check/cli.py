@@ -21,7 +21,7 @@ from typing import Any, NoReturn
 from agent_speech_check import __version__
 from agent_speech_check.config import edit, prefs, setup
 from agent_speech_check.config.prefs import MODES, WINDOWS
-from agent_speech_check.config.targets import SANDBOX_PORT, Config, Target, load
+from agent_speech_check.config.targets import Config, Target, defaults, load
 from agent_speech_check.daemon import ipc, server, session, state
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
@@ -32,6 +32,7 @@ from agent_speech_check.errors import (
     InternalError,
     NeedsTerminal,
     NoCommand,
+    NoFirewallNeeded,
     NotRunning,
     UnrecognizedArguments,
     UsageError,
@@ -42,6 +43,7 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
+from agent_speech_check.windows import paths
 from agent_speech_check.windows.paths import config_file, mode_dir, state_root
 from agent_speech_check.windows.wait import poll_until
 
@@ -59,6 +61,8 @@ typical use:
   asc stop
 
 Speech is kept in memory only. Run asc COMMAND --help for details.
+--instance NAME (or ASC_INSTANCE) runs a separate asc, with its own config and
+daemon, next to the default one: one per agent, each with its own VM.
 """
 
 EPILOG = (
@@ -77,6 +81,12 @@ class Command:
     add_args: Callable[[argparse.ArgumentParser], None] | None = None
     # True for a command that works on one mode's settings.
     takes_mode: bool = False
+
+
+def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
+    parser.add_argument(
+        "--instance", metavar="NAME", default=default, help="default: ASC_INSTANCE, else none"
+    )
 
 
 def _add_mode(parser: argparse.ArgumentParser) -> None:
@@ -221,6 +231,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--version", action="version", version=f"asc {__version__}")
+    _add_instance(parser, None)
     commands = parser.add_subparsers(dest="command", metavar="COMMAND")
     for name, command in COMMANDS.items():
         sub = commands.add_parser(
@@ -229,6 +240,8 @@ def build_parser() -> argparse.ArgumentParser:
             description=command.details,
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
+        # Suppressed, so a subcommand without it keeps the one given before it.
+        _add_instance(sub, argparse.SUPPRESS)
         if command.takes_mode:
             _add_mode(sub)
         if command.add_args is not None:
@@ -350,11 +363,12 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
-def _stop_every(image: Path | None) -> int:
-    """Stop every daemon, print each one stopped, and return how many."""
+def _stop_every(roots: list[Path], image: Path | None) -> int:
+    """Stop every daemon under `roots`, print each one stopped, and return how many."""
     stopped = 0
-    for mode in session.stop_all(state_root(), image):
-        print(f"stopped: {mode}")
+    for folder in session.stop_all(roots, image):
+        where = folder.relative_to(paths.base_root()).as_posix()
+        print(f"stopped: {where}")
         stopped += 1
     return stopped
 
@@ -362,7 +376,7 @@ def _stop_every(image: Path | None) -> int:
 def cmd_stop(_: argparse.Namespace) -> int:
     # A state file left behind counts as something to clear, not as nothing running.
     found = bool(state.folders(state_root()))
-    stopped = _stop_every(None)
+    stopped = _stop_every([state_root()], None)
     if not (found or stopped):
         raise NotRunning
     return 0
@@ -442,21 +456,25 @@ def cmd_launch(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_sandbox_setup(_: argparse.Namespace) -> int:
-    wsb.require_available()
-    target = load(config_file()).resolve("sandbox")
+def cmd_firewall_setup(args: argparse.Namespace) -> int:
+    target = _target(args)
+    if not target.listens_outside:
+        raise NoFirewallNeeded(target.mode)
+    if target.mode == "sandbox":
+        wsb.require_available()
+    rule = firewall.rule_name(target.mode, target.port)
     program = firewall.daemon_program()
-    if firewall.rule_ok(target.port, program):
+    if firewall.rule_ok(rule, target.port, program):
         print(f"firewall rule already in place for port {target.port}")
         return 0
-    _add_firewall_rule(target.port, program)
+    _add_firewall_rule(rule, target.port, program)
     return 0
 
 
-def _add_firewall_rule(port: int, program: str) -> None:
+def _add_firewall_rule(rule: str, port: int, program: str) -> None:
     print("asking Windows for admin rights to add one firewall rule")
-    firewall.create_rule(port, program)
-    print(f"firewall rule added: {firewall.RULE_NAME}, TCP {port}, local subnets only")
+    firewall.create_rule(rule, port, program)
+    print(f"firewall rule added: {rule}, TCP {port}, local subnets only")
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
@@ -627,13 +645,16 @@ def _get_nvda_now(ask: Ask) -> None:
     _offer(ask, question, _make_portable, "asc get-nvda")
 
 
-def _firewall_now(ask: Ask) -> None:
+def _firewall_now(ask: Ask, mode: str) -> None:
+    port = defaults(mode).port
+    rule = firewall.rule_name(mode, port)
     program = firewall.daemon_program()
-    if firewall.rule_ok(SANDBOX_PORT, program):
+    if firewall.rule_ok(rule, port, program):
         return
-    _section("Sandbox mode needs one firewall rule, so the sandbox's NVDA can reach asc.")
+    _section(f"{mode.capitalize()} mode needs one firewall rule, so NVDA there can reach asc.")
     question = "Add it now? Windows asks for admin rights."
-    _offer(ask, question, lambda: _add_firewall_rule(SANDBOX_PORT, program), "asc sandbox-setup")
+    later = f"asc firewall-setup --mode {mode}{paths.instance_flag()}"
+    _offer(ask, question, lambda: _add_firewall_rule(rule, port, program), later)
 
 
 def _ask_mode(ask: Ask) -> str:
@@ -649,6 +670,8 @@ def _ask_mode(ask: Ask) -> str:
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
+        if mode == "remote":
+            print("Note: asc status says how to connect the other machine's NVDA.")
         if mode in ("shared", "desktop"):
             print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
         return mode
@@ -690,8 +713,8 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
 def _answers(ask: Ask) -> setup.Answers:
     mode = _ask_mode(ask)
     given = {field: _ASKERS[field](ask, mode) for field in setup.QUESTIONS[mode]}
-    if mode == "sandbox":
-        _firewall_now(ask)
+    if mode in ("sandbox", "remote"):
+        _firewall_now(ask, mode)
     return setup.Answers(mode, **given)
 
 
@@ -734,7 +757,7 @@ COMMANDS: dict[str, Command] = {
         """\
 Start the background daemon in --mode, or the mode setting (watch unless set),
 with that mode's settings from config.toml (see asc config). One daemon runs
-at a time: the other commands talk to it.
+per instance: the other commands talk to it.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
 keys. asc start asks your running NVDA to connect: answer Yes in NVDA, and trust
@@ -742,17 +765,22 @@ the certificate the first time. It waits up to a minute for that. Until NVDA
 restarts, it then reconnects by itself. Turn the asking off with
 asc config set connect false, and connect in NVDA instead (asc status says how).
 
+remote mode: asc launches nothing. Start NVDA on the other machine (a VM, say)
+and connect its Remote Access to asc as asc status says. Run several agents,
+each with its own VM, as named instances with their own ports.
+
 examples:
   asc start
-  asc start --mode sandbox""",
+  asc start --mode sandbox
+  asc start --mode remote --instance vm1""",
         cmd_start,
         _start_args,
         takes_mode=True,
     ),
     "stop": Command(
         "stop recording and forget the speech",
-        "Stop the daemon, whatever its mode. Held keys are released. A daemon that\n"
-        "doesn't answer is ended.",
+        "Stop this instance's daemon, whatever its mode. Held keys are released. A\n"
+        "daemon that doesn't answer is ended.",
         cmd_stop,
     ),
     "status": Command(
@@ -851,6 +879,7 @@ anything at all if --title is left out. Prints what NVDA said, numbered
 like press.
 Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
 inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
+Remote mode refuses (exit 2): start the app on that machine, then asc wait.
 
 examples:
   asc launch "C:\\share\\app\\run.cmd" --title "My App"
@@ -902,25 +931,30 @@ examples:
         cmd_config,
         _config_args,
     ),
-    "sandbox-setup": Command(
-        "allow the sandbox's NVDA to reach asc (asks for admin once)",
-        """Sandbox mode runs NVDA in Windows Sandbox, which connects to asc on this
-computer's Hyper-V Default Switch address. Windows Firewall blocks that until
-one rule allows it. This command creates that rule after a Windows admin
-prompt: inbound TCP only, only from this computer's local subnets, only the
-relay port (16837 unless the port setting of sandbox mode says another), only
-for the program running asc. Run it again after updating Python or asc, since
-the rule names the program.
+    "firewall-setup": Command(
+        "allow NVDA in a sandbox or VM to reach asc (asks for admin once)",
+        """Sandbox and remote mode have NVDA on another machine connect to asc, on this
+computer's Hyper-V Default Switch address (or remote mode's host setting).
+Windows Firewall blocks that until a rule allows it. This command creates the
+mode's rule after a Windows admin prompt: inbound TCP only, only from this
+computer's local subnets, only the mode's port (sandbox 16837, remote 26837,
+unless its port setting says another), only for the program running asc.
+Remote mode gets one rule per port. Run it again after updating Python or asc,
+since the rule names the program.
 
 examples:
-  asc sandbox-setup""",
-        cmd_sandbox_setup,
+  asc firewall-setup --mode sandbox
+  asc firewall-setup --mode remote --instance vm1""",
+        cmd_firewall_setup,
+        takes_mode=True,
     ),
 }
 
 
 def run(argv: Sequence[str] | None) -> int:
     args_list = list(sys.argv[1:] if argv is None else argv)
+    # Checked before anything, so even the daemon never works in a folder it shouldn't.
+    paths.instance()
     if args_list[:1] == ["_daemon"] and len(args_list) == 2:  # noqa: PLR2004 - _daemon JSON
         # Hidden: how `asc start` runs the daemon.
         return server.run(args_list[1])
@@ -932,9 +966,12 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.
         image = Path(sys.executable) if getattr(sys, "frozen", False) else None
-        _stop_every(image)
+        _stop_every(paths.every_root(), image)
         return 0
     args = build_parser().parse_args(args_list)
+    if args.instance is not None:
+        # In the environment, so the daemon asc starts works on it too.
+        os.environ[paths.INSTANCE_VAR] = paths.check_instance(args.instance)
     if args.command is None:
         raise NoCommand
     return COMMANDS[args.command].run(args)

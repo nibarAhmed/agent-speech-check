@@ -43,6 +43,7 @@ MODES = _choices(
         "desktop": "asc runs its own silent NVDA on this desktop",
         "sandbox": "asc runs its own NVDA inside Windows Sandbox",
         "shared": "asc presses keys in your own NVDA, in your own session",
+        "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
     },
     default="watch",
 )
@@ -157,6 +158,7 @@ QUESTIONS = _per_mode(
         "desktop": ("nvda_dir",),
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
+        "remote": ("keys_layout",),
     }
 )
 

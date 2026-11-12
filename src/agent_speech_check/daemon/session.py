@@ -23,13 +23,14 @@ from agent_speech_check.errors import (
     NotConnected,
     NotRunning,
     NvdaDidNotConnect,
+    OwnNvdaInInstance,
     SandboxBusy,
     SharedNeedsConsent,
 )
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.windows import winapi
+from agent_speech_check.windows import paths, winapi
 from agent_speech_check.windows.paths import relay_dir
 from agent_speech_check.windows.wait import poll_until
 
@@ -137,12 +138,18 @@ def _check_nvda(target: Target) -> None:
     nvda_config.check(target.settings, nvda_config.user_ini(nvda_config.source_config(folder)))
 
 
+def _check_firewall(target: Target) -> None:
+    rule = firewall.rule_name(target.mode, target.port)
+    if not firewall.rule_ok(rule, target.port, firewall.daemon_program()):
+        command = f"asc firewall-setup --mode {target.mode}{paths.instance_flag()}"
+        raise FirewallRuleMissing(target.port, command)
+
+
 def _check_sandbox(target: Target) -> None:
     if target.nvda_dir:
         _check_nvda(target)
     wsb.require_available()
-    if not firewall.rule_ok(target.port, firewall.daemon_program()):
-        raise FirewallRuleMissing
+    _check_firewall(target)
     if wsb.running():
         raise SandboxBusy
     if target.nvda_dir is None:
@@ -152,6 +159,8 @@ def _check_sandbox(target: Target) -> None:
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
+    if target.own_nvda and paths.instance() is not None:
+        raise OwnNvdaInInstance(target.mode)
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
     if target.launches_portable:
@@ -159,6 +168,10 @@ def precheck(target: Target) -> None:
         launcher.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)
+    if target.mode == "remote":
+        _check_firewall(target)
+        if target.host is None:
+            firewall.default_switch_address()
     # Last: it holds the hotkey for a moment, so only once nothing else refuses.
     if target.takes_panic_key:
         server.check_panic_key(target.panic_key)
@@ -225,9 +238,11 @@ def stop(folder: Path, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
         _end(folder)
 
 
-def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_S) -> Iterator[str]:
-    """Stop every daemon, for `asc stop` and the installer, yielding the folder name
-    of each one stopped.
+def stop_all(
+    roots: list[Path], image: Path | None, *, timeout_s: float = STOP_TIMEOUT_S
+) -> Iterator[Path]:
+    """Stop every daemon under `roots`, for `asc stop` and the installer, yielding
+    the folder of each one stopped.
 
     Tries them all before raising for any it couldn't end. Then waits for the
     other processes running `image`: a stopped daemon still runs for a moment
@@ -235,7 +250,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
     ends them, as they may be a person's own asc commands.
     """
     stuck: list[int] = []
-    for folder in state.folders(root):
+    for folder in (folder for root in roots for folder in state.folders(root)):
         try:
             state.read(folder)
         except NotConnected:
@@ -249,7 +264,7 @@ def stop_all(root: Path, image: Path | None, *, timeout_s: float = STOP_TIMEOUT_
         except DaemonUnstoppable as error:
             stuck += error.pids
             continue
-        yield folder.name
+        yield folder
     if stuck:
         raise DaemonUnstoppable(stuck)
     if image is not None and not poll_until(

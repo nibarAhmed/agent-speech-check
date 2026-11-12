@@ -254,7 +254,7 @@ def test_firewall_reads_are_harmless() -> None:
         return
     assert firewall.parse_address(address) == address
     # A port no rule names.
-    assert firewall.rule_ok(1, firewall.daemon_program()) is False
+    assert firewall.rule_ok(firewall.rule_name("remote", 1), 1, firewall.daemon_program()) is False
 
 
 def test_sandbox_availability() -> None:

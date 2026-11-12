@@ -396,16 +396,17 @@ class FileUnusable(SetupNeeded):
 class NoDefaultSwitch(SetupNeeded):
     def __init__(self, interface: str) -> None:
         super().__init__(
-            f"no IPv4 address on {_show(interface)}, so the sandbox can't reach asc",
-            hint="start any Windows Sandbox once, which creates the Default Switch",
+            f"no IPv4 address on {_show(interface)}, so the sandbox or VM can't reach asc",
+            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default "
+            "Switch; or in remote mode, asc config set host ADDRESS --mode remote",
         )
 
 
 class FirewallRuleMissing(SetupNeeded):
-    def __init__(self) -> None:
+    def __init__(self, port: int, command: str) -> None:
         super().__init__(
-            "the firewall rule that lets the sandbox reach asc is missing",
-            hint="asc sandbox-setup (asks for admin rights once)",
+            f"no firewall rule lets NVDA on another machine reach asc on port {port}",
+            hint=f"{command} (asks for admin rights once)",
         )
 
 
@@ -413,7 +414,39 @@ class FirewallFailed(SetupNeeded):
     def __init__(self, rule: str) -> None:
         super().__init__(
             f"the firewall rule {_show(rule)} was not created",
-            hint="approve the admin prompt, or run asc sandbox-setup again",
+            hint="approve the admin prompt, or run asc firewall-setup again",
+        )
+
+
+class NoFirewallNeeded(UsageError):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"{mode} mode needs no firewall rule",
+            hint="asc firewall-setup --mode sandbox, or --mode remote",
+        )
+
+
+class BadInstance(UsageError):
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"instance {_show(name)}: expected up to 32 lowercase letters, digits and dashes",
+            hint="like --instance vm1; not a Windows device name like con or nul",
+        )
+
+
+class OwnNvdaInInstance(Refused):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"{mode} mode uses your own NVDA, which only the default instance may join",
+            hint="use remote mode in a named instance, or leave out --instance",
+        )
+
+
+class LaunchElsewhere(UsageError):
+    def __init__(self) -> None:
+        super().__init__(
+            "remote mode can't start apps: NVDA runs on another machine",
+            hint="start the app there, then asc wait for its speech",
         )
 
 

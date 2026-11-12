@@ -248,12 +248,12 @@ def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
 
 
 @pytest.mark.skipif(
-    not firewall.rule_ok(SANDBOX_PORT, firewall.daemon_program()),
-    reason="needs the asc sandbox-setup rule on this machine",
+    not firewall.rule_ok(firewall.SANDBOX_RULE, SANDBOX_PORT, firewall.daemon_program()),
+    reason="needs the sandbox mode firewall rule on this machine",
 )
 @pytest.mark.usefixtures("env")
-def test_sandbox_setup_is_a_no_op_when_done() -> None:
-    result = run_asc("sandbox-setup")
+def test_firewall_setup_is_a_no_op_when_done() -> None:
+    result = run_asc("firewall-setup", "--mode", "sandbox")
     assert result.returncode == 0
     assert result.stdout == f"firewall rule already in place for port {SANDBOX_PORT}\n"
 

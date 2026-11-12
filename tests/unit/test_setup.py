@@ -39,7 +39,7 @@ class Asker:
 
 def test_prompts_are_plain_words() -> None:
     prompt = setup.choice_prompt(setup.MODES)
-    assert prompt == "Choose 1 to 4: "
+    assert prompt == "Choose 1 to 5: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
 
@@ -92,7 +92,14 @@ def test_summary_says_none_and_your_folder() -> None:
 
 @pytest.mark.parametrize(
     ("answer", "picked"),
-    [("", "watch"), ("2", "desktop"), (" Sandbox ", "sandbox"), ("5", None), ("x", None)],
+    [
+        ("", "watch"),
+        ("2", "desktop"),
+        (" Sandbox ", "sandbox"),
+        ("5", "remote"),
+        ("6", None),
+        ("x", None),
+    ],
 )
 def test_pick(answer: str, picked: str | None) -> None:
     assert setup.pick(answer, setup.MODES) == picked
@@ -234,7 +241,7 @@ def test_config_set_get_list_unset(root: Path, capsys: pytest.CaptureFixture[str
     assert "settle_ms = 700 (global)\n" in out
     assert "nvda_dir = none (default)\n" in out
     assert run(capsys, "config", "get", "port", "--mode", "sandbox")[1] == "7000\n"
-    assert run(capsys, "config", "get", "launch", "--mode", "sandbox")[1] == "true\n"
+    assert run(capsys, "config", "get", "launch", "--mode", "sandbox")[1] == "false\n"
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
@@ -255,6 +262,13 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", "window", "show")
     assert code == 2
     assert "window: expected only in sandbox mode" in err
+    # asc launches no NVDA in remote mode, and always one in sandbox mode.
+    code, _, err = run(capsys, "config", "set", "launch", "false", "--mode", "sandbox")
+    assert code == 2
+    assert "[sandbox] launch: expected only in desktop mode" in err
+    code, _, err = run(capsys, "config", "set", "host", "172.20.0.1", "--mode", "sandbox")
+    assert code == 2
+    assert "host: expected only in remote mode" in err
     assert not (root / "config.toml").exists()
 
 

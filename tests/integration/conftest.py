@@ -91,16 +91,19 @@ class Env:
     root: Path
     port: int
 
-    def folder(self, mode: str) -> Path:
-        return self.root / "agent-speech-check" / mode
+    def home(self, instance: str | None = None) -> Path:
+        home = self.root / "agent-speech-check"
+        return home if instance is None else home / "instances" / instance
 
-    def config(self, text: str) -> None:
-        (self.root / "agent-speech-check" / "config.toml").write_text(
-            _never_invite(text), encoding="utf-8"
-        )
+    def folder(self, mode: str, instance: str | None = None) -> Path:
+        return self.home(instance) / mode
 
-    def channel(self, mode: str) -> str:
-        relay = (self.folder(mode) / "relay.json").read_text(encoding="utf-8")
+    def config(self, text: str, instance: str | None = None) -> None:
+        self.home(instance).mkdir(parents=True, exist_ok=True)
+        (self.home(instance) / "config.toml").write_text(_never_invite(text), encoding="utf-8")
+
+    def channel(self, mode: str, instance: str | None = None) -> str:
+        relay = (self.folder(mode, instance) / "relay.json").read_text(encoding="utf-8")
         channel: str = json.loads(relay)["channel"]
         return channel
 
@@ -113,28 +116,37 @@ class Env:
         """Wait until the daemon runs `command`, so a test acts during it, not before."""
         assert wait_until(lambda: command in self.running(mode)), self.running(mode)
 
-    def fake(self, mode: str, replies: dict[str, Reply | str] | None = None) -> FakeNvda:
+    def fake(
+        self,
+        mode: str,
+        replies: dict[str, Reply | str] | None = None,
+        *,
+        instance: str | None = None,
+        port: int | None = None,
+    ) -> FakeNvda:
         """A fake NVDA connected to the mode's relay, using its stored key and cert."""
-        folder = self.folder(mode)
+        folder = self.folder(mode, instance)
         cert = fingerprint(folder / "relay_cert.pem")
-        fake = FakeNvda(self.port, self.channel(mode), cert, replies or {})
+        fake = FakeNvda(port or self.port, self.channel(mode, instance), cert, replies or {})
         return fake.start()
 
 
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.delenv("ASC_INSTANCE", raising=False)
     port = free_port()
     config = tmp_path / "agent-speech-check"
     config.mkdir()
     made = Env(tmp_path, port)
     made.config(f"[watch]\nport = {port}\n[desktop]\nport = {port}\nlaunch = false\n")
     yield made
-    # Never leave a daemon behind, even when a test failed half way. 3: none ran.
-    if run_asc("stop").returncode not in (0, 3):
-        for folder in state.folders(config):
-            raw = (folder / state.FILE).read_text(encoding="utf-8")
-            _kill_if_ours(json.loads(raw)["pid"])
+    # Never leave a daemon behind, in any instance, even when a test failed half way.
+    if run_asc("_stop_all").returncode != 0:
+        for root in [config, *config.glob("instances/*")]:
+            for folder in state.folders(root):
+                raw = (folder / state.FILE).read_text(encoding="utf-8")
+                _kill_if_ours(json.loads(raw)["pid"])
     assert os.environ["LOCALAPPDATA"] == str(tmp_path)
 
 

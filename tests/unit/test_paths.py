@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.errors import SetupNeeded
+from agent_speech_check.errors import BadInstance, SetupNeeded
 from agent_speech_check.windows import paths
 from agent_speech_check.windows.paths import write_atomic
 
@@ -60,3 +60,20 @@ def test_shared_mode_uses_watch_modes_relay_files() -> None:
     assert paths.relay_dir("shared") == paths.relay_dir("watch") == paths.mode_dir("watch")
     for mode in ("desktop", "sandbox"):
         assert paths.relay_dir(mode) == paths.mode_dir(mode)
+
+
+@pytest.mark.parametrize("name", ["vm1", "a", "agent-2", "x" * 32])
+def test_instance_names(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv(paths.INSTANCE_VAR, name)
+    assert paths.state_root() == tmp_path / "agent-speech-check" / "instances" / name
+    # The NVDA asc downloads is shared by every instance.
+    assert paths.base_root() == tmp_path / "agent-speech-check"
+
+
+@pytest.mark.parametrize(
+    "name", ["-a", "VM1", "a_b", "..", "a\b", "a/b", "x" * 33, "con", "nul", "com1", "lpt9"]
+)
+def test_bad_instance_names(name: str) -> None:
+    with pytest.raises(BadInstance):
+        paths.check_instance(name)

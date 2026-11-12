@@ -29,6 +29,7 @@ from agent_speech_check.daemon import ipc, state
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
+    LaunchElsewhere,
     LaunchFailed,
     NoMatch,
     NvdaNotConnected,
@@ -293,6 +294,8 @@ class Daemon:
         return _new_speech(typed.since, typed.after)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
+        if self.target.mode == "remote":
+            raise LaunchElsewhere
         if not self.relay.connected:
             raise NvdaNotConnected
         start = self.speech.latest
@@ -355,9 +358,9 @@ class Daemon:
 
     async def run(self) -> None:
         self._start_panic_key()
-        host = relay.HOST
-        if self.target.mode == "sandbox":
-            # NVDA in the sandbox reaches the host only on the Default Switch.
+        host = self.target.host or relay.HOST
+        if self.target.listens_outside and self.target.host is None:
+            # A sandbox or VM reaches the host only on the Default Switch, unless told otherwise.
             host = await asyncio.to_thread(firewall.default_switch_address)
         relay_server = await self.relay.start(self.target.port, host)
         token = secrets.token_urlsafe(32)

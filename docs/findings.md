@@ -36,7 +36,7 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
 - With networking on, the sandbox sits on the Hyper-V Default Switch subnet
   (for example 172.24.82.2/20), and its gateway is the host's Default Switch
   address (172.24.80.1). NVDA inside reaches a relay bound to that address once
-  one inbound firewall rule allows it (`asc sandbox-setup`). No firewall dialog
+  one inbound firewall rule allows it (`asc firewall-setup`). No firewall dialog
   appears with the rule in place.
 - **The Default Switch does not last** (Windows 11 Pro, build 26300). About half
   an hour after the last sandbox closed, `vEthernet (Default Switch)` was gone.

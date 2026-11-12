@@ -37,7 +37,7 @@ from agent_speech_check.errors import (
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
 from agent_speech_check.windows import winapi
-from agent_speech_check.windows.paths import state_root
+from agent_speech_check.windows.paths import base_root
 from agent_speech_check.windows.wait import poll_until
 
 log = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ STOP_TIMEOUT_S = 10
 
 def managed_dir() -> Path:
     """Where `asc get-nvda` puts the portable copy."""
-    return state_root() / "nvda" / "portable"
+    return base_root() / "nvda" / "portable"
 
 
 def folder_for(nvda_dir: str | None) -> Path:
@@ -73,7 +73,7 @@ def folder_for(nvda_dir: str | None) -> Path:
 
 def installers_dir() -> Path:
     """Where `asc get-nvda` and sandbox mode keep the downloaded installer."""
-    return state_root() / "nvda"
+    return base_root() / "nvda"
 
 
 def installer_path(version: str) -> Path:

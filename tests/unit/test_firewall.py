@@ -8,7 +8,7 @@ from agent_speech_check.windows import powershell
 
 
 def test_create_script_is_narrow() -> None:
-    script = firewall.create_script(16837, r"C:\Program Files\asc\asc.exe")
+    script = firewall.create_script(firewall.SANDBOX_RULE, 16837, r"C:\Program Files\asc\asc.exe")
     assert "-Direction Inbound" in script
     assert "-Protocol TCP -LocalPort 16837" in script
     assert "-RemoteAddress LocalSubnet" in script
@@ -24,12 +24,14 @@ def test_create_script_is_narrow() -> None:
 
 
 def test_quotes_cannot_break_out() -> None:
-    script = firewall.create_script(1, "C:\\it's\\x.exe")
+    script = firewall.create_script(firewall.rule_name("remote", 1), 1, "C:\\it's\\x.exe")
     assert "-Program 'C:\\it''s\\x.exe'" in script
+    # Remote mode has one rule per port, so each instance can have its own.
+    assert "-DisplayName 'agent-speech-check remote relay 1'" in script
 
 
 def test_check_script_names_port_and_program() -> None:
-    script = firewall.check_script(16837, "C:\\p.exe")
+    script = firewall.check_script(firewall.SANDBOX_RULE, 16837, "C:\\p.exe")
     assert "LocalPort -eq '16837'" in script
     assert "Program -eq 'C:\\p.exe'" in script
 
