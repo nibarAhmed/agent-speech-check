@@ -94,13 +94,22 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = [
     "E", "F", "W", "I", "B", "BLE", "UP", "SIM", "C4", "PT", "RUF", "ASYNC",
-    "PTH", "PL", "TRY", "ARG", "ERA", "S", "T20",
+    "PTH", "PL", "TRY", "ARG", "ERA", "S", "T20", "TID251",
 ]
+
+# Tests and scripts wait for a condition, never a fixed time (CLAUDE.md, Testing policy).
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"time.sleep".msg = "Wait for a condition: wait_until or poll_until. If the sleep is the behavior under test, add `# noqa: TID251` and say why."
+"asyncio.sleep".msg = "Wait for a condition, not a fixed time. If the sleep is the behavior under test, add `# noqa: TID251` and say why."
 
 [tool.ruff.lint.per-file-ignores]
 # cli.py is the only module allowed to print.
 "src/agent_speech_check/cli.py" = ["T20"]
+# The product's own waits and keepalives sleep on purpose; the sleep ban is for tests.
+"src/**" = ["TID251"]
 "tests/**" = ["S101", "PLR2004", "TRY003"]
+# The fake is the NVDA peer: its pacing is peer behavior, not a test waiting.
+"tests/fake_nvda.py" = ["TID251"]
 # Dev scripts and hooks print and run tools on purpose.
 "scripts/**" = ["T20", "S603", "S607"]
 ".claude/**" = ["T20", "S603", "S607"]

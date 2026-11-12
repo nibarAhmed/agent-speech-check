@@ -32,11 +32,11 @@ import re
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
+from agent_speech_check.windows.wait import poll_until
 
 REPO = Path(__file__).resolve().parents[1]
 PYTHON = (REPO / ".python-version").read_text(encoding="utf-8").strip()
@@ -191,10 +191,8 @@ def run_tests(window: wsb.SandboxWindow, cmd: Path) -> int:
         ],
         stdout=subprocess.DEVNULL,
     )
-    deadline = time.monotonic() + TIMEOUT_S
     done = OUT / "DONE"
-    while not done.exists() and time.monotonic() < deadline:
-        time.sleep(0.5)
+    poll_until(done.exists, TIMEOUT_S, 0.5)
     runner.kill()
     report = OUT / "pytest.txt"
     print(report.read_text(encoding="utf-8", errors="replace") if report.exists() else "")

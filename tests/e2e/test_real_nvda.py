@@ -14,7 +14,6 @@ import os
 import re
 import shutil
 import subprocess
-import time
 import winreg
 from collections.abc import Iterator
 from ctypes import wintypes
@@ -48,12 +47,8 @@ def insert_held() -> bool:
 
 
 def wait_connected(timeout_s: float = 90) -> None:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if "nvda: connected" in run_asc("status").stdout:
-            return
-        time.sleep(1)
-    raise AssertionError("NVDA did not connect")
+    connected = poll_until(lambda: "nvda: connected" in run_asc("status").stdout, timeout_s, 1)
+    assert connected, "NVDA did not connect"
 
 
 def in_focus_mode() -> bool:

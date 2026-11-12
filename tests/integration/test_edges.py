@@ -65,7 +65,7 @@ class FakeDaemon:
         with conn:
             conn.recv(65536)
             if self.reply == HANG:
-                time.sleep(30)
+                time.sleep(30)  # noqa: TID251 (a peer that hangs is the behavior under test)
             else:
                 conn.sendall(self.reply)
 
@@ -344,6 +344,6 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
         # From here on it never reads or answers, like a peer that is gone.
         stopped = time.monotonic()
         assert run_asc("stop").returncode == 0
-        while winapi.image_path(pid) is not None:
-            assert time.monotonic() - stopped < 10, "the daemon waited on the silent peer"
-            time.sleep(0.1)
+        left_s = 10 - (time.monotonic() - stopped)
+        gone = wait_until(lambda: winapi.image_path(pid) is None, left_s)
+        assert gone, "the daemon waited on the silent peer"

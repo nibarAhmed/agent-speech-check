@@ -115,7 +115,7 @@ def test_window_helpers_without_a_sandbox() -> None:
         assert keeper.shown
         keeper.remember_focus()
         with keeper:  # the keeping thread starts, runs and stops
-            time.sleep(wsb.KEEP_WINDOW_EVERY_S * 3)
+            time.sleep(wsb.KEEP_WINDOW_EVERY_S * 3)  # noqa: TID251 (the thread runs a few ticks)
         assert keeper.shown
 
 
