@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit settings. The project rules live in CLAUDE.md, which CodeRabbit
+# CodeRabbit settings. The project rules live in AGENTS.md, which CodeRabbit
 # reads by default, so they aren't repeated here.
 language: en-US
 
@@ -24,7 +24,7 @@ reviews:
   finishing_touches:
     docstrings:
       enabled: false
-    # Our tests follow CLAUDE.md's testing policy; generated ones wouldn't.
+    # Our tests follow AGENTS.md's testing policy; generated ones wouldn't.
     unit_tests:
       enabled: false
   pre_merge_checks:

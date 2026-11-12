@@ -200,19 +200,10 @@ LAUNCH_SCRIPT = "launch.ps1"
 LAUNCH_PATH = f"{IN}\\{LAUNCH_SCRIPT}"
 NO_WINDOW_EXIT = 3
 
-# An app started through `wsb exec` doesn't get the foreground (Windows'
-# focus-stealing rules), so NVDA never hears of it (observed). This script
-# starts the app, waits for its new window, and brings it forward by attaching
-# to the foreground thread's input, the documented way to be allowed to.
-# A process's MainWindowHandle isn't always the window a user sees: mshta's is
-# a hidden "Internet Explorer_Hidden" window, which NVDA reads as "unknown"
-# (observed). So it leaves the focus alone when the app already has it, and
-# otherwise picks the app's topmost visible window with a title.
-# A batch file runs with `call` in the script's hidden console: `start` would
-# open a console for it, which NVDA reads and which takes the focus (observed).
-# After recent input that forced switch is silent: Windows tells NVDA nothing
-# (observed). So first, as `mouse.nudge` does on the host, it sends a mouse
-# input that moves nothing and lets any process take the foreground.
+# An app started through `wsb exec` doesn't get the foreground, so NVDA never hears of it. This
+# script lifts the foreground lock as `mouse.nudge` does, starts the app, and brings its topmost
+# visible titled window forward. A batch file runs with `call`, not `start`. Why each step, as
+# observed: docs/findings.md, "Starting an app" and the Windows Sandbox section before it.
 LAUNCH_PS1 = r"""param([string]$Command, [switch]$Batch)
 Add-Type @"
 using System;
