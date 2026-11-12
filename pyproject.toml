@@ -71,7 +71,8 @@ dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup -p no:cacheprovider"
-check = ["spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
+static = ["spell", "fmt-check", "lint", "types", "dead", "deps"]
+check = ["static", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.

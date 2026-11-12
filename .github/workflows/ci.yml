@@ -14,22 +14,33 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# uv reads the Python version from .python-version, here as in development.
 jobs:
-  check:
+  lint:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install
+        run: uv sync --locked
+      - name: Spelling, format, lint, types, dead code, deps
+        run: uv run poe static
+
+  test:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The version used in development, which the MSI also ships.
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          python-version: "3.12"
       - name: Install
         run: uv sync --locked
-      - name: Check (lint, types, dead code, deps, tests)
-        run: uv run poe check
+      - name: Tests
+        run: uv run poe test
 
   installer:
     runs-on: windows-latest
@@ -39,24 +50,17 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          python-version: "3.12"
       - name: Install
         run: uv sync --locked
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
       # Two builds of one version, as during development: the second must replace the first.
-      # The first is built with a newer Python, so its files have higher versions: Windows
-      # Installer must still put the second build's files in their place.
       - name: Build the MSI twice
         shell: pwsh
         run: |
-          $python = $env:UV_PYTHON
-          $env:UV_PYTHON = '3.13'
           uv run python scripts/build_installer.py
           Copy-Item (Get-Item dist\agent-speech-check-*.msi).FullName "$env:RUNNER_TEMP\first.msi"
-          $env:UV_PYTHON = $python
           uv run python scripts/build_installer.py
       - name: Install, upgrade, run and uninstall the MSI
         shell: pwsh
