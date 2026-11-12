@@ -26,6 +26,7 @@ from agent_speech_check.config.targets import defaults
 from agent_speech_check.daemon import ipc, session
 from agent_speech_check.daemon.session import sandbox_failure
 from agent_speech_check.errors import (
+    DaemonStartFailed,
     DownloadFailed,
     FileUnusable,
     InstallerInUse,
@@ -46,6 +47,7 @@ from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.windows import wait, winapi
+from agent_speech_check.windows.paths import mode_dir
 
 
 def test_kill_on_close_job_kills_the_child() -> None:
@@ -763,6 +765,16 @@ def test_a_mode_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
     assert str(blocked) in exc.value.message
 
 
-def test_a_relay_address_that_is_not_ours_is_left_to_the_daemon() -> None:
+def test_a_relay_address_that_is_not_ours_is_left_to_the_daemon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     # 192.0.2.1 is reserved for documentation, so no interface here has it.
-    session._check_port_free(replace(defaults("remote"), host="192.0.2.1"))
+    target = replace(defaults("remote"), host="192.0.2.1")
+    session._check_port_free(target)
+    # The daemon can't bind it, and its failed start says why from its log.
+    process = session._spawn(target, mode_dir("remote"))
+    with pytest.raises(DaemonStartFailed) as exc:
+        session._wait_started(process, mode_dir("remote"))
+    assert "it exited with code" in exc.value.message
+    assert "could not start" in exc.value.message

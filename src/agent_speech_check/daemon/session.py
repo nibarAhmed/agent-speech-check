@@ -213,7 +213,13 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
             raise AlreadyRunning(other.name)
     if target.port:
         _check_port_free(target)
-    process = _spawn(target, folder)
+    _wait_started(_spawn(target, folder), folder)
+    if target.launches_nvda:
+        return _wait_connected(target, folder)
+    return status(folder)
+
+
+def _wait_started(process: subprocess.Popen[bytes], folder: Path) -> None:
     if not poll_until(
         lambda: process.poll() is not None or state.exists(folder), START_TIMEOUT_S, POLL_S
     ):
@@ -221,9 +227,6 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     code = process.poll()
     if code is not None:
         raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
-    if target.launches_nvda:
-        return _wait_connected(target, folder)
-    return status(folder)
 
 
 def _check_port_free(target: Target) -> None:
