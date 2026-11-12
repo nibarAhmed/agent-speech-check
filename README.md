@@ -27,8 +27,8 @@ asc stop
 | Mode | Best for | What it does |
 |---|---|---|
 | `sandbox` | Isolated tests | Runs NVDA inside Windows Sandbox, away from your desktop. |
-| `desktop` | Local development and CI | Starts a portable NVDA with its own config. Its keys go to your desktop. |
-| `watch` | Listening to the NVDA you already run | Captures its speech and never sends keys. |
+| `desktop` | Local development and CI | Starts a portable NVDA with its own config. Won't start while another `nvda.exe` runs. Its keys go to your desktop. |
+| `watch` | Listening to the NVDA you already run | Captures its speech and never sends keys. On start, your NVDA asks to allow the connection: answer Yes. |
 | `shared` | Driving the NVDA you already run | Sends keys to your real session. Needs `--i-understand`. |
 
 Unsure? Use **sandbox**, or **desktop** for a simpler setup. Details are in the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes).
@@ -86,6 +86,7 @@ See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main
 Speech can include passwords and private messages, and `asc` can press keys. [SECURITY.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/SECURITY.md) lists what it promises and how to report a problem privately.
 
 - In `shared` and `desktop` mode, `Control+Shift+Alt+F12` (the `panic_key` setting) releases held keys and stops `asc` at once.
+- Each mode's folder holds its relay certificate and channel key: keep it private.
 - Speech is never written to a log, but command output can contain it: treat it as sensitive.
 
 ## Documentation

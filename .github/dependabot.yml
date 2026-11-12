@@ -1,4 +1,4 @@
-# GitHub's standard setup: weekly, one PR per ecosystem (groups). Updates wait a week after a
+# Weekly, one PR per ecosystem (groups). Updates wait a week after a
 # release (cooldown), so a compromised release is usually pulled before we take it. Security
 # updates are not delayed by the cooldown, and groups apply only to version updates, so each
 # security update still gets its own PR. The prefixes make Dependabot's PR titles
