@@ -20,7 +20,7 @@ asc stop
 
 - Windows 11.
 - NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
-- For sandbox mode: Windows 11 24H2 or later, Pro, Enterprise or Education, with Windows Sandbox turned on.
+- For sandbox mode: Windows 11 24H2 or later, Pro, Enterprise or Education, with Windows Sandbox turned on, and `asc sandbox-setup` run once (it asks for admin).
 
 ## Choose a mode
 
@@ -85,7 +85,7 @@ See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main
 
 Speech can include passwords and private messages, and `asc` can press keys. [SECURITY.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/SECURITY.md) lists what it promises and how to report a problem privately.
 
-- In `shared` and `desktop` mode, `Control+Shift+Alt+F12` (the `panic_key` setting) releases held keys and stops `asc` at once.
+- `shared` mode, and `desktop` mode when its NVDA runs on your computer, send keys to your real session. There `Control+Shift+Alt+F12` (the `panic_key` setting) releases held keys and stops `asc` at once.
 - Each mode's folder holds its relay certificate and channel key: keep it private.
 - Speech is never written to a log, but command output can contain it: treat it as sensitive.
 
