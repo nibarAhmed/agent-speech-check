@@ -2,6 +2,12 @@
 
 
 
+## Verification
+
+<!-- What you ran or tried, and what you saw. "Tests pass" alone isn't evidence. -->
+
+
+
 ## Checks
 
 - [ ] `uv run poe check` passes locally

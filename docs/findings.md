@@ -69,6 +69,13 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
   a PowerShell script in the session, which sends the still mouse input described
   in the next section, then waits for the new window and brings it forward
   (`AttachThreadInput`, then `SetForegroundWindow`).
+- A process's `MainWindowHandle` isn't always the window a user sees: `mshta`'s is a
+  hidden "Internet Explorer_Hidden" window, which NVDA reads as "unknown". So the
+  script leaves the focus alone when the app already has it, and otherwise picks
+  the app's topmost visible window with a title.
+- A batch file started with `start` opens a console of its own, which NVDA reads
+  and which takes the focus. The script runs it with `call` in its own hidden
+  console instead.
 
 
 ## Starting an app: the foreground lock

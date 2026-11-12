@@ -26,16 +26,16 @@ Contributions come in under the project's MIT license. There's no CLA.
 - Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
   Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
   Keep pull requests small.
-- CI must pass. The `e2e` check skips PRs that change only docs. It runs the real-NVDA tests on
-  a throwaway runner, but GitHub's runners have no Windows Sandbox, so run the sandbox tests
-  yourself when they apply (Setup, step 4).
+- CI must pass. The `e2e` check runs the real-NVDA tests on a throwaway runner, but GitHub's
+  runners have no Windows Sandbox, so run the sandbox tests yourself when they apply (Setup,
+  step 4).
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
 
 ## Rules
 
-Some of the most important rules (the full set is in [CLAUDE.md](CLAUDE.md)):
+Some of the most important rules (the full set is in [AGENTS.md](AGENTS.md)):
 
 - Tests first for new logic, a failing test first for a bug, no mocks of our own code, and never
   weaken a test to get green.

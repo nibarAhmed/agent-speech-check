@@ -10,6 +10,7 @@ permissions: {}
 jobs:
   pr-title:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check the title is a conventional commit
         # The title goes through env, never into the script, so it can't inject shell.

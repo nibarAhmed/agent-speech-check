@@ -1,11 +1,19 @@
 import os
+import re
 import shutil
 from pathlib import Path
 
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import main
+from agent_speech_check.cli import COMMANDS, main
+
+CLI_DOC = Path(__file__).parents[2] / "docs" / "cli.md"
+
+
+def test_cli_doc_has_a_section_per_command() -> None:
+    documented = re.findall(r"^### `asc ([a-z-]+)`$", CLI_DOC.read_text(encoding="utf-8"), re.M)
+    assert sorted(documented) == sorted(COMMANDS)
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:

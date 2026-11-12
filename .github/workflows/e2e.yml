@@ -3,11 +3,8 @@ name: e2e
 # The real-NVDA tests, on a hosted runner: a throwaway VM with no one's NVDA to
 # replace, so the tests start a portable NVDA here, as they do in Windows Sandbox.
 on:
-  # Skips only docs: a file left off this list runs the tests, it doesn't skip them.
+  # Every PR, docs too: a required check skipped by a path filter never reports.
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
   # Weekly too: asc downloads the latest NVDA, so a new NVDA release can break it
   # with no PR to run these. Monday 06:00 UTC.
   schedule:
@@ -31,8 +28,6 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        with:
-          python-version: "3.13"
       - name: Install
         run: uv sync --locked
       - name: Create a portable NVDA

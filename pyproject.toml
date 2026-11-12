@@ -43,6 +43,10 @@ packages = ["src/agent_speech_check"]
 [tool.hatch.build.targets.sdist]
 include = ["/src/agent_speech_check", "/LICENSE", "/README.md", "/pyproject.toml"]
 
+# The runner's python.org 3.15 has no python3t.dll, which cryptography needs in the frozen app.
+[tool.uv]
+python-preference = "only-managed"
+
 [dependency-groups]
 build = [
     "pyinstaller>=6.22.3",
@@ -71,7 +75,8 @@ dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup -p no:cacheprovider"
-check = ["spell", "fmt-check", "lint", "types", "dead", "deps", "test"]
+static = ["spell", "fmt-check", "lint", "types", "dead", "deps"]
+check = ["static", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.

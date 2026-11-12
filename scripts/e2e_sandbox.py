@@ -38,8 +38,8 @@ from pathlib import Path
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
 
-PYTHON = "3.13"
 REPO = Path(__file__).resolve().parents[1]
+PYTHON = (REPO / ".python-version").read_text(encoding="utf-8").strip()
 WORK = REPO / ".e2e"
 IN = WORK / "in"
 OUT = WORK / "out"
