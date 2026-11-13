@@ -86,7 +86,7 @@ SETUP = (
 
 @pytest.mark.parametrize("cls", SETUP, ids=lambda c: c.__name__)
 def test_missing_setup_exits_7_not_3(cls: type[errors.AscError]) -> None:
-    # Exit 3 means retry or asc start; these need get-nvda, sandbox-setup or a person.
+    # Exit 3 means retry or asc start; these need get-nvda, firewall-setup or a person.
     assert cls.exit_code == 7
 
 

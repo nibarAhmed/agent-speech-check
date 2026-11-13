@@ -19,6 +19,7 @@ the MSI from https://github.com/nibarAhmed/agent-speech-check/releases/latest, o
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation |
+| Press keys in NVDA on a VM the user set up | `remote` (the user starts and connects that NVDA; `launch` is refused) |
 
 ## Rules
 
@@ -28,17 +29,20 @@ the MSI from https://github.com/nibarAhmed/agent-speech-check/releases/latest, o
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
-- `asc sandbox-setup` shows an admin prompt: ask the user to run it.
+- `asc firewall-setup --mode sandbox` (or `--mode remote`) shows an admin
+  prompt: ask the user to run it.
 - Shared and desktop mode send keys to the user's desktop. Tell the user the
   panic key from `asc status` before you send any.
 - If the user names their own portable NVDA, set it for desktop or sandbox mode
   (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
   It runs with a copy of their settings; `asc` never writes their copy.
-- Never set `launch` yourself. A mode with `launch = false` starts no NVDA and
-  no sandbox (the user starts NVDA): none of the desktop or sandbox notes here
-  apply, and `launch` runs the command on this computer. In desktop mode it has
-  no panic key, yet its keys reach an NVDA on this computer, maybe the user's
-  own: send keys only if the user asked.
+- Never set `launch` yourself. Desktop mode with `launch = false` starts no
+  NVDA (the user starts one): it has no panic key, yet its keys reach an NVDA
+  on this computer, maybe the user's own: send keys only if the user asked.
+- When several agents share this computer, each may use its own instance:
+  `--instance NAME` (or `ASC_INSTANCE=NAME`) on every command gives it its own
+  config and daemon. Instances can't use watch or shared mode. A port another
+  instance holds makes `asc start` exit 4; its hint says how to pick another.
 
 ## Workflow
 
@@ -78,6 +82,9 @@ NVDA says, typed text included, so `asc stop` when you're done.
 - Sandbox mode: your own app must come from a folder in sandbox mode's `share`
   (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
 - Shared mode needs `asc start --mode shared --i-understand` every time.
+- Remote mode: the VM's NVDA connects only after the user ticks Enable Remote
+  Access in its settings, then connects as `asc status` says. Start the app on
+  the VM yourself or ask the user, then `asc wait`.
 
 ## Exit codes
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from agent_speech_check.config import prefs
+from agent_speech_check.config.targets import defaults
 
 
 @dataclass(frozen=True)
@@ -36,15 +37,17 @@ def default_of(choices: tuple[Choice, ...]) -> str:
     return name
 
 
-MODES = _choices(
-    prefs.MODES,
-    {
-        "watch": "listen to your own NVDA while you use it; never sends keys",
-        "desktop": "asc runs its own silent NVDA on this desktop",
-        "sandbox": "asc runs its own NVDA inside Windows Sandbox",
-        "shared": "asc presses keys in your own NVDA, in your own session",
-    },
-    default="watch",
+_MODE_ABOUT = {
+    "watch": "listen to your own NVDA while you use it; never sends keys",
+    "desktop": "asc runs its own silent NVDA on this desktop",
+    "sandbox": "asc runs its own NVDA inside Windows Sandbox",
+    "shared": "asc presses keys in your own NVDA, in your own session",
+    "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
+}
+MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
+# A named instance can't join your own NVDA (watch and shared mode).
+INSTANCE_MODES = _choices(
+    tuple(m for m in prefs.MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
 )
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
@@ -65,7 +68,7 @@ LAYOUTS = _choices(
     default="desktop",  # keys_layout's default in prefs
 )
 # Fails at import unless each question has exactly one default.
-for _question in (MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
+for _question in (MODES, INSTANCE_MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
     default_of(_question)
 
 
@@ -126,6 +129,7 @@ class Answers:
     share: tuple[str, ...] = ()
     window: str = default_of(WINDOWS)
     keys_layout: str = default_of(LAYOUTS)
+    port: int | None = None  # None: the mode's default
 
 
 def _every_answer(labels: dict[str, str]) -> dict[str, str]:
@@ -140,6 +144,7 @@ LABELS = _every_answer(
         "share": "Shared folders",
         "window": "Window",
         "keys_layout": "Keyboard layout",
+        "port": "Port",
     }
 )
 
@@ -157,6 +162,7 @@ QUESTIONS = _per_mode(
         "desktop": ("nvda_dir",),
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
+        "remote": ("keys_layout", "port"),
     }
 )
 
@@ -171,6 +177,8 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["share"] = list(answers.share)
     if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
+    if answers.port not in (None, defaults(answers.mode).port):
+        table["port"] = answers.port
     data: dict[str, Any] = {"mode": answers.mode}
     if table:
         data[answers.mode] = table
@@ -190,11 +198,11 @@ def summary_lines(answers: Answers) -> list[str]:
     return ["Your settings:", *_columns(rows)]
 
 
-def _shown(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
+def _shown(value: str | tuple[str, ...] | int | None) -> tuple[str, ...]:
     """An answer as the summary says it, one line per folder. No NVDA folder
     means asc's own NVDA."""
     if value is None:
         return (default_of(NVDA_SOURCES),)
     if isinstance(value, tuple):
         return value or ("none",)
-    return (value,)
+    return (str(value),)

@@ -43,8 +43,9 @@ from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.validate import Fields
 
 WATCH_PORT = 6837
-# Fixed, so the one firewall rule `asc sandbox-setup` makes keeps matching.
+# Fixed, so the firewall rule `asc firewall-setup` makes keeps matching.
 SANDBOX_PORT = 16837
+REMOTE_PORT = 26837
 _PANIC = parse_hotkey(PANIC_KEY)
 
 
@@ -56,6 +57,7 @@ class Target:
     nvda_dir: str | None = None
     share: tuple[str, ...] = ()
     window: str | None = None  # sandbox mode; None: the default, tray
+    host: str | None = None  # remote mode; None: the Default Switch address
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
@@ -86,6 +88,7 @@ class Target:
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
+            host=f.opt_text("host", max_len=40),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent"),
             panic_key=parse_hotkey(f.text("panic_key", max_len=40)),
@@ -116,7 +119,12 @@ class Target:
     @property
     def launches_sandbox(self) -> bool:
         """asc starts NVDA inside Windows Sandbox (sandbox mode)."""
-        return self.mode == "sandbox" and self.launch
+        return self.mode == "sandbox"
+
+    @property
+    def listens_outside(self) -> bool:
+        """NVDA on another machine joins, so the relay listens beyond loopback."""
+        return self.mode in ("sandbox", "remote")
 
     @property
     def launches_nvda(self) -> bool:
@@ -139,6 +147,12 @@ class Target:
 
 
 def _checked(target: Target, where: str) -> Target:
+    if target.launch and target.mode != "desktop":
+        raise bad_field(UsageError, f"{where} launch", "only in desktop mode", target.launch)
+    if target.host is not None:
+        if target.mode != "remote":
+            raise bad_field(UsageError, f"{where} host", "only in remote mode", target.host)
+        prefs.BY_NAME["host"].check(target.host, where)
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
@@ -161,12 +175,13 @@ def _checked(target: Target, where: str) -> Target:
 
 
 def defaults(mode: str) -> Target:
-    ports = {"watch": WATCH_PORT, "shared": WATCH_PORT, "sandbox": SANDBOX_PORT}
-    return Target(
-        mode,
-        ports.get(mode, 0),
-        launch=mode in ("desktop", "sandbox"),
-    )
+    ports = {
+        "watch": WATCH_PORT,
+        "shared": WATCH_PORT,
+        "sandbox": SANDBOX_PORT,
+        "remote": REMOTE_PORT,
+    }
+    return Target(mode, ports.get(mode, 0), launch=mode == "desktop")
 
 
 def parse(text: str, where: str) -> dict[str, Any]:
@@ -198,6 +213,8 @@ def _from_table(mode: str, raw: object, file: str) -> Target:
     where = f"{file}: [{mode}]"
     f = Fields(raw, where, UsageError, prefs.MODE_KEYS)
     values = _checked_values(f, prefs.MODE_KEYS)
+    if "launch" in values and mode != "desktop":
+        raise bad_field(UsageError, f"{where} launch", "only in desktop mode", values["launch"])
     settings = tuple(
         Setting.parse(text, f"{where} nvda_settings") for text in values.get("nvda_settings", [])
     )

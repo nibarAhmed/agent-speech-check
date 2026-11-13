@@ -11,6 +11,7 @@ A command default in `[defaults]` gives way to its flag on the command line.
 from __future__ import annotations
 
 import difflib
+import ipaddress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,7 +29,7 @@ from agent_speech_check.validate import Fields
 GLOBAL = "global"
 PER_MODE = "per mode"
 
-MODES = ("watch", "desktop", "sandbox", "shared")
+MODES = ("watch", "desktop", "sandbox", "shared", "remote")
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
 # taskbar, or left alone.
 WINDOWS = ("tray", "taskbar", "show")
@@ -41,7 +42,7 @@ type Value = str | int | bool | list[str]
 class Pref:
     name: str
     scope: str
-    kind: str  # bool, int, choice, hotkey, path, paths or settings
+    kind: str  # bool, int, choice, address, hotkey, path, paths or settings
     default: str | int | bool | None = None  # None: none, or it depends on the mode
     low: int = 0
     high: int = 0
@@ -51,7 +52,7 @@ class Pref:
     def is_list(self) -> bool:
         return self.kind in ("paths", "settings")
 
-    def check(self, raw: object, where: str) -> Value:
+    def check(self, raw: object, where: str) -> Value:  # noqa: PLR0911 - one return per kind
         """A value from the file, checked on its own. Rules across settings
         (window outside sandbox mode, say) are checked on the whole table."""
         f = Fields({self.name: raw}, where, UsageError)
@@ -61,6 +62,8 @@ class Pref:
             return f.number(self.name, low=self.low, high=self.high)
         if self.kind == "choice":
             return f.choice(self.name, self.choices)
+        if self.kind == "address":
+            return _address(f.text(self.name, max_len=40), f"{where} {self.name}")
         if self.kind in ("path", "paths"):
             one = self.kind == "path"
             paths = [f.text(self.name, max_len=1000)] if one else list(f.strings(self.name))
@@ -113,6 +116,7 @@ PREFS: tuple[Pref, ...] = (
     Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
     Pref("port", PER_MODE, "int", low=1, high=65535),
     Pref("launch", PER_MODE, "bool"),
+    Pref("host", PER_MODE, "address"),
     Pref("nvda_dir", PER_MODE, "path"),
     Pref("share", PER_MODE, "paths"),
     Pref("window", PER_MODE, "choice", choices=WINDOWS),
@@ -128,6 +132,20 @@ BY_NAME = {pref.name: pref for pref in PREFS}
 # Keys each part of the file may hold.
 MODE_KEYS = tuple(p.name for p in PREFS if p.scope == PER_MODE)
 DEFAULTS_KEYS = tuple(p.name for p in PREFS if p.scope == GLOBAL and p.name != "mode")
+
+
+def _address(text: str, where: str) -> str:
+    """One IPv4 address of this computer that the other machine can reach. Not
+    loopback: an NVDA on this computer has shared mode, with its consent and panic key."""
+    try:
+        address = ipaddress.IPv4Address(text)
+    except ValueError:
+        address = None
+    if address is None or address.is_unspecified or address.is_loopback:
+        raise bad_field(
+            UsageError, where, "an IPv4 address of this computer, like 172.20.0.1", text
+        )
+    return str(address)
 
 
 def find(name: str) -> Pref:

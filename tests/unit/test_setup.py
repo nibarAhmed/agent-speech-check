@@ -39,7 +39,7 @@ class Asker:
 
 def test_prompts_are_plain_words() -> None:
     prompt = setup.choice_prompt(setup.MODES)
-    assert prompt == "Choose 1 to 4: "
+    assert prompt == "Choose 1 to 5: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
 
@@ -92,7 +92,14 @@ def test_summary_says_none_and_your_folder() -> None:
 
 @pytest.mark.parametrize(
     ("answer", "picked"),
-    [("", "watch"), ("2", "desktop"), (" Sandbox ", "sandbox"), ("5", None), ("x", None)],
+    [
+        ("", "watch"),
+        ("2", "desktop"),
+        (" Sandbox ", "sandbox"),
+        ("5", "remote"),
+        ("6", None),
+        ("x", None),
+    ],
 )
 def test_pick(answer: str, picked: str | None) -> None:
     assert setup.pick(answer, setup.MODES) == picked
@@ -160,6 +167,29 @@ def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture
     # The warning comes with the choice of mode, before the next question.
     assert out.index("--i-understand at every asc start") < out.index("keyboard layout")
     assert load(root / "config.toml").resolve(None).mode == "shared"
+
+
+def test_setup_remote_takes_a_port_no_other_instance_has(
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = root / "instances" / "vm1"
+    other.mkdir(parents=True)
+    (other / "config.toml").write_text('mode = "remote"\n', encoding="utf-8")
+    # Another starts remote mode only with --mode, on a port of its own.
+    third = root / "instances" / "vm3"
+    third.mkdir()
+    (third / "config.toml").write_text("[remote]\nport = 26838\n", encoding="utf-8")
+    monkeypatch.setenv("ASC_INSTANCE", "vm2")
+    # Mode (an instance can't join your own NVDA, so remote is the default),
+    # keyboard layout, no firewall rule now, save.
+    run_setup(Asker("watch", "", "", "n", "y"), replace_without_asking=False)
+    out = capsys.readouterr().out
+    assert "Answer 1 to 3, or a name." in out
+    assert "Note: port 26839, as another instance's remote mode has 26837." in out
+    assert "  Port:             26839\n" in out
+    # The firewall rule offered is for that port.
+    assert "Run asc firewall-setup --mode remote --instance vm2 later." in out
+    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).port == 26839
 
 
 def test_setup_without_sandbox_says_how_to_get_it(
@@ -234,7 +264,7 @@ def test_config_set_get_list_unset(root: Path, capsys: pytest.CaptureFixture[str
     assert "settle_ms = 700 (global)\n" in out
     assert "nvda_dir = none (default)\n" in out
     assert run(capsys, "config", "get", "port", "--mode", "sandbox")[1] == "7000\n"
-    assert run(capsys, "config", "get", "launch", "--mode", "sandbox")[1] == "true\n"
+    assert run(capsys, "config", "get", "launch", "--mode", "sandbox")[1] == "false\n"
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
@@ -255,6 +285,13 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", "window", "show")
     assert code == 2
     assert "window: expected only in sandbox mode" in err
+    # asc launches no NVDA in remote mode, and always one in sandbox mode.
+    code, _, err = run(capsys, "config", "set", "launch", "false", "--mode", "sandbox")
+    assert code == 2
+    assert "[sandbox] launch: expected only in desktop mode" in err
+    code, _, err = run(capsys, "config", "set", "host", "172.20.0.1", "--mode", "sandbox")
+    assert code == 2
+    assert "host: expected only in remote mode" in err
     assert not (root / "config.toml").exists()
 
 
