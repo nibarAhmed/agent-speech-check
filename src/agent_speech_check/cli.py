@@ -460,7 +460,7 @@ def cmd_firewall_setup(args: argparse.Namespace) -> int:
     target = _target(args)
     if not target.listens_outside:
         raise NoFirewallNeeded(target.mode)
-    if target.mode == "sandbox":
+    if target.launches_sandbox:
         wsb.require_available()
     if firewall.rule_ok(target.mode, target.port):
         print(f"firewall rule already in place for port {target.port}")
@@ -652,8 +652,8 @@ def _firewall_now(ask: Ask, mode: str, port: int) -> None:
 
 
 def _ask_mode(ask: Ask) -> str:
+    modes = setup.MODES if paths.instance() is None else setup.INSTANCE_MODES
     while True:
-        modes = setup.MODES if paths.instance() is None else setup.INSTANCE_MODES
         mode = _ask_choice(ask, "How should asc work with NVDA?", modes)
         if mode == "sandbox":
             try:
