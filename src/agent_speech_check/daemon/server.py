@@ -188,6 +188,7 @@ class Daemon:
         self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
+        self.shown_host = relay.HOST
         # Commands in progress, in no set order. Status shows them, so a client can tell a
         # command has begun: each one takes its starting point before its first await.
         self.running: list[str] = []
@@ -237,7 +238,7 @@ class Daemon:
             "mode": self.target.mode,
             "keys": self.target.keys,
             "connected": self.relay.connected,
-            "host": f"{self.relay.host}:{self.relay.port}",
+            "host": f"{self.shown_host}:{self.relay.port}",
             "channel": self.relay.credentials.channel,
             "fingerprint": self.relay.credentials.fingerprint,
             "nvda_mode": self.speech.mode,
@@ -367,6 +368,11 @@ class Daemon:
         self._start_panic_key()
         host = await asyncio.to_thread(relay_host, self.target)
         relay_server = await self.relay.start(self.target.port, host)
+        # A VM's NVDA keeps the host it was given; the Default Switch address drifts.
+        if self.target.mode == "remote" and self.target.host is None:
+            self.shown_host = await asyncio.to_thread(firewall.switch_name, host)
+        else:
+            self.shown_host = host
         token = secrets.token_urlsafe(32)
         ipc_server = await asyncio.start_server(
             functools.partial(ipc.serve_one, token, self.handle),

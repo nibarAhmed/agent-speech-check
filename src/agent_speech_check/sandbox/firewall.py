@@ -19,6 +19,7 @@ from __future__ import annotations
 import ipaddress
 import os
 import sys
+from pathlib import Path
 
 from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch, PowerShellTimedOut
 from agent_speech_check.windows import paths, winapi
@@ -77,6 +78,16 @@ def parse_address(output: str) -> str | None:
     return None
 
 
+def parse_ics_name(hosts: str, address: str) -> str | None:
+    """This computer's name on the Default Switch, from `hosts.ics`. Lowercase,
+    because NVDA lowercases the host before it looks up the certificate it trusts."""
+    for line in hosts.splitlines():
+        match line.split("#", 1)[0].split():
+            case [ip, name, *_] if ip == address:
+                return name.lower()
+    return None
+
+
 # ---------------------------------------------------------------- the thin shell
 
 
@@ -95,6 +106,17 @@ def default_switch_address() -> str:
     if address is None:
         raise NoDefaultSwitch(INTERFACE)
     return address
+
+
+def switch_name(address: str) -> str:
+    """The name a VM on the Default Switch resolves to `address`, which lasts when
+    the address changes, or the address itself when Windows lists no name."""
+    hosts_ics = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"), r"System32\drivers\etc\hosts.ics")
+    try:
+        hosts = hosts_ics.read_text("utf-8", "replace")
+    except OSError:
+        return address
+    return parse_ics_name(hosts, address) or address
 
 
 def rule_ok(mode: str, port: int) -> bool:

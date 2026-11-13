@@ -82,8 +82,9 @@ NVDA says, typed text included, so `asc stop` when you're done.
 - Sandbox mode: your own app must come from a folder in sandbox mode's `share`
   (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
 - Shared mode needs `asc start --mode shared --i-understand` every time.
-- Remote mode: start the app on the VM yourself or ask the user, then
-  `asc wait`.
+- Remote mode: the VM's NVDA connects only after the user ticks Enable Remote
+  Access in its settings, then connects as `asc status` says. Start the app on
+  the VM yourself or ask the user, then `asc wait`.
 
 ## Exit codes
 

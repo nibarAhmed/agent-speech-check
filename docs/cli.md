@@ -186,12 +186,17 @@ the network. `asc` launches nothing: you start that NVDA and connect its
 Remote Access as `asc status` says (allow this computer to be controlled).
 Its keys land on that machine, so there is no panic key.
 
+- A new NVDA has Remote Access off: tick Enable Remote Access in its settings
+  (Remote Access category) first, or Tools has no Remote Access menu.
 - Needs `asc firewall-setup --mode remote` done once for its port (exit 7 with
   that hint otherwise).
 - The relay listens on remote mode's `host`, or else on this computer's
   Hyper-V Default Switch address (looked up at every start; exit 7 if there is
   none), on port 26837 unless remote mode's `port` says another. `host` must be
   an IPv4 address of this computer; loopback and `0.0.0.0` are refused (exit 2).
+- Without `host`, `asc status` gives this computer's name on the Default Switch
+  (like `desktop-1.mshome.net`) rather than its address, which changes over
+  time, so a VM's NVDA keeps finding `asc`.
 - `asc launch` is refused (exit 4): start the app on that machine, then
   `asc wait`.
 - To give each agent its own VM, run one [instance](#instances) per VM, each

@@ -42,6 +42,12 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
   an hour after the last sandbox closed, `vEthernet (Default Switch)` was gone.
   Starting a sandbox made it again with a new interface id (`3B811EAC...` became
   `DCBD0D9D...`) and, on other days, a new address.
+- **The name lasts.** `C:\Windows\System32\drivers\etc\hosts.ics` maps the
+  host's name (`DESKTOP-E1Q2MEQ.mshome.net`) to the switch's current address,
+  and a guest gets the host as its DNS server with suffix `mshome.net`. NVDA in
+  a sandbox connected by that name. The name must be lowercase: NVDA lowercases
+  the host before it looks up its trusted certificates, so a trust saved under
+  the mixed-case name failed with "Certificate validation failed".
 - **A firewall rule on that interface dies with it.** A rule made with
   `-InterfaceAlias 'vEthernet (Default Switch)'` is stored with the id the
   interface had then (`IF={...}` in the registry), not the name. After the
