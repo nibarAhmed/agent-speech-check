@@ -43,7 +43,7 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
   Starting a sandbox made it again with a new interface id (`3B811EAC...` became
   `DCBD0D9D...`) and, on other days, a new address.
 - **The name lasts.** `C:\Windows\System32\drivers\etc\hosts.ics` maps the
-  host's name (`DESKTOP-E1Q2MEQ.mshome.net`) to the switch's current address,
+  host's name (`DESKTOP-ABC1234.mshome.net`) to the switch's current address,
   and a guest gets the host as its DNS server with suffix `mshome.net`. NVDA in
   a sandbox connected by that name. The name must be lowercase: NVDA lowercases
   the host before it looks up its trusted certificates, so a trust saved under

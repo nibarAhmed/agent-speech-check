@@ -47,10 +47,10 @@ def test_parse_ics_name() -> None:
     hosts = (
         "# Copyright (c) 1993-2001 Microsoft Corp.\r\n\r\n"
         "172.25.151.95 77dc45fb-f87d.mshome.net # 2026 11 3 18 21 53 57 307\r\n"
-        "172.24.64.1 DESKTOP-E1Q2MEQ.mshome.net # 2031 11 2 11 23 51 28 356\r\n"
+        "172.24.64.1 DESKTOP-ABC1234.mshome.net # 2031 11 2 11 23 51 28 356\r\n"
     )
     # NVDA lowercases the host before it looks up the certificate it trusts.
-    assert firewall.parse_ics_name(hosts, "172.24.64.1") == "desktop-e1q2meq.mshome.net"
+    assert firewall.parse_ics_name(hosts, "172.24.64.1") == "desktop-abc1234.mshome.net"
     assert firewall.parse_ics_name(hosts, "172.24.64.11") is None
     assert firewall.parse_ics_name("", "172.24.64.1") is None
 
