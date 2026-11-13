@@ -670,6 +670,9 @@ the firewall rule sandbox or remote mode needs. Timings are not asked; change th
 - Without a terminal it exits 2 at once, so a script never waits on it. Use
   `asc config` there.
 - It refuses with exit 4 while `asc` runs.
+- In a named [instance](#instances) it offers only desktop, sandbox and remote
+  mode (remote by default). Remote mode takes the first port from 26837 that no
+  other instance's remote mode has.
 
 ### `asc config`
 
