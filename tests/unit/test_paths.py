@@ -72,7 +72,7 @@ def test_instance_names(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 @pytest.mark.parametrize(
-    "name", ["-a", "VM1", "a_b", "..", "a\b", "a/b", "x" * 33, "con", "nul", "com1", "lpt9"]
+    "name", ["-a", "VM1", "a_b", "..", r"a\b", "a/b", "x" * 33, "con", "nul", "com1", "lpt9"]
 )
 def test_bad_instance_names(name: str) -> None:
     with pytest.raises(BadInstance):

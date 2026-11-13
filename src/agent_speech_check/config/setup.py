@@ -37,16 +37,17 @@ def default_of(choices: tuple[Choice, ...]) -> str:
     return name
 
 
-MODES = _choices(
-    prefs.MODES,
-    {
-        "watch": "listen to your own NVDA while you use it; never sends keys",
-        "desktop": "asc runs its own silent NVDA on this desktop",
-        "sandbox": "asc runs its own NVDA inside Windows Sandbox",
-        "shared": "asc presses keys in your own NVDA, in your own session",
-        "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
-    },
-    default="watch",
+_MODE_ABOUT = {
+    "watch": "listen to your own NVDA while you use it; never sends keys",
+    "desktop": "asc runs its own silent NVDA on this desktop",
+    "sandbox": "asc runs its own NVDA inside Windows Sandbox",
+    "shared": "asc presses keys in your own NVDA, in your own session",
+    "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
+}
+MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
+# A named instance can't join your own NVDA (watch and shared mode).
+INSTANCE_MODES = _choices(
+    tuple(m for m in prefs.MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
 )
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
@@ -67,7 +68,7 @@ LAYOUTS = _choices(
     default="desktop",  # keys_layout's default in prefs
 )
 # Fails at import unless each question has exactly one default.
-for _question in (MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
+for _question in (MODES, INSTANCE_MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
     default_of(_question)
 
 

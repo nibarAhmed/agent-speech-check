@@ -653,7 +653,8 @@ def _firewall_now(ask: Ask, mode: str, port: int) -> None:
 
 def _ask_mode(ask: Ask) -> str:
     while True:
-        mode = _ask_choice(ask, "How should asc work with NVDA?", setup.MODES)
+        modes = setup.MODES if paths.instance() is None else setup.INSTANCE_MODES
+        mode = _ask_choice(ask, "How should asc work with NVDA?", modes)
         if mode == "sandbox":
             try:
                 wsb.require_available()

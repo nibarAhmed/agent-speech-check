@@ -278,7 +278,8 @@ own VM with remote mode.
   or digit (exit 2 otherwise).
 - Every instance shares the portable NVDA that `asc get-nvda` makes.
 - Watch and shared mode use your own NVDA, which only the default instance
-  may join: an instance refuses them (exit 4).
+  may join: an instance refuses them (exit 4), and its `asc setup` doesn't
+  offer them (remote is its default).
 - Ports must differ between running instances: `asc start` refuses one in use
   (exit 4). Desktop mode picks a free one, and `asc setup` gives remote mode the
   first port from 26837 that no other instance's config uses.

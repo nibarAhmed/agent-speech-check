@@ -180,9 +180,11 @@ def test_setup_remote_takes_a_port_no_other_instance_has(
     third.mkdir()
     (third / "config.toml").write_text("[remote]\nport = 26838\n", encoding="utf-8")
     monkeypatch.setenv("ASC_INSTANCE", "vm2")
-    # Mode, keyboard layout, no firewall rule now, save.
-    run_setup(Asker("remote", "", "n", "y"), replace_without_asking=False)
+    # Mode (an instance can't join your own NVDA, so remote is the default),
+    # keyboard layout, no firewall rule now, save.
+    run_setup(Asker("watch", "", "", "n", "y"), replace_without_asking=False)
     out = capsys.readouterr().out
+    assert "Answer 1 to 3, or a name." in out
     assert "Note: port 26839, as another instance's remote mode has 26837." in out
     assert "  Port:             26839\n" in out
     # The firewall rule offered is for that port.
