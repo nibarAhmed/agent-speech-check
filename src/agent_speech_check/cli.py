@@ -53,7 +53,7 @@ NVDA says as text, and check it.
 
 typical use:
   asc setup                    choose your settings (once)
-  asc start                    start recording (watch mode: your own NVDA)
+  asc start                    start recording in your configured mode
   asc status                   how NVDA should connect, and whether it is
   asc mark                     print the latest line number, N
   asc wait --since N "OK"      block until NVDA says it after line N (regex)
