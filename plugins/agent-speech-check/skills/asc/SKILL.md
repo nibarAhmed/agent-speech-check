@@ -13,9 +13,9 @@ the MSI from https://github.com/nibarAhmed/agent-speech-check/releases/latest, o
 
 ## Mode
 
-`asc start` uses the mode the user configured (`asc config` shows it). Pass
-`--mode` only when the user asks for a mode. If the configured mode can't do the
-task, stop and ask the user to switch, naming the mode this table suggests:
+`asc start` uses the configured mode (`asc config` shows it). Pass `--mode`
+only when the user asks for a mode. If the configured mode can't do the task,
+stop and ask the user to switch to the mode this table suggests:
 
 | Need | Mode |
 |---|---|
