@@ -11,11 +11,15 @@ the MSI from https://github.com/nibarAhmed/agent-speech-check/releases/latest, o
 `uv tool install git+https://github.com/nibarAhmed/agent-speech-check`. `asc --help` and
 `asc <command> --help` are short and exact; trust them over this file.
 
-## Pick the mode
+## Mode
+
+`asc start` uses the configured mode (`asc config` shows it). Pass `--mode`
+only when the user asks for a mode. If the configured mode can't do the task,
+stop and ask the user to switch to the mode this table suggests:
 
 | Need | Mode |
 |---|---|
-| Hear the user's own NVDA while you act some other way (browser tools, tests, the user) | `watch` (default, never sends keys) |
+| Hear the user's own NVDA while you act some other way (browser tools, tests, the user) | `watch` (never sends keys) |
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation |
@@ -47,7 +51,7 @@ the MSI from https://github.com/nibarAhmed/agent-speech-check/releases/latest, o
 ## Workflow
 
 ```
-asc start                         # the mode setting, or --mode M
+asc start                         # the configured mode
 asc mark                          # mark: 40, before each step
 ...act (click, navigate, run the test)...
 asc wait --since 40 "(?i)saved"
