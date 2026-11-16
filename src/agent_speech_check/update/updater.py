@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import http.client
 import json
 import logging
 import os
@@ -30,8 +31,7 @@ import psutil
 from agent_speech_check import __version__
 from agent_speech_check.config.targets import load
 from agent_speech_check.daemon import spawn, state
-from agent_speech_check.errors import AscError, DownloadFailed
-from agent_speech_check.nvda.launcher import failing_as_download
+from agent_speech_check.errors import AscError
 from agent_speech_check.windows import winapi
 from agent_speech_check.windows.paths import base_root, every_root, write_atomic
 from agent_speech_check.windows.wait import poll_until
@@ -192,6 +192,9 @@ def run() -> None:
             log.info("up to date: %s", __version__)
             return
         msi = download(release)
+        if msi is None:
+            log.warning("the MSI's SHA-256 is not the one GitHub lists")
+            return
         idle = poll_until(lambda: not (_running() or winapi.others_running(exe)), IDLE_WAIT_S, 0.5)
         if not idle or not enabled():
             # Again at the next asc stop; the MSI is kept.
@@ -200,16 +203,14 @@ def run() -> None:
             return
         install(msi)
         log.info("installing %s over %s", release.name, __version__)
-    except DownloadFailed as error:
-        log.warning("%s", error.message)
+    # URLError is an OSError. A reply that isn't HTTP raises HTTPException.
+    except (OSError, http.client.HTTPException) as error:
+        log.warning("update check failed: %s", getattr(error, "reason", error))
 
 
 def latest() -> Release | None:
     request = urllib.request.Request(LATEST_URL, headers={"Accept": "application/vnd.github+json"})
-    with (
-        failing_as_download(LATEST_URL),
-        urllib.request.urlopen(request, timeout=LOOKUP_TIMEOUT_S) as response,  # noqa: S310 - fixed https URL
-    ):
+    with urllib.request.urlopen(request, timeout=LOOKUP_TIMEOUT_S) as response:  # noqa: S310 - fixed https URL
         text = response.read(LOOKUP_MAX_BYTES)
     try:
         return parse_release(json.loads(text))
@@ -222,8 +223,8 @@ def _sha256(path: Path) -> str:
         return hashlib.file_digest(file, "sha256").hexdigest()
 
 
-def download(release: Release) -> Path:
-    """The release's MSI, checked against its SHA-256. Kept until a newer one."""
+def download(release: Release) -> Path | None:
+    """The release's MSI, if it matches its SHA-256. Kept until a newer one."""
     msi = folder() / f"agent-speech-check-{release.name}.msi"
     msi.parent.mkdir(parents=True, exist_ok=True)
     if msi.exists() and _sha256(msi) == release.sha256:
@@ -233,13 +234,12 @@ def download(release: Release) -> Path:
     partial = msi.with_suffix(".part")
     try:
         with (
-            failing_as_download(release.url),
             urllib.request.urlopen(release.url, timeout=DOWNLOAD_TIMEOUT_S) as response,  # noqa: S310 - https URL under DOWNLOAD_PREFIX
             partial.open("wb") as file,
         ):
             shutil.copyfileobj(response, file)
         if _sha256(partial) != release.sha256:
-            raise DownloadFailed(release.url, "its SHA-256 is not the one GitHub lists")
+            return None
         partial.replace(msi)
     finally:
         partial.unlink(missing_ok=True)

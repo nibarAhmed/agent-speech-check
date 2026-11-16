@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -110,3 +111,17 @@ def test_installing_only_while_that_process_lives(
     assert not updater.installing()
     updater.marker().write_text("not json", encoding="utf-8")
     assert not updater.installing()
+
+
+def test_download_keeps_only_an_msi_with_the_listed_sha256(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    source = tmp_path / "served.msi"
+    source.write_bytes(b"msi")
+    good = hashlib.sha256(b"msi").hexdigest()
+    assert updater.download(Release((0, 5, 0), source.as_uri(), SHA)) is None
+    assert not list(updater.folder().iterdir())
+    msi = updater.download(Release((0, 5, 0), source.as_uri(), good))
+    assert msi is not None
+    assert msi.read_bytes() == b"msi"

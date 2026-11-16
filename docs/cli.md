@@ -94,7 +94,7 @@ An `asc` installed by the MSI keeps itself up to date:
   does: your settings and data stay. It never installs an older version.
 - It installs only while no `asc` runs. If one does, it tries again after the
   next `asc stop`.
-- While it installs (a few seconds), every command exits 4 with the hint to
+- While it installs, every command exits 4 with the hint to
   try again in a minute.
 - `asc config set auto_update false` turns it off. `false` in any instance's
   `config.toml` turns it off for all of them, since they share one `asc`.

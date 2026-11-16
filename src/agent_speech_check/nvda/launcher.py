@@ -122,7 +122,7 @@ def parse_release(text: str) -> Release | None:
 
 
 @contextmanager
-def failing_as_download(url: str) -> Iterator[None]:
+def _failing_as_download(url: str) -> Iterator[None]:
     """Turn what a failed fetch of `url` raises into DownloadFailed."""
     try:
         yield
@@ -137,7 +137,7 @@ def failing_as_download(url: str) -> Iterator[None]:
 def _read_update_check(into: list[str | DownloadFailed]) -> None:
     try:
         with (
-            failing_as_download(UPDATE_URL),
+            _failing_as_download(UPDATE_URL),
             urllib.request.urlopen(UPDATE_URL, timeout=LOOKUP_TIMEOUT_S) as response,
         ):
             into.append(response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace"))
@@ -254,7 +254,7 @@ def download(version: str, sha1: str | None = None) -> Path:
         url = installer_url(version)
         try:
             with (
-                failing_as_download(url),
+                _failing_as_download(url),
                 urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response,  # noqa: S310 - fixed https URL
                 partial.open("wb") as file,
             ):
