@@ -361,14 +361,20 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
 @pytest.mark.usefixtures("env")
 def test_commands_refuse_while_an_update_installs() -> None:
     installer = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+    check = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
     try:
-        updater.mark_installing(installer.pid)
+        updater.mark(updater.marker(), installer.pid)
+        updater.mark(updater.checking(), check.pid)
         busy = run_asc("status")
         assert busy.returncode == Updating.exit_code
         assert "installing an update" in busy.stderr
-        # The installer's own step to stop every daemon still runs.
+        # The installer's own step to stop every daemon still runs, and ends
+        # an update check that would otherwise outlive the install.
         assert run_asc("_stop_all").returncode == 0
+        assert check.poll() is not None
+        assert installer.poll() is None
     finally:
-        installer.kill()
-        installer.wait()
+        for process in (installer, check):
+            process.kill()
+            process.wait()
     assert run_asc("status").returncode == NotRunning.exit_code

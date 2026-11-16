@@ -26,8 +26,6 @@ import winreg
 from dataclasses import dataclass
 from pathlib import Path
 
-import psutil
-
 from agent_speech_check import __version__
 from agent_speech_check.config.targets import load
 from agent_speech_check.daemon import spawn, state
@@ -80,10 +78,11 @@ def _version(text: str) -> tuple[int, int, int] | None:
 
 def parse_release(raw: object) -> Release | None:
     """GitHub's latest release, if it has an MSI from this repo with a SHA-256."""
-    if not isinstance(raw, dict) or not isinstance(raw.get("tag_name"), str):
+    if not isinstance(raw, dict):
         return None
-    version = _version(raw["tag_name"].removeprefix("v"))
-    if version is None or not raw["tag_name"].startswith("v"):
+    tag = raw.get("tag_name")
+    version = _version(tag[1:]) if isinstance(tag, str) and tag.startswith("v") else None
+    if version is None:
         return None
     name = f"agent-speech-check-{'.'.join(map(str, version))}.msi"
     assets = raw.get("assets")
@@ -139,20 +138,39 @@ def installed_exe() -> Path | None:
     return exe if same else None
 
 
-def mark_installing(pid: int) -> None:
-    started = psutil.Process(pid).create_time()
-    marker().parent.mkdir(parents=True, exist_ok=True)
-    write_atomic(marker(), json.dumps({"pid": pid, "started": started}))
+def checking() -> Path:
+    """Names the `asc _update` that `asc stop` started, so the installer can end it."""
+    return folder() / "checking.json"
+
+
+def mark(path: Path, pid: int) -> None:
+    started = winapi.created_at(pid)
+    if started is None:  # done already
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(path, json.dumps({"pid": pid, "started": started}))
+
+
+def _marked(path: Path) -> int | None:
+    """The pid `path` names, while that process runs."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        # The start time tells a reused pid apart.
+        return int(raw["pid"]) if winapi.created_at(raw["pid"]) == raw["started"] else None
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
 
 
 def installing() -> bool:
     """An update's msiexec runs: asc.exe and its files are being replaced."""
-    try:
-        raw = json.loads(marker().read_text(encoding="utf-8"))
-        # The start time tells a reused pid apart.
-        return bool(psutil.Process(raw["pid"]).create_time() == raw["started"])
-    except (OSError, ValueError, TypeError, KeyError, psutil.Error):
-        return False
+    return _marked(marker()) is not None
+
+
+def stop_check() -> None:
+    """For the installer: end an update check, which may otherwise run for minutes."""
+    pid = _marked(checking())
+    if pid is not None:
+        winapi.terminate(pid, winapi.KILL_WAIT_S)
 
 
 def _running() -> bool:
@@ -162,16 +180,18 @@ def _running() -> bool:
 def start_if_due() -> None:
     """After `asc stop`: check for an update in the background, if one is due."""
     exe = installed_exe()
-    stamp = folder() / "checked"
-    if exe is None or _running() or not due(stamp, time.time()) or not enabled():
+    if exe is None:
         return
+    stamp = folder() / "checked"
     # An update check never fails asc stop.
     with contextlib.suppress(OSError):
+        if _running() or not due(stamp, time.time()) or not enabled():
+            return
         stamp.parent.mkdir(parents=True, exist_ok=True)
         stamp.touch()
         # Its log, and any crash, land in update.log.
         with (folder() / "update.log").open("wb") as err:
-            spawn.detached([str(exe), "_update"], err, folder())
+            mark(checking(), spawn.detached([str(exe), "_update"], err, folder()).pid)
 
 
 def run() -> None:
@@ -204,7 +224,7 @@ def run() -> None:
         install(msi)
         log.info("installing %s over %s", release.name, __version__)
     # URLError is an OSError. A reply that isn't HTTP raises HTTPException.
-    except (OSError, http.client.HTTPException) as error:
+    except (OSError, http.client.HTTPException, AscError) as error:
         log.warning("update check failed: %s", getattr(error, "reason", error))
 
 
@@ -229,7 +249,7 @@ def download(release: Release) -> Path | None:
     msi.parent.mkdir(parents=True, exist_ok=True)
     if msi.exists() and _sha256(msi) == release.sha256:
         return msi
-    for old in folder().glob("*.msi"):
+    for old in folder().glob("agent-speech-check-*"):
         old.unlink(missing_ok=True)
     partial = msi.with_suffix(".part")
     try:
@@ -252,6 +272,4 @@ def install(msi: Path) -> None:
     msiexec = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "msiexec.exe"
     log_file = folder() / "msiexec.log"
     command = [str(msiexec), "/i", str(msi), "/qn", "/norestart", "/l*", str(log_file)]
-    process = spawn.detached(command, subprocess.DEVNULL)
-    with contextlib.suppress(psutil.NoSuchProcess):  # done already
-        mark_installing(process.pid)
+    mark(marker(), spawn.detached(command, subprocess.DEVNULL).pid)

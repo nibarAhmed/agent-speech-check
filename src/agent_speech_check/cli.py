@@ -1020,6 +1020,7 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.
         image = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        updater.stop_check()
         _stop_every(paths.every_root(), image)
         return 0
     if args_list == ["_update"]:

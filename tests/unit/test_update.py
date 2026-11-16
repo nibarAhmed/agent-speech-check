@@ -97,7 +97,7 @@ def test_installing_only_while_that_process_lives(
     assert not updater.installing()
     child = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
     try:
-        updater.mark_installing(child.pid)
+        updater.mark(updater.marker(), child.pid)
         assert updater.installing()
     finally:
         child.kill()
@@ -120,6 +120,9 @@ def test_download_keeps_only_an_msi_with_the_listed_sha256(
     source = tmp_path / "served.msi"
     source.write_bytes(b"msi")
     good = hashlib.sha256(b"msi").hexdigest()
+    # One an earlier run left, cut off mid-download.
+    updater.folder().mkdir(parents=True)
+    (updater.folder() / "agent-speech-check-0.4.0.part").write_bytes(b"ms")
     assert updater.download(Release((0, 5, 0), source.as_uri(), SHA)) is None
     assert not list(updater.folder().iterdir())
     msi = updater.download(Release((0, 5, 0), source.as_uri(), good))
