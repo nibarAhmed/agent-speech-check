@@ -30,7 +30,7 @@ from agent_speech_check import __version__
 from agent_speech_check.config.targets import load
 from agent_speech_check.daemon import spawn, state
 from agent_speech_check.errors import AscError
-from agent_speech_check.windows import winapi
+from agent_speech_check.windows import tls, winapi
 from agent_speech_check.windows.paths import base_root, every_root, write_atomic
 from agent_speech_check.windows.wait import poll_until
 
@@ -235,7 +235,9 @@ def run() -> None:
 
 def latest() -> Release | None:
     request = urllib.request.Request(LATEST_URL, headers={"Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(request, timeout=LOOKUP_TIMEOUT_S) as response:  # noqa: S310 - fixed https URL
+    with urllib.request.urlopen(  # noqa: S310 - fixed https URL
+        request, timeout=LOOKUP_TIMEOUT_S, context=tls.context()
+    ) as response:
         text = response.read(LOOKUP_MAX_BYTES)
     try:
         return parse_release(json.loads(text))
@@ -259,7 +261,9 @@ def download(release: Release) -> Path | None:
     partial = msi.with_suffix(".part")
     try:
         with (
-            urllib.request.urlopen(release.url, timeout=DOWNLOAD_TIMEOUT_S) as response,  # noqa: S310 - https URL under DOWNLOAD_PREFIX
+            urllib.request.urlopen(  # noqa: S310 - https URL under DOWNLOAD_PREFIX
+                release.url, timeout=DOWNLOAD_TIMEOUT_S, context=tls.context()
+            ) as response,
             partial.open("wb") as file,
         ):
             shutil.copyfileobj(response, file)

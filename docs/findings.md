@@ -13,6 +13,11 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
 - The `.wsb` `LogonCommand` works with mapped folders: read-only for inputs,
   writable for results. A relocatable Python (uv-managed CPython) runs from a
   read-only mapped folder. The Microsoft Store Python can't be used that way.
+- Its root certificate store starts nearly empty. Python's `ssl`, which reads
+  only the roots already there, failed on api.github.com with
+  `CERTIFICATE_VERIFY_FAILED`; PowerShell's `Invoke-WebRequest` worked, because
+  Windows fetches a missing root when it checks a chain. So `asc` checks HTTPS
+  through Windows (`truststore`).
 - Creating the portable copy inside takes about 13 s, with
   `nvda_<ver>.exe --create-portable-silent --portable-path=C:\nvda`.
 
