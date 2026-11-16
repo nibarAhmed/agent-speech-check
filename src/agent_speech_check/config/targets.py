@@ -106,6 +106,12 @@ class Target:
         return self.mode in ("watch", "shared")
 
     @property
+    def named_only(self) -> bool:
+        """Runs only in a named instance (remote mode, one per VM), so an agent's
+        forgotten --instance never reaches another agent's VM."""
+        return self.mode == "remote"
+
+    @property
     def launches_portable(self) -> bool:
         """asc starts a portable NVDA on this computer (desktop mode)."""
         return self.mode == "desktop" and self.launch

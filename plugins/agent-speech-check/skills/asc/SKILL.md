@@ -33,8 +33,9 @@ stop and ask the user to switch to the mode this table suggests:
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
-- `asc firewall-setup --mode sandbox` (or `--mode remote`) shows an admin
-  prompt: ask the user to run it.
+- `asc firewall-setup` shows an admin prompt and adds a Windows Firewall rule.
+  Ask the user first, unless they already said to go ahead, then run it
+  yourself; they approve the prompt.
 - Shared and desktop mode send keys to the user's desktop. Tell the user the
   panic key from `asc status` before you send any.
 - If the user names their own portable NVDA, set it for desktop or sandbox mode
@@ -43,10 +44,18 @@ stop and ask the user to switch to the mode this table suggests:
 - Never set `launch` yourself. Desktop mode with `launch = false` starts no
   NVDA (the user starts one): it has no panic key, yet its keys reach an NVDA
   on this computer, maybe the user's own: send keys only if the user asked.
-- When several agents share this computer, each may use its own instance:
-  `--instance NAME` (or `ASC_INSTANCE=NAME`) on every command gives it its own
-  config and daemon. Instances can't use watch or shared mode. A port another
-  instance holds makes `asc start` exit 4; its hint says how to pick another.
+- Remote mode (configured, or the user names a VM) runs only in a named
+  instance. It leaves the user's settings alone, so set it up without asking
+  to switch modes. Use your own instance, named after your VM, with
+  `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command, `asc stop`
+  too. Never share one with another agent. Set it up yourself:
+  1. `asc config set mode remote --instance VMNAME`
+  2. `asc start --instance VMNAME`. On exit 4 (port in use), run the command
+     its hint gives and start again. On exit 7 (no firewall rule), run the
+     `asc firewall-setup` it gives, asking first as above.
+  3. Tell the user what `asc status --instance VMNAME` says, so the VM's NVDA
+     can connect.
+- Instances can't use watch or shared mode.
 
 ## Workflow
 

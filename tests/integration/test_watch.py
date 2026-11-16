@@ -131,7 +131,8 @@ def test_second_start_is_refused() -> None:
     again = run_asc("start", "--mode", "watch")
     assert again.returncode == 4
     assert "asc is already running in watch mode" in again.stderr
-    assert again.stderr.endswith("hint: asc stop, then try again\n")
+    # Another agent may have started it, so the hint can't just say to stop it.
+    assert again.stderr.endswith("hint: asc stop only if you started it\n")
 
 
 def test_stale_state_file_is_removed(env: Env) -> None:

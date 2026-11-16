@@ -65,12 +65,12 @@ def test_summary_follows_the_questions_each_mode_asks() -> None:
     assert set(setup.QUESTIONS) == set(prefs.MODES)
     for mode, fields in setup.QUESTIONS.items():
         # The title, the mode, then one line per question.
-        assert len(setup.summary_lines(setup.Answers(mode))) == 2 + len(fields)
+        assert len(setup.summary_lines(setup.Answers(mode), fields)) == 2 + len(fields)
 
 
 def test_summary_shows_every_answer_for_the_mode() -> None:
     answers = setup.Answers("sandbox", None, ("C:\\a", "C:\\b"), "show")
-    assert setup.summary_lines(answers) == [
+    assert setup.summary_lines(answers, setup.QUESTIONS["sandbox"]) == [
         "Your settings:",
         "  Mode:            sandbox",
         "  NVDA:            asc",
@@ -81,13 +81,16 @@ def test_summary_shows_every_answer_for_the_mode() -> None:
 
 
 def test_summary_says_none_and_your_folder() -> None:
-    assert setup.summary_lines(setup.Answers("watch")) == [
+    asked = setup.QUESTIONS
+    assert setup.summary_lines(setup.Answers("watch"), asked["watch"]) == [
         "Your settings:",
         "  Mode:             watch",
         "  Keyboard layout:  desktop",
     ]
-    assert setup.summary_lines(setup.Answers("desktop", "C:\\n"))[2] == "  NVDA:  C:\\n"
-    assert setup.summary_lines(setup.Answers("sandbox"))[3] == "  Shared folders:  none"
+    desktop = setup.Answers("desktop", "C:\\n")
+    assert setup.summary_lines(desktop, asked["desktop"])[2] == "  NVDA:  C:\\n"
+    sandbox = setup.summary_lines(setup.Answers("sandbox"), asked["sandbox"])
+    assert sandbox[3] == "  Shared folders:  none"
 
 
 @pytest.mark.parametrize(
@@ -179,6 +182,9 @@ def test_setup_remote_takes_a_port_no_other_instance_has(
     third = root / "instances" / "vm3"
     third.mkdir()
     (third / "config.toml").write_text("[remote]\nport = 26838\n", encoding="utf-8")
+    # The default instance never runs remote mode, so its port takes none.
+    default = 'mode = "remote"\n[remote]\nport = 26839\n'
+    (root / "config.toml").write_text(default, encoding="utf-8")
     monkeypatch.setenv("ASC_INSTANCE", "vm2")
     # Mode (an instance can't join your own NVDA, so remote is the default),
     # keyboard layout, no firewall rule now, save.
@@ -190,6 +196,21 @@ def test_setup_remote_takes_a_port_no_other_instance_has(
     # The firewall rule offered is for that port.
     assert "Run asc firewall-setup --mode remote --instance vm2 later." in out
     assert load(root / "instances" / "vm2" / "config.toml").resolve(None).port == 26839
+
+
+def test_setup_remote_in_the_default_instance_keeps_only_the_mode(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_setup(Asker("remote", "y"), replace_without_asking=False)
+    out = capsys.readouterr().out
+    assert "Remote mode runs only in a named instance, one per VM:" in out
+    assert "asc setup --instance VMNAME" in out
+    # No port, layout or firewall rule: this instance won't run remote mode.
+    assert "Your settings:\n  Mode:  remote\n" in out
+    assert "firewall" not in out
+    saved = (root / "config.toml").read_text(encoding="utf-8")
+    assert 'mode = "remote"' in saved
+    assert "[" not in saved
 
 
 def test_setup_without_sandbox_says_how_to_get_it(

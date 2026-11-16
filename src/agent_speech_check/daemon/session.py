@@ -27,6 +27,7 @@ from agent_speech_check.errors import (
     NvdaDidNotConnect,
     OwnNvdaInInstance,
     PortInUse,
+    RemoteNeedsInstance,
     SandboxBusy,
     SharedNeedsConsent,
 )
@@ -158,10 +159,18 @@ def _check_sandbox(target: Target) -> None:
         launcher.latest_installer()
 
 
+def check_instance(target: Target, command: str) -> None:
+    """Refuse a mode this kind of instance doesn't run."""
+    named = paths.instance() is not None
+    if target.own_nvda and named:
+        raise OwnNvdaInInstance(target.mode)
+    if target.named_only and not named:
+        raise RemoteNeedsInstance(command)
+
+
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
-    if target.own_nvda and paths.instance() is not None:
-        raise OwnNvdaInInstance(target.mode)
+    check_instance(target, "start")
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
     if target.launches_portable:

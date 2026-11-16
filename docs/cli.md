@@ -206,6 +206,10 @@ the network. `asc` launches nothing: you start that NVDA and connect its
 Remote Access as `asc status` says (allow this computer to be controlled).
 Its keys land on that machine, so there is no panic key.
 
+- It runs only in a named [instance](#instances), one per VM, so each agent has
+  its own and a forgotten `--instance` never reaches another agent's VM. The
+  default instance may keep `mode = "remote"` as the preferred mode, but
+  `asc start` and `asc firewall-setup` there exit 4.
 - A new NVDA has Remote Access off: tick Enable Remote Access in its settings
   (Remote Access category) first, or Tools has no Remote Access menu.
 - To set that NVDA up unattended instead, `asc status --nvda-ini` prints the
@@ -214,8 +218,8 @@ Its keys land on that machine, so there is no panic key.
   update prompts. Save it as UTF-8 `nvda.ini` in that NVDA's config folder (for
   an installed NVDA, `%APPDATA%\nvda`) while NVDA is not running (Windows
   PowerShell 5.1's `>` writes UTF-16). It replaces that NVDA's own settings.
-- Needs `asc firewall-setup --mode remote` done once for its port (exit 7 with
-  that hint otherwise).
+- Needs `asc firewall-setup --mode remote --instance NAME` done once for its
+  port (exit 7 with that hint otherwise).
 - The relay listens on remote mode's `host`, or else on this computer's
   Hyper-V Default Switch address (looked up at every start; exit 7 if there is
   none), on port 26837 unless remote mode's `port` says another. `host` must be
@@ -225,8 +229,6 @@ Its keys land on that machine, so there is no panic key.
   time, so a VM's NVDA keeps finding `asc`.
 - `asc launch` is refused (exit 4): start the app on that machine, then
   `asc wait`.
-- To give each agent its own VM, run one [instance](#instances) per VM, each
-  with its own `port`.
 
 ### Shared mode
 
@@ -298,7 +300,7 @@ and `launch` talk to it without being told its mode.
 environment variable, picks a named instance: a separate `asc` with its own
 `config.toml`, mode folders and daemon, running next to the default one and
 any other instance. Use one per agent, for example each driving NVDA in its
-own VM with remote mode.
+own VM with remote mode, which runs only in a named instance.
 
 - `NAME` is 1 to 32 lowercase letters, digits and `-`, starting with a letter
   or digit (exit 2 otherwise).
@@ -308,7 +310,7 @@ own VM with remote mode.
   offer them (remote is its default).
 - Ports must differ between running instances: `asc start` refuses one in use
   (exit 4). Desktop mode picks a free one, and `asc setup` gives remote mode the
-  first port from 26837 that no other instance's config uses.
+  first port from 26837 that no other named instance's config uses.
 - `asc stop` stops only its own instance.
 
 ### Global settings
@@ -702,6 +704,8 @@ the firewall rule sandbox or remote mode needs. Timings are not asked; change th
 - In a named [instance](#instances) it offers only desktop, sandbox and remote
   mode (remote by default). Remote mode takes the first port from 26837 that no
   other instance's remote mode has.
+- In the default instance, remote saves only `mode = "remote"` and says to run
+  `asc setup --instance VMNAME`: remote mode runs only in a named instance.
 
 ### `asc config`
 
