@@ -108,7 +108,7 @@ class Target:
     @property
     def named_only(self) -> bool:
         """Runs only in a named instance (remote mode, one per VM), so an agent's
-        forgotten --instance fails rather than reach another agent's asc."""
+        forgotten --instance never reaches another agent's VM."""
         return self.mode == "remote"
 
     @property

@@ -422,7 +422,7 @@ class NoFirewallNeeded(UsageError):
     def __init__(self, mode: str) -> None:
         super().__init__(
             f"{mode} mode needs no firewall rule",
-            hint="asc firewall-setup --mode sandbox, or --mode remote",
+            hint="asc firewall-setup --mode sandbox, or --mode remote --instance NAME",
         )
 
 
@@ -443,10 +443,10 @@ class OwnNvdaInInstance(Refused):
 
 
 class RemoteNeedsInstance(Refused):
-    def __init__(self) -> None:
+    def __init__(self, command: str) -> None:
         super().__init__(
             "remote mode runs only in a named instance, one per VM",
-            hint="asc start --mode remote --instance VMNAME",
+            hint=f"asc {command} --mode remote --instance VMNAME",
         )
 
 
@@ -527,7 +527,7 @@ class AlreadyRunning(Refused):
         where = f" in {mode} mode" if mode else ""
         super().__init__(
             f"asc is already running{where}",
-            hint="asc stop if you started it, else use --instance NAME",
+            hint="asc stop only if you started it",
         )
 
 

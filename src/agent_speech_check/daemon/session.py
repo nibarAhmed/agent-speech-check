@@ -164,7 +164,7 @@ def precheck(target: Target) -> None:
     if target.own_nvda and paths.instance() is not None:
         raise OwnNvdaInInstance(target.mode)
     if target.named_only and paths.instance() is None:
-        raise RemoteNeedsInstance
+        raise RemoteNeedsInstance("start")
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
     if target.launches_portable:

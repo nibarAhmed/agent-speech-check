@@ -35,6 +35,7 @@ from agent_speech_check.errors import (
     NoFirewallNeeded,
     NotRunning,
     NvdaIniOnlyRemote,
+    RemoteNeedsInstance,
     UnrecognizedArguments,
     Updating,
     UsageError,
@@ -486,6 +487,8 @@ def cmd_firewall_setup(args: argparse.Namespace) -> int:
     target = _target(args)
     if not target.listens_outside:
         raise NoFirewallNeeded(target.mode)
+    if target.named_only and paths.instance() is None:
+        raise RemoteNeedsInstance("firewall-setup")
     if target.launches_sandbox:
         wsb.require_available()
     if firewall.rule_ok(target.mode, target.port):
@@ -677,8 +680,8 @@ def _firewall_now(ask: Ask, mode: str, port: int) -> None:
     _offer(ask, question, lambda: _add_firewall_rule(mode, port), firewall.setup_command(mode))
 
 
-def _ask_mode(ask: Ask) -> str:
-    modes = setup.MODES if paths.instance() is None else setup.INSTANCE_MODES
+def _ask_mode(ask: Ask, *, named: bool) -> str:
+    modes = setup.INSTANCE_MODES if named else setup.MODES
     while True:
         mode = _ask_choice(ask, "How should asc work with NVDA?", modes)
         if mode == "sandbox":
@@ -691,7 +694,7 @@ def _ask_mode(ask: Ask) -> str:
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
-        if mode == "remote" and paths.instance() is None:
+        if not setup.runs_here(mode, named=named):
             print("Remote mode runs only in a named instance, one per VM:")
             print("asc setup --instance VMNAME. Agents make their own.")
         elif mode == "remote":
@@ -719,11 +722,12 @@ def _ask_share(ask: Ask, _mode: str) -> tuple[str, ...]:
 
 
 def _free_port(_ask: Ask, mode: str) -> int:
-    """The first port from the mode's default that no other instance's config
-    gives this mode, so their relays can run side by side."""
+    """The first port from the mode's default that no other named instance's
+    config gives this mode, so their relays can run side by side."""
     taken = set()
-    for root in paths.every_root():
-        if root == state_root() or (root == paths.base_root() and defaults(mode).named_only):
+    # Only remote mode asks for a port, and the default instance never runs it.
+    for root in paths.every_root()[1:]:
+        if root == state_root():
             continue
         try:
             config = load(root / "config.toml")
@@ -758,10 +762,13 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
 
 def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
     """The answers, and which questions were asked."""
-    mode = _ask_mode(ask)
-    fields = setup.asked(mode, named=paths.instance() is not None)
+    named = paths.instance() is not None
+    mode = _ask_mode(ask, named=named)
+    if not setup.runs_here(mode, named=named):
+        return setup.Answers(mode), ()
+    fields = setup.QUESTIONS[mode]
     answers = setup.Answers(mode, **{f: _ASKERS[f](ask, mode) for f in fields})
-    if defaults(mode).listens_outside and fields:
+    if defaults(mode).listens_outside:
         _firewall_now(ask, mode, answers.port or defaults(mode).port)
     return answers, fields
 
@@ -814,8 +821,8 @@ restarts, it then reconnects by itself. Turn the asking off with
 asc config set connect false, and connect in NVDA instead (asc status says how).
 
 remote mode: asc launches nothing. Start NVDA on the other machine (a VM, say)
-and connect its Remote Access to asc as asc status says. Run several agents,
-each with its own VM, as named instances with their own ports.
+and connect its Remote Access to asc as asc status says. It runs only in a
+named instance, one per VM, each with its own port.
 
 examples:
   asc start

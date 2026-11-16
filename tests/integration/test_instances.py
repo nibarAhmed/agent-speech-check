@@ -49,6 +49,10 @@ def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
     assert remote.returncode == 4, remote.stderr
     assert "remote mode runs only in a named instance, one per VM" in remote.stderr
     assert remote.stderr.endswith("hint: asc start --mode remote --instance VMNAME\n")
+    # Nor does it add a firewall rule the default instance can't use.
+    rule = run_asc("firewall-setup", "--mode", "remote")
+    assert rule.returncode == 4, rule.stderr
+    assert rule.stderr.endswith("hint: asc firewall-setup --mode remote --instance VMNAME\n")
 
 
 def test_remote_mode_needs_its_firewall_rule(env: Env) -> None:

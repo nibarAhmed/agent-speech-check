@@ -154,7 +154,7 @@ def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...
     return {mode: questions[mode] for mode in prefs.MODES}
 
 
-# The answers each mode asks for, in order, where it runs (see `asked`).
+# The answers each mode asks for, in order, where it runs (see `runs_here`).
 QUESTIONS = _per_mode(
     {
         "watch": ("keys_layout",),
@@ -166,10 +166,10 @@ QUESTIONS = _per_mode(
 )
 
 
-def asked(mode: str, *, named: bool) -> tuple[str, ...]:
-    """The answers setup asks for. The default instance keeps remote only as the
-    preferred mode, so it asks nothing more for it."""
-    return () if defaults(mode).named_only and not named else QUESTIONS[mode]
+def runs_here(mode: str, *, named: bool) -> bool:
+    """Whether the instance runs `mode`. The default instance keeps remote only
+    as the preferred mode, so setup asks nothing more for it."""
+    return named or not defaults(mode).named_only
 
 
 def to_data(answers: Answers) -> dict[str, Any]:

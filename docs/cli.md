@@ -207,9 +207,9 @@ Remote Access as `asc status` says (allow this computer to be controlled).
 Its keys land on that machine, so there is no panic key.
 
 - It runs only in a named [instance](#instances), one per VM, so each agent has
-  its own and a forgotten `--instance` fails instead of reaching another
-  agent's `asc`. The default instance may keep `mode = "remote"` as the
-  preferred mode, but `asc start` there exits 4.
+  its own and a forgotten `--instance` never reaches another agent's VM. The
+  default instance may keep `mode = "remote"` as the preferred mode, but
+  `asc start` and `asc firewall-setup` there exit 4.
 - A new NVDA has Remote Access off: tick Enable Remote Access in its settings
   (Remote Access category) first, or Tools has no Remote Access menu.
 - To set that NVDA up unattended instead, `asc status --nvda-ini` prints the
@@ -310,7 +310,7 @@ own VM with remote mode, which runs only in a named instance.
   offer them (remote is its default).
 - Ports must differ between running instances: `asc start` refuses one in use
   (exit 4). Desktop mode picks a free one, and `asc setup` gives remote mode the
-  first port from 26837 that no other instance's config uses.
+  first port from 26837 that no other named instance's config uses.
 - `asc stop` stops only its own instance.
 
 ### Global settings
