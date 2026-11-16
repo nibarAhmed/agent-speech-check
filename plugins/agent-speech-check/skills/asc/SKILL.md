@@ -87,8 +87,10 @@ NVDA says, typed text included, so `asc stop` when you're done.
   (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
 - Shared mode needs `asc start --mode shared --i-understand` every time.
 - Remote mode: the VM's NVDA connects only after the user ticks Enable Remote
-  Access in its settings, then connects as `asc status` says. Start the app on
-  the VM yourself or ask the user, then `asc wait`.
+  Access in its settings, then connects as `asc status` says. Or, in a VM you
+  set up yourself, put `asc status --nvda-ini` into its NVDA's config folder
+  while NVDA is not running: it then connects at startup, nothing to answer.
+  Start the app on the VM yourself or ask the user, then `asc wait`.
 
 ## Exit codes
 

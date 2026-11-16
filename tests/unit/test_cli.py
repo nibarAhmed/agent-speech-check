@@ -4,11 +4,13 @@ import re
 import shutil
 from pathlib import Path
 
+import configobj
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import COMMANDS, build_parser, main
+from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini
 from agent_speech_check.config import prefs
+from agent_speech_check.errors import NvdaIniOnlyRemote
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -193,6 +195,17 @@ def test_internal_error_in_a_group_names_the_inner_error(
     monkeypatch.delenv("ASC_DEBUG", raising=False)
     assert main([_FailsInATaskGroup()]) == 6  # type: ignore[list-item]
     assert "internal error: ValueError: tray icon\n" in capsys.readouterr().err
+
+
+def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
+    host = "pc.mshome.net:26837"
+    status = {"mode": "remote", "host": host, "channel": "key", "fingerprint": "ab" * 32}
+    remote = configobj.ConfigObj(nvda_ini(status).splitlines())["remote"]
+    server = remote["controlServer"]
+    assert (server["host"], server["port"], server["key"]) == (host, "26837", "key")
+    assert remote["trustedCertificates"][host] == "ab" * 32
+    with pytest.raises(NvdaIniOnlyRemote):
+        nvda_ini({**status, "mode": "watch"})
 
 
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])

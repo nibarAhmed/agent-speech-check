@@ -450,6 +450,14 @@ class LaunchElsewhere(Refused):
         )
 
 
+class NvdaIniOnlyRemote(Refused):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"{mode} mode has no nvda.ini to print: only remote mode's NVDA is set up by you",
+            hint="asc status",
+        )
+
+
 class NvdaDidNotConnect(NotConnected):
     def __init__(self, seconds: float, log_tail: str) -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
