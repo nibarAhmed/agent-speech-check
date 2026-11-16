@@ -36,6 +36,7 @@ from agent_speech_check.errors import (
     NotRunning,
     NvdaIniOnlyRemote,
     UnrecognizedArguments,
+    Updating,
     UsageError,
     bad_field,
     numbered_lines,
@@ -44,6 +45,7 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
+from agent_speech_check.update import updater
 from agent_speech_check.windows import paths
 from agent_speech_check.windows.paths import config_file, mode_dir, state_root
 from agent_speech_check.windows.wait import poll_until
@@ -388,6 +390,7 @@ def cmd_stop(_: argparse.Namespace) -> int:
     stopped = _stop_every([state_root()], None)
     if not (found or stopped):
         raise NotRunning
+    updater.start_if_due()
     return 0
 
 
@@ -1017,8 +1020,16 @@ def run(argv: Sequence[str] | None) -> int:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.
         image = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        updater.stop_check()
         _stop_every(paths.every_root(), image)
         return 0
+    if args_list == ["_update"]:
+        # Hidden: the background update check that `asc stop` starts.
+        updater.run()
+        return 0
+    # The hidden commands above stay open: the installer runs _stop_all.
+    if updater.installing():
+        raise Updating
     args = build_parser().parse_args(args_list)
     if args.instance is not None:
         # In the environment, so the daemon asc starts works on it too.

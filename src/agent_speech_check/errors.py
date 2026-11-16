@@ -555,6 +555,11 @@ class AscStillRunning(Refused):
         )
 
 
+class Updating(Refused):
+    def __init__(self) -> None:
+        super().__init__("asc is installing an update", hint="try again in a minute")
+
+
 class NvdaAlreadyRunning(Refused):
     def __init__(self) -> None:
         super().__init__(

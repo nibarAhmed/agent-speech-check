@@ -66,7 +66,8 @@ human's sign-off before breaking it.
   a new module in its area, and keep the folders' `__init__.py` files empty of imports.
 - Runtime dependencies: `cryptography` (the stdlib can't create the relay cert), `tomlkit`
   (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
-  processes) and `configobj` (`nvda.ini`, read and written by the same library NVDA uses). Add
+  processes), `configobj` (`nvda.ini`, read and written by the same library NVDA uses) and
+  `truststore` (HTTPS checked by Windows, which fetches a root it lacks; `ssl` can't). Add
   a library when it saves code; say why in the PR description.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.

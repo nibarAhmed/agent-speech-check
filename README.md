@@ -36,7 +36,7 @@ Unsure? Use **sandbox**, or **desktop** for a simpler setup. Details are in the 
 
 ## Install
 
-- **MSI installer** (no Python needed): run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest). It installs for your user, without admin.
+- **MSI installer** (no Python needed): run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest). It installs for your user, without admin, and [updates itself](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates) after `asc stop`, at most once a day. `asc config set auto_update false` turns that off.
 - **With [`uv`](https://docs.astral.sh/uv/)**, for the latest code on `main`: `uv tool install git+https://github.com/nibarAhmed/agent-speech-check`. Update with `uv tool upgrade agent-speech-check`.
 
 Open a new terminal afterwards so it sees the new `PATH`.

@@ -16,7 +16,6 @@ import shutil
 import subprocess
 import threading
 import time
-import urllib.request
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -36,7 +35,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
-from agent_speech_check.windows import winapi
+from agent_speech_check.windows import tls, winapi
 from agent_speech_check.windows.paths import base_root
 from agent_speech_check.windows.wait import poll_until
 
@@ -138,7 +137,7 @@ def _read_update_check(into: list[str | DownloadFailed]) -> None:
     try:
         with (
             _failing_as_download(UPDATE_URL),
-            urllib.request.urlopen(UPDATE_URL, timeout=LOOKUP_TIMEOUT_S) as response,
+            tls.urlopen(UPDATE_URL, LOOKUP_TIMEOUT_S) as response,
         ):
             into.append(response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace"))
     except DownloadFailed as error:
@@ -255,7 +254,7 @@ def download(version: str, sha1: str | None = None) -> Path:
         try:
             with (
                 _failing_as_download(url),
-                urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_S) as response,  # noqa: S310 - fixed https URL
+                tls.urlopen(url, DOWNLOAD_TIMEOUT_S) as response,
                 partial.open("wb") as file,
             ):
                 shutil.copyfileobj(response, file)

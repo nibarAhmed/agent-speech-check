@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import socket
 import ssl
+import subprocess
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -16,8 +18,15 @@ from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_c
 from agent_speech_check.cli import run_setup
 from agent_speech_check.config.targets import SANDBOX_PORT, Target
 from agent_speech_check.daemon import ipc, session, state
-from agent_speech_check.errors import IPC_VERSION, AlreadyRunning, DaemonNoReply
+from agent_speech_check.errors import (
+    IPC_VERSION,
+    AlreadyRunning,
+    DaemonNoReply,
+    NotRunning,
+    Updating,
+)
 from agent_speech_check.sandbox import firewall
+from agent_speech_check.update import updater
 from agent_speech_check.windows import winapi
 
 
@@ -347,3 +356,25 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
         left_s = 10 - (time.monotonic() - stopped)
         gone = wait_until(lambda: winapi.image_path(pid) is None, left_s)
         assert gone, "the daemon waited on the silent peer"
+
+
+@pytest.mark.usefixtures("env")
+def test_commands_refuse_while_an_update_installs() -> None:
+    installer = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+    check = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+    try:
+        updater.mark(updater.marker(), installer.pid)
+        updater.mark(updater.checking(), check.pid)
+        busy = run_asc("status")
+        assert busy.returncode == Updating.exit_code
+        assert "installing an update" in busy.stderr
+        # The installer's own step to stop every daemon still runs, and ends
+        # an update check that would otherwise outlive the install.
+        assert run_asc("_stop_all").returncode == 0
+        assert check.poll() is not None
+        assert installer.poll() is None
+    finally:
+        for process in (installer, check):
+            process.kill()
+            process.wait()
+    assert run_asc("status").returncode == NotRunning.exit_code
