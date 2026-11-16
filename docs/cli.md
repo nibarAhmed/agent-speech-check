@@ -92,8 +92,8 @@ An `asc` installed by the MSI keeps itself up to date:
 - It downloads that release's MSI from GitHub over HTTPS, checks it against
   the SHA-256 GitHub lists for it, and installs it quietly, as an upgrade
   does: your settings and data stay. It never installs an older version.
-- It installs only while no `asc` runs. If one does, it tries again after the
-  next `asc stop`.
+- It installs only while no `asc` runs. If one does, it tries again an hour
+  later, at the next `asc stop`.
 - While it installs, every command exits 4 with the hint to
   try again in a minute.
 - `asc config set auto_update false` turns it off. `false` in any instance's

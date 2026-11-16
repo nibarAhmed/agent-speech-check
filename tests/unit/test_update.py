@@ -71,6 +71,10 @@ def test_due(tmp_path: Path) -> None:
     assert updater.due(stamp, 1_000_000 + updater.CHECK_EVERY_S)
     # A clock set back must not stop the checks for good.
     assert updater.due(stamp, 1_000_000 - 1)
+    # Deferred because asc ran: due again in an hour, not a day.
+    updater.defer(stamp, 2_000_000)
+    assert not updater.due(stamp, 2_000_000 + updater.RETRY_S - 1)
+    assert updater.due(stamp, 2_000_000 + updater.RETRY_S)
 
 
 def test_enabled_unless_any_instance_turns_it_off(

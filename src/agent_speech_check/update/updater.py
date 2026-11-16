@@ -42,6 +42,7 @@ DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"
 # The entry the MSI writes; its InstallLocation is the folder it installed.
 UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\agent-speech-check"
 CHECK_EVERY_S = 24 * 60 * 60
+RETRY_S = 60 * 60
 LOOKUP_TIMEOUT_S = 15
 LOOKUP_MAX_BYTES = 1_000_000
 DOWNLOAD_TIMEOUT_S = 60
@@ -115,6 +116,13 @@ def due(stamp: Path, now: float) -> bool:
         return not 0 <= now - stamp.stat().st_mtime < CHECK_EVERY_S
     except FileNotFoundError:
         return True
+
+
+def defer(stamp: Path, now: float) -> None:
+    """Makes the next check due in RETRY_S, not a day."""
+    then = now - CHECK_EVERY_S + RETRY_S
+    stamp.touch()
+    os.utime(stamp, (then, then))
 
 
 def enabled() -> bool:
@@ -222,8 +230,8 @@ def run() -> None:
             return
         idle = poll_until(lambda: not (_running() or winapi.others_running(exe)), IDLE_WAIT_S, 0.5)
         if not idle or not enabled():
-            # Again at the next asc stop; the MSI is kept.
-            stamp().unlink(missing_ok=True)
+            # The MSI is kept for the retry.
+            defer(stamp(), time.time())
             log.info("not installing %s now: asc runs, or auto_update is off", release.name)
             return
         install(msi)
