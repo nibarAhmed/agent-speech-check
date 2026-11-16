@@ -154,8 +154,7 @@ def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...
     return {mode: questions[mode] for mode in prefs.MODES}
 
 
-# The answers each mode asks for, in order. Setup asks these, and the summary
-# shows them.
+# The answers each mode asks for, in order, where it runs (see `asked`).
 QUESTIONS = _per_mode(
     {
         "watch": ("keys_layout",),
@@ -165,6 +164,12 @@ QUESTIONS = _per_mode(
         "remote": ("keys_layout", "port"),
     }
 )
+
+
+def asked(mode: str, *, named: bool) -> tuple[str, ...]:
+    """The answers setup asks for. The default instance keeps remote only as the
+    preferred mode, so it asks nothing more for it."""
+    return () if defaults(mode).named_only and not named else QUESTIONS[mode]
 
 
 def to_data(answers: Answers) -> dict[str, Any]:
@@ -187,11 +192,11 @@ def to_data(answers: Answers) -> dict[str, Any]:
     return data
 
 
-def summary_lines(answers: Answers) -> list[str]:
+def summary_lines(answers: Answers, fields: tuple[str, ...]) -> list[str]:
     """Every answer given, in the questions' words, for a last look before saving.
     Unlike `to_data`, defaults are shown too, so no answer seems lost."""
     rows = [("Mode:", answers.mode)]
-    for field in QUESTIONS[answers.mode]:
+    for field in fields:
         first, *more = _shown(getattr(answers, field))
         rows.append((f"{LABELS[field]}:", first))
         rows.extend(("", value) for value in more)

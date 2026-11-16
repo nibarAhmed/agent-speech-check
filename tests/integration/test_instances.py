@@ -39,11 +39,16 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
         second.close()
 
 
-@pytest.mark.usefixtures("env")
-def test_own_nvda_only_in_the_default_instance() -> None:
+def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
     result = run_asc("start", "--mode", "shared", "--i-understand", "--instance", "vm1")
     assert result.returncode == 4
     assert "only the default instance may join" in result.stderr
+    # Refused before the firewall check, so an agent's forgotten --instance fails.
+    env.config(f"[remote]\nport = {free_port()}\nhost = '172.31.255.1'\n")
+    remote = run_asc("start", "--mode", "remote")
+    assert remote.returncode == 4, remote.stderr
+    assert "remote mode runs only in a named instance, one per VM" in remote.stderr
+    assert remote.stderr.endswith("hint: asc start --mode remote --instance VMNAME\n")
 
 
 def test_remote_mode_needs_its_firewall_rule(env: Env) -> None:

@@ -27,6 +27,7 @@ from agent_speech_check.errors import (
     NvdaDidNotConnect,
     OwnNvdaInInstance,
     PortInUse,
+    RemoteNeedsInstance,
     SandboxBusy,
     SharedNeedsConsent,
 )
@@ -162,6 +163,8 @@ def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
     if target.own_nvda and paths.instance() is not None:
         raise OwnNvdaInInstance(target.mode)
+    if target.named_only and paths.instance() is None:
+        raise RemoteNeedsInstance
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
     if target.launches_portable:

@@ -691,7 +691,10 @@ def _ask_mode(ask: Ask) -> str:
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
-        if mode == "remote":
+        if mode == "remote" and paths.instance() is None:
+            print("Remote mode runs only in a named instance, one per VM:")
+            print("asc setup --instance VMNAME. Agents make their own.")
+        elif mode == "remote":
             print("Note: asc status says how to connect the other machine's NVDA.")
         if mode in ("shared", "desktop"):
             print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
@@ -720,7 +723,7 @@ def _free_port(_ask: Ask, mode: str) -> int:
     gives this mode, so their relays can run side by side."""
     taken = set()
     for root in paths.every_root():
-        if root == state_root():
+        if root == state_root() or (root == paths.base_root() and defaults(mode).named_only):
             continue
         try:
             config = load(root / "config.toml")
@@ -753,12 +756,14 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
 }
 
 
-def _answers(ask: Ask) -> setup.Answers:
+def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
+    """The answers, and which questions were asked."""
     mode = _ask_mode(ask)
-    answers = setup.Answers(mode, **{f: _ASKERS[f](ask, mode) for f in setup.QUESTIONS[mode]})
-    if defaults(mode).listens_outside:
+    fields = setup.asked(mode, named=paths.instance() is not None)
+    answers = setup.Answers(mode, **{f: _ASKERS[f](ask, mode) for f in fields})
+    if defaults(mode).listens_outside and fields:
         _firewall_now(ask, mode, answers.port or defaults(mode).port)
-    return answers
+    return answers, fields
 
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
@@ -774,8 +779,8 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
             return 0
     print("Answer with a number or a name. Enter keeps the default.")
     print("Ctrl+C stops without saving.")
-    answers = _answers(ask)
-    _section(*setup.summary_lines(answers), "")
+    answers, fields = _answers(ask)
+    _section(*setup.summary_lines(answers, fields), "")
     if not _ask_yes(ask, "Save?", default=True):
         print("Nothing saved.")
         return 0

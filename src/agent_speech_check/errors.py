@@ -442,6 +442,14 @@ class OwnNvdaInInstance(Refused):
         )
 
 
+class RemoteNeedsInstance(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "remote mode runs only in a named instance, one per VM",
+            hint="asc start --mode remote --instance VMNAME",
+        )
+
+
 class LaunchElsewhere(Refused):
     def __init__(self) -> None:
         super().__init__(
@@ -517,7 +525,10 @@ class KeysRefused(Refused):
 class AlreadyRunning(Refused):
     def __init__(self, mode: str | None = None) -> None:
         where = f" in {mode} mode" if mode else ""
-        super().__init__(f"asc is already running{where}", hint="asc stop, then try again")
+        super().__init__(
+            f"asc is already running{where}",
+            hint="asc stop if you started it, else use --instance NAME",
+        )
 
 
 class PortInUse(Refused):
