@@ -69,6 +69,7 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 | `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key (shared mode uses watch mode's) |
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
 | `%LOCALAPPDATA%\agent-speech-check\instances\<name>\` | a [named instance's](#instances) `config.toml` and mode folders |
+| `%LOCALAPPDATA%\agent-speech-check\update\` | the last [update](#updates) check's `update.log` and `msiexec.log`, and the MSI it downloaded |
 
 The certificate and key are created once and kept, because NVDA pins the
 certificate.
@@ -80,6 +81,25 @@ settings and data" checkbox, and a silent uninstall keeps it only with
 `KEEPDATA=1` (`msiexec /x FILE.msi /qn KEEPDATA=1`). An upgrade keeps it.
 The firewall rules from `asc firewall-setup` stay: delete them as
 [that command](#asc-firewall-setup) says.
+
+## Updates
+
+An `asc` installed by the MSI keeps itself up to date:
+
+- After `asc stop`, when no `asc` daemon runs in any instance, it checks in
+  the background, at most once a day, for a newer
+  [release](https://github.com/nibarAhmed/agent-speech-check/releases/latest).
+- It downloads that release's MSI from GitHub over HTTPS, checks it against
+  the SHA-256 GitHub lists for it, and installs it quietly, as an upgrade
+  does: your settings and data stay. It never installs an older version.
+- It installs only while no `asc` runs. If one does, it tries again after the
+  next `asc stop`.
+- While it installs (a few seconds), every command exits 4 with the hint to
+  try again in a minute.
+- `asc config set auto_update false` turns it off. `false` in any instance's
+  `config.toml` turns it off for all of them, since they share one `asc`.
+- An `asc` installed with `uv`, or run from a clone, never updates itself: use
+  `uv tool upgrade agent-speech-check`.
 
 ## Modes
 
@@ -310,6 +330,7 @@ built-in default.
 | `launch_timeout_ms` | 30000 (at most 600000) | `launch --timeout` |
 | `keys_layout` | desktop | `keys --layout` (desktop or laptop) |
 | `connect` | true | none: `start` in watch and shared mode asks your running NVDA to connect |
+| `auto_update` | true | none: an MSI-installed `asc` [updates itself](#updates); false in any instance's config turns that off |
 
 ### Mode settings
 
