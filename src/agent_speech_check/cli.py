@@ -34,6 +34,7 @@ from agent_speech_check.errors import (
     NoCommand,
     NoFirewallNeeded,
     NotRunning,
+    NvdaIniOnlyRemote,
     UnrecognizedArguments,
     UsageError,
     bad_field,
@@ -124,6 +125,14 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
         "--i-understand",
         action="store_true",
         help="shared mode: yes, send keys into my own session",
+    )
+
+
+def _status_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--nvda-ini",
+        action="store_true",
+        help="remote mode: print the nvda.ini that connects that NVDA unattended",
     )
 
 
@@ -255,7 +264,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _connect_line(status: dict[str, Any]) -> str:
     return (
         f"connect NVDA: Remote Access, allow this computer to be controlled, "
-        f"host {status['host']}, key {status['channel']}; "
+        f"host {status['host']}:{status['port']}, key {status['channel']}; "
         f"trust the certificate {status['fingerprint'][:16]}..."
     )
 
@@ -331,7 +340,7 @@ def _connect_own_nvda(folder: Path, status: dict[str, Any]) -> dict[str, Any]:
 
     if poll_until(joined, REJOIN_S, JOIN_POLL_S):
         return session.status(folder)
-    link = invite.link(status["host"], status["channel"])
+    link = invite.link(f"{status['host']}:{status['port']}", status["channel"])
     if not (invite.registered() and invite.send(link)):
         return status
     # Now, not at exit: the user has to act while this command waits.
@@ -382,8 +391,22 @@ def cmd_stop(_: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_status(_: argparse.Namespace) -> int:
-    _show_status(_call("status", {}))
+def nvda_ini(status: dict[str, Any]) -> str:
+    """The nvda.ini that connects a remote NVDA to this relay: desktop mode's base config."""
+    if status["mode"] != "remote":
+        raise NvdaIniOnlyRemote(status["mode"])
+    relay = nvda_config.RelayAddress(
+        status["host"], status["port"], status["channel"], status["fingerprint"]
+    )
+    return nvda_config.render(relay)
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    status = _call("status", {})
+    if args.nvda_ini:
+        print(nvda_ini(status), end="")
+    else:
+        _show_status(status)
     return 0
 
 
@@ -802,9 +825,20 @@ examples:
     ),
     "status": Command(
         "show whether asc is recording and NVDA is connected",
-        "Show the mode, whether NVDA is connected, how to connect it, and the\n"
-        "browse/focus mode (unknown until NVDA first switches).",
+        """\
+Show the mode, whether NVDA is connected, how to connect it, and the
+browse/focus mode (unknown until NVDA first switches).
+
+remote mode: --nvda-ini prints instead an nvda.ini for the other machine's NVDA,
+as desktop mode writes its own: Remote Access on, connecting to asc at startup
+with the certificate trusted, the silent synth, no welcome or update prompts.
+Save it as UTF-8 nvda.ini in that NVDA's config folder while NVDA is not running.
+
+examples:
+  asc status
+  asc status --nvda-ini --instance vm1""",
         cmd_status,
+        _status_args,
     ),
     "speech": Command(
         "print what NVDA said after a line",

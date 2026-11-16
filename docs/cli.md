@@ -188,6 +188,12 @@ Its keys land on that machine, so there is no panic key.
 
 - A new NVDA has Remote Access off: tick Enable Remote Access in its settings
   (Remote Access category) first, or Tools has no Remote Access menu.
+- To set that NVDA up unattended instead, `asc status --nvda-ini` prints the
+  base `nvda.ini` desktop mode writes: Remote Access on, connecting to `asc` at
+  startup with the certificate trusted, the silent synth, and no welcome or
+  update prompts. Save it as UTF-8 `nvda.ini` in that NVDA's config folder (for
+  an installed NVDA, `%APPDATA%\nvda`) while NVDA is not running (Windows
+  PowerShell 5.1's `>` writes UTF-16). It replaces that NVDA's own settings.
 - Needs `asc firewall-setup --mode remote` done once for its port (exit 7 with
   that hint otherwise).
 - The relay listens on remote mode's `host`, or else on this computer's
@@ -383,7 +389,7 @@ instance). Exits 3 if nothing runs.
 ### `asc status`
 
 ```
-asc status
+asc status [--nvda-ini]
 ```
 
 Shows the mode, whether `asc` is recording and NVDA is connected, the
@@ -403,6 +409,8 @@ speech: 12 lines kept, latest 12
   example a wrong channel key), until NVDA next joins.
 - When the mode has a [panic key](#panic-key), it shows it.
 - If `asc` isn't running, it exits 3.
+- `--nvda-ini` prints, instead, an `nvda.ini` for remote mode's NVDA. See
+  [remote mode](#remote-mode). Other modes exit 4.
 
 ### `asc speech`
 

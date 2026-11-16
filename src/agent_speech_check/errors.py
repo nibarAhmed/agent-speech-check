@@ -450,6 +450,14 @@ class LaunchElsewhere(Refused):
         )
 
 
+class NvdaIniOnlyRemote(Refused):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"--nvda-ini is for remote mode only; asc runs in {mode} mode",
+            hint="asc status shows how to connect NVDA",
+        )
+
+
 class NvdaDidNotConnect(NotConnected):
     def __init__(self, seconds: float, log_tail: str) -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
@@ -622,7 +630,7 @@ _BY_KIND = {category.kind: category for category in CATEGORIES}
 EXIT_INTERRUPTED = 130
 
 # The IPC version lives here so `DaemonVersionMismatch` can name it.
-IPC_VERSION = 2
+IPC_VERSION = 3
 
 
 def from_kind(kind: str, message: str, hint: str | None = None) -> AscError:
