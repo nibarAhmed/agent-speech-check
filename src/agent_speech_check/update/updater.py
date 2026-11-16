@@ -66,6 +66,11 @@ def folder() -> Path:
     return base_root() / "update"
 
 
+def stamp() -> Path:
+    """Touched by each update check."""
+    return folder() / "checked"
+
+
 def marker() -> Path:
     """Names the msiexec that installs an update, while it runs."""
     return folder() / "installing.json"
@@ -145,7 +150,7 @@ def checking() -> Path:
 
 def mark(path: Path, pid: int) -> None:
     started = winapi.created_at(pid)
-    if started is None:  # done already
+    if started is None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(path, json.dumps({"pid": pid, "started": started}))
@@ -182,13 +187,13 @@ def start_if_due() -> None:
     exe = installed_exe()
     if exe is None:
         return
-    stamp = folder() / "checked"
+    checked = stamp()
     # An update check never fails asc stop.
     with contextlib.suppress(OSError):
-        if _running() or not due(stamp, time.time()) or not enabled():
+        if _running() or not due(checked, time.time()) or not enabled():
             return
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.touch()
+        checked.parent.mkdir(parents=True, exist_ok=True)
+        checked.touch()
         # Its log, and any crash, land in update.log.
         with (folder() / "update.log").open("wb") as err:
             mark(checking(), spawn.detached([str(exe), "_update"], err, folder()).pid)
@@ -218,7 +223,7 @@ def run() -> None:
         idle = poll_until(lambda: not (_running() or winapi.others_running(exe)), IDLE_WAIT_S, 0.5)
         if not idle or not enabled():
             # Again at the next asc stop; the MSI is kept.
-            (folder() / "checked").unlink(missing_ok=True)
+            stamp().unlink(missing_ok=True)
             log.info("not installing %s now: asc runs, or auto_update is off", release.name)
             return
         install(msi)
