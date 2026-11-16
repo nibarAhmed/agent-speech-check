@@ -35,7 +35,6 @@ from agent_speech_check.errors import (
     NoFirewallNeeded,
     NotRunning,
     NvdaIniOnlyRemote,
-    RemoteNeedsInstance,
     UnrecognizedArguments,
     Updating,
     UsageError,
@@ -487,8 +486,7 @@ def cmd_firewall_setup(args: argparse.Namespace) -> int:
     target = _target(args)
     if not target.listens_outside:
         raise NoFirewallNeeded(target.mode)
-    if target.named_only and paths.instance() is None:
-        raise RemoteNeedsInstance("firewall-setup")
+    session.check_instance(target, "firewall-setup")
     if target.launches_sandbox:
         wsb.require_available()
     if firewall.rule_ok(target.mode, target.port):
@@ -725,9 +723,9 @@ def _free_port(_ask: Ask, mode: str) -> int:
     """The first port from the mode's default that no other named instance's
     config gives this mode, so their relays can run side by side."""
     taken = set()
-    # Only remote mode asks for a port, and the default instance never runs it.
-    for root in paths.every_root()[1:]:
-        if root == state_root():
+    for root in paths.every_root():
+        # Only remote mode asks for a port, and the default instance never runs it.
+        if root in (state_root(), paths.base_root()):
             continue
         try:
             config = load(root / "config.toml")

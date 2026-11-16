@@ -45,9 +45,10 @@ stop and ask the user to switch to the mode this table suggests:
   NVDA (the user starts one): it has no panic key, yet its keys reach an NVDA
   on this computer, maybe the user's own: send keys only if the user asked.
 - Remote mode (configured, or the user names a VM) runs only in a named
-  instance. It leaves the user's own settings alone, so set it up without
-  asking to switch modes: use your own instance, named after your VM, with `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command,
-  `asc stop` too. Never share one with another agent. Set it up yourself:
+  instance. It leaves the user's settings alone, so set it up without asking
+  to switch modes. Use your own instance, named after your VM, with
+  `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command, `asc stop`
+  too. Never share one with another agent. Set it up yourself:
   1. `asc config set mode remote --instance VMNAME`
   2. `asc start --instance VMNAME`. On exit 4 (port in use), run the command
      its hint gives and start again. On exit 7 (no firewall rule), run the
