@@ -198,12 +198,11 @@ def test_internal_error_in_a_group_names_the_inner_error(
 
 
 def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
-    host = "pc.mshome.net:26837"
-    status = {"mode": "remote", "host": host, "channel": "key", "fingerprint": "ab" * 32}
+    status = {"mode": "remote", "host": "pc", "port": 26837, "channel": "key", "fingerprint": "f"}
     remote = configobj.ConfigObj(nvda_ini(status).splitlines())["remote"]
     server = remote["controlServer"]
-    assert (server["host"], server["port"], server["key"]) == (host, "26837", "key")
-    assert remote["trustedCertificates"][host] == "ab" * 32
+    assert (server["host"], server["port"], server["key"]) == ("pc:26837", "26837", "key")
+    assert remote["trustedCertificates"]["pc:26837"] == "f"
     with pytest.raises(NvdaIniOnlyRemote):
         nvda_ini({**status, "mode": "watch"})
 
