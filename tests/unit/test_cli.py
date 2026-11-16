@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import shutil
@@ -6,14 +7,50 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import COMMANDS, main
+from agent_speech_check.cli import COMMANDS, build_parser, main
+from agent_speech_check.config import prefs
 
-CLI_DOC = Path(__file__).parents[2] / "docs" / "cli.md"
+ROOT = Path(__file__).parents[2]
+CLI_DOC = ROOT / "docs" / "cli.md"
+SKILL = ROOT / "plugins" / "agent-speech-check" / "skills" / "asc" / "SKILL.md"
+DOCS = (CLI_DOC, SKILL)
 
 
-def test_cli_doc_has_a_section_per_command() -> None:
-    documented = re.findall(r"^### `asc ([a-z-]+)`$", CLI_DOC.read_text(encoding="utf-8"), re.M)
-    assert sorted(documented) == sorted(COMMANDS)
+def _subparsers(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
+    actions = parser._actions
+    return next((a.choices for a in actions if isinstance(a, argparse._SubParsersAction)), {})
+
+
+def _flags(parser: argparse.ArgumentParser) -> set[str]:
+    own = {o for a in parser._actions for o in a.option_strings if o.startswith("--")}
+    return own.union(*(_flags(sub) for sub in _subparsers(parser).values()))
+
+
+def _mentioned_flags(text: str) -> set[str]:
+    return set(re.findall(r"--[a-z][a-z-]*", text))
+
+
+def test_cli_doc_matches_the_parser() -> None:
+    # Each command has a section naming each of its flags, and no doc names a flag that's gone.
+    parser = build_parser()
+    parts = re.split(r"^### `asc ([a-z-]+)`$", CLI_DOC.read_text(encoding="utf-8"), flags=re.M)
+    sections = dict(zip(parts[1::2], parts[2::2], strict=True))
+    assert sorted(sections) == sorted(COMMANDS)
+    for name, sub in _subparsers(parser).items():
+        missing = _flags(sub) - {"--help", "--instance"} - _mentioned_flags(sections[name])
+        assert not missing, f"docs/cli.md, asc {name}: {missing}"
+    for doc in DOCS:
+        unknown = _mentioned_flags(doc.read_text(encoding="utf-8")) - _flags(parser)
+        assert not unknown, f"{doc.name}: {unknown}"
+
+
+def test_docs_name_only_real_settings() -> None:
+    text = CLI_DOC.read_text(encoding="utf-8")
+    tables = text[text.index("\n## Configuration") : text.index("\n## Command reference")]
+    assert sorted(re.findall(r"^\| `([a-z_]+)` \|", tables, re.M)) == sorted(prefs.BY_NAME)
+    for doc in DOCS:
+        named = set(re.findall(r"`([a-z]+(?:_[a-z]+)+)`", doc.read_text(encoding="utf-8")))
+        assert named <= set(prefs.BY_NAME), f"{doc.name}: {named - set(prefs.BY_NAME)}"
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
