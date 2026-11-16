@@ -235,9 +235,7 @@ def run() -> None:
 
 def latest() -> Release | None:
     request = urllib.request.Request(LATEST_URL, headers={"Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(  # noqa: S310 - fixed https URL
-        request, timeout=LOOKUP_TIMEOUT_S, context=tls.context()
-    ) as response:
+    with tls.urlopen(request, LOOKUP_TIMEOUT_S) as response:
         text = response.read(LOOKUP_MAX_BYTES)
     try:
         return parse_release(json.loads(text))
@@ -261,9 +259,7 @@ def download(release: Release) -> Path | None:
     partial = msi.with_suffix(".part")
     try:
         with (
-            urllib.request.urlopen(  # noqa: S310 - https URL under DOWNLOAD_PREFIX
-                release.url, timeout=DOWNLOAD_TIMEOUT_S, context=tls.context()
-            ) as response,
+            tls.urlopen(release.url, DOWNLOAD_TIMEOUT_S) as response,
             partial.open("wb") as file,
         ):
             shutil.copyfileobj(response, file)

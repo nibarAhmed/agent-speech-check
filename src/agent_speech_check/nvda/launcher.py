@@ -16,7 +16,6 @@ import shutil
 import subprocess
 import threading
 import time
-import urllib.request
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -138,9 +137,7 @@ def _read_update_check(into: list[str | DownloadFailed]) -> None:
     try:
         with (
             _failing_as_download(UPDATE_URL),
-            urllib.request.urlopen(
-                UPDATE_URL, timeout=LOOKUP_TIMEOUT_S, context=tls.context()
-            ) as response,
+            tls.urlopen(UPDATE_URL, LOOKUP_TIMEOUT_S) as response,
         ):
             into.append(response.read(LOOKUP_MAX_BYTES).decode("utf-8", "replace"))
     except DownloadFailed as error:
@@ -257,9 +254,7 @@ def download(version: str, sha1: str | None = None) -> Path:
         try:
             with (
                 _failing_as_download(url),
-                urllib.request.urlopen(  # noqa: S310 - fixed https URL
-                    url, timeout=DOWNLOAD_TIMEOUT_S, context=tls.context()
-                ) as response,
+                tls.urlopen(url, DOWNLOAD_TIMEOUT_S) as response,
                 partial.open("wb") as file,
             ):
                 shutil.copyfileobj(response, file)
