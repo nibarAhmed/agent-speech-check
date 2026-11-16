@@ -27,20 +27,21 @@ def _flags(parser: argparse.ArgumentParser) -> set[str]:
 
 
 def _mentioned_flags(text: str) -> set[str]:
-    return set(re.findall(r"--[a-z][a-z-]*", text))
+    return set(re.findall(r"--[a-z]+(?:-[a-z]+)*", text))
 
 
 def test_cli_doc_matches_the_parser() -> None:
-    # Each command has a section naming each of its flags, and no doc names a flag that's gone.
     parser = build_parser()
     parts = re.split(r"^### `asc ([a-z-]+)`$", CLI_DOC.read_text(encoding="utf-8"), flags=re.M)
-    sections = dict(zip(parts[1::2], parts[2::2], strict=True))
-    assert sorted(sections) == sorted(COMMANDS)
+    names = parts[1::2]
+    assert sorted(names) == sorted(COMMANDS)
+    sections = {name: body.split("\n## ")[0] for name, body in zip(names, parts[2::2], strict=True)}
     for name, sub in _subparsers(parser).items():
         missing = _flags(sub) - {"--help", "--instance"} - _mentioned_flags(sections[name])
         assert not missing, f"docs/cli.md, asc {name}: {missing}"
+    every_flag = _flags(parser)
     for doc in DOCS:
-        unknown = _mentioned_flags(doc.read_text(encoding="utf-8")) - _flags(parser)
+        unknown = _mentioned_flags(doc.read_text(encoding="utf-8")) - every_flag
         assert not unknown, f"{doc.name}: {unknown}"
 
 
