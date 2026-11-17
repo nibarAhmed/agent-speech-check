@@ -22,7 +22,7 @@ stop and ask the user to switch to the mode this table suggests:
 | Hear the user's own NVDA while you act some other way (browser tools, tests, the user) | `watch` (never sends keys) |
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
-| Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation |
+| Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation; only then add `--i-understand` |
 | Press keys in NVDA on a VM the user set up | `remote` (the user starts and connects that NVDA; `launch` is refused) |
 
 ## Rules
@@ -49,8 +49,8 @@ stop and ask the user to switch to the mode this table suggests:
   `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command, `asc stop`
   too. Never share one with another agent. Set it up yourself:
   1. `asc config set mode remote --instance VMNAME`
-  2. `asc start --instance VMNAME`. If it fails, run the command its hint
-     gives (`asc firewall-setup` too, asking first as above), then start again.
+  2. `asc start --instance VMNAME`. If it fails, follow its hint (ask before
+     `asc firewall-setup`, as above), then start again.
   3. Tell the user what `asc status --instance VMNAME` says, so the VM's NVDA
      can connect.
 
@@ -78,11 +78,11 @@ asc stop                          # when done
 - Before a key that acts (Enter, Space, `type`), check focus with
   `asc press NVDA+Tab`. After starting or switching apps, `NVDA+T` names the
   window in front.
-- Act only on a match: `asc press Tab --expect "(?i)send" && asc press Enter`.
-  A loop acts only after it matched; if it runs out, stop and look.
-- `unknown`, `window unavailable`, or an NVDA command doing the app's own thing
-  means the app lacks focus, not that keys are slow: bring it to the front and
-  check with NVDA+T before pressing on.
+- Act only on a match: press Enter only if `asc press Tab --expect "(?i)send"`
+  exited 0. A loop acts only after it matched; if it runs out, stop and look.
+- A press that says `unknown` or `window unavailable`, or an NVDA command
+  doing the app's own thing, means the app lacks focus, not that keys are
+  slow: bring it to the front and check with NVDA+T before pressing on.
 - Silence after an action can be the finding: check whether the action
   happened before calling the key lost.
 
@@ -122,4 +122,4 @@ NVDA says, typed text included, so `asc stop` when you're done.
 | 4 | refused or busy | read the message |
 | 5 | protocol error | report it |
 | 6 | bug in asc | report it; the message says where the log is |
-| 7 | setup needed | tell the user the hint; retrying won't help |
+| 7 | setup needed | follow the hint, or tell the user if it needs them; retrying alone won't help |
