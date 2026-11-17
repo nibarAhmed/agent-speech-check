@@ -29,7 +29,7 @@ stop and ask the user to switch to the mode this table suggests:
 
 - Never run an NVDA binary or installer on the host yourself: a second NVDA
   restarts the user's screen reader. `asc get-nvda` and `asc start` are safe.
-- Desktop mode refuses while any NVDA runs; never stop the user's NVDA.
+- Never stop the user's NVDA.
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
@@ -40,7 +40,6 @@ stop and ask the user to switch to the mode this table suggests:
   panic key from `asc status` before you send any.
 - If the user names their own portable NVDA, set it for desktop or sandbox mode
   (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
-  It runs with a copy of their settings; `asc` never writes their copy.
 - Never set `launch` yourself. Desktop mode with `launch = false` starts no
   NVDA (the user starts one): it has no panic key, yet its keys reach an NVDA
   on this computer, maybe the user's own: send keys only if the user asked.
@@ -50,12 +49,9 @@ stop and ask the user to switch to the mode this table suggests:
   `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command, `asc stop`
   too. Never share one with another agent. Set it up yourself:
   1. `asc config set mode remote --instance VMNAME`
-  2. `asc start --instance VMNAME`. On exit 4 (port in use), run the command
-     its hint gives and start again. On exit 7 (no firewall rule), run the
-     `asc firewall-setup` it gives, asking first as above.
+  2. `asc start --instance VMNAME`, following its hints.
   3. Tell the user what `asc status --instance VMNAME` says, so the VM's NVDA
      can connect.
-- Instances can't use watch or shared mode.
 
 ## Workflow
 
@@ -72,8 +68,22 @@ asc stop                          # when done
   Numbers restart with each `asc start`.
 - If `asc start` says `asc` already runs, another session may own it: stop it
   only if it's the wrong mode.
-- If presses keep missing speech or a slow app times out, raise `settle_ms`,
-  `timeout_ms` or `launch_timeout_ms` with `asc config set`.
+- If a press's speech shows up only in the next command's output, raise
+  `settle_ms`. If a slow app times out, raise `timeout_ms` or
+  `launch_timeout_ms`. Both with `asc config set`.
+
+## Pressing keys
+
+- Before a key that acts (Enter, Space, `type`), check focus with
+  `asc press NVDA+Tab`. After starting or switching apps, `NVDA+T` names the
+  window in front.
+- Act only on a match: `asc press Tab --expect "(?i)send" && asc press Enter`.
+  A loop acts only after it matched; if it runs out, stop and look.
+- `unknown`, `window unavailable`, or an NVDA command doing the app's own thing
+  means the app lacks focus, not that keys are slow: bring it to the front and
+  check with NVDA+T before pressing on.
+- Silence after an action can be the finding: check whether the action
+  happened before calling the key lost.
 
 ## Watch and shared mode
 
@@ -94,7 +104,6 @@ NVDA says, typed text included, so `asc stop` when you're done.
   anyway. In watch mode the user may need to switch to that window.
 - Sandbox mode: your own app must come from a folder in sandbox mode's `share`
   (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
-- Shared mode needs `asc start --mode shared --i-understand` every time.
 - Remote mode: the VM's NVDA connects only after the user ticks Enable Remote
   Access in its settings, then connects as `asc status` says. Or, in a VM you
   set up yourself, save `asc status --nvda-ini` as UTF-8 `nvda.ini` in its
