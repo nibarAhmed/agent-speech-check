@@ -33,12 +33,13 @@ human's sign-off before breaking it.
 
 - You're not done until `uv run poe check` passes. Paste the command and its final summary lines
   as evidence. A fix or change to what a command does also shows a short transcript of the real
-  `asc` command, before and after. Run it against a test app, never the user's own windows.
+  command, before and after, run as `uv run asc` (the `asc` on PATH may be the installed release).
+  Run it in its own `--instance`, against a test app, never the user's own windows or daemon.
 - For a bug: first write a test that reproduces it and see it fail, then fix it.
 - For new logic (parsing, waits, protocol): tests first.
 - Test what can break, once, at the lowest layer that fails without the change. Extend an existing
-  case before adding a new test. Skip what types already guarantee, trivial logic, help and
-  message text, and smoke runs that only check nothing crashed.
+  case before adding a new test. Skip what types already guarantee, trivial logic, the exact
+  wording of help and messages, and smoke runs that only check nothing crashed.
 - Wait for a condition, never a fixed time: a sleep that guesses how long something takes fails
   on a slow CI runner. Poll what you need (`wait_until`, `Env.wait_running`), with a timeout.
   Sleeping is fine only when the sleep is the behavior under test, like a peer that hangs.
@@ -65,8 +66,8 @@ human's sign-off before breaking it.
 
 - Layout: `cli.py`, `errors.py` and `validate.py` at the top, the rest in one folder per area. Put
   a new module in its area, and keep the folders' `__init__.py` files empty of imports.
-- Add a library when it saves code. Say why in the PR description and in a comment beside it in
-  `pyproject.toml`.
+- Add a runtime dependency when it saves code. Say why in the PR description and in a comment
+  beside it in `pyproject.toml`.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.
 - Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
@@ -102,6 +103,9 @@ human's sign-off before breaking it.
   speech (`NoMatch` lists what NVDA said), because they go to the caller, not to a log.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
 - Watch mode never sends keys; the daemon enforces this.
+- Shared mode starts only with `--i-understand`.
+- An MSI-installed `asc` updates itself only from this repository's GitHub releases, over HTTPS,
+  with an MSI whose SHA-256 matches the one GitHub lists.
 
 ## Writing
 

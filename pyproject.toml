@@ -20,7 +20,7 @@ dependencies = [
     "configobj>=5.0.9",
     # The stdlib can't create the relay cert.
     "cryptography>=50.0.2",
-    # Finding, waiting for and ending processes.
+    # Find, wait for and end processes.
     "psutil>=7.2.2",
     # The stdlib can read TOML but not write it.
     "tomlkit>=0.15.1",
