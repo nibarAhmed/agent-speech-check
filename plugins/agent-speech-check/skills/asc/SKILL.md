@@ -69,22 +69,22 @@ asc stop                          # when done
   Numbers restart with each `asc start`.
 - If `asc start` says `asc` already runs, another session may own it: stop it
   only if it's the wrong mode.
-- If a press's speech shows up only in the next command's output, raise
-  `settle_ms`. If a slow app times out, raise `timeout_ms` or
-  `launch_timeout_ms`. Both with `asc config set`.
+- If a press's speech appears only in the next command's output, raise
+  `settle_ms`; if a slow app times out, raise `timeout_ms` or
+  `launch_timeout_ms` (`asc config set`).
 
 ## Pressing keys
 
-- Before a key that acts (Enter, Space, `type`), check focus with
-  `asc press NVDA+Tab`. After starting or switching apps, `NVDA+T` names the
-  window in front.
-- Act only on a match: press Enter only if `asc press Tab --expect "(?i)send"`
-  exited 0. A loop acts only after it matched; if it runs out, stop and look.
+- Before a key that acts (Enter, Space, `type`), confirm the target: reach it
+  with `--expect`, as in `asc press Tab --expect "(?i)send"`, and act only if
+  that exited 0; otherwise check with `asc press NVDA+Tab`. A loop acts only
+  after it matched; if it runs out, stop and look.
+- After starting or switching apps, `NVDA+T` names the window in front.
 - A press that says `unknown` or `window unavailable`, or an NVDA command
   doing the app's own thing, means the app lacks focus, not that keys are
-  slow: bring it to the front and check with NVDA+T before pressing on.
-- Silence after an action can be the finding: check whether the action
-  happened before calling the key lost.
+  slow: bring it to the front, then retry with `--expect`.
+- Silence after an action may be the finding: confirm the action happened
+  before blaming the key.
 
 ## Watch and shared mode
 
@@ -122,4 +122,4 @@ NVDA says, typed text included, so `asc stop` when you're done.
 | 4 | refused or busy | read the message |
 | 5 | protocol error | report it |
 | 6 | bug in asc | report it; the message says where the log is |
-| 7 | setup needed | follow the hint, or tell the user if it needs them; retrying alone won't help |
+| 7 | setup needed | follow the hint (tell the user if it needs them); retrying alone won't help |
