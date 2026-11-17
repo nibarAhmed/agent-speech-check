@@ -23,7 +23,6 @@ switches on for an app could change the synth or keyboard layout.
 from __future__ import annotations
 
 import copy
-import functools
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -78,7 +77,7 @@ class Setting:
 
     @property
     def owned(self) -> bool:
-        return self.key[0] == "remote" or self.key in _owned_keys()
+        return self.key[0] == "remote" or self.key in _OWNED_KEYS
 
 
 def merge(kept: tuple[Setting, ...], given: tuple[Setting, ...]) -> tuple[Setting, ...]:
@@ -96,11 +95,6 @@ def _flatten(section: Section, prefix: tuple[str, ...] = ()) -> list[tuple[str, 
         else:
             keys.append((*prefix, name))
     return keys
-
-
-@functools.cache
-def _owned_keys() -> frozenset[tuple[str, ...]]:
-    return frozenset(tuple(p.lower() for p in key) for key in _flatten(base_config(_ANY_RELAY)))
 
 
 @dataclass(frozen=True)
@@ -143,6 +137,11 @@ def base_config(relay: RelayAddress) -> Section:
             "trustedCertificates": {host: relay.fingerprint},
         },
     }
+
+
+_OWNED_KEYS = frozenset(
+    tuple(part.lower() for part in key) for key in _flatten(base_config(_ANY_RELAY))
+)
 
 
 # ---------------------------------------------------------------- the user's own config
