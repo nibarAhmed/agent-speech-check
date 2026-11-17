@@ -7,15 +7,15 @@
 ## Example
 
 ```shell
-asc setup
-asc start
+asc get-nvda
+asc start --mode desktop
 asc launch "C:\path\to\your-app.exe"
 asc press Tab
 asc press Shift+Tab --expect "expected accessible name"
 asc stop
 ```
 
-You run `asc setup` once. It asks which mode you want and offers to download NVDA or add a firewall rule if that mode needs one. After that, each `asc press` prints what NVDA said, and `--expect` makes it fail when that text is missing. `asc speech --since 0` shows everything NVDA has said so far, and every command has `--help`.
+`asc get-nvda` downloads the portable NVDA that desktop mode runs, once. Each `asc press` prints what NVDA said, and `--expect` makes it fail when that text is missing. `asc speech --since 0` shows everything NVDA has said so far. Run `asc setup` to pick a default mode.
 
 ## Requirements
 
@@ -28,10 +28,10 @@ You run `asc setup` once. It asks which mode you want and offers to download NVD
 | Mode | When to use it |
 |---|---|
 | `sandbox` | You want NVDA kept away from your desktop. It runs inside Windows Sandbox, and your own NVDA keeps running. |
-| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, which presses keys on your desktop. It won't start while another NVDA is running. |
+| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. |
 | `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
-| `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM (`--instance NAME`). |
+| `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM: run `asc setup --instance NAME` for each. |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 
