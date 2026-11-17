@@ -49,7 +49,8 @@ stop and ask the user to switch to the mode this table suggests:
   `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command, `asc stop`
   too. Never share one with another agent. Set it up yourself:
   1. `asc config set mode remote --instance VMNAME`
-  2. `asc start --instance VMNAME`, following its hints.
+  2. `asc start --instance VMNAME`. If it fails, run the command its hint
+     gives (`asc firewall-setup` too, asking first as above), then start again.
   3. Tell the user what `asc status --instance VMNAME` says, so the VM's NVDA
      can connect.
 
