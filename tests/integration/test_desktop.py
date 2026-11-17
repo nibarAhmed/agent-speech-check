@@ -146,8 +146,11 @@ def test_sandbox_needs_the_firewall_rule(env: Env, monkeypatch: pytest.MonkeyPat
     env.config(f"[sandbox]\nport = {env.port}\n")
     result = run_asc("start", "--mode", "sandbox")
     assert result.returncode == 7
-    assert "the firewall rule that lets the sandbox reach asc is missing" in result.stderr
-    assert "hint: asc sandbox-setup" in result.stderr
+    assert (
+        f"no firewall rule lets NVDA on another machine reach asc on port {env.port}"
+        in result.stderr
+    )
+    assert "hint: asc firewall-setup --mode sandbox (asks" in result.stderr
 
 
 @pytest.mark.usefixtures("env")

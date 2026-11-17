@@ -7,7 +7,7 @@ This is the complete command and configuration reference. If you're new to `asc`
 ## Usage
 
 ```
-asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
+asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 ```
 
 - In the synopses, `[X]` is optional, `UPPERCASE` is a value you supply,
@@ -19,8 +19,8 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
   `error: <message>` and, when there is one, `hint: <what to do>`. Bad
   arguments do too, with the command's `--help` as the hint, and exit 2.
 - `asc start`, `asc keys` and `asc config` take `--mode` (see
-  [Choosing a mode](#choosing-a-mode)). The rest talk to the one daemon that
-  runs, whatever its mode.
+  [Choosing a mode](#choosing-a-mode)). The rest talk to the
+  [instance's](#instances) one daemon, whatever its mode.
 - `MS` values are milliseconds. A flag on the command beats the setting it
   defaults to (see [Command defaults](#command-defaults)).
 - Commands that need NVDA exit 3 if it isn't connected or drops meanwhile, and
@@ -45,7 +45,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | Setup | [`get-nvda`](#asc-get-nvda) | make the portable NVDA that desktop mode launches |
 | | [`setup`](#asc-setup) | choose your settings, by answering questions |
 | | [`config`](#asc-config) | show or change one setting |
-| | [`sandbox-setup`](#asc-sandbox-setup) | allow the sandbox's NVDA to reach `asc` (asks for admin once) |
+| | [`firewall-setup`](#asc-firewall-setup) | allow NVDA in a sandbox or VM to reach `asc` (asks for admin once) |
 
 ## Exit codes
 
@@ -58,7 +58,7 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | 4 | Refused, or busy (the message says which) |
 | 5 | Protocol error |
 | 6 | Internal error (a bug in `asc`; the message says where the log is) |
-| 7 | Setup needed: NVDA, Windows Sandbox or its firewall rule; the hint says how |
+| 7 | Setup needed: NVDA, Windows Sandbox, the Default Switch or a firewall rule; the hint says how |
 | 130 | Interrupted (Ctrl+C) |
 
 ## Files
@@ -68,6 +68,8 @@ asc [--help] [--version] COMMAND [OPTIONS] [ARGS]
 | `%LOCALAPPDATA%\agent-speech-check\config.toml` | the settings (see [Configuration](#configuration)) |
 | `%LOCALAPPDATA%\agent-speech-check\<mode>\` | one mode's state file, `daemon.log`, and the relay certificate and channel key (shared mode uses watch mode's) |
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
+| `%LOCALAPPDATA%\agent-speech-check\instances\<name>\` | a [named instance's](#instances) `config.toml` and mode folders |
+| `%LOCALAPPDATA%\agent-speech-check\update\` | the last [update](#updates) check's `update.log` and `msiexec.log`, and the MSI it downloaded |
 
 The certificate and key are created once and kept, because NVDA pins the
 certificate.
@@ -77,12 +79,31 @@ removes `asc`. Removing it also deletes this whole folder, unless you keep it:
 uninstalling from Control Panel or Settings opens a wizard with a "Keep my
 settings and data" checkbox, and a silent uninstall keeps it only with
 `KEEPDATA=1` (`msiexec /x FILE.msi /qn KEEPDATA=1`). An upgrade keeps it.
-The firewall rule from `asc sandbox-setup` (`agent-speech-check sandbox relay`)
-stays: delete it in Windows Defender Firewall.
+The firewall rules from `asc firewall-setup` stay: delete them as
+[that command](#asc-firewall-setup) says.
+
+## Updates
+
+An `asc` installed by the MSI keeps itself up to date:
+
+- After `asc stop`, when no `asc` daemon runs in any instance, it checks in
+  the background, at most once a day, for a newer
+  [release](https://github.com/nibarAhmed/agent-speech-check/releases/latest).
+- It downloads that release's MSI from GitHub over HTTPS, checks it against
+  the SHA-256 GitHub lists for it, and installs it quietly, as an upgrade
+  does: your settings and data stay. It never installs an older version.
+- It installs only while no `asc` runs. If one does, it tries again an hour
+  later, at the next `asc stop`.
+- While it installs, every command exits 4 with the hint to
+  try again in a minute.
+- `asc config set auto_update false` turns it off. `false` in any instance's
+  `config.toml` turns it off for all of them, since they share one `asc`.
+- An `asc` installed with `uv`, or run from a clone, never updates itself: use
+  `uv tool upgrade agent-speech-check`.
 
 ## Modes
 
-The `mode` setting (or `asc start --mode`) picks one of four.
+The `mode` setting (or `asc start --mode`) picks one of five.
 
 ### Watch mode
 
@@ -152,7 +173,8 @@ Its keys land on this desktop, so it has a [panic key](#panic-key).
 and your own NVDA keeps running undisturbed.
 
 - Needs Windows Pro, Enterprise or Education (exit 7 on Home), and
-  `asc sandbox-setup` done once (exit 7 with that hint otherwise).
+  `asc firewall-setup --mode sandbox` done once (exit 7 with that hint
+  otherwise).
 - Only one sandbox can run at a time (exit 4 if one already runs).
 - If the sandbox fails to start, a retry may help when wsb timed out or the
   last sandbox was still shutting down (exit 3). An error from wsb itself, or
@@ -176,6 +198,37 @@ and your own NVDA keeps running undisturbed.
   (looked up at every start), on port 16837 unless sandbox mode's `port` says another.
 - Folders listed in sandbox mode's `share` are mapped read-only into the sandbox
   at `C:\share\<folder name>`, so `asc launch` can start your app from there.
+
+### Remote mode
+
+NVDA runs on another machine, like a Hyper-V VM, and connects to `asc` over
+the network. `asc` launches nothing: you start that NVDA and connect its
+Remote Access as `asc status` says (allow this computer to be controlled).
+Its keys land on that machine, so there is no panic key.
+
+- It runs only in a named [instance](#instances), one per VM, so each agent has
+  its own and a forgotten `--instance` never reaches another agent's VM. The
+  default instance may keep `mode = "remote"` as the preferred mode, but
+  `asc start` and `asc firewall-setup` there exit 4.
+- A new NVDA has Remote Access off: tick Enable Remote Access in its settings
+  (Remote Access category) first, or Tools has no Remote Access menu.
+- To set that NVDA up unattended instead, `asc status --nvda-ini` prints the
+  base `nvda.ini` desktop mode writes: Remote Access on, connecting to `asc` at
+  startup with the certificate trusted, the silent synth, and no welcome or
+  update prompts. Save it as UTF-8 `nvda.ini` in that NVDA's config folder (for
+  an installed NVDA, `%APPDATA%\nvda`) while NVDA is not running (Windows
+  PowerShell 5.1's `>` writes UTF-16). It replaces that NVDA's own settings.
+- Needs `asc firewall-setup --mode remote --instance NAME` done once for its
+  port (exit 7 with that hint otherwise).
+- The relay listens on remote mode's `host`, or else on this computer's
+  Hyper-V Default Switch address (looked up at every start; exit 7 if there is
+  none), on port 26837 unless remote mode's `port` says another. `host` must be
+  an IPv4 address of this computer; loopback and `0.0.0.0` are refused (exit 2).
+- Without `host`, `asc status` gives this computer's name on the Default Switch
+  (like `desktop-1.mshome.net`) rather than its address, which changes over
+  time, so a VM's NVDA keeps finding `asc`.
+- `asc launch` is refused (exit 4): start the app on that machine, then
+  `asc wait`.
 
 ### Shared mode
 
@@ -201,8 +254,9 @@ and stops `asc` at once (in desktop mode, its NVDA too).
 - If another program owns the hotkey, `asc start` refuses (exit 4): `asc` never
   sends keys to this desktop without one.
 - `asc status` shows the panic key.
-- Sandbox mode has none: its keys land in the sandbox. Desktop mode with
-  `launch = false` has none either (see [Desktop mode](#desktop-mode)).
+- Sandbox and remote mode have none: their keys land on another machine.
+  Desktop mode with `launch = false` has none either (see
+  [Desktop mode](#desktop-mode)).
 
 ## Configuration
 
@@ -233,11 +287,31 @@ the mode that uses them.
 
 `asc start` uses `--mode`, or the `mode` setting, or watch. Each mode keeps its
 own settings in a table named after it (`[watch]`, `[desktop]`, `[sandbox]`,
-`[shared]`) and its own folder. A mode without a table uses the defaults below.
+`[shared]`, `[remote]`) and its own folder. A mode without a table uses the
+defaults below.
 
-One daemon runs at a time. `asc start` exits 4 while one runs in any mode, and
-`stop`, `status`, `speech`, `wait`, `mark`, `press`, `type` and `launch` talk
-to it without being told its mode.
+One daemon runs per [instance](#instances). `asc start` exits 4 while one runs
+in any mode, and `stop`, `status`, `speech`, `wait`, `mark`, `press`, `type`
+and `launch` talk to it without being told its mode.
+
+### Instances
+
+`--instance NAME` (before or after the command), or the `ASC_INSTANCE`
+environment variable, picks a named instance: a separate `asc` with its own
+`config.toml`, mode folders and daemon, running next to the default one and
+any other instance. Use one per agent, for example each driving NVDA in its
+own VM with remote mode, which runs only in a named instance.
+
+- `NAME` is 1 to 32 lowercase letters, digits and `-`, starting with a letter
+  or digit (exit 2 otherwise).
+- Every instance shares the portable NVDA that `asc get-nvda` makes.
+- Watch and shared mode use your own NVDA, which only the default instance
+  may join: an instance refuses them (exit 4), and its `asc setup` doesn't
+  offer them (remote is its default).
+- Ports must differ between running instances: `asc start` refuses one in use
+  (exit 4). Desktop mode picks a free one, and `asc setup` gives remote mode the
+  first port from 26837 that no other named instance's config uses.
+- `asc stop` stops only its own instance.
 
 ### Global settings
 
@@ -258,6 +332,7 @@ built-in default.
 | `launch_timeout_ms` | 30000 (at most 600000) | `launch --timeout` |
 | `keys_layout` | desktop | `keys --layout` (desktop or laptop) |
 | `connect` | true | none: `start` in watch and shared mode asks your running NVDA to connect |
+| `auto_update` | true | none: an MSI-installed `asc` [updates itself](#updates); false in any instance's config turns that off |
 
 ### Mode settings
 
@@ -266,14 +341,16 @@ context.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `port` | watch and shared 6837, sandbox 16837, desktop a free one | relay port |
-| `launch` | true in desktop and sandbox mode | false: `asc` starts no NVDA; you start one and connect it (in desktop mode, on this computer) |
+| `port` | watch and shared 6837, sandbox 16837, remote 26837, desktop a free one | relay port |
+| `launch` | true | desktop only: false means `asc` starts no NVDA; you start one on this computer and connect it |
+| `host` | the Default Switch address | remote only: the IPv4 address of this computer the relay listens on |
 | `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
 | `share` | none | sandbox: folders mapped read-only to `C:\share\<name>`, full paths |
 | `window` | tray | sandbox: its window in the tray, taskbar or show |
 | `nvda_settings` | none | `section.key=value` settings for an NVDA that `asc` launches, as `--nvda-setting` takes |
 
-`window` and `share` are refused (exit 2) outside sandbox mode, and `nvda_dir`
+`window` and `share` are refused (exit 2) outside sandbox mode, `launch`
+outside desktop mode, `host` outside remote mode, and `nvda_dir`
 and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
 `asc` writes itself are never kept.
 
@@ -282,7 +359,7 @@ and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
 ### `asc start`
 
 ```
-asc start [--mode {watch,desktop,sandbox,shared}]
+asc start [--mode {watch,desktop,sandbox,shared,remote}]
           [--nvda-setting SECTION.KEY=VALUE] [--window {tray,taskbar,show}]
           [--i-understand]
 ```
@@ -312,6 +389,7 @@ checks depends on the mode: see [Modes](#modes).
 ```shell
 asc start
 asc start --mode sandbox
+asc start --mode remote --instance vm1
 asc start --nvda-setting keyboard.speakTypedCharacters=False
 ```
 
@@ -321,8 +399,9 @@ asc start --nvda-setting keyboard.speakTypedCharacters=False
 asc stop
 ```
 
-Releases any held keys, stops the daemon and forgets the speech, and prints
-`stopped: MODE`. Exits 3 if nothing runs.
+Releases any held keys, stops this instance's daemon and forgets the speech,
+and prints `stopped: MODE` (`stopped: instances/NAME/MODE` in a named
+instance). Exits 3 if nothing runs.
 
 - A daemon that is there but doesn't answer (an older asc, or a stuck one)
   still counts as running, so `asc start` and `asc setup` refuse with exit 4. `asc stop` ends its process,
@@ -333,7 +412,7 @@ Releases any held keys, stops the daemon and forgets the speech, and prints
 ### `asc status`
 
 ```
-asc status
+asc status [--nvda-ini]
 ```
 
 Shows the mode, whether `asc` is recording and NVDA is connected, the
@@ -353,6 +432,8 @@ speech: 12 lines kept, latest 12
   example a wrong channel key), until NVDA next joins.
 - When the mode has a [panic key](#panic-key), it shows it.
 - If `asc` isn't running, it exits 3.
+- `--nvda-ini` prints, instead, an `nvda.ini` for remote mode's NVDA. See
+  [remote mode](#remote-mode). Other modes exit 4.
 
 ### `asc speech`
 
@@ -493,7 +574,7 @@ asc type "x@example.com" --settle 800
 ### `asc keys`
 
 ```
-asc keys [--mode {watch,desktop,sandbox,shared}] [--layout {desktop,laptop}] [--lang LANG]
+asc keys [--mode {watch,desktop,sandbox,shared,remote}] [--layout {desktop,laptop}] [--lang LANG]
          [--braille | --no-braille] [SEARCH ...]
 ```
 
@@ -534,7 +615,8 @@ asc launch [--title REGEX] [--timeout MS] CMD
 
 Starts `CMD` and waits until NVDA says something matching `--title`, or
 anything at all if `--title` is left out, then for quiet. Prints what NVDA
-said, numbered like `press`. Works in every mode.
+said, numbered like `press`. Works in every mode but remote, where it exits 4:
+start the app on that machine and use `asc wait`.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
@@ -547,7 +629,7 @@ said, numbered like `press`. Works in every mode.
   meanwhile, or `(none)`.
 - A command that can't start exits 2. NVDA disconnecting meanwhile is handled
   as in `wait`.
-- In sandbox mode (unless `launch = false`) `CMD` runs inside the sandbox,
+- In sandbox mode `CMD` runs inside the sandbox,
   which has no Edge and no Notepad. Your own app must come from a path under
   `C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
   shared folder. A `.cmd` or `.bat` runs in a hidden console, so NVDA hears
@@ -600,10 +682,10 @@ Asks a few questions and saves the answers in `config.toml`:
 1. The mode.
 2. Desktop and sandbox mode: which NVDA.
 3. Sandbox mode: the shared folders and the window.
-4. Watch and shared mode: your NVDA's keyboard layout.
+4. Watch, shared and remote mode: your NVDA's keyboard layout.
 
 When they are missing, it offers to download NVDA for desktop mode and to add
-the sandbox firewall rule. Timings are not asked; change them with
+the firewall rule sandbox or remote mode needs. Timings are not asked; change them with
 `asc config set` when needed.
 
 | Option | Default | Meaning |
@@ -619,6 +701,11 @@ the sandbox firewall rule. Timings are not asked; change them with
 - Without a terminal it exits 2 at once, so a script never waits on it. Use
   `asc config` there.
 - It refuses with exit 4 while `asc` runs.
+- In a named [instance](#instances) it offers only desktop, sandbox and remote
+  mode (remote by default). Remote mode takes the first port from 26837 that no
+  other instance's remote mode has.
+- In the default instance, remote saves only `mode = "remote"` and says to run
+  `asc setup --instance VMNAME`: remote mode runs only in a named instance.
 
 ### `asc config`
 
@@ -660,23 +747,35 @@ asc config set share C:\src\app C:\data --mode sandbox
 asc config unset settle_ms
 ```
 
-### `asc sandbox-setup`
+### `asc firewall-setup`
 
 ```
-asc sandbox-setup
+asc firewall-setup [--mode {sandbox,remote}]
 ```
 
-Creates the one Windows Firewall rule sandbox mode needs, after a Windows admin
-prompt. Sandbox mode's NVDA connects to `asc` on this computer's Hyper-V
-Default Switch address, which Windows Firewall blocks until this rule allows
-it. The rule is inbound TCP, only from this computer's local subnets, only
-sandbox mode's relay port (16837 unless its `port` says another), only for the
-program that runs `asc`. It does not name the Default Switch, because Windows
-replaces that switch between sandboxes; the relay itself listens only on the
-Default Switch address.
+Creates the Windows Firewall rule that sandbox or remote mode needs, after a
+Windows admin prompt. In those modes NVDA on another machine connects to `asc`
+on this computer's Hyper-V Default Switch address (or remote mode's `host`),
+which Windows Firewall blocks until a rule allows it. The rule is inbound TCP,
+only from this computer's local subnets, only the mode's relay port (sandbox
+16837, remote 26837, unless its `port` says another), only for the program
+that runs `asc`. It does not name the Default Switch, because Windows replaces
+that switch between sandboxes; the relay itself listens only on its address.
 
+| Option | Default | Meaning |
+|---|---|---|
+| `--mode MODE` | the `mode` setting | sandbox or remote; other modes need no rule (exit 2) |
+
+- Sandbox mode has one rule, `agent-speech-check sandbox relay`. Remote mode
+  has one per port, `agent-speech-check remote relay PORT`, so each
+  [instance](#instances) can have its own.
 - If the rule is already in place it says so and changes nothing.
 - Run it again after updating Python or `asc`, since the rule names the
   program.
-- Remove it from an admin terminal with
-  `netsh advfirewall firewall delete rule name="agent-speech-check sandbox relay"`.
+- Remove one from an admin terminal with
+  `netsh advfirewall firewall delete rule name="RULE NAME"`.
+
+```shell
+asc firewall-setup --mode sandbox
+asc firewall-setup --mode remote --instance vm1
+```

@@ -229,9 +229,9 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
 ## Security considerations
 
 - Whoever reaches the relay and knows the channel key can send keys to NVDA.
-  So the relay listens on 127.0.0.1, or for sandbox mode on the host's
-  Hyper-V Default Switch address, never on all interfaces, and the key is
-  random.
+  So the relay listens on 127.0.0.1, or for sandbox and remote mode on the
+  host's Hyper-V Default Switch address (or remote mode's `host`, one address
+  of this computer), never on all interfaces, and the key is random.
 - Watch and shared mode use one key and certificate, so an NVDA that joined
   watch mode can also be sent keys once the user starts shared mode. NVDA's
   question is the same for both ("allow this computer to be controlled"), so

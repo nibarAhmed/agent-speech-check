@@ -1,4 +1,4 @@
-"""Starting asc's own background processes (the daemon, the sandbox guard)."""
+"""Starting asc's own background processes (the daemon, the sandbox guard, the updater)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def asc_command(*args: str) -> list[str]:
 
 
 def detached(
-    command: list[str], err: IO[bytes], cwd: Path | None = None
+    command: list[str], err: IO[bytes] | int, cwd: Path | None = None
 ) -> subprocess.Popen[bytes]:
     def popen(flags: int) -> subprocess.Popen[bytes]:
         return subprocess.Popen(  # noqa: S603 - our own executable and arguments

@@ -1,19 +1,59 @@
+import argparse
 import os
 import re
 import shutil
 from pathlib import Path
 
+import configobj
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import COMMANDS, main
+from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini
+from agent_speech_check.config import prefs
+from agent_speech_check.errors import NvdaIniOnlyRemote
 
-CLI_DOC = Path(__file__).parents[2] / "docs" / "cli.md"
+ROOT = Path(__file__).parents[2]
+CLI_DOC = ROOT / "docs" / "cli.md"
+SKILL = ROOT / "plugins" / "agent-speech-check" / "skills" / "asc" / "SKILL.md"
+DOCS = (CLI_DOC, SKILL)
 
 
-def test_cli_doc_has_a_section_per_command() -> None:
-    documented = re.findall(r"^### `asc ([a-z-]+)`$", CLI_DOC.read_text(encoding="utf-8"), re.M)
-    assert sorted(documented) == sorted(COMMANDS)
+def _subparsers(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
+    actions = parser._actions
+    return next((a.choices for a in actions if isinstance(a, argparse._SubParsersAction)), {})
+
+
+def _flags(parser: argparse.ArgumentParser) -> set[str]:
+    own = {o for a in parser._actions for o in a.option_strings if o.startswith("--")}
+    return own.union(*(_flags(sub) for sub in _subparsers(parser).values()))
+
+
+def _mentioned_flags(text: str) -> set[str]:
+    return set(re.findall(r"--[a-z]+(?:-[a-z]+)*", text))
+
+
+def test_cli_doc_matches_the_parser() -> None:
+    parser = build_parser()
+    parts = re.split(r"^### `asc ([a-z-]+)`$", CLI_DOC.read_text(encoding="utf-8"), flags=re.M)
+    names = parts[1::2]
+    assert sorted(names) == sorted(COMMANDS)
+    sections = {name: body.split("\n## ")[0] for name, body in zip(names, parts[2::2], strict=True)}
+    for name, sub in _subparsers(parser).items():
+        missing = _flags(sub) - {"--help", "--instance"} - _mentioned_flags(sections[name])
+        assert not missing, f"docs/cli.md, asc {name}: {missing}"
+    every_flag = _flags(parser)
+    for doc in DOCS:
+        unknown = _mentioned_flags(doc.read_text(encoding="utf-8")) - every_flag
+        assert not unknown, f"{doc.name}: {unknown}"
+
+
+def test_docs_name_only_real_settings() -> None:
+    text = CLI_DOC.read_text(encoding="utf-8")
+    tables = text[text.index("\n## Configuration") : text.index("\n## Command reference")]
+    assert sorted(re.findall(r"^\| `([a-z_]+)` \|", tables, re.M)) == sorted(prefs.BY_NAME)
+    for doc in DOCS:
+        named = set(re.findall(r"`([a-z]+(?:_[a-z]+)+)`", doc.read_text(encoding="utf-8")))
+        assert named <= set(prefs.BY_NAME), f"{doc.name}: {named - set(prefs.BY_NAME)}"
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -155,6 +195,16 @@ def test_internal_error_in_a_group_names_the_inner_error(
     monkeypatch.delenv("ASC_DEBUG", raising=False)
     assert main([_FailsInATaskGroup()]) == 6  # type: ignore[list-item]
     assert "internal error: ValueError: tray icon\n" in capsys.readouterr().err
+
+
+def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
+    status = {"mode": "remote", "host": "pc", "port": 26837, "channel": "key", "fingerprint": "f"}
+    remote = configobj.ConfigObj(nvda_ini(status).splitlines())["remote"]
+    server = remote["controlServer"]
+    assert (server["host"], server["port"], server["key"]) == ("pc:26837", "26837", "key")
+    assert remote["trustedCertificates"]["pc:26837"] == "f"
+    with pytest.raises(NvdaIniOnlyRemote):
+        nvda_ini({**status, "mode": "watch"})
 
 
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])

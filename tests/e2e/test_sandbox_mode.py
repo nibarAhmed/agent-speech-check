@@ -1,6 +1,6 @@
 """Sandbox mode end to end, run on the host (a sandbox can't run inside one).
 
-Needs `asc sandbox-setup` done once, and the NVDA installer: set
+Needs `asc firewall-setup --mode sandbox` done once, and the NVDA installer: set
 ASC_E2E_SANDBOX=1 and ASC_E2E_INSTALLER to the installer (scripts/e2e_sandbox.py
 downloads it to .e2e/in). Your own NVDA keeps running; the test checks that
 its process is untouched.

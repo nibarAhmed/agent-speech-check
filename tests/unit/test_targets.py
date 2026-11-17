@@ -26,13 +26,15 @@ def test_no_file_gives_watch_default(tmp_path: Path) -> None:
 
 def test_mode_defaults() -> None:
     assert defaults("desktop") == Target("desktop", 0, launch=True)
-    assert defaults("sandbox") == Target("sandbox", 16837, launch=True)
+    assert defaults("sandbox") == Target("sandbox", 16837, launch=False)
+    assert defaults("remote") == Target("remote", 26837, launch=False)
 
 
 def test_keys_follow_the_mode() -> None:
     assert not defaults("watch").keys
     assert defaults("shared").keys
     assert defaults("sandbox").keys
+    assert defaults("remote").keys
     assert replace(defaults("desktop"), launch=False).keys
 
 
@@ -43,6 +45,7 @@ def test_panic_key_wherever_keys_reach_this_desktop() -> None:
     # has none either: whoever starts that NVDA takes the risk (docs/cli.md).
     assert not replace(defaults("desktop"), launch=False).takes_panic_key
     assert not defaults("sandbox").takes_panic_key
+    assert not defaults("remote").takes_panic_key
     assert not defaults("watch").takes_panic_key
 
 
@@ -58,7 +61,15 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared"),
+        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared, remote"),
+        # asc always launches NVDA in sandbox mode, and never elsewhere.
+        ("[sandbox]\nlaunch = false\n", r"\[sandbox\] launch: expected only in desktop mode"),
+        ("[remote]\nlaunch = true\n", r"\[remote\] launch: expected only in desktop mode"),
+        ("[sandbox]\nhost = '172.20.0.1'\n", "host: expected only in remote mode"),
+        # Loopback is this desktop: shared mode, with its consent and panic key.
+        ("[remote]\nhost = '127.0.0.2'\n", "host: expected an IPv4 address of this computer"),
+        ("[remote]\nhost = '0.0.0.0'\n", "host: expected an IPv4 address of this computer"),
+        ("[remote]\nhost = 'vm.local'\n", "host: expected an IPv4 address of this computer"),
         ("[desktop]\nmode = 'desktop'\n", "expected only known keys, got mode"),
         ("[desktop]\nkeys = true\n", "expected only known keys, got keys"),
         ("[watch]\nport = 0\n", "port: expected a whole number from 1"),
@@ -107,6 +118,16 @@ def test_json_round_trip() -> None:
         Target.from_json('{"mode":"desktop","port":1,"launch":true,"settings":[1]}')
 
 
+def test_remote_host_from_file_and_json(tmp_path: Path) -> None:
+    target = resolve(write(tmp_path, "[remote]\nhost = '172.20.0.1'\n"), "remote")
+    assert target.host == "172.20.0.1"
+    assert not target.launches_nvda
+    assert Target.from_json(target.to_json()) == target
+    # The daemon checks the address too, since its target is an edge.
+    with pytest.raises(UsageError, match="host: expected an IPv4 address"):
+        Target.from_json(replace(target, host="0.0.0.0").to_json())  # noqa: S104 - refused
+
+
 def test_json_round_trip_with_settings_and_nvda_dir() -> None:
     settings = (Setting.parse("speech.symbolLevel=300"), Setting.parse("presentation.x=a, b"))
     target = replace(defaults("desktop"), nvda_dir="C:/nvda").with_settings(settings)
@@ -129,7 +150,7 @@ def test_share_list(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "table",
-    ["[watch]", "[shared]", "[desktop]\nlaunch = false", "[sandbox]\nlaunch = false"],
+    ["[watch]", "[shared]", "[desktop]\nlaunch = false", "[remote]"],
 )
 def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
     path = write(tmp_path, f"{table}\nnvda_dir = 'C:/nvda'\n")
@@ -171,7 +192,7 @@ def test_bad_window(tmp_path: Path) -> None:
     assert exc.value.exit_code == 2
 
 
-@pytest.mark.parametrize("table", ["[watch]", "[desktop]", "[sandbox]\nlaunch = false"])
+@pytest.mark.parametrize("table", ["[watch]", "[desktop]", "[remote]"])
 def test_window_only_for_a_sandbox_asc_launches(tmp_path: Path, table: str) -> None:
     path = write(tmp_path, f"{table}\nwindow = 'tray'\n")
     with pytest.raises(UsageError, match="window: expected only in sandbox mode") as exc:

@@ -396,16 +396,17 @@ class FileUnusable(SetupNeeded):
 class NoDefaultSwitch(SetupNeeded):
     def __init__(self, interface: str) -> None:
         super().__init__(
-            f"no IPv4 address on {_show(interface)}, so the sandbox can't reach asc",
-            hint="start any Windows Sandbox once, which creates the Default Switch",
+            f"no IPv4 address on {_show(interface)}, so the sandbox or VM can't reach asc",
+            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default "
+            "Switch; or in remote mode, asc config set host ADDRESS --mode remote",
         )
 
 
 class FirewallRuleMissing(SetupNeeded):
-    def __init__(self) -> None:
+    def __init__(self, port: int, command: str) -> None:
         super().__init__(
-            "the firewall rule that lets the sandbox reach asc is missing",
-            hint="asc sandbox-setup (asks for admin rights once)",
+            f"no firewall rule lets NVDA on another machine reach asc on port {port}",
+            hint=f"{command} (asks for admin rights once)",
         )
 
 
@@ -413,7 +414,55 @@ class FirewallFailed(SetupNeeded):
     def __init__(self, rule: str) -> None:
         super().__init__(
             f"the firewall rule {_show(rule)} was not created",
-            hint="approve the admin prompt, or run asc sandbox-setup again",
+            hint="approve the admin prompt, or run asc firewall-setup again",
+        )
+
+
+class NoFirewallNeeded(UsageError):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"{mode} mode needs no firewall rule",
+            hint="asc firewall-setup --mode sandbox, or --mode remote --instance NAME",
+        )
+
+
+class BadInstance(UsageError):
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"instance {_show(name)}: expected up to 32 lowercase letters, digits and dashes",
+            hint="like --instance vm1; not a Windows device name like con or nul",
+        )
+
+
+class OwnNvdaInInstance(Refused):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"{mode} mode uses your own NVDA, which only the default instance may join",
+            hint="use remote mode in a named instance, or leave out --instance",
+        )
+
+
+class RemoteNeedsInstance(Refused):
+    def __init__(self, command: str) -> None:
+        super().__init__(
+            "remote mode runs only in a named instance, one per VM",
+            hint=f"asc {command} --mode remote --instance VMNAME",
+        )
+
+
+class LaunchElsewhere(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "remote mode can't start apps: NVDA runs on another machine",
+            hint="start the app there, then asc wait for its speech",
+        )
+
+
+class NvdaIniOnlyRemote(Refused):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"--nvda-ini is for remote mode only; asc runs in {mode} mode",
+            hint="asc status shows how to connect NVDA",
         )
 
 
@@ -476,7 +525,18 @@ class KeysRefused(Refused):
 class AlreadyRunning(Refused):
     def __init__(self, mode: str | None = None) -> None:
         where = f" in {mode} mode" if mode else ""
-        super().__init__(f"asc is already running{where}", hint="asc stop, then try again")
+        super().__init__(
+            f"asc is already running{where}",
+            hint="asc stop only if you started it",
+        )
+
+
+class PortInUse(Refused):
+    def __init__(self, port: int, command: str) -> None:
+        super().__init__(
+            f"port {port} is in use, maybe by another asc instance",
+            hint=f"{command} (a free one)",
+        )
 
 
 class DaemonNotAnswering(Refused):
@@ -504,6 +564,11 @@ class AscStillRunning(Refused):
             f"asc is still running (pid {', '.join(str(pid) for pid in pids)})",
             hint="close it, or end it in Task Manager, then try again",
         )
+
+
+class Updating(Refused):
+    def __init__(self) -> None:
+        super().__init__("asc is installing an update", hint="try again in a minute")
 
 
 class NvdaAlreadyRunning(Refused):
@@ -581,7 +646,7 @@ _BY_KIND = {category.kind: category for category in CATEGORIES}
 EXIT_INTERRUPTED = 130
 
 # The IPC version lives here so `DaemonVersionMismatch` can name it.
-IPC_VERSION = 2
+IPC_VERSION = 3
 
 
 def from_kind(kind: str, message: str, hint: str | None = None) -> AscError:

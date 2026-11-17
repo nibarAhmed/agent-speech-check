@@ -20,7 +20,7 @@ asc stop
 
 - Windows 11.
 - NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
-- For sandbox mode: Windows 11 24H2 or later, Pro, Enterprise or Education, with Windows Sandbox turned on, and `asc sandbox-setup` run once (it asks for admin).
+- For sandbox mode: Windows 11 24H2 or later, Pro, Enterprise or Education, with Windows Sandbox turned on, and `asc firewall-setup --mode sandbox` run once (it asks for admin).
 
 ## Choose a mode
 
@@ -30,12 +30,13 @@ asc stop
 | `desktop` | Local development and CI | Starts a portable NVDA with its own config. Won't start while another `nvda.exe` runs. Its keys go to your desktop. |
 | `watch` | Listening to the NVDA you already run | Captures its speech and never sends keys. On start, your NVDA asks to allow the connection: answer Yes. |
 | `shared` | Driving the NVDA you already run | Sends keys to your real session. Needs `--i-understand`. |
+| `remote` | NVDA in a VM you run | You start NVDA there and connect it to `asc`. Runs in a named instance, one per VM (`--instance NAME`), so each agent has its own. Needs `asc firewall-setup --mode remote --instance NAME` once. |
 
 Unsure? Use **sandbox**, or **desktop** for a simpler setup. Details are in the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes).
 
 ## Install
 
-- **MSI installer** (no Python needed): run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest). It installs for your user, without admin.
+- **MSI installer** (no Python needed): run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest). It installs for your user, without admin, and [updates itself](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates) after `asc stop`, at most once a day. `asc config set auto_update false` turns that off.
 - **With [`uv`](https://docs.astral.sh/uv/)**, for the latest code on `main`: `uv tool install git+https://github.com/nibarAhmed/agent-speech-check`. Update with `uv tool upgrade agent-speech-check`.
 
 Open a new terminal afterwards so it sees the new `PATH`.
