@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_speech_check.config.targets import Target
-from agent_speech_check.daemon import ipc, server, spawn, state
+from agent_speech_check.daemon import ipc, server, state
 from agent_speech_check.daemon.server import LOG_FILE
 from agent_speech_check.errors import (
     AlreadyRunning,
@@ -34,7 +34,7 @@ from agent_speech_check.errors import (
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.windows import paths, winapi
+from agent_speech_check.windows import paths, spawn, winapi
 from agent_speech_check.windows.paths import relay_dir
 from agent_speech_check.windows.wait import poll_until
 

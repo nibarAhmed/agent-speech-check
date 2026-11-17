@@ -32,7 +32,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from agent_speech_check.daemon import spawn
 from agent_speech_check.errors import (
     NotConnected,
     SandboxBroken,
@@ -41,7 +40,7 @@ from agent_speech_check.errors import (
     WsbMissing,
 )
 from agent_speech_check.validate import Fields
-from agent_speech_check.windows import powershell, winapi
+from agent_speech_check.windows import powershell, spawn, winapi
 from agent_speech_check.windows.wait import poll_until
 
 log = logging.getLogger(__name__)

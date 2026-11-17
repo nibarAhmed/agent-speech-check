@@ -77,10 +77,7 @@ class Setting:
 
     @property
     def owned(self) -> bool:
-        if self.key[0] == "remote":
-            return True
-        owned = _flatten(base_config(_ANY_RELAY))
-        return any(self.key == tuple(p.lower() for p in key) for key in owned)
+        return self.key[0] == "remote" or self.key in _OWNED_KEYS
 
 
 def merge(kept: tuple[Setting, ...], given: tuple[Setting, ...]) -> tuple[Setting, ...]:
@@ -140,6 +137,11 @@ def base_config(relay: RelayAddress) -> Section:
             "trustedCertificates": {host: relay.fingerprint},
         },
     }
+
+
+_OWNED_KEYS = frozenset(
+    tuple(part.lower() for part in key) for key in _flatten(base_config(_ANY_RELAY))
+)
 
 
 # ---------------------------------------------------------------- the user's own config
