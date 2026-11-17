@@ -20,7 +20,7 @@ human's sign-off before breaking it.
   you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox or on a
   throwaway CI runner nothing is the user's, so stopping by name is fine there.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
-- Never push to `main`: it's protected. Work on a branch and open a PR.
+- Never push to `main`: it's protected. Work on a branch, and open a PR only when asked.
 
 ## Commands
 
@@ -32,17 +32,19 @@ human's sign-off before breaking it.
 ## Testing policy
 
 - You're not done until `uv run poe check` passes. Paste the command and its final summary lines
-  as evidence.
+  as evidence. A fix or change to what a command does also shows a short transcript of the real
+  command, before and after, run as `uv run asc` (the `asc` on PATH may be the installed release).
+  Run it in its own `--instance`, against a test app, never the user's own windows or daemon.
 - For a bug: first write a test that reproduces it and see it fail, then fix it.
 - For new logic (parsing, waits, protocol): tests first.
 - Test what can break, once, at the lowest layer that fails without the change. Extend an existing
-  case before adding a new test. Skip what types already guarantee and trivial logic.
+  case before adding a new test. Skip what types already guarantee, trivial logic, the exact
+  wording of help and messages, and smoke runs that only check nothing crashed.
 - Wait for a condition, never a fixed time: a sleep that guesses how long something takes fails
   on a slow CI runner. Poll what you need (`wait_until`, `Env.wait_running`), with a timeout.
   Sleeping is fine only when the sleep is the behavior under test, like a peer that hangs.
-  Ruff enforces this: `time.sleep` and `asyncio.sleep` are banned outside `src/`, so mark such a
-  sleep `# noqa: TID251` and say why.
-- Never weaken, skip, delete or `xfail` a test to get green. If a test seems wrong, say why and ask.
+- Never weaken, skip, delete, `xfail` or retry a test to get green, or raise its timeout. Fix a
+  flaky test. If a test seems wrong, say why and ask.
 - No mocks of our own code. The one fake sits at the system boundary: `tests/fake_nvda.py`, which
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
   evidence from real NVDA.
@@ -64,11 +66,8 @@ human's sign-off before breaking it.
 
 - Layout: `cli.py`, `errors.py` and `validate.py` at the top, the rest in one folder per area. Put
   a new module in its area, and keep the folders' `__init__.py` files empty of imports.
-- Runtime dependencies: `cryptography` (the stdlib can't create the relay cert), `tomlkit`
-  (the stdlib can read TOML but not write it), `psutil` (finding, waiting for and ending
-  processes), `configobj` (`nvda.ini`, read and written by the same library NVDA uses) and
-  `truststore` (HTTPS checked by Windows, which fetches a root it lacks; `ssl` can't). Add
-  a library when it saves code; say why in the PR description.
+- Add a runtime dependency when it saves code. Say why in the PR description and in a comment
+  beside it in `pyproject.toml`.
 - Validate at the edge into frozen dataclasses, then trust them inside. Check all input before any
   side effect.
 - Keys are sent only from `keyboard.py`. Presses go through the one locked function that guarantees
@@ -104,7 +103,9 @@ human's sign-off before breaking it.
   speech (`NoMatch` lists what NVDA said), because they go to the caller, not to a log.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
 - Watch mode never sends keys; the daemon enforces this.
-- `asc` never writes the user's own NVDA configuration (also under Never, above).
+- Shared mode starts only with `--i-understand`.
+- An MSI-installed `asc` updates itself only from this repository's GitHub releases, over HTTPS,
+  with an MSI whose SHA-256 matches the one GitHub lists.
 
 ## Writing
 
@@ -117,6 +118,10 @@ human's sign-off before breaking it.
 ## Etiquette
 
 - PRs are squash-merged: the PR title becomes the commit on `main` and the PR description its
-  message. Write the title as a conventional commit. Small PRs.
+  message. Write the title as a conventional commit, in plain words: what changes for the user.
+- One request is one PR. Keep it to what the request needs, and list anything extra as a
+  follow-up.
+- Fill in `.github/pull_request_template.md`, also when you write the body yourself:
+  `gh pr create --body` skips the template.
 - Update `docs/cli.md` and `plugins/agent-speech-check/skills/asc/SKILL.md` with every command change.
 - Don't commit plans, research notes or scratch files. Keep them outside the repo.

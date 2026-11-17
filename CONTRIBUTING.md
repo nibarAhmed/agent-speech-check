@@ -25,7 +25,9 @@ Contributions come in under the project's MIT license. There's no CLA.
 - Push a branch to your fork and open a pull request against `main`.
 - Pull requests are squash-merged, and the pull request's title becomes the commit on `main`.
   Write the title as a conventional commit, like `fix(setup): say where the settings were saved`.
-  Keep pull requests small.
+  Fill in the template.
+- Solve one problem per pull request. Include every change it needs (code, tests, `docs/cli.md`,
+  the skill). Cleanup, refactors and a second fix go in their own pull requests.
 - CI must pass. The `e2e` check runs the real-NVDA tests on a throwaway runner, but GitHub's
   runners have no Windows Sandbox, so run the sandbox tests yourself when they apply (Setup,
   step 4).
@@ -35,14 +37,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 ## Rules
 
-Some of the most important rules (the full set is in [AGENTS.md](AGENTS.md)):
-
-- Tests first for new logic, a failing test first for a bug, no mocks of our own code, and never
-  weaken a test to get green.
-- No em dashes (U+2014) anywhere.
-- Never copy NVDA source code (it's GPL). Work from `docs/protocol.md`.
-- Update `docs/cli.md` and `plugins/agent-speech-check/skills/asc/SKILL.md` with every command change.
-- A new dependency is fine when it saves code. Say why in the pull request description.
+The rules for code, tests and docs are in [AGENTS.md](AGENTS.md). They apply to people too.
 
 ## Releasing
 
@@ -65,17 +60,6 @@ the winget manifests and attaches them to a GitHub Release.
    `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`. Your first one asks you to sign Microsoft's
    CLA, by replying `@microsoft-github-policy-service agree` on it. CI's `installer` check
    already installs, lists and uninstalls the MSI with winget from these manifests.
-
-## Tests next to a real `asc`
-
-Some tests touch machine-wide state: window titles, the foreground window, global hotkeys and
-Windows Sandbox. If you also use `asc` for real on the same machine (another project's sandbox
-or daemon), those tests can meet it and fail. Check for a running sandbox or `asc` daemon before
-blaming your change, and don't stop processes you didn't start. When a test clashes, give it its
-own names, titles and hotkeys instead of skipping it: a skipped test checks nothing.
-Tests never use the default panic key (they set `panic_key`), and each test that registers a
-hotkey uses one no other test uses (Control+Shift+Alt with F21, F22 or F23), because test
-workers run in parallel.
 
 ## Issues
 
