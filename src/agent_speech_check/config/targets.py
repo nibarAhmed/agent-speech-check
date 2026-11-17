@@ -219,6 +219,7 @@ def _from_table(mode: str, raw: object, file: str) -> Target:
     where = f"{file}: [{mode}]"
     f = Fields(raw, where, UsageError, prefs.MODE_KEYS)
     values = _checked_values(f, prefs.MODE_KEYS)
+    # Also refuses `launch = false`, which `_checked` can't tell from no launch at all.
     if "launch" in values and mode != "desktop":
         raise bad_field(UsageError, f"{where} launch", "only in desktop mode", values["launch"])
     settings = tuple(
