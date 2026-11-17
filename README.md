@@ -2,11 +2,12 @@
 
 **Let AI agents test your app with a real NVDA screen reader.**
 
-`asc` connects to NVDA, presses keys, captures what NVDA says as text, and checks it against what you expect. Use it from a terminal, an AI coding agent, or CI on Windows.
+`asc` connects to NVDA, presses keys, and gives you what NVDA said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows.
 
 ## Example
 
 ```shell
+asc get-nvda
 asc start --mode desktop
 asc launch "C:\path\to\your-app.exe"
 asc press Tab
@@ -14,46 +15,33 @@ asc press Shift+Tab --expect "expected accessible name"
 asc stop
 ```
 
-`asc press` prints what NVDA said; `--expect` fails the command when that text is missing.
+`asc get-nvda` downloads the portable NVDA that desktop mode runs, once. Each `asc press` prints what NVDA said, and `--expect` makes it fail when that text is missing. `asc speech --since 0` shows everything NVDA has said so far. Run `asc setup` to pick a default mode.
 
 ## Requirements
 
 - Windows 11.
 - NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
-- For sandbox mode: Windows 11 24H2 or later, Pro, Enterprise or Education, with Windows Sandbox turned on, and `asc firewall-setup --mode sandbox` run once (it asks for admin).
+- Sandbox mode also needs Windows 11 24H2 or later (Pro, Enterprise or Education) with Windows Sandbox turned on.
 
 ## Choose a mode
 
-| Mode | Best for | What it does |
-|---|---|---|
-| `sandbox` | Isolated tests | Runs NVDA inside Windows Sandbox, away from your desktop. |
-| `desktop` | Local development and CI | Starts a portable NVDA with its own config. Won't start while another `nvda.exe` runs. Its keys go to your desktop. |
-| `watch` | Listening to the NVDA you already run | Captures its speech and never sends keys. On start, your NVDA asks to allow the connection: answer Yes. |
-| `shared` | Driving the NVDA you already run | Sends keys to your real session. Needs `--i-understand`. |
-| `remote` | NVDA in a VM you run | You start NVDA there and connect it to `asc`. Runs in a named instance, one per VM (`--instance NAME`), so each agent has its own. Needs `asc firewall-setup --mode remote --instance NAME` once. |
+| Mode | When to use it |
+|---|---|
+| `sandbox` | You want NVDA kept away from your desktop. It runs inside Windows Sandbox, and your own NVDA keeps running. |
+| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. |
+| `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
+| `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
+| `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM: run `asc setup --instance NAME` for each. |
 
-Unsure? Use **sandbox**, or **desktop** for a simpler setup. Details are in the [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes).
+The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 
 ## Install
 
-- **MSI installer** (no Python needed): run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest). It installs for your user, without admin, and [updates itself](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates) after `asc stop`, at most once a day. `asc config set auto_update false` turns that off.
-- **With [`uv`](https://docs.astral.sh/uv/)**, for the latest code on `main`: `uv tool install git+https://github.com/nibarAhmed/agent-speech-check`. Update with `uv tool upgrade agent-speech-check`.
-
-Open a new terminal afterwards so it sees the new `PATH`.
-
-To uninstall the MSI, use Settings > Apps. For `uv`, run `asc stop`, then `uv tool uninstall agent-speech-check`, and delete `%LOCALAPPDATA%\agent-speech-check`.
-
-## Get started
-
-1. Run `asc setup` to pick a mode and write the configuration. Change it later with `asc config`.
-2. Start a session, launch your app and press keys, as in the [Example](#example). `asc speech --since 0` shows everything NVDA said.
-3. Run `asc stop` when you're done.
-
-`asc status` checks the connection; `asc COMMAND --help` lists a command's options.
+Run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. It [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates). To uninstall, use Settings > Apps.
 
 ## AI agent skill
 
-An [agent skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md) teaches Claude Code and Codex the workflow. Install it for all your projects:
+The [`asc` skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md) teaches Claude Code and Codex how to use `asc`: which mode fits the task, how to press keys safely, and how to check what NVDA said. Install it once and it works in all your projects:
 
 ```shell
 # Claude Code
@@ -95,7 +83,6 @@ Speech can include passwords and private messages, and `asc` can press keys. [SE
 - [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
 - [NVDA Remote Access protocol](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
 - [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
-- [Agent skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md): the recommended workflow for coding agents.
 
 ## License
 

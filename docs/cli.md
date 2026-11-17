@@ -98,8 +98,7 @@ An `asc` installed by the MSI keeps itself up to date:
   try again in a minute.
 - `asc config set auto_update false` turns it off. `false` in any instance's
   `config.toml` turns it off for all of them, since they share one `asc`.
-- An `asc` installed with `uv`, or run from a clone, never updates itself: use
-  `uv tool upgrade agent-speech-check`.
+- Any other `asc`, like one run from a clone, never updates itself.
 
 ## Modes
 
