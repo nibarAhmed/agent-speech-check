@@ -11,7 +11,7 @@ import signal
 import subprocess
 import sys
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from agent_speech_check.errors import (
@@ -37,6 +37,8 @@ _SETUP = (
     "REMOTE HOST IDENTIFICATION HAS CHANGED",
     "Could not resolve hostname",
 )
+# What `-v` adds without a `debug` prefix, which never says why ssh ended.
+_CHATTER = ("OpenSSH", "Authenticated to", "Transferred:", "Bytes per second:")
 # Only `-v` says when the other machine listens: this debug line.
 _FORWARDED = "remote forward success for: listen"
 _FORWARD_FAILED = "remote port forwarding failed"
@@ -55,10 +57,23 @@ def tunnel_command(destination: str, port: int, local_port: int) -> list[str]:
 
 def failed(destination: str, lines: Sequence[str], code: int) -> AscError:
     """Why ssh exited with `code`, from its last lines of stderr."""
-    detail = lines[-1] if lines else f"exit code {code}"
+    said = [line for line in lines if not line.startswith(_CHATTER)]
+    detail = said[-1] if said else f"exit code {code}"
     if any(sign in line for line in lines for sign in _SETUP):
         return SshSetupNeeded(destination, detail)
     return SshFailed(destination, detail)
+
+
+async def stderr_lines(stderr: asyncio.StreamReader) -> AsyncIterator[str]:
+    """ssh's stderr, line by line, each cut to 500 characters."""
+    while True:
+        try:
+            raw = await stderr.readline()
+        except ValueError:
+            continue  # an overlong line is dropped
+        if not raw:
+            return
+        yield raw.decode(errors="replace").rstrip()[:500]
 
 
 def _dies_with_asc() -> dict[str, Any]:
@@ -119,7 +134,12 @@ class Tunnel:
         job = None
         try:
             if sys.platform == "win32":
-                job = winapi.kill_on_close_job(process.pid)
+                try:
+                    job = winapi.kill_on_close_job(process.pid)
+                except OSError:
+                    # Windows refuses a process that has already exited; stderr still says why.
+                    with contextlib.suppress(ProcessLookupError):
+                        process.kill()
             came_up, lines = await self._follow(process)
             return came_up, self.error(await process.wait(), lines)
         finally:
@@ -136,20 +156,14 @@ class Tunnel:
             raise RuntimeError
         came_up = False
         lines: deque[str] = deque(maxlen=STDERR_LINES)
-        while True:
-            try:
-                raw = await stderr.readline()
-            except ValueError:
-                continue  # an overlong line is dropped
-            if not raw:
-                return came_up, lines
-            line = raw.decode(errors="replace").rstrip()[:500]
+        async for line in stderr_lines(stderr):
             if not line.startswith("debug"):
                 lines.append(line)
             elif _FORWARDED in line and not came_up:
                 came_up = self.up = True
                 self.last_error = None
                 log.info("ssh tunnel up")
+        return came_up, lines
 
     def error(self, code: int, lines: Sequence[str]) -> AscError:
         if code == FAILED and any(_FORWARD_FAILED in line for line in lines):

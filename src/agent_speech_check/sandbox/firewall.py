@@ -97,8 +97,7 @@ def rule_ok(port: int) -> bool:
 
 def create_rule(port: int) -> None:
     """Create the rule in an elevated PowerShell. Windows shows a UAC prompt."""
-    rule = SANDBOX_RULE
-    inner = encoded(create_script(rule, port, daemon_program()))
+    inner = encoded(create_script(SANDBOX_RULE, port, daemon_program()))
     outer = (
         "Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList "
         f"'-NoProfile','-NonInteractive','-EncodedCommand','{inner}'"
@@ -107,6 +106,6 @@ def create_rule(port: int) -> None:
         # It waits for the UAC prompt, so give a person time to answer it.
         run(outer, timeout_s=UAC_TIMEOUT_S)
     except PowerShellTimedOut:
-        raise FirewallFailed(rule) from None
+        raise FirewallFailed(SANDBOX_RULE) from None
     if not rule_ok(port):
-        raise FirewallFailed(rule)
+        raise FirewallFailed(SANDBOX_RULE)

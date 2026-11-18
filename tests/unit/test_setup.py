@@ -188,6 +188,10 @@ def test_setup_remote_asks_where_ssh_goes(
     assert "firewall" not in out
     target = load(root / "instances" / "vm2" / "config.toml").resolve(None)
     assert (target.os, target.ssh, target.tunnel) == ("windows", "me@vm", True)
+    # Orca reads there, so no NVDA keyboard layout is asked.
+    run_setup(Asker("", "linux", "me@vm", "y"), replace_without_asking=True)
+    assert "keyboard layout" not in capsys.readouterr().out
+    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).os == "linux"
 
 
 def test_setup_remote_in_the_default_instance_keeps_only_the_mode(

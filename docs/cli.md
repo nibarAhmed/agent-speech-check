@@ -243,7 +243,7 @@ controlled).
   Windows, the OpenSSH Server optional feature). The port listens only on its
   127.0.0.1, and no firewall rule is needed on either machine.
 - If the tunnel drops, `asc` opens it again, after 1 s and then backing off up
-  to 30 s; `asc status` shows `tunnel down` meanwhile. A tunnel that never came
+  to 30 s; `asc status` shows `tunnel down (WHY)` meanwhile. A tunnel that never came
   up, or that needs a person (exit 7 above), is not retried.
 - If that port is taken on that machine, by another instance's tunnel say,
   `asc start` exits 4: give this instance another `port`.
@@ -502,7 +502,7 @@ speech: 12 lines kept, latest 12
 - With Orca the line is `orca: connected`, and there is no `browse/focus`
   line.
 - In remote mode `over ssh: DEST` names the machine, followed for NVDA by
-  `tunnel up` or `tunnel down`.
+  `tunnel up` or `tunnel down (WHY)`.
 - `--nvda-ini` prints, instead, an `nvda.ini` for remote mode's NVDA. See
   [remote mode](#remote-mode). Other modes, and Orca, exit 4.
 
@@ -847,6 +847,8 @@ the relay itself listens only on its address.
   program.
 - Remove it from an admin terminal with
   `netsh advfirewall firewall delete rule name="agent-speech-check sandbox relay"`.
+  Remote mode no longer needs a rule: delete any made for it the same way, by
+  its name, `agent-speech-check remote relay PORT`.
 
 ```shell
 asc firewall-setup --mode sandbox

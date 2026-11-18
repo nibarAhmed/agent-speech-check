@@ -98,7 +98,7 @@ def _add_mode(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mode",
         choices=MODES,
-        help="default: the mode setting, else watch (orca, the only mode on Linux)",
+        help="default: the mode setting, else watch (orca on Linux)",
     )
 
 
@@ -286,7 +286,12 @@ def _show_status(status: dict[str, Any]) -> None:
     print(f"{reader}: {'connected' if status['connected'] else 'not connected'}")
     if status["ssh"]:
         tunnel = status["tunnel"]
-        up = "" if tunnel is None else ", tunnel up" if tunnel["up"] else ", tunnel down"
+        if tunnel is None:
+            up = ""
+        elif tunnel["up"]:
+            up = ", tunnel up"
+        else:
+            up = ", tunnel down" + (f" ({tunnel['error']})" if tunnel["error"] else "")
         print(f"over ssh: {status['ssh']}{up}")
     # Nothing listens for Orca: asc starts it itself.
     if not status["connected"] and status["port"] is not None:
@@ -737,7 +742,7 @@ def _ask_ssh(ask: Ask, _mode: str) -> str:
     while True:
         text = ask("ssh destination, like me@vm: ").strip()
         try:
-            return str(prefs.BY_NAME["ssh"].check(text, "ssh"))
+            return str(prefs.BY_NAME["ssh"].check(text, "[remote]"))
         except UsageError as error:
             print(_sentence(error))
 
@@ -766,11 +771,14 @@ def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
     mode = _ask_mode(ask, named=named)
     if not setup.runs_here(mode, named=named):
         return setup.Answers(mode), ()
-    fields = setup.QUESTIONS[mode]
-    answers = setup.Answers(mode, **{f: _ASKERS[f](ask, mode) for f in fields})
+    asked: dict[str, Any] = {}
+    for field in setup.QUESTIONS[mode]:
+        # The layout is NVDA's, and Orca reads on a Linux machine.
+        if not (field == "keys_layout" and asked.get("os") == "linux"):
+            asked[field] = _ASKERS[field](ask, mode)
     if defaults(mode).launches_sandbox:
         _firewall_now(ask, defaults(mode).port)
-    return answers, fields
+    return setup.Answers(mode, **asked), tuple(asked)
 
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
@@ -811,7 +819,7 @@ COMMANDS: dict[str, Command] = {
         "start recording",
         """\
 Start the background daemon in --mode, or the mode setting (watch; on Linux,
-orca, the only mode there), with that mode's settings from config.toml (see
+orca), with that mode's settings from config.toml (see
 asc config). One daemon runs per instance: the other commands talk to it.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends

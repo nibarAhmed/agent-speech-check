@@ -189,8 +189,8 @@ Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
   | Path | `asc start` | press median | press p95 |
   | --- | --- | --- | --- |
   | straight to the relay | 0.7 s | 76 ms | 104 ms |
-  | tunnel, Windows' ssh | 1.7 s | 75 to 104 ms | 137 ms |
-  | tunnel, Git's ssh | 1.7 s | 76 ms | 104 ms |
+  | tunnel, Windows' ssh | 0.8 s | 75 to 104 ms | 137 ms |
+  | tunnel, Git's ssh | 0.8 s | 76 ms | 104 ms |
 
   Typing 10 characters took 263 ms on every path. Through Windows' ssh about half the replies
   came about 60 ms late, and with a 50 ms settle some presses ended before their speech

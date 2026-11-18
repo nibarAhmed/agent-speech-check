@@ -26,6 +26,17 @@ def test_tunnel_command() -> None:
             "Connection closed",
         ),
         (["connect to host vm port 22: Connection refused"], SshFailed, "Connection refused"),
+        (
+            [
+                "OpenSSH_9.6p1, OpenSSL 3.0.13",
+                'Authenticated to vm ([10.0.0.2]:22) using "publickey".',
+                "Timeout, server vm not responding.",
+                "Transferred: sent 2964, received 2580 bytes, in 3.2 seconds",
+                "Bytes per second: sent 921.4, received 802.2",
+            ],
+            SshFailed,
+            "Timeout, server vm not responding.",
+        ),
         ([], SshFailed, "exit code 255"),
     ],
 )

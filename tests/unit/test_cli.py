@@ -9,7 +9,7 @@ import configobj
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini, run
+from agent_speech_check.cli import COMMANDS, _show_status, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
 from agent_speech_check.errors import NvdaIniOnlyRemote, WindowsOnlyCommand
 
@@ -206,6 +206,25 @@ def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
     assert remote["trustedCertificates"]["pc:26837"] == "f"
     with pytest.raises(NvdaIniOnlyRemote):
         nvda_ini({**status, "mode": "watch"})
+
+
+def test_status_says_why_the_tunnel_is_down(capsys: pytest.CaptureFixture[str]) -> None:
+    status = {
+        "mode": "remote",
+        "keys": True,
+        "reader": "nvda",
+        "ssh": "me@vm",
+        "tunnel": {"up": False, "error": "ssh me@vm failed: Host key verification failed."},
+        "connected": True,
+        "port": 6837,
+        "nvda_mode": "focus",
+        "lines": 0,
+        "latest": 0,
+        "last_error": None,
+    }
+    _show_status(status)
+    said = "over ssh: me@vm, tunnel down (ssh me@vm failed: Host key verification failed.)\n"
+    assert said in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])

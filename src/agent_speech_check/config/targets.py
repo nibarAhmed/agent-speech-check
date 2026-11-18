@@ -289,8 +289,9 @@ _MOVED = {
 def _check_moved(mode: str, raw: object, where: str) -> None:
     if not isinstance(raw, Mapping):
         return
-    for (moved_from, name), (message, hint) in _MOVED.items():
-        if mode == moved_from and name in raw:
+    for name in raw:
+        if (mode, name) in _MOVED:
+            message, hint = _MOVED[mode, name]
             field_name = f"{where} {name}"
             raise BadInFile(field_name, message, hint=hint)
 

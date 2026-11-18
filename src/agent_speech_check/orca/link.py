@@ -319,14 +319,8 @@ class OrcaLink:
         return OrcaSetupNeeded(f"its helper exited with code {code}: {detail}")
 
     async def _keep_stderr(self, stderr: asyncio.StreamReader) -> None:
-        while True:
-            try:
-                line = await stderr.readline()
-            except ValueError:
-                continue  # an overlong line is dropped
-            if not line:
-                return
-            self._stderr.append(line.decode(errors="replace").rstrip()[:500])
+        async for line in ssh.stderr_lines(stderr):
+            self._stderr.append(line)
 
     def _write(self, message: dict[str, Any]) -> None:
         stdin = self._stdin

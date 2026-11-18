@@ -48,7 +48,6 @@ TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
 # A sandbox boots and makes its portable NVDA first, which takes a while.
 CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "orca": 60.0, "remote": 60.0}
-CONNECT_POLL_S = 1.0
 
 
 def status(folder: Path) -> dict[str, Any]:
@@ -209,7 +208,7 @@ def _wait_ready(target: Target, folder: Path) -> dict[str, Any]:
                 raise SshFailed(str(target.ssh), f"no tunnel within {timeout_s:g} s")
             reader = "Orca" if target.orca else "NVDA"
             raise NvdaDidNotConnect(timeout_s, log_tail(folder), reader)
-        time.sleep(CONNECT_POLL_S)
+        time.sleep(POLL_S)
 
 
 def start(target: Target, folder: Path) -> dict[str, Any]:
