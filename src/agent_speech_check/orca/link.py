@@ -358,8 +358,9 @@ class OrcaLink:
         try:
             return await asyncio.wait_for(future, ACK_TIMEOUT_S)
         except TimeoutError:
-            self._lose(f"Orca's helper did not answer within {ACK_TIMEOUT_S:g} s")
-            await self.stop()
+            if self._ready:  # another wait may have found it lost already
+                self._lose(f"Orca's helper did not answer within {ACK_TIMEOUT_S:g} s")
+                await self.stop()
             raise OrcaNotConnected(last_error=self.last_error) from None
         finally:
             self._acks.pop(ident, None)

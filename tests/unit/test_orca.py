@@ -201,8 +201,9 @@ def test_a_helper_that_stops_answering_is_a_lost_link(monkeypatch: pytest.Monkey
         )
         orca._process, orca._stdin = process, process.stdin
         orca._dispatch(Ready("51.1"))
-        with pytest.raises(OrcaNotConnected):
-            await orca.send_key(KEYS["tab"], pressed=True)
+        both = orca.send_key(KEYS["tab"], pressed=True), orca.launch("gedit")
+        lost = await asyncio.gather(*both, return_exceptions=True)
+        assert all(isinstance(error, OrcaNotConnected) for error in lost)
         assert not orca.connected  # as asc status says
         orca._ended(await process.wait(), None)
         return orca

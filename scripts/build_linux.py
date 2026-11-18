@@ -38,7 +38,7 @@ def write_tarball(app: Path, version: str, out: Path) -> None:
     link = tarfile.TarInfo(f"{LINUX_TOP}/current")
     link.type = tarfile.SYMTYPE
     link.linkname = f"versions/{version}"
-    link.mtime = int(os.environ.get("SOURCE_DATE_EPOCH", time.time()))
+    link.mtime = int(os.environ.get("SOURCE_DATE_EPOCH") or time.time())
     with tarfile.open(out, "w:gz") as tar:
         tar.add(app, f"{LINUX_TOP}/versions/{version}", filter=_owned_by_root)
         tar.addfile(_owned_by_root(link))

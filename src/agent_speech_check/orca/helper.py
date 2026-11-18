@@ -231,7 +231,7 @@ class Session:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return False
+            raise Failed("setup", "Orca did not answer on D-Bus") from None
         return result.returncode == 0
 
     def _wait_orca(self) -> None:
