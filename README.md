@@ -31,8 +31,8 @@ asc stop
 | `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. |
 | `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
-| `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM: run `asc setup --instance NAME` for each. |
-| `orca` | You test with Orca on Linux. `asc` starts its own Orca on a hidden display, on the Linux machine it runs on or one it reaches over SSH. It needs Orca 51 or later, Xvfb, openbox, xdotool and python3 there. |
+| `remote` | The screen reader runs on a machine you manage, like a VM, that `asc` reaches over ssh. On Windows you start NVDA there and it connects to `asc` through an ssh tunnel; on Linux `asc` starts Orca there. One instance per machine: run `asc setup --instance NAME` for each. |
+| `orca` | You test with Orca on this Linux machine. `asc` starts its own Orca on a hidden display. It needs Orca 51 or later, Xvfb, openbox, xdotool and python3. |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 

@@ -33,9 +33,11 @@ import tomlkit.exceptions
 from agent_speech_check.config import prefs
 from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS
 from agent_speech_check.errors import (
+    BadInFile,
     ConfigFileError,
     FileUnusable,
-    OrcaNeedsSsh,
+    OrcaNeedsLinux,
+    RemoteNeedsMachine,
     UsageError,
     WindowsOnlyMode,
     bad_field,
@@ -60,8 +62,8 @@ class Target:
     nvda_dir: str | None = None
     share: tuple[str, ...] = ()
     window: str | None = None  # sandbox mode; None: the default, tray
-    host: str | None = None  # remote mode; None: the Default Switch address
-    ssh: str | None = None  # orca mode; None: Orca runs on this Linux machine
+    ssh: str | None = None  # remote mode: the machine NVDA or Orca runs on
+    os: str | None = None  # remote mode: windows (NVDA) or linux (Orca)
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
@@ -92,8 +94,8 @@ class Target:
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
-            host=f.opt_text("host", max_len=40),
             ssh=f.opt_text("ssh", max_len=255),
+            os=f.opt_text("os", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent"),
             panic_key=parse_hotkey(f.text("panic_key", max_len=40)),
@@ -133,9 +135,14 @@ class Target:
         return self.mode == "sandbox"
 
     @property
-    def listens_outside(self) -> bool:
-        """NVDA on another machine joins, so the relay listens beyond loopback."""
-        return self.mode in ("sandbox", "remote")
+    def orca(self) -> bool:
+        """Orca reads, here (orca mode) or on the remote Linux machine."""
+        return self.mode == "orca" or (self.mode == "remote" and self.os == "linux")
+
+    @property
+    def tunnel(self) -> bool:
+        """NVDA on the remote Windows machine joins through an ssh reverse tunnel."""
+        return self.mode == "remote" and self.os == "windows"
 
     @property
     def launches_nvda(self) -> bool:
@@ -144,7 +151,7 @@ class Target:
     @property
     def launches_reader(self) -> bool:
         """asc starts the screen reader, so `asc start` waits until it joins."""
-        return self.launches_nvda or self.mode == "orca"
+        return self.launches_nvda or self.orca
 
     @property
     def sandbox_window(self) -> str:
@@ -165,16 +172,14 @@ class Target:
 def _checked(target: Target, where: str) -> Target:
     if target.launch and target.mode != "desktop":
         raise bad_field(UsageError, f"{where} launch", "only in desktop mode", target.launch)
-    if target.host is not None:
-        if target.mode != "remote":
-            raise bad_field(UsageError, f"{where} host", "only in remote mode", target.host)
-        prefs.BY_NAME["host"].check(target.host, where)
-    if target.ssh is not None:
-        if target.mode != "orca":
-            raise bad_field(UsageError, f"{where} ssh", "only in orca mode", target.ssh)
-        prefs.BY_NAME["ssh"].check(target.ssh, where)
-    if target.mode == "orca" and target.port != 0:
-        raise bad_field(UsageError, f"{where} port", "only in modes that listen", target.port)
+    for name in ("ssh", "os"):
+        value = getattr(target, name)
+        if value is not None:
+            if target.mode != "remote":
+                raise bad_field(UsageError, f"{where} {name}", "only in remote mode", value)
+            prefs.BY_NAME[name].check(value, where)
+    if target.orca and target.port != 0:
+        raise bad_field(UsageError, f"{where} port", "only where NVDA connects", target.port)
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
@@ -196,20 +201,26 @@ def _checked(target: Target, where: str) -> Target:
     return target
 
 
-def check_platform(target: Target, platform: str = sys.platform) -> None:
-    """Orca mode is the one mode beyond Windows; on Windows it reaches Linux over ssh."""
-    if platform != "win32" and target.mode != "orca":
+def check_runnable(target: Target, platform: str = sys.platform) -> None:
+    """Orca mode runs only on Linux, remote mode anywhere once it names its machine,
+    and the rest only on Windows."""
+    if target.mode == "remote":
+        missing = [name for name in ("ssh", "os") if getattr(target, name) is None]
+        if missing:
+            raise RemoteNeedsMachine(missing)
+    elif target.mode == "orca":
+        if platform == "win32":
+            raise OrcaNeedsLinux
+    elif platform != "win32":
         raise WindowsOnlyMode(target.mode)
-    if platform == "win32" and target.mode == "orca" and target.ssh is None:
-        raise OrcaNeedsSsh
 
 
-def defaults(mode: str) -> Target:
+def defaults(mode: str, os: str | None = None) -> Target:
     ports = {
         "watch": WATCH_PORT,
         "shared": WATCH_PORT,
         "sandbox": SANDBOX_PORT,
-        "remote": REMOTE_PORT,
+        "remote": 0 if os == "linux" else REMOTE_PORT,
     }
     return Target(mode, ports.get(mode, 0), launch=mode == "desktop")
 
@@ -241,6 +252,7 @@ def _read(path: Path) -> dict[str, Any]:
 
 def _from_table(mode: str, raw: object, file: str) -> Target:
     where = f"{file}: [{mode}]"
+    _check_moved(mode, raw, where)
     f = Fields(raw, where, UsageError, prefs.MODE_KEYS)
     values = _checked_values(f, prefs.MODE_KEYS)
     # Also refuses `launch = false`, which `_checked` can't tell from no launch at all.
@@ -256,8 +268,31 @@ def _from_table(mode: str, raw: object, file: str) -> Target:
         for key, value in values.items()
         if key in _TARGET_FIELDS
     }
-    target = replace(defaults(mode), **kept, settings=settings)
+    target = replace(defaults(mode, values.get("os")), **kept, settings=settings)
     return _checked(target, where)
+
+
+# Settings from before remote mode went over ssh, with the way to move them.
+_MOVED = {
+    ("remote", "host"): (
+        "remote mode now reaches its machine over ssh",
+        "delete host from config.toml, then asc config set ssh USER@HOST "
+        "--mode remote --instance VMNAME",
+    ),
+    ("orca", "ssh"): (
+        "Orca on another machine is now remote mode",
+        'move ssh to [remote], with os = "linux", in a named instance',
+    ),
+}
+
+
+def _check_moved(mode: str, raw: object, where: str) -> None:
+    if not isinstance(raw, Mapping):
+        return
+    for (moved_from, name), (message, hint) in _MOVED.items():
+        if mode == moved_from and name in raw:
+            field_name = f"{where} {name}"
+            raise BadInFile(field_name, message, hint=hint)
 
 
 _TARGET_FIELDS = frozenset(field.name for field in fields(Target))

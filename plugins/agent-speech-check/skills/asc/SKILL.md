@@ -23,8 +23,9 @@ stop and ask the user to switch to the mode this table suggests:
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation; only then add `--i-understand` |
-| Press keys in NVDA on a VM the user set up | `remote` (the user starts and connects that NVDA; `launch` is refused) |
-| Hear Orca on Linux: on this Linux machine, or one the user reaches over SSH | `orca` (the only mode on Linux; on Windows it needs `ssh`) |
+| Press keys in NVDA on a VM the user set up | `remote` with `os windows` (over ssh; the user starts and connects that NVDA; `launch` is refused) |
+| Hear Orca on this Linux machine | `orca` (the default on Linux) |
+| Hear Orca on another Linux machine, reached over ssh | `remote` with `os linux` |
 
 ## Rules
 
@@ -34,7 +35,7 @@ stop and ask the user to switch to the mode this table suggests:
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
-- `asc firewall-setup` shows an admin prompt and adds a Windows Firewall rule.
+- `asc firewall-setup` (sandbox mode) shows an admin prompt and adds a Windows Firewall rule.
   Ask the user first, unless they already said to go ahead, then run it
   yourself; they approve the prompt.
 - Shared and desktop mode send keys to the user's desktop. Tell the user the
@@ -49,11 +50,14 @@ stop and ask the user to switch to the mode this table suggests:
   to switch modes. Use your own instance, named after your VM, with
   `--instance VMNAME` (or `ASC_INSTANCE=VMNAME`) on every command, `asc stop`
   too. Never share one with another agent. Set it up yourself:
-  1. `asc config set mode remote --instance VMNAME`
-  2. `asc start --instance VMNAME`. If it fails, follow its hint (ask before
-     `asc firewall-setup`, as above), then start again.
-  3. Tell the user what `asc status --instance VMNAME` says, so the VM's NVDA
-     can connect.
+  1. `asc config set mode remote --instance VMNAME`, then
+     `asc config set ssh USER@HOST --mode remote --instance VMNAME` and
+     `asc config set os windows --mode remote --instance VMNAME` (`linux` for Orca).
+  2. `asc start --instance VMNAME`. ssh never asks for a password: if it exits
+     7 about ssh, ask the user to run `ssh USER@HOST` once. Otherwise follow its
+     hint, then start again.
+  3. With NVDA, tell the user what `asc status --instance VMNAME` says, so the
+     VM's NVDA can connect through the tunnel.
 
 ## Workflow
 
@@ -116,9 +120,8 @@ NVDA says, typed text included, so `asc stop` when you're done.
 ## Orca mode
 
 - `asc` starts its own Orca on a hidden display, so its keys reach no one's
-  desktop. On Linux, plain `asc start` runs it. On Windows, set the machine first:
-  `asc config set ssh USER@HOST --mode orca`. ssh never asks for a password:
-  if `asc start` exits 7 about ssh, ask the user to run `ssh USER@HOST` once.
+  desktop. On Linux, plain `asc start` runs it. For Orca on another machine, use
+  remote mode with `os linux` (see the remote steps in Rules).
 - It needs Orca 51 or later on that machine (`orca --version`), plus Xvfb,
   openbox, xdotool and python3. If `asc start` exits 7 naming one, ask the
   user to install or upgrade it: older Orca can't work.

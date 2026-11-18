@@ -215,6 +215,7 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="action", metavar="ACTION", required=True)
     for action, summary in CONFIG_HELP.items():
         sub = actions.add_parser(action, help=summary, description=summary)
+        _add_instance(sub, argparse.SUPPRESS)
         if action in ("get", "set", "unset"):
             sub.add_argument("name", metavar="NAME")
         if action == "set":
@@ -281,13 +282,15 @@ def _show_status(status: dict[str, Any]) -> None:
     keys = "keys allowed" if status["keys"] else "keys refused"
     print(f"mode: {status['mode']} ({keys})")
     print("recording: yes")
-    reader = "orca" if status["mode"] == "orca" else "nvda"
+    reader = status["reader"]
     print(f"{reader}: {'connected' if status['connected'] else 'not connected'}")
-    # Nothing listens in orca mode: asc starts Orca itself.
+    if status["ssh"]:
+        tunnel = status["tunnel"]
+        up = "" if tunnel is None else ", tunnel up" if tunnel["up"] else ", tunnel down"
+        print(f"over ssh: {status['ssh']}{up}")
+    # Nothing listens for Orca: asc starts it itself.
     if not status["connected"] and status["port"] is not None:
         print(_connect_line(status))
-    if reader == "orca" and status["host"]:
-        print(f"over ssh: {status['host']}")
     if reader == "nvda":
         print(f"browse/focus: {status['nvda_mode']}")
     print(f"speech: {status['lines']} lines kept, latest {status['latest']}")
@@ -407,7 +410,7 @@ def cmd_stop(_: argparse.Namespace) -> int:
 
 def nvda_ini(status: dict[str, Any]) -> str:
     """The nvda.ini that connects a remote NVDA to this relay: desktop mode's base config."""
-    if status["mode"] != "remote":
+    if status["mode"] != "remote" or status["port"] is None:
         raise NvdaIniOnlyRemote(status["mode"])
     relay = nvda_config.RelayAddress(
         status["host"], status["port"], status["channel"], status["fingerprint"]
@@ -495,22 +498,21 @@ def cmd_launch(args: argparse.Namespace) -> int:
 
 def cmd_firewall_setup(args: argparse.Namespace) -> int:
     target = _target(args)
-    if not target.listens_outside:
+    if not target.launches_sandbox:
         raise NoFirewallNeeded(target.mode)
     session.check_instance(target, "firewall-setup")
-    if target.launches_sandbox:
-        wsb.require_available()
-    if firewall.rule_ok(target.mode, target.port):
+    wsb.require_available()
+    if firewall.rule_ok(target.port):
         print(f"firewall rule already in place for port {target.port}")
         return 0
-    _add_firewall_rule(target.mode, target.port)
+    _add_firewall_rule(target.port)
     return 0
 
 
-def _add_firewall_rule(mode: str, port: int) -> None:
+def _add_firewall_rule(port: int) -> None:
     print("asking Windows for admin rights to add one firewall rule")
-    firewall.create_rule(mode, port)
-    print(f"firewall rule added: {firewall.rule_name(mode, port)}, TCP {port}, local subnets only")
+    firewall.create_rule(port)
+    print(f"firewall rule added: {firewall.SANDBOX_RULE}, TCP {port}, local subnets only")
 
 
 def cmd_get_nvda(args: argparse.Namespace) -> int:
@@ -681,12 +683,12 @@ def _get_nvda_now(ask: Ask) -> None:
     _offer(ask, question, _make_portable, "asc get-nvda")
 
 
-def _firewall_now(ask: Ask, mode: str, port: int) -> None:
-    if firewall.rule_ok(mode, port):
+def _firewall_now(ask: Ask, port: int) -> None:
+    if firewall.rule_ok(port):
         return
-    _section(f"{mode.capitalize()} mode needs one firewall rule, so NVDA there can reach asc.")
+    _section("Sandbox mode needs one firewall rule, so NVDA there can reach asc.")
     question = "Add it now? Windows asks for admin rights."
-    _offer(ask, question, lambda: _add_firewall_rule(mode, port), firewall.setup_command(mode))
+    _offer(ask, question, lambda: _add_firewall_rule(port), firewall.setup_command())
 
 
 def _ask_mode(ask: Ask, *, named: bool) -> str:
@@ -707,7 +709,7 @@ def _ask_mode(ask: Ask, *, named: bool) -> str:
             print("Remote mode runs only in a named instance, one per VM:")
             print("asc setup --instance VMNAME. Agents make their own.")
         elif mode == "remote":
-            print("Note: asc status says how to connect the other machine's NVDA.")
+            print("Note: asc reaches it with ssh and a key, never a password.")
         if mode in ("shared", "desktop"):
             print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
         return mode
@@ -730,26 +732,14 @@ def _ask_share(ask: Ask, _mode: str) -> tuple[str, ...]:
     return tuple(share)
 
 
-def _free_port(_ask: Ask, mode: str) -> int:
-    """The first port from the mode's default that no other named instance's
-    config gives this mode, so their relays can run side by side."""
-    taken = set()
-    for root in paths.every_root():
-        # Only remote mode asks for a port, and the default instance never runs it.
-        if root in (state_root(), paths.base_root()):
-            continue
+def _ask_ssh(ask: Ask, _mode: str) -> str:
+    """Where ssh connects, checked as the file checks it."""
+    while True:
+        text = ask("ssh destination, like me@vm: ").strip()
         try:
-            config = load(root / "config.toml")
-        except AscError:
-            continue
-        if config.mode == mode or mode in config.modes:
-            taken.add(config.resolve(mode).port)
-    first = port = defaults(mode).port
-    while port in taken:
-        port += 1
-    if port != first:
-        print(f"Note: port {port}, as another instance's {mode} mode has {first}.")
-    return port
+            return str(prefs.BY_NAME["ssh"].check(text, "ssh"))
+        except UsageError as error:
+            print(_sentence(error))
 
 
 def _asking(question: str, choices: tuple[setup.Choice, ...]) -> Callable[[Ask, str], str]:
@@ -763,7 +753,8 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
         "share": _ask_share,
         "window": _asking("How should the sandbox window appear?", setup.WINDOWS),
         "keys_layout": _asking("Which keyboard layout does your NVDA use?", setup.LAYOUTS),
-        "port": _free_port,
+        "os": _asking("What does the other machine run?", setup.OSES),
+        "ssh": _ask_ssh,
     }[field]
     for field in setup.LABELS
 }
@@ -777,8 +768,8 @@ def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
         return setup.Answers(mode), ()
     fields = setup.QUESTIONS[mode]
     answers = setup.Answers(mode, **{f: _ASKERS[f](ask, mode) for f in fields})
-    if defaults(mode).listens_outside:
-        _firewall_now(ask, mode, answers.port or defaults(mode).port)
+    if defaults(mode).launches_sandbox:
+        _firewall_now(ask, defaults(mode).port)
     return answers, fields
 
 
@@ -829,9 +820,11 @@ the certificate the first time. It waits up to a minute for that. Until NVDA
 restarts, it then reconnects by itself. Turn the asking off with
 asc config set connect false, and connect in NVDA instead (asc status says how).
 
-remote mode: asc launches nothing. Start NVDA on the other machine (a VM, say)
-and connect its Remote Access to asc as asc status says. It runs only in a
-named instance, one per VM, each with its own port.
+remote mode: the screen reader runs on another machine (a VM, say) that asc
+reaches with ssh and a key. With os windows, start NVDA there yourself: asc
+opens an ssh tunnel, and NVDA connects through it to 127.0.0.1 on that machine,
+as asc status says. With os linux, asc starts Orca there. It runs only in a
+named instance, one per VM.
 
 examples:
   asc start
@@ -853,7 +846,7 @@ examples:
 Show the mode, whether NVDA is connected, how to connect it, and the
 browse/focus mode (unknown until NVDA first switches).
 
-remote mode: --nvda-ini prints instead an nvda.ini for the other machine's NVDA,
+remote mode with os windows: --nvda-ini prints instead an nvda.ini for its NVDA,
 as desktop mode writes its own: Remote Access on, connecting to asc at startup
 with the certificate trusted, the silent synth, no welcome or update prompts.
 Save it as UTF-8 nvda.ini in that NVDA's config folder while NVDA is not running.
@@ -955,7 +948,7 @@ anything at all if --title is left out. Prints what NVDA said, numbered
 like press.
 Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
 inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
-Remote mode refuses (exit 4): start the app on that machine, then asc wait.
+Remote mode with os windows refuses (exit 4): start the app there, then asc wait.
 
 examples:
   asc launch "C:\\share\\app\\run.cmd" --title "My App"
@@ -1010,19 +1003,17 @@ examples:
         _config_args,
     ),
     "firewall-setup": Command(
-        "allow NVDA in a sandbox or VM to reach asc (asks for admin once)",
-        """Sandbox and remote mode have NVDA on another machine connect to asc, on this
-computer's Hyper-V Default Switch address (or remote mode's host setting).
-Windows Firewall blocks that until a rule allows it. This command creates the
-mode's rule after a Windows admin prompt: inbound TCP only, only from this
-computer's local subnets, only the mode's port (sandbox 16837, remote 26837,
-unless its port setting says another), only for the program running asc.
-Remote mode gets one rule per port. Run it again after updating Python or asc,
-since the rule names the program.
+        "allow NVDA in Windows Sandbox to reach asc (asks for admin once)",
+        """Sandbox mode has NVDA in Windows Sandbox connect to asc on this computer's
+Hyper-V Default Switch address, which Windows Firewall blocks until a rule
+allows it. This command creates that rule after a Windows admin prompt: inbound
+TCP only, only from this computer's local subnets, only sandbox mode's port
+(16837 unless its port setting says another), only for the program running asc.
+Run it again after updating Python or asc, since the rule names the program.
+Other modes need no rule (exit 2).
 
 examples:
-  asc firewall-setup --mode sandbox
-  asc firewall-setup --mode remote --instance vm1""",
+  asc firewall-setup --mode sandbox""",
         cmd_firewall_setup,
         takes_mode=True,
         windows_only=True,

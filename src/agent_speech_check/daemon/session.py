@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check.config.targets import Target, check_platform
+from agent_speech_check.config.targets import Target, check_runnable
 from agent_speech_check.daemon import ipc, server, state
 from agent_speech_check.daemon.server import LOG_FILE
 from agent_speech_check.errors import (
@@ -30,6 +30,7 @@ from agent_speech_check.errors import (
     RemoteNeedsInstance,
     SandboxBusy,
     SharedNeedsConsent,
+    SshFailed,
 )
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.remote import relay
@@ -46,7 +47,7 @@ ERR_FILE = "daemon.err"
 TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
 # A sandbox boots and makes its portable NVDA first, which takes a while.
-CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "orca": 60.0}
+CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "orca": 60.0, "remote": 60.0}
 CONNECT_POLL_S = 1.0
 
 
@@ -143,8 +144,8 @@ def _check_nvda(target: Target) -> None:
 
 
 def _check_firewall(target: Target) -> None:
-    if not firewall.rule_ok(target.mode, target.port):
-        raise FirewallRuleMissing(target.port, firewall.setup_command(target.mode))
+    if not firewall.rule_ok(target.port):
+        raise FirewallRuleMissing(target.port, firewall.setup_command())
 
 
 def _check_sandbox(target: Target) -> None:
@@ -170,7 +171,7 @@ def check_instance(target: Target, command: str) -> None:
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
-    check_platform(target)
+    check_runnable(target)
     check_instance(target, "start")
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
@@ -179,8 +180,6 @@ def precheck(target: Target) -> None:
         launcher.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)
-    if target.mode == "remote":
-        _check_firewall(target)
     # Last: it holds the hotkey for a moment, so only once nothing else refuses.
     if target.takes_panic_key:
         server.check_panic_key(target.panic_key)
@@ -192,20 +191,23 @@ def failure(current: dict[str, Any]) -> AscError | None:
     return None if raw is None else ipc.error_from(raw, "failure")
 
 
-def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
-    """For a screen reader that asc starts, wait until it has joined."""
+def _wait_ready(target: Target, folder: Path) -> dict[str, Any]:
+    """Wait until the screen reader asc starts has joined, or the tunnel NVDA joins
+    through is up."""
     timeout_s = CONNECT_TIMEOUT_S[target.mode]
     deadline = time.monotonic() + timeout_s
     while True:
         current = status(folder)
-        if current["connected"]:
+        if current["tunnel"]["up"] if target.tunnel else current["connected"]:
             return current
         failed = failure(current)
         if failed or time.monotonic() > deadline:
             stop(folder)
             if failed:
                 raise failed
-            reader = "Orca" if target.mode == "orca" else "NVDA"
+            if target.tunnel:
+                raise SshFailed(str(target.ssh), f"no tunnel within {timeout_s:g} s")
+            reader = "Orca" if target.orca else "NVDA"
             raise NvdaDidNotConnect(timeout_s, log_tail(folder), reader)
         time.sleep(CONNECT_POLL_S)
 
@@ -214,7 +216,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
-    if target.mode != "orca":
+    if not target.orca:
         relay.load_or_create(relay_dir(target.mode))
     # Only one daemon runs, whatever its mode, even one that no longer answers.
     for other in state.folders(folder.parent):
@@ -223,11 +225,12 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
             raise DaemonNotAnswering(silent.message)
         if running:
             raise AlreadyRunning(other.name)
-    if target.port:
+    # A tunnel's port is on the other machine.
+    if target.port and not target.tunnel:
         _check_port_free(target)
     _wait_started(_spawn(target, folder), folder)
-    if target.launches_reader:
-        return _wait_connected(target, folder)
+    if target.launches_reader or target.tunnel:
+        return _wait_ready(target, folder)
     return status(folder)
 
 

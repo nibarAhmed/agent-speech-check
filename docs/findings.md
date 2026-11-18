@@ -47,12 +47,6 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
   an hour after the last sandbox closed, `vEthernet (Default Switch)` was gone.
   Starting a sandbox made it again with a new interface id (`3B811EAC...` became
   `DCBD0D9D...`) and, on other days, a new address.
-- **The name lasts.** `C:\Windows\System32\drivers\etc\hosts.ics` maps the
-  host's name (`DESKTOP-ABC1234.mshome.net`) to the switch's current address,
-  and a guest gets the host as its DNS server with suffix `mshome.net`. NVDA in
-  a sandbox connected by that name. The name must be lowercase: NVDA lowercases
-  the host before it looks up its trusted certificates, so a trust saved under
-  the mixed-case name failed with "Certificate validation failed".
 - **A firewall rule on that interface dies with it.** A rule made with
   `-InterfaceAlias 'vEthernet (Default Switch)'` is stored with the id the
   interface had then (`IF={...}` in the registry), not the name. After the
@@ -176,3 +170,30 @@ Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and n
   (`pgrep -u <uid> -x orca`). `--replace` would kill the other one, so `asc` never passes it.
 - **Keys sent through `Atspi.generate_keyboard_event`** from a separate process produced no key
   events at all in this setup. Keys sent through XTest (xdotool) work.
+
+## The ssh tunnel
+
+Remote mode with `os = "windows"`: Windows' OpenSSH client (`C:\Windows\System32\OpenSSH`) and
+Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
+
+- **When the tunnel is up.** With `-v`, ssh prints
+  `debug1: remote forward success for: listen 127.0.0.1:PORT, connect ...` once the other side
+  listens. Before that line, nothing on the other machine can reach the relay yet.
+- **A taken port.** With `ExitOnForwardFailure=yes`, ssh prints
+  `Error: remote port forwarding failed for listen port PORT` and exits 255, the same code as a
+  failed connection, so only the line tells the two apart.
+- **Cost.** Against a fake NVDA in the container, 80 presses each (press to its speech, with a
+  50 ms settle), and the old design's path (the fake straight to the relay across Docker's
+  network) as the baseline:
+
+  | Path | `asc start` | press median | press p95 |
+  | --- | --- | --- | --- |
+  | straight to the relay | 0.7 s | 76 ms | 104 ms |
+  | tunnel, Windows' ssh | 1.7 s | 75 to 104 ms | 137 ms |
+  | tunnel, Git's ssh | 1.7 s | 76 ms | 104 ms |
+
+  Typing 10 characters took 263 ms on every path. Through Windows' ssh about half the replies
+  came about 60 ms late, and with a 50 ms settle some presses ended before their speech
+  arrived. The default 400 ms covers it. TCP_NODELAY on the relay's socket, or on the fake's,
+  changed nothing; a tty session (`-tt` for `-N`) moved every press to about 105 ms. Windows'
+  OpenSSH server wasn't measured.

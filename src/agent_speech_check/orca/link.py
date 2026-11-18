@@ -27,13 +27,12 @@ from agent_speech_check.errors import (
     OrcaNotConnected,
     OrcaSetupNeeded,
     ProtocolError,
-    SshFailed,
     SshMissing,
-    SshSetupNeeded,
     bad_field,
 )
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.orca import helper
+from agent_speech_check.remote import ssh
 from agent_speech_check.remote.speech_log import SpeechLog
 from agent_speech_check.validate import Fields
 
@@ -48,15 +47,6 @@ MAX_LINE = 1_000_000
 # Past the helper's xdotool timeout, so its error arrives first.
 ACK_TIMEOUT_S = helper.XDOTOOL_TIMEOUT_S + 5
 STOP_TIMEOUT_S = 10.0
-STDERR_LINES = 20
-_SSH_FAILED = 255
-# What ssh prints when only the user can fix it, by answering ssh once or fixing the name.
-_SSH_SETUP = (
-    "Permission denied",
-    "Host key verification failed",
-    "REMOTE HOST IDENTIFICATION HAS CHANGED",
-    "Could not resolve hostname",
-)
 
 KEYSYMS = {
     "NVDA": "Insert",
@@ -126,15 +116,12 @@ def keysym(key: Key) -> str:
     return key.name.lower() if len(key.name) == 1 else key.name
 
 
-def helper_command(ssh: str | None) -> list[str]:
+def helper_command(destination: str | None) -> list[str]:
     # The machine's own python3, here as over ssh: a frozen asc has no Python to run it.
     command = ["python3", "-I", "-c", BOOTSTRAP]
-    if ssh is None:
+    if destination is None:
         return command
-    remote = shlex.join(command)
-    # Keepalives, so a connection that drops silently ends ssh (code 255) in about 15 s.
-    keepalive = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"]
-    return ["ssh", "-T", "-o", "BatchMode=yes", *keepalive, "--", ssh, remote]
+    return [*ssh.command(destination, "-T"), shlex.join(command)]
 
 
 def payload() -> bytes:
@@ -201,8 +188,8 @@ def parse_message(line: bytes) -> Message | None:
 class OrcaLink:
     not_connected = OrcaNotConnected
 
-    def __init__(self, ssh: str | None, speech: SpeechLog) -> None:
-        self.ssh = ssh
+    def __init__(self, destination: str | None, speech: SpeechLog) -> None:
+        self.destination = destination
         self.speech = speech
         self.on_join: Callable[[], None] = lambda: None
         self.last_error: str | None = None
@@ -215,7 +202,7 @@ class OrcaLink:
         self._ready = False
         self._acks: dict[int, asyncio.Future[str | None]] = {}
         self._last_id = 0
-        self._stderr: deque[str] = deque(maxlen=STDERR_LINES)
+        self._stderr: deque[str] = deque(maxlen=ssh.STDERR_LINES)
         self._drain: asyncio.Task[None] | None = None
 
     @property
@@ -234,7 +221,7 @@ class OrcaLink:
     async def run(self) -> None:
         """Start the helper and follow it until it ends. Never raises: what went
         wrong goes to `failure` and `last_error`, and the daemon keeps running."""
-        command = helper_command(self.ssh)
+        command = helper_command(self.destination)
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -247,7 +234,9 @@ class OrcaLink:
         except OSError as error:
             detail = error.strerror or str(error)
             self._fail(
-                SshMissing(detail) if self.ssh else OrcaSetupNeeded(f"cannot run python: {detail}")
+                SshMissing(detail)
+                if self.destination
+                else OrcaSetupNeeded(f"cannot run python: {detail}")
             )
             return
         stdin, stdout, stderr = _pipes(process)
@@ -324,12 +313,9 @@ class OrcaLink:
         self.speech.activity()
 
     def _exit_error(self, code: int) -> AscError:
+        if self.destination is not None and code == ssh.FAILED:
+            return ssh.failed(self.destination, self._stderr, code)
         detail = self._stderr[-1] if self._stderr else f"exit code {code}"
-        if self.ssh is not None and code == _SSH_FAILED:
-            said = "\n".join(self._stderr)
-            if any(sign in said for sign in _SSH_SETUP):
-                return SshSetupNeeded(self.ssh, detail)
-            return SshFailed(self.ssh, detail)
         return OrcaSetupNeeded(f"its helper exited with code {code}: {detail}")
 
     async def _keep_stderr(self, stderr: asyncio.StreamReader) -> None:

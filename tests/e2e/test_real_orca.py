@@ -55,12 +55,25 @@ def left_folders() -> list[Path]:
     return list(Path(tempfile.gettempdir()).glob("asc-orca-*"))
 
 
-def test_orca_reads_a_form(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("over_ssh", [False, True], ids=["here", "over ssh"])
+def test_orca_reads_a_form(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, over_ssh: bool
+) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    if over_ssh:
+        # A destination whose files are this machine's, as e2e.yml's root@localhost.
+        destination = os.environ.get("ASC_E2E_SSH")
+        if not destination:
+            pytest.skip("needs ASC_E2E_SSH")
+        monkeypatch.setenv("ASC_INSTANCE", "e2e-orca")
+        home = tmp_path / "state" / "agent-speech-check" / "instances" / "e2e-orca"
+        home.mkdir(parents=True)
+        remote = f'mode = "remote"\n[remote]\nos = "linux"\nssh = "{destination}"\n'
+        (home / "config.toml").write_text(remote, encoding="utf-8")
     form = tmp_path / "form.py"
     form.write_text(FORM, encoding="utf-8")
     assert not left_running()
-    started = run_asc("start")  # orca, the one mode on Linux
+    started = run_asc("start")  # orca, the default on Linux, or the instance's remote mode
     assert started.returncode == 0, started.stderr
     try:
         launched = run_asc("launch", f"/usr/bin/python3 {form}", "--title", "asc e2e form")

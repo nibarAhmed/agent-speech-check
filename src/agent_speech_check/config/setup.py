@@ -42,9 +42,9 @@ _MODE_ABOUT = {
     "desktop": "asc runs its own silent NVDA on this desktop",
     "sandbox": "asc runs its own NVDA inside Windows Sandbox",
     "shared": "asc presses keys in your own NVDA, in your own session",
-    "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
+    "remote": "NVDA or Orca on another machine, like a VM, that asc reaches over ssh",
 }
-# Orca mode asks nothing setup can: `asc config set ssh` names its machine.
+# Orca mode runs only on Linux, where setup doesn't.
 _SETUP_MODES = tuple(m for m in prefs.MODES if m != "orca")
 MODES = _choices(_SETUP_MODES, _MODE_ABOUT, default="watch")
 # A named instance can't join your own NVDA (watch and shared mode).
@@ -69,8 +69,13 @@ LAYOUTS = _choices(
     {"desktop": "NVDA's desktop keyboard layout", "laptop": "NVDA's laptop keyboard layout"},
     default="desktop",  # keys_layout's default in prefs
 )
+OSES = _choices(
+    prefs.OSES,
+    {"windows": "NVDA, already running there", "linux": "Orca, which asc starts there"},
+    default="windows",
+)
 # Fails at import unless each question has exactly one default.
-for _question in (MODES, INSTANCE_MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
+for _question in (MODES, INSTANCE_MODES, NVDA_SOURCES, WINDOWS, LAYOUTS, OSES):
     default_of(_question)
 
 
@@ -131,7 +136,8 @@ class Answers:
     share: tuple[str, ...] = ()
     window: str = default_of(WINDOWS)
     keys_layout: str = default_of(LAYOUTS)
-    port: int | None = None  # None: the mode's default
+    os: str | None = None
+    ssh: str | None = None
 
 
 def _every_answer(labels: dict[str, str]) -> dict[str, str]:
@@ -146,7 +152,8 @@ LABELS = _every_answer(
         "share": "Shared folders",
         "window": "Window",
         "keys_layout": "Keyboard layout",
-        "port": "Port",
+        "os": "Other machine runs",
+        "ssh": "Reached with ssh",
     }
 )
 
@@ -163,7 +170,7 @@ QUESTIONS = _per_mode(
         "desktop": ("nvda_dir",),
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
-        "remote": ("keys_layout", "port"),
+        "remote": ("os", "ssh", "keys_layout"),
         "orca": (),
     }
 )
@@ -185,8 +192,10 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["share"] = list(answers.share)
     if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
-    if answers.port not in (None, defaults(answers.mode).port):
-        table["port"] = answers.port
+    if answers.os is not None:
+        table["os"] = answers.os
+    if answers.ssh is not None:
+        table["ssh"] = answers.ssh
     data: dict[str, Any] = {"mode": answers.mode}
     if table:
         data[answers.mode] = table
@@ -206,7 +215,7 @@ def summary_lines(answers: Answers, fields: tuple[str, ...]) -> list[str]:
     return ["Your settings:", *_columns(rows)]
 
 
-def _shown(value: str | tuple[str, ...] | int | None) -> tuple[str, ...]:
+def _shown(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
     """An answer as the summary says it, one line per folder. No NVDA folder
     means asc's own NVDA."""
     if value is None:

@@ -221,7 +221,7 @@ def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     orca = OrcaLink("me@vm", speech)
     asyncio.run(orca.run())
     assert isinstance(orca.failure, SshMissing)
-    keyboard = Keyboard(Target("orca", 0, launch=False, ssh="me@vm"), orca, speech)
+    keyboard = Keyboard(Target("remote", 0, launch=False, ssh="me@vm", os="linux"), orca, speech)
     with pytest.raises(OrcaNotConnected):
         asyncio.run(keyboard.press((parse_gesture("Tab"),), 0, 1))
     with pytest.raises(OrcaNotConnected):

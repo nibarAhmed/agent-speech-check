@@ -46,6 +46,7 @@ from agent_speech_check.orca.link import OrcaLink
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import Relay
 from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
+from agent_speech_check.remote.ssh import Tunnel
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.windows import winapi
@@ -127,10 +128,8 @@ def check_panic_key(key: Hotkey) -> None:
 
 
 def relay_host(target: Target) -> str:
-    """A sandbox or VM reaches the host only on the Default Switch, unless told otherwise."""
-    if target.host is not None:
-        return target.host
-    return firewall.default_switch_address() if target.listens_outside else relay.HOST
+    """A sandbox reaches the host only on the Default Switch."""
+    return firewall.default_switch_address() if target.launches_sandbox else relay.HOST
 
 
 def start_app(command: str) -> None:
@@ -186,11 +185,12 @@ class Daemon:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        # Orca's helper takes the relay's place: nothing listens in orca mode.
+        # Orca's helper takes the relay's place: nothing listens for Orca.
         self.relay: Relay | None = None
         self.orca: OrcaLink | None = None
+        self.tunnel: Tunnel | None = None
         self.link: Relay | OrcaLink
-        if target.mode == "orca":
+        if target.orca:
             self.link = self.orca = OrcaLink(target.ssh, self.speech)
         else:
             credentials = relay.load_or_create(relay_dir(target.mode))
@@ -200,7 +200,6 @@ class Daemon:
         self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
-        self.shown_host: str | None = relay.HOST
         # Commands in progress, in no set order. Status shows them, so a client can tell a
         # command has begun: each one takes its starting point before its first await.
         self.running: list[str] = []
@@ -250,9 +249,12 @@ class Daemon:
         return {
             "mode": self.target.mode,
             "keys": self.target.keys,
+            "reader": "orca" if self.orca is not None else "nvda",
+            "ssh": self.target.ssh,
+            "tunnel": None if self.tunnel is None else self.tunnel.state(),
             "connected": self.link.connected,
-            "host": self.shown_host,
-            "port": None if self.relay is None else self.relay.port,
+            "host": None if self.relay is None else self.relay.host,
+            "port": self._port(),
             "channel": None if credentials is None else credentials.channel,
             "fingerprint": None if credentials is None else credentials.fingerprint,
             "nvda_mode": self.speech.mode,
@@ -265,9 +267,15 @@ class Daemon:
             "running": list(self.running),
         }
 
+    def _port(self) -> int | None:
+        """Where NVDA connects: on the other machine, for a tunnel."""
+        if self.relay is None:
+            return None
+        return self.target.port if self.tunnel else self.relay.port
+
     def _failure(self) -> dict[str, Any] | None:
-        """Why the sandbox or Orca never got going, for `asc start` to raise."""
-        owner = self.sandbox or self.orca
+        """Why the sandbox, Orca or the tunnel never got going, for `asc start` to raise."""
+        owner = self.sandbox or self.orca or self.tunnel
         failure = None if owner is None else owner.failure
         return None if failure is None else ipc.error_detail(failure)
 
@@ -323,7 +331,7 @@ class Daemon:
         return _new_speech(typed.since, typed.after)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
-        if self.target.mode == "remote":
+        if self.target.tunnel:
             raise LaunchElsewhere
         if not self.link.connected:
             raise self.link.not_connected
@@ -392,13 +400,11 @@ class Daemon:
 
     async def _start_relay(self, relay: Relay) -> asyncio.Server:
         host = await asyncio.to_thread(relay_host, self.target)
-        server = await relay.start(self.target.port, host)
+        # A tunnel's port is on the other machine; here any free one does.
+        server = await relay.start(0 if self.target.tunnel else self.target.port, host)
         log.info("relay on %s", relay.port)
-        # A VM's NVDA keeps the host it was given; the Default Switch address drifts.
-        if self.target.mode == "remote" and self.target.host is None:
-            self.shown_host = await asyncio.to_thread(firewall.switch_name, host)
-        else:
-            self.shown_host = host
+        if self.target.tunnel and self.target.ssh is not None:
+            self.tunnel = Tunnel(self.target.ssh, self.target.port, relay.port)
         return server
 
     async def run(self) -> None:
@@ -406,8 +412,6 @@ class Daemon:
         relay_server = None
         if self.relay is not None:
             relay_server = await self._start_relay(self.relay)
-        else:
-            self.shown_host = self.target.ssh
         token = secrets.token_urlsafe(32)
         ipc_server = await asyncio.start_server(
             functools.partial(ipc.serve_one, token, self.handle),
@@ -426,11 +430,14 @@ class Daemon:
                 follow = group.create_task(
                     link.keepalive() if isinstance(link, Relay) else link.run()
                 )
+                tunnel = None if self.tunnel is None else group.create_task(self.tunnel.run())
                 if self.target.launches_sandbox:
                     self.sandbox = SandboxSession(self.folder, self.target, self._relay_info())
                     group.create_task(self.sandbox.run())
                 await self.stopping.wait()
                 follow.cancel()
+                if tunnel is not None:
+                    tunnel.cancel()
         finally:
             self.keyboard.release_all()
             # Before NVDA goes, so it can still answer the close.

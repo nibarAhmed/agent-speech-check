@@ -11,7 +11,6 @@ A command default in `[defaults]` gives way to its flag on the command line.
 from __future__ import annotations
 
 import difflib
-import ipaddress
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +36,8 @@ DEFAULT_MODE = "watch" if sys.platform == "win32" else "orca"
 # taskbar, or left alone.
 WINDOWS = ("tray", "taskbar", "show")
 LAYOUTS = ("desktop", "laptop")
+# What remote mode's machine runs: NVDA on Windows, Orca on Linux.
+OSES = ("windows", "linux")
 
 type Value = str | int | bool | list[str]
 
@@ -45,7 +46,7 @@ type Value = str | int | bool | list[str]
 class Pref:
     name: str
     scope: str
-    kind: str  # bool, int, choice, address, destination, hotkey, path, paths or settings
+    kind: str  # bool, int, choice, destination, hotkey, path, paths or settings
     default: str | int | bool | None = None  # None: none, or it depends on the mode
     low: int = 0
     high: int = 0
@@ -65,8 +66,6 @@ class Pref:
             return f.number(self.name, low=self.low, high=self.high)
         if self.kind == "choice":
             return f.choice(self.name, self.choices)
-        if self.kind == "address":
-            return _address(f.text(self.name, max_len=40), f"{where} {self.name}")
         if self.kind == "destination":
             return _destination(f.text(self.name, max_len=255), f"{where} {self.name}")
         if self.kind in ("path", "paths"):
@@ -121,7 +120,7 @@ PREFS: tuple[Pref, ...] = (
     Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
     Pref("port", PER_MODE, "int", low=1, high=65535),
     Pref("launch", PER_MODE, "bool"),
-    Pref("host", PER_MODE, "address"),
+    Pref("os", PER_MODE, "choice", choices=OSES),
     Pref("ssh", PER_MODE, "destination"),
     Pref("nvda_dir", PER_MODE, "path"),
     Pref("share", PER_MODE, "paths"),
@@ -139,20 +138,6 @@ BY_NAME = {pref.name: pref for pref in PREFS}
 # Keys each part of the file may hold.
 MODE_KEYS = tuple(p.name for p in PREFS if p.scope == PER_MODE)
 DEFAULTS_KEYS = tuple(p.name for p in PREFS if p.scope == GLOBAL and p.name != "mode")
-
-
-def _address(text: str, where: str) -> str:
-    """One IPv4 address of this computer that the other machine can reach. Not
-    loopback: an NVDA on this computer has shared mode, with its consent and panic key."""
-    try:
-        address = ipaddress.IPv4Address(text)
-    except ValueError:
-        address = None
-    if address is None or address.is_unspecified or address.is_loopback:
-        raise bad_field(
-            UsageError, where, "an IPv4 address of this computer, like 172.20.0.1", text
-        )
-    return str(address)
 
 
 def _destination(text: str, where: str) -> str:

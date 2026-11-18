@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.config.targets import Target, check_platform, defaults, load
+from agent_speech_check.config.targets import Target, check_runnable, defaults, load
 from agent_speech_check.errors import ConfigFileError, SetupNeeded, UsageError
 from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
@@ -68,11 +68,7 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
         # asc always launches NVDA in sandbox mode, and never elsewhere.
         ("[sandbox]\nlaunch = false\n", r"\[sandbox\] launch: expected only in desktop mode"),
         ("[remote]\nlaunch = true\n", r"\[remote\] launch: expected only in desktop mode"),
-        ("[sandbox]\nhost = '172.20.0.1'\n", "host: expected only in remote mode"),
-        # Loopback is this desktop: shared mode, with its consent and panic key.
-        ("[remote]\nhost = '127.0.0.2'\n", "host: expected an IPv4 address of this computer"),
-        ("[remote]\nhost = '0.0.0.0'\n", "host: expected an IPv4 address of this computer"),
-        ("[remote]\nhost = 'vm.local'\n", "host: expected an IPv4 address of this computer"),
+        ("[sandbox]\nhost = '172.20.0.1'\n", "expected only known keys, got host"),
         ("[desktop]\nmode = 'desktop'\n", "expected only known keys, got mode"),
         ("[desktop]\nkeys = true\n", "expected only known keys, got keys"),
         ("[watch]\nport = 0\n", "port: expected a whole number from 1"),
@@ -86,11 +82,14 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
         ),
         ('[shared]\npanic_key = "Alt+F1"\n', "got panic_key"),
         ("[sandbox]\nsettle_ms = 900\n", "got settle_ms"),
-        ("[remote]\nssh = 'me@vm'\n", "ssh: expected only in orca mode"),
-        # Nothing listens in orca mode: the helper talks over its own stdio.
-        ("[orca]\nport = 7000\n", r"\[orca\] port: expected only in modes that listen"),
-        ("[orca]\nssh = '-oProxyCommand=x'\n", "ssh: expected an ssh destination"),
-        ("[orca]\nssh = 'me@vm sh'\n", "ssh: expected an ssh destination"),
+        ("[watch]\nssh = 'me@vm'\n", "ssh: expected only in remote mode"),
+        ("[sandbox]\nos = 'windows'\n", "os: expected only in remote mode"),
+        ("[remote]\nos = 'macos'\n", "os: expected one of windows, linux"),
+        # Nothing listens for Orca: the helper talks over its own stdio.
+        ("[orca]\nport = 7000\n", r"\[orca\] port: expected only where NVDA connects"),
+        ("[remote]\nos = 'linux'\nport = 7000\n", "port: expected only where NVDA connects"),
+        ("[remote]\nssh = '-oProxyCommand=x'\n", "ssh: expected an ssh destination"),
+        ("[remote]\nssh = 'me@vm sh'\n", "ssh: expected an ssh destination"),
     ],
 )
 def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
@@ -126,33 +125,60 @@ def test_json_round_trip() -> None:
         Target.from_json('{"mode":"desktop","port":1,"launch":true,"settings":[1]}')
 
 
-def test_remote_host_from_file_and_json(tmp_path: Path) -> None:
-    target = resolve(write(tmp_path, "[remote]\nhost = '172.20.0.1'\n"), "remote")
-    assert target.host == "172.20.0.1"
-    assert not target.launches_nvda
+def test_remote_from_file_and_json(tmp_path: Path) -> None:
+    text = "[remote]\nos = 'windows'\nssh = 'me@vm.local'\n"
+    target = resolve(write(tmp_path, text), "remote")
+    assert (target.os, target.ssh, target.port) == ("windows", "me@vm.local", 26837)
+    assert target.tunnel
+    assert not target.orca
+    assert not target.launches_reader
     assert Target.from_json(target.to_json()) == target
-    # The daemon checks the address too, since its target is an edge.
-    with pytest.raises(UsageError, match="host: expected an IPv4 address"):
-        Target.from_json(replace(target, host="0.0.0.0").to_json())  # noqa: S104 - refused
-
-
-def test_orca_ssh_from_file_and_json(tmp_path: Path) -> None:
-    target = resolve(write(tmp_path, "[orca]\nssh = 'me@vm.local'\n"), "orca")
-    assert target.ssh == "me@vm.local"
-    assert Target.from_json(target.to_json()) == target
+    # The daemon checks the destination too, since its target is an edge.
     with pytest.raises(UsageError, match="ssh: expected an ssh destination"):
         Target.from_json(replace(target, ssh="-oProxyCommand=x").to_json())
+    linux = resolve(write(tmp_path, "[remote]\nos = 'linux'\nssh = 'me@vm'\n"), "remote")
+    # Orca over ssh: no port, no tunnel, and asc waits for the Orca it starts.
+    assert (linux.port, linux.tunnel, linux.orca, linux.launches_reader) == (0, False, True, True)
+    assert Target.from_json(linux.to_json()) == linux
+
+
+@pytest.mark.parametrize(
+    ("text", "field", "hint"),
+    [
+        ("[remote]\nhost = '172.20.0.1'\n", r"\[remote\] host", "delete host from config.toml"),
+        ("[orca]\nssh = 'me@vm'\n", r"\[orca\] ssh", 'move ssh to [remote], with os = "linux"'),
+    ],
+)
+def test_settings_from_before_ssh_say_how_to_move(
+    tmp_path: Path, text: str, field: str, hint: str
+) -> None:
+    with pytest.raises(UsageError, match=f"^config.toml: {field}: ") as exc:
+        resolve(write(tmp_path, text), None)
+    assert exc.value.exit_code == 2
+    assert hint in (exc.value.hint or "")
 
 
 def test_modes_this_platform_runs() -> None:
-    check_platform(defaults("watch"), "win32")
-    check_platform(defaults("orca"), "linux")
+    remote = replace(defaults("remote"), os="windows", ssh="me@vm")
+    check_runnable(defaults("watch"), "win32")
+    check_runnable(defaults("orca"), "linux")
+    check_runnable(remote, "win32")
+    # The relay and ssh work from Linux too.
+    check_runnable(remote, "linux")
     with pytest.raises(UsageError, match="watch mode needs Windows"):
-        check_platform(defaults("watch"), "linux")
-    # On Windows, Orca runs on a Linux machine that asc reaches over SSH.
-    with pytest.raises(UsageError, match="orca mode on Windows needs ssh"):
-        check_platform(defaults("orca"), "win32")
-    check_platform(replace(defaults("orca"), ssh="me@vm"), "win32")
+        check_runnable(defaults("watch"), "linux")
+    with pytest.raises(UsageError, match="orca mode runs Orca on this machine"):
+        check_runnable(defaults("orca"), "win32")
+
+
+@pytest.mark.parametrize(
+    ("ssh", "os", "missing"),
+    [(None, None, "ssh and os"), ("me@vm", None, "os"), (None, "linux", "ssh")],
+)
+def test_remote_mode_needs_its_machine(ssh: str | None, os: str | None, missing: str) -> None:
+    with pytest.raises(UsageError, match=f"^remote mode needs {missing}") as exc:
+        check_runnable(replace(defaults("remote"), ssh=ssh, os=os), "win32")
+    assert exc.value.exit_code == 2
 
 
 def test_json_round_trip_with_settings_and_nvda_dir() -> None:

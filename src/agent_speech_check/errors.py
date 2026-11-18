@@ -401,16 +401,15 @@ class FileUnusable(SetupNeeded):
 class NoDefaultSwitch(SetupNeeded):
     def __init__(self, interface: str) -> None:
         super().__init__(
-            f"no IPv4 address on {_show(interface)}, so the sandbox or VM can't reach asc",
-            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default "
-            "Switch; or in remote mode, asc config set host ADDRESS --mode remote",
+            f"no IPv4 address on {_show(interface)}, so the sandbox can't reach asc",
+            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default Switch",
         )
 
 
 class FirewallRuleMissing(SetupNeeded):
     def __init__(self, port: int, command: str) -> None:
         super().__init__(
-            f"no firewall rule lets NVDA on another machine reach asc on port {port}",
+            f"no firewall rule lets NVDA in Windows Sandbox reach asc on port {port}",
             hint=f"{command} (asks for admin rights once)",
         )
 
@@ -427,7 +426,7 @@ class NoFirewallNeeded(UsageError):
     def __init__(self, mode: str) -> None:
         super().__init__(
             f"{mode} mode needs no firewall rule",
-            hint="asc firewall-setup --mode sandbox, or --mode remote --instance NAME",
+            hint="only sandbox mode needs one: asc firewall-setup --mode sandbox",
         )
 
 
@@ -457,22 +456,39 @@ class RemoteNeedsInstance(Refused):
 
 class WindowsOnlyMode(UsageError):
     def __init__(self, mode: str) -> None:
-        super().__init__(f"{mode} mode needs Windows", hint="on Linux, asc start --mode orca")
+        super().__init__(
+            f"{mode} mode needs Windows",
+            hint="on Linux, asc start --mode orca, or remote mode to reach another machine",
+        )
 
 
 class WindowsOnlyCommand(UsageError):
     def __init__(self, command: str) -> None:
         super().__init__(
             f"asc {command} needs Windows",
-            hint="on Linux, asc start runs Orca, here or over ssh",
+            hint="on Linux, asc start runs Orca here, or remote mode reaches another machine",
         )
 
 
-class OrcaNeedsSsh(UsageError):
+class OrcaNeedsLinux(UsageError):
     def __init__(self) -> None:
         super().__init__(
-            "orca mode on Windows needs ssh: Orca runs on a Linux machine",
-            hint="asc config set ssh USER@HOST --mode orca",
+            "orca mode runs Orca on this machine, so it needs Linux",
+            hint="for Orca on another machine, use remote mode with os = linux: "
+            "asc config set os linux --mode remote --instance VMNAME",
+        )
+
+
+class RemoteNeedsMachine(UsageError):
+    def __init__(self, missing: Sequence[str]) -> None:
+        sets = ", then ".join(
+            f"asc config set {name} {'USER@HOST' if name == 'ssh' else 'windows|linux'}"
+            " --mode remote --instance VMNAME"
+            for name in missing
+        )
+        super().__init__(
+            f"remote mode needs {' and '.join(missing)}: which machine, and what it runs",
+            hint=sets,
         )
 
 
@@ -513,7 +529,7 @@ class SshFailed(NotConnected):
 class LaunchElsewhere(Refused):
     def __init__(self) -> None:
         super().__init__(
-            "remote mode can't start apps: NVDA runs on another machine",
+            "remote mode can't start apps on Windows: NVDA runs on another machine",
             hint="start the app there, then asc wait for its speech",
         )
 

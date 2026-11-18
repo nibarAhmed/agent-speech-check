@@ -79,7 +79,20 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             orca xvfb xdotool dbus-daemon libglib2.0-bin at-spi2-core openbox \
-            python3-gi gir1.2-gtk-3.0 fonts-dejavu-core git ca-certificates
+            python3-gi gir1.2-gtk-3.0 fonts-dejavu-core git ca-certificates \
+            openssh-server openssh-client
+      # Remote mode's other machine is this one: its 127.0.0.1 is where NVDA joins. ssh reads
+      # /root/.ssh, not the job's HOME.
+      - name: Let root ssh to localhost with a key
+        run: |
+          mkdir -p /run/sshd /root/.ssh
+          chmod 700 /root/.ssh
+          ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/id_ed25519
+          cp /root/.ssh/id_ed25519.pub /root/.ssh/authorized_keys
+          ssh-keygen -A
+          /usr/sbin/sshd
+          ssh-keyscan localhost > /root/.ssh/known_hosts
+          ssh -o BatchMode=yes root@localhost true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -100,11 +113,14 @@ jobs:
           rm "$RUNNER_TEMP/agent-speech-check/current"
           echo "ASC_E2E_EXE=$(echo "$RUNNER_TEMP"/agent-speech-check/versions/*/asc)" >> "$GITHUB_ENV"
       # By path: the other e2e and unit tests drive Windows.
-      - name: Orca tests
+      - name: Orca and ssh tests
         timeout-minutes: 10
         env:
           ASC_E2E_ORCA: "1"
-        run: uv run pytest tests/unit/test_orca.py tests/e2e/test_real_orca.py -v -p no:cacheprovider
+          ASC_E2E_SSH: root@localhost
+        run: >-
+          uv run pytest tests/unit/test_orca.py tests/unit/test_ssh.py
+          tests/e2e/test_real_orca.py tests/e2e/test_real_ssh.py -v -p no:cacheprovider
 
   # The one check branch protection requires from this workflow, so jobs and matrix legs
   # can change with no ruleset change. Add every new job to needs. always(): a skipped
