@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -20,9 +21,14 @@ _DEVICES = re.compile(r"con|prn|aux|nul|com\d|lpt\d")
 
 
 def base_root() -> Path:
-    """The default instance's home. It also keeps the NVDA every instance shares."""
-    local = os.environ.get("LOCALAPPDATA")
-    base = Path(local) if local else Path.home() / "AppData" / "Local"
+    """The default instance's home. It also keeps the NVDA every instance shares.
+    On Linux, where only orca mode runs: `$XDG_STATE_HOME/agent-speech-check`."""
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA")
+        base = Path(local) if local else Path.home() / "AppData" / "Local"
+    else:
+        state = os.environ.get("XDG_STATE_HOME")
+        base = Path(state) if state else Path.home() / ".local" / "state"
     return base / APP_DIR_NAME
 
 

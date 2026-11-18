@@ -9,6 +9,7 @@ it for this project. Prints the path of dist/agent-speech-check-VERSION.msi.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -20,6 +21,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build"
 DIST = ROOT / "dist"
+ORCA_HELPER = ROOT / "src" / "agent_speech_check" / "orca" / "helper.py"
 
 # MSI versions are three numbers: at most 255, 255 and 65535.
 MSI_LIMITS = (255, 255, 65535)
@@ -67,6 +69,8 @@ def main() -> None:
             "uv", "run", "--group", "build", "pyinstaller", "--noconfirm", "--onedir",
             "--name", "asc", "--copy-metadata", "agent-speech-check",
             "--paths", str(ROOT / "src"),
+            # Sent as text to the Linux machine in orca mode, so never imported.
+            "--add-data", f"{ORCA_HELPER}{os.pathsep}agent_speech_check/orca",
             "--distpath", str(DIST), "--workpath", str(BUILD), "--specpath", str(BUILD),
             str(ROOT / "src" / "agent_speech_check" / "__main__.py"),
         ],

@@ -221,13 +221,18 @@ class NotRunning(NotConnected):
 
 
 class NvdaNotConnected(NotConnected):
+    what = "NVDA is not connected"
+    next_step = "asc status shows how NVDA should connect"
+
     def __init__(self, waited_ms: int | None = None, last_error: str | None = None) -> None:
         waited = "" if waited_ms is None else f" after waiting {waited_ms} ms"
         why = f"; last error: {last_error}" if last_error else ""
-        super().__init__(
-            f"NVDA is not connected{waited}{why}",
-            hint="asc status shows how NVDA should connect",
-        )
+        super().__init__(f"{self.what}{waited}{why}", hint=self.next_step)
+
+
+class OrcaNotConnected(NvdaNotConnected):
+    what = "Orca is not running"
+    next_step = "asc status says why; asc stop, then asc start"
 
 
 class DaemonStartFailed(NotConnected):
@@ -450,6 +455,61 @@ class RemoteNeedsInstance(Refused):
         )
 
 
+class WindowsOnlyMode(UsageError):
+    def __init__(self, mode: str) -> None:
+        super().__init__(f"{mode} mode needs Windows", hint="on Linux, asc start --mode orca")
+
+
+class SetupWindowsOnly(UsageError):
+    def __init__(self) -> None:
+        super().__init__(
+            "asc setup offers the Windows modes; on Linux only orca mode runs",
+            hint="asc start needs no setup; asc config set ssh USER@HOST reaches another machine",
+        )
+
+
+class OrcaNeedsSsh(UsageError):
+    def __init__(self) -> None:
+        super().__init__(
+            "orca mode on Windows needs ssh: Orca runs on a Linux machine",
+            hint="asc config set ssh USER@HOST --mode orca",
+        )
+
+
+class OrcaSetupNeeded(SetupNeeded):
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"Orca can't start: {reason}",
+            hint="install Orca 51 or later, Xvfb, openbox, xdotool and python3 there",
+        )
+
+
+class OrcaBusy(Refused):
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"Orca can't start: {reason}",
+            hint="close that Orca, or run asc as another user",
+        )
+
+
+class SshSetupNeeded(SetupNeeded):
+    def __init__(self, destination: str, detail: str) -> None:
+        super().__init__(
+            f"ssh {destination} failed: {detail}",
+            hint=f"run ssh {destination} once by hand: asc needs a key, not a password",
+        )
+
+
+class SshMissing(SetupNeeded):
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"cannot run ssh: {detail}", hint="install the OpenSSH client")
+
+
+class SshFailed(NotConnected):
+    def __init__(self, destination: str, detail: str) -> None:
+        super().__init__(f"ssh {destination} failed: {detail}")
+
+
 class LaunchElsewhere(Refused):
     def __init__(self) -> None:
         super().__init__(
@@ -467,9 +527,9 @@ class NvdaIniOnlyRemote(Refused):
 
 
 class NvdaDidNotConnect(NotConnected):
-    def __init__(self, seconds: float, log_tail: str) -> None:
+    def __init__(self, seconds: float, log_tail: str, reader: str = "NVDA") -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
-        super().__init__(f"NVDA did not connect within {seconds:g} s, so asc stopped{tail}")
+        super().__init__(f"{reader} did not connect within {seconds:g} s, so asc stopped{tail}")
 
 
 class SandboxBusy(Refused):

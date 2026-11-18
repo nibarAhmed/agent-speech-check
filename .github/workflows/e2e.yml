@@ -2,11 +2,12 @@ name: e2e
 
 # The real-NVDA tests, on a hosted runner: a throwaway VM with no one's NVDA to
 # replace, so the tests start a portable NVDA here, as they do in Windows Sandbox.
+# The real-Orca tests, in a throwaway Linux container.
 on:
   # Every PR, docs too: a required check skipped by a path filter never reports.
   pull_request:
-  # Weekly too: asc downloads the latest NVDA, so a new NVDA release can break it
-  # with no PR to run these. Monday 06:00 UTC.
+  # Weekly too: asc downloads the latest NVDA, and the container the latest Orca, so
+  # a new release can break it with no PR to run these. Monday 06:00 UTC.
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
@@ -52,3 +53,28 @@ jobs:
         with:
           name: e2e-out
           path: ${{ runner.temp }}/e2e-out
+
+  orca:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # A rolling distro, for Orca 51 or later. Its packages still come from today's repo.
+    container: registry.opensuse.org/opensuse/tumbleweed@sha256:806c95a13322931c84d43f088aee444deb2f04affc2d82746e9625d8862c9872
+    steps:
+      - name: Install Orca and what asc runs with it
+        run: >-
+          zypper -n --gpg-auto-import-keys install --no-recommends
+          orca xorg-x11-server-Xvfb xdotool dbus-1-daemon at-spi2-core openbox
+          python3-gobject python3-gobject-Gdk typelib-1_0-Gtk-3_0 dejavu-fonts
+          git-core tar gzip
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install
+        run: uv sync --locked
+      # By path: the other e2e and unit tests drive Windows.
+      - name: Orca tests
+        timeout-minutes: 10
+        env:
+          ASC_E2E_ORCA: "1"
+        run: uv run pytest tests/unit/test_orca.py tests/e2e/test_real_orca.py -v -p no:cacheprovider

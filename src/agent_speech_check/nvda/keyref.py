@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import os
 import re
-import winreg
+import sys
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
 from agent_speech_check.errors import NvdaNotFound
 from agent_speech_check.windows import winapi
+
+if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+    import winreg
 
 _HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 # Single letter navigation is a list, not a table: "h: heading".
@@ -169,6 +172,8 @@ def _registry_dir() -> Path | None:
 def candidates() -> list[tuple[str, Path]]:
     """Where your own NVDA may be, in the order `asc keys` tries them."""
     found: list[tuple[str, Path]] = []
+    if sys.platform != "win32":
+        return found
     running = winapi.process_image("nvda.exe")
     if running is not None:
         found.append(("the running nvda.exe", running.parent))

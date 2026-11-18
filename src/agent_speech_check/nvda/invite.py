@@ -10,8 +10,11 @@ configuration.
 from __future__ import annotations
 
 import os
-import winreg
+import sys
 from urllib.parse import quote
+
+if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+    import winreg
 
 # Under HKEY_CURRENT_USER, where NVDA registers the scheme.
 HANDLER = r"Software\Classes\nvdaremote\shell\open\command"

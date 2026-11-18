@@ -2,7 +2,7 @@
 
 **Let AI agents test your app with a real NVDA screen reader.**
 
-`asc` connects to NVDA, presses keys, and gives you what NVDA said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows.
+`asc` connects to NVDA, presses keys, and gives you what NVDA said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows. On Linux it does the same with Orca.
 
 ## Example
 
@@ -32,6 +32,7 @@ asc stop
 | `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
 | `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM: run `asc setup --instance NAME` for each. |
+| `orca` | You test with Orca on Linux. `asc` starts its own Orca on a hidden display, on the Linux machine it runs on or one it reaches over SSH. It needs Orca 51 or later, Xvfb, openbox and xdotool there. |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 

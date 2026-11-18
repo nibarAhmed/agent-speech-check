@@ -7,7 +7,9 @@ import contextlib
 import ctypes
 import hashlib
 import os
+import sys
 import threading
+import types
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from ctypes import wintypes
@@ -17,7 +19,24 @@ import psutil
 
 ERROR_ALREADY_EXISTS = 183
 
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+class _Absent:
+    """A DLL off Windows, so this module imports on Linux: its functions can be set
+    up but not called."""
+
+    def __getattr__(self, name: str) -> types.SimpleNamespace:
+        return types.SimpleNamespace()
+
+
+def _dll(name: str) -> ctypes.WinDLL:
+    if sys.platform != "win32":
+        return _Absent()  # type: ignore[unreachable, unused-ignore]
+    return ctypes.WinDLL(name, use_last_error=True)
+
+
+_FUNCTYPE = ctypes.WINFUNCTYPE if sys.platform == "win32" else ctypes.CFUNCTYPE
+
+_kernel32 = _dll("kernel32")
 _kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
 _kernel32.CreateMutexW.restype = wintypes.HANDLE
 
@@ -146,7 +165,7 @@ def process_image(image: str) -> Path | None:
 
 # ---------------------------------------------------------------- keyboard
 
-_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_user32 = _dll("user32")
 _user32.VkKeyScanW.argtypes = [wintypes.WCHAR]
 _user32.VkKeyScanW.restype = ctypes.c_short
 
@@ -165,7 +184,7 @@ def vk_key_scan(char: str) -> tuple[int, int] | None:
 SW_HIDE = 0
 SW_MINIMIZE = 6
 SW_RESTORE = 9
-_WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_WNDENUMPROC = _FUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 _user32.EnumWindows.argtypes = [_WNDENUMPROC, wintypes.LPARAM]
 _user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 _user32.IsWindowVisible.argtypes = [wintypes.HWND]
@@ -381,7 +400,7 @@ def close_handle(handle: int) -> None:
 
 # ---------------------------------------------------------------- file version
 
-_version = ctypes.WinDLL("version", use_last_error=True)
+_version = _dll("version")
 _version.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, wintypes.LPDWORD]
 _version.GetFileVersionInfoSizeW.restype = wintypes.DWORD
 _version.GetFileVersionInfoW.argtypes = [
@@ -545,9 +564,7 @@ _TRAY_CLASS = "AgentSpeechCheckTray"
 _TRAY_ID = 1
 
 _LRESULT = ctypes.c_ssize_t
-_WNDPROC = ctypes.WINFUNCTYPE(
-    _LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
-)
+_WNDPROC = _FUNCTYPE(_LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
 
 
 class _WndClassEx(ctypes.Structure):
@@ -587,7 +604,7 @@ class _NotifyIconData(ctypes.Structure):
     )
 
 
-_shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+_shell32 = _dll("shell32")
 _shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.POINTER(_NotifyIconData)]
 _user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 _user32.DefWindowProcW.restype = _LRESULT

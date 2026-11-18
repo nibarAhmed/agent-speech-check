@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check.config.targets import Target
+from agent_speech_check.config.targets import Target, check_platform
 from agent_speech_check.daemon import ipc, server, state
 from agent_speech_check.daemon.server import LOG_FILE
 from agent_speech_check.errors import (
@@ -46,7 +46,7 @@ ERR_FILE = "daemon.err"
 TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
 # A sandbox boots and makes its portable NVDA first, which takes a while.
-CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0}
+CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "orca": 60.0}
 CONNECT_POLL_S = 1.0
 
 
@@ -170,6 +170,7 @@ def check_instance(target: Target, command: str) -> None:
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
+    check_platform(target)
     check_instance(target, "start")
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
@@ -185,26 +186,27 @@ def precheck(target: Target) -> None:
         server.check_panic_key(target.panic_key)
 
 
-def sandbox_failure(current: dict[str, Any]) -> AscError | None:
-    """Why the daemon's sandbox failed, as it was raised there, or None."""
-    raw = current.get("sandbox_failure")
-    return None if raw is None else ipc.error_from(raw, "sandbox_failure")
+def failure(current: dict[str, Any]) -> AscError | None:
+    """Why the daemon's sandbox or Orca failed, as it was raised there, or None."""
+    raw = current.get("failure")
+    return None if raw is None else ipc.error_from(raw, "failure")
 
 
 def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
-    """For an NVDA that asc launches, wait until it has joined the relay."""
+    """For a screen reader that asc starts, wait until it has joined."""
     timeout_s = CONNECT_TIMEOUT_S[target.mode]
     deadline = time.monotonic() + timeout_s
     while True:
         current = status(folder)
         if current["connected"]:
             return current
-        failure = sandbox_failure(current)
-        if failure or time.monotonic() > deadline:
+        failed = failure(current)
+        if failed or time.monotonic() > deadline:
             stop(folder)
-            if failure:
-                raise failure
-            raise NvdaDidNotConnect(timeout_s, log_tail(folder))
+            if failed:
+                raise failed
+            reader = "Orca" if target.mode == "orca" else "NVDA"
+            raise NvdaDidNotConnect(timeout_s, log_tail(folder), reader)
         time.sleep(CONNECT_POLL_S)
 
 
@@ -212,7 +214,8 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
-    relay.load_or_create(relay_dir(target.mode))
+    if target.mode != "orca":
+        relay.load_or_create(relay_dir(target.mode))
     # Only one daemon runs, whatever its mode, even one that no longer answers.
     for other in state.folders(folder.parent):
         running, silent = _probe(other)
@@ -223,7 +226,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     if target.port:
         _check_port_free(target)
     _wait_started(_spawn(target, folder), folder)
-    if target.launches_nvda:
+    if target.launches_reader:
         return _wait_connected(target, folder)
     return status(folder)
 

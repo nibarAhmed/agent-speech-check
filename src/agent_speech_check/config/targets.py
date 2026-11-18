@@ -12,7 +12,7 @@
     share = ['C:\\src\\app']
     nvda_settings = ["keyboard.speakTypedCharacters=False"]
 
-`mode` is what `asc start` uses without `--mode` (watch if not set). A mode
+`mode` is what `asc start` uses without `--mode` (if not set: watch, or orca on Linux). A mode
 without a table gets its defaults. `--nvda-setting` and `--window` are added at
 `asc start` and are not kept. The whole file is checked when it is read, so a
 bad table fails every command, not only the ones that use it.
@@ -21,6 +21,7 @@ bad table fails every command, not only the ones that use it.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
@@ -30,11 +31,13 @@ import tomlkit
 import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.prefs import MODES, WINDOWS
+from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS
 from agent_speech_check.errors import (
     ConfigFileError,
     FileUnusable,
+    OrcaNeedsSsh,
     UsageError,
+    WindowsOnlyMode,
     bad_field,
 )
 from agent_speech_check.inputs.keys import PANIC_KEY, Hotkey, parse_hotkey
@@ -58,6 +61,7 @@ class Target:
     share: tuple[str, ...] = ()
     window: str | None = None  # sandbox mode; None: the default, tray
     host: str | None = None  # remote mode; None: the Default Switch address
+    ssh: str | None = None  # orca mode; None: Orca runs on this Linux machine
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
@@ -89,6 +93,7 @@ class Target:
             share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
             host=f.opt_text("host", max_len=40),
+            ssh=f.opt_text("ssh", max_len=255),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent"),
             panic_key=parse_hotkey(f.text("panic_key", max_len=40)),
@@ -137,6 +142,11 @@ class Target:
         return self.launches_portable or self.launches_sandbox
 
     @property
+    def launches_reader(self) -> bool:
+        """asc starts the screen reader, so `asc start` waits until it joins."""
+        return self.launches_nvda or self.mode == "orca"
+
+    @property
     def sandbox_window(self) -> str:
         return self.window or "tray"
 
@@ -159,6 +169,12 @@ def _checked(target: Target, where: str) -> Target:
         if target.mode != "remote":
             raise bad_field(UsageError, f"{where} host", "only in remote mode", target.host)
         prefs.BY_NAME["host"].check(target.host, where)
+    if target.ssh is not None:
+        if target.mode != "orca":
+            raise bad_field(UsageError, f"{where} ssh", "only in orca mode", target.ssh)
+        prefs.BY_NAME["ssh"].check(target.ssh, where)
+    if target.mode == "orca" and target.port != 0:
+        raise bad_field(UsageError, f"{where} port", "only in modes that listen", target.port)
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
@@ -178,6 +194,14 @@ def _checked(target: Target, where: str) -> Target:
                 UsageError, f"{where} window", f"one of {', '.join(WINDOWS)}", target.window
             )
     return target
+
+
+def check_platform(target: Target, platform: str = sys.platform) -> None:
+    """Orca mode is the one mode beyond Windows; on Windows it reaches Linux over ssh."""
+    if platform != "win32" and target.mode != "orca":
+        raise WindowsOnlyMode(target.mode)
+    if platform == "win32" and target.mode == "orca" and target.ssh is None:
+        raise OrcaNeedsSsh
 
 
 def defaults(mode: str) -> Target:
@@ -250,14 +274,14 @@ class Config:
     `asc config` to change and write back."""
 
     data: Mapping[str, Any] = field(default_factory=dict)
-    mode: str = "watch"
+    mode: str = DEFAULT_MODE
     defaults: Mapping[str, prefs.Value] = field(default_factory=dict)
     modes: Mapping[str, Target] = field(default_factory=dict)
 
     @classmethod
     def from_data(cls, data: dict[str, Any], file: str) -> Config:
         top = Fields(data, file, UsageError, ("mode", "defaults", *MODES))
-        mode = top.choice("mode", MODES) if top.has("mode") else "watch"
+        mode = top.choice("mode", MODES) if top.has("mode") else DEFAULT_MODE
         globals_ = Fields(
             data.get("defaults", {}), f"{file}: [defaults]", UsageError, prefs.DEFAULTS_KEYS
         )

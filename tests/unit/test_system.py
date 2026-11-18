@@ -24,7 +24,7 @@ import pytest
 
 from agent_speech_check.config.targets import defaults
 from agent_speech_check.daemon import ipc, session
-from agent_speech_check.daemon.session import sandbox_failure
+from agent_speech_check.daemon.session import failure
 from agent_speech_check.errors import (
     DaemonStartFailed,
     DownloadFailed,
@@ -35,6 +35,7 @@ from agent_speech_check.errors import (
     NvdaAlreadyRunning,
     NvdaNotFound,
     NvdaTooOld,
+    OrcaBusy,
     PortableNotReplaced,
     ProgramWontStart,
     SandboxBroken,
@@ -342,17 +343,17 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
         shutil.rmtree(os.path.realpath(root), ignore_errors=True)
 
 
-def test_sandbox_failure_keeps_its_message_and_category() -> None:
-    """The daemon reports why its sandbox failed; `asc start` raises that, unwrapped."""
-    for error in (SandboxFailed("start", "file not found"), SandboxNeedsPro()):
-        got = sandbox_failure({"sandbox_failure": ipc.error_detail(error)})
+def test_start_failure_keeps_its_message_and_category() -> None:
+    """The daemon reports why its sandbox or Orca failed; `asc start` raises that, unwrapped."""
+    for error in (SandboxFailed("start", "file not found"), SandboxNeedsPro(), OrcaBusy("x")):
+        got = failure({"failure": ipc.error_detail(error)})
         assert got is not None
         assert (got.message, got.hint, got.exit_code) == (
             error.message,
             error.hint,
             error.exit_code,
         )
-    assert sandbox_failure({"sandbox_failure": None}) is None
+    assert failure({"failure": None}) is None
 
 
 def test_sandbox_session_before_start() -> None:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.config.targets import Target, defaults, load
+from agent_speech_check.config.targets import Target, check_platform, defaults, load
 from agent_speech_check.errors import ConfigFileError, SetupNeeded, UsageError
 from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
@@ -28,6 +28,7 @@ def test_mode_defaults() -> None:
     assert defaults("desktop") == Target("desktop", 0, launch=True)
     assert defaults("sandbox") == Target("sandbox", 16837, launch=False)
     assert defaults("remote") == Target("remote", 26837, launch=False)
+    assert defaults("orca") == Target("orca", 0, launch=False)
 
 
 def test_keys_follow_the_mode() -> None:
@@ -46,6 +47,8 @@ def test_panic_key_wherever_keys_reach_this_desktop() -> None:
     assert not replace(defaults("desktop"), launch=False).takes_panic_key
     assert not defaults("sandbox").takes_panic_key
     assert not defaults("remote").takes_panic_key
+    # Its keys go to a private X display, never this desktop.
+    assert not defaults("orca").takes_panic_key
     assert not defaults("watch").takes_panic_key
 
 
@@ -61,7 +64,7 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared, remote"),
+        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared, remote, orca"),
         # asc always launches NVDA in sandbox mode, and never elsewhere.
         ("[sandbox]\nlaunch = false\n", r"\[sandbox\] launch: expected only in desktop mode"),
         ("[remote]\nlaunch = true\n", r"\[remote\] launch: expected only in desktop mode"),
@@ -83,6 +86,11 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
         ),
         ('[shared]\npanic_key = "Alt+F1"\n', "got panic_key"),
         ("[sandbox]\nsettle_ms = 900\n", "got settle_ms"),
+        ("[remote]\nssh = 'me@vm'\n", "ssh: expected only in orca mode"),
+        # Nothing listens in orca mode: the helper talks over its own stdio.
+        ("[orca]\nport = 7000\n", r"\[orca\] port: expected only in modes that listen"),
+        ("[orca]\nssh = '-oProxyCommand=x'\n", "ssh: expected an ssh destination"),
+        ("[orca]\nssh = 'me@vm sh'\n", "ssh: expected an ssh destination"),
     ],
 )
 def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
@@ -126,6 +134,25 @@ def test_remote_host_from_file_and_json(tmp_path: Path) -> None:
     # The daemon checks the address too, since its target is an edge.
     with pytest.raises(UsageError, match="host: expected an IPv4 address"):
         Target.from_json(replace(target, host="0.0.0.0").to_json())  # noqa: S104 - refused
+
+
+def test_orca_ssh_from_file_and_json(tmp_path: Path) -> None:
+    target = resolve(write(tmp_path, "[orca]\nssh = 'me@vm.local'\n"), "orca")
+    assert target.ssh == "me@vm.local"
+    assert Target.from_json(target.to_json()) == target
+    with pytest.raises(UsageError, match="ssh: expected an ssh destination"):
+        Target.from_json(replace(target, ssh="-oProxyCommand=x").to_json())
+
+
+def test_modes_this_platform_runs() -> None:
+    check_platform(defaults("watch"), "win32")
+    check_platform(defaults("orca"), "linux")
+    with pytest.raises(UsageError, match="watch mode needs Windows"):
+        check_platform(defaults("watch"), "linux")
+    # On Windows, Orca runs on a Linux machine that asc reaches over SSH.
+    with pytest.raises(UsageError, match="orca mode on Windows needs ssh"):
+        check_platform(defaults("orca"), "win32")
+    check_platform(replace(defaults("orca"), ssh="me@vm"), "win32")
 
 
 def test_json_round_trip_with_settings_and_nvda_dir() -> None:

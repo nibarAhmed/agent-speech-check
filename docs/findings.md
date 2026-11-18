@@ -149,3 +149,26 @@ where 2026.2 in the same setup passed them all.
 - Sandbox mode also stops Windows Audio, so with 2025.1 it should hit the
   same failure (not observed).
 
+
+## Orca on Linux
+
+Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and no audio.
+
+- **No speech server is needed.** Orca fails to connect to Speech Dispatcher, logs it, and
+  carries on. It still sends everything it would say to the recorder that
+  `SpeechPresenter.SetLogFileForTesting` starts.
+- **The recorder writes to a FIFO.** It opens the path for writing, one line per record, so a
+  named pipe works. The reader must open the pipe first, because Orca's open blocks until there
+  is a reader. A pipe nobody empties stalls Orca.
+- **Orca's own key commands need a window manager.** With none, X input focus is `PointerRoot`
+  (window 1). libatspi puts its key grabs on the focus window, so every grab fails with
+  BadWindow (XInput opcode 131, minor 54), and Orca's debug log shows `Grab id for Insert: 0`.
+  Plain keys still reach the app and Orca still speaks focus changes, but Insert+T types a "t".
+  Setting the focus to the root window didn't help. With openbox running, the grabs work
+  (`Grab id for Insert: 273`) and Insert+T speaks the time.
+- **Xvfb resets when its last client disconnects**, which drops any focus or keymap a client
+  set, so it runs with `-noreset`.
+- **One Orca per user.** Orca refuses to start while another Orca runs as the same user
+  (`pgrep -u <uid> -x orca`). `--replace` would kill the other one, so `asc` never passes it.
+- **Keys sent through `Atspi.generate_keyboard_event`** from a separate process produced no key
+  events at all in this setup. Keys sent through XTest (xdotool) work.

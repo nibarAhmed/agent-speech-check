@@ -44,10 +44,12 @@ _MODE_ABOUT = {
     "shared": "asc presses keys in your own NVDA, in your own session",
     "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
 }
-MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
+# Orca mode asks nothing setup can: `asc config set ssh` names its machine.
+_SETUP_MODES = tuple(m for m in prefs.MODES if m != "orca")
+MODES = _choices(_SETUP_MODES, _MODE_ABOUT, default="watch")
 # A named instance can't join your own NVDA (watch and shared mode).
 INSTANCE_MODES = _choices(
-    tuple(m for m in prefs.MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
+    tuple(m for m in _SETUP_MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
 )
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
@@ -162,6 +164,7 @@ QUESTIONS = _per_mode(
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
         "remote": ("keys_layout", "port"),
+        "orca": (),
     }
 )
 

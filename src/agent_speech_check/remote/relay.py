@@ -154,6 +154,8 @@ class Relay:
     have left down. It must not await, or a press could get in first.
     """
 
+    not_connected = NvdaNotConnected
+
     def __init__(
         self,
         credentials: Credentials,

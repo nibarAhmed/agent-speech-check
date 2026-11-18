@@ -7,9 +7,6 @@ import sys
 from pathlib import Path
 from typing import IO
 
-DETACHED = (
-    subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined,unused-ignore]
-)
 BREAKAWAY = 0x01000000  # CREATE_BREAKAWAY_FROM_JOB
 
 
@@ -26,6 +23,7 @@ def detached(
         return subprocess.Popen(  # noqa: S603 - our own executable and arguments
             command,
             creationflags=flags,
+            start_new_session=sys.platform != "win32",
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=err,
@@ -33,6 +31,9 @@ def detached(
             close_fds=True,
         )
 
+    if sys.platform != "win32":
+        return popen(0)
+    DETACHED = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     try:
         # Leave the caller's job object, so the process outlives the shell
         # that started it.

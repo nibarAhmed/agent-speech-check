@@ -1,5 +1,6 @@
 """`asc keys` parsing, against NVDA's real Commands Quick Reference (tests/fixtures)."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -81,3 +82,6 @@ def test_candidates_include_program_files(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("ProgramFiles", r"C:\PF")
     labels = [label for label, _ in keyref.candidates()]
     assert "%ProgramFiles%" in labels
+    # Off Windows there is no NVDA of your own: `asc keys` then exits 7.
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert keyref.candidates() == []

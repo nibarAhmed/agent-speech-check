@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import difflib
 import ipaddress
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,7 +30,9 @@ from agent_speech_check.validate import Fields
 GLOBAL = "global"
 PER_MODE = "per mode"
 
-MODES = ("watch", "desktop", "sandbox", "shared", "remote")
+MODES = ("watch", "desktop", "sandbox", "shared", "remote", "orca")
+# Orca mode is the one mode that runs on Linux.
+DEFAULT_MODE = "watch" if sys.platform == "win32" else "orca"
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
 # taskbar, or left alone.
 WINDOWS = ("tray", "taskbar", "show")
@@ -42,7 +45,7 @@ type Value = str | int | bool | list[str]
 class Pref:
     name: str
     scope: str
-    kind: str  # bool, int, choice, address, hotkey, path, paths or settings
+    kind: str  # bool, int, choice, address, destination, hotkey, path, paths or settings
     default: str | int | bool | None = None  # None: none, or it depends on the mode
     low: int = 0
     high: int = 0
@@ -64,6 +67,8 @@ class Pref:
             return f.choice(self.name, self.choices)
         if self.kind == "address":
             return _address(f.text(self.name, max_len=40), f"{where} {self.name}")
+        if self.kind == "destination":
+            return _destination(f.text(self.name, max_len=255), f"{where} {self.name}")
         if self.kind in ("path", "paths"):
             one = self.kind == "path"
             paths = [f.text(self.name, max_len=1000)] if one else list(f.strings(self.name))
@@ -112,11 +117,12 @@ class Pref:
 
 
 PREFS: tuple[Pref, ...] = (
-    Pref("mode", GLOBAL, "choice", "watch", choices=MODES),
+    Pref("mode", GLOBAL, "choice", DEFAULT_MODE, choices=MODES),
     Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
     Pref("port", PER_MODE, "int", low=1, high=65535),
     Pref("launch", PER_MODE, "bool"),
     Pref("host", PER_MODE, "address"),
+    Pref("ssh", PER_MODE, "destination"),
     Pref("nvda_dir", PER_MODE, "path"),
     Pref("share", PER_MODE, "paths"),
     Pref("window", PER_MODE, "choice", choices=WINDOWS),
@@ -147,6 +153,13 @@ def _address(text: str, where: str) -> str:
             UsageError, where, "an IPv4 address of this computer, like 172.20.0.1", text
         )
     return str(address)
+
+
+def _destination(text: str, where: str) -> str:
+    """What ssh connects to. Never an option: ssh would read `-oProxyCommand=...` as one."""
+    if text.startswith("-") or any(c.isspace() or not c.isprintable() for c in text):
+        raise bad_field(UsageError, where, "an ssh destination, like me@vm", text)
+    return text
 
 
 def find(name: str) -> Pref:

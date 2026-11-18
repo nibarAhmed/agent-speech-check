@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ import pytest
 from agent_speech_check.cli import main, run_setup, say_update
 from agent_speech_check.config import prefs, setup
 from agent_speech_check.config.targets import load
-from agent_speech_check.errors import AscError
+from agent_speech_check.errors import AscError, SetupWindowsOnly
 from agent_speech_check.nvda.launcher import Release
 from agent_speech_check.sandbox import wsb
 
@@ -126,6 +127,13 @@ def test_to_data_keeps_only_choices() -> None:
 
 
 # ---------------------------------------------------------------- the flow
+
+
+def test_no_setup_on_linux(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(SetupWindowsOnly):
+        run_setup(Asker(), replace_without_asking=True)
+    assert not (root / "config.toml").exists()
 
 
 def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:

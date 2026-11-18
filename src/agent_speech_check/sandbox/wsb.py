@@ -26,8 +26,8 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
-import winreg
 from dataclasses import dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -42,6 +42,9 @@ from agent_speech_check.errors import (
 from agent_speech_check.validate import Fields
 from agent_speech_check.windows import powershell, spawn, winapi
 from agent_speech_check.windows.wait import poll_until
+
+if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+    import winreg
 
 log = logging.getLogger(__name__)
 

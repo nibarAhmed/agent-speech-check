@@ -38,7 +38,7 @@ from agent_speech_check.errors import (
     bad_field,
     from_kind,
 )
-from agent_speech_check.inputs.keys import Gesture, parse_gesture, text_gestures
+from agent_speech_check.inputs.keys import Gesture, parse_gesture
 from agent_speech_check.validate import Fields
 
 log = logging.getLogger(__name__)
@@ -154,19 +154,10 @@ class TypeArgs:
     settle_ms: int
     timeout_ms: int
 
-    @property
-    def parsed(self) -> tuple[Gesture, ...]:
-        return text_gestures(self.text)
-
     @classmethod
     def parse(cls, f: Fields) -> TypeArgs:
-        args = cls(
-            f.text("text", max_len=MAX_TYPED),
-            _settle(f),
-            _timeout(f),
-        )
-        args.parsed  # noqa: B018 - every character is checked before any is typed
-        return args
+        # The daemon checks the characters: which can be typed depends on its mode.
+        return cls(f.text("text", max_len=MAX_TYPED), _settle(f), _timeout(f))
 
 
 @dataclass(frozen=True)

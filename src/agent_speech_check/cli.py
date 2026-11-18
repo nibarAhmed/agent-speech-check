@@ -35,6 +35,7 @@ from agent_speech_check.errors import (
     NoFirewallNeeded,
     NotRunning,
     NvdaIniOnlyRemote,
+    SetupWindowsOnly,
     UnrecognizedArguments,
     Updating,
     UsageError,
@@ -93,7 +94,9 @@ def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
 
 
 def _add_mode(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--mode", choices=MODES, help="default: the mode setting, watch unless set")
+    parser.add_argument(
+        "--mode", choices=MODES, help="default: the mode setting, else watch (orca on Linux)"
+    )
 
 
 def _default(name: str) -> str:
@@ -275,10 +278,15 @@ def _show_status(status: dict[str, Any]) -> None:
     keys = "keys allowed" if status["keys"] else "keys refused"
     print(f"mode: {status['mode']} ({keys})")
     print("recording: yes")
-    print(f"nvda: {'connected' if status['connected'] else 'not connected'}")
-    if not status["connected"]:
+    reader = "orca" if status["mode"] == "orca" else "nvda"
+    print(f"{reader}: {'connected' if status['connected'] else 'not connected'}")
+    # Nothing listens in orca mode: asc starts Orca itself.
+    if not status["connected"] and status["port"] is not None:
         print(_connect_line(status))
-    print(f"browse/focus: {status['nvda_mode']}")
+    if reader == "orca" and status["host"]:
+        print(f"over ssh: {status['host']}")
+    if reader == "nvda":
+        print(f"browse/focus: {status['nvda_mode']}")
     print(f"speech: {status['lines']} lines kept, latest {status['latest']}")
     if status.get("panic_key"):
         print(f"panic key: {status['panic_key']} stops asc and releases keys")
@@ -773,6 +781,8 @@ def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
+    if sys.platform != "win32":
+        raise SetupWindowsOnly
     if (mode := session.running_mode(state_root())) is not None:
         raise AlreadyRunning(mode)
     path = config_file()
@@ -808,7 +818,7 @@ COMMANDS: dict[str, Command] = {
     "start": Command(
         "start recording",
         """\
-Start the background daemon in --mode, or the mode setting (watch unless set),
+Start the background daemon in --mode, or the mode setting (watch, orca on Linux),
 with that mode's settings from config.toml (see asc config). One daemon runs
 per instance: the other commands talk to it.
 

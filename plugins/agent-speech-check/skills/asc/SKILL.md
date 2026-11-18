@@ -1,6 +1,6 @@
 ---
 name: asc
-description: Check what the NVDA screen reader actually says, or drive an app with NVDA keys, using asc (Agent Speech Check). Use when verifying screen reader output, live regions, focus order, labels, or NVDA keyboard navigation in a Windows or web app.
+description: Check what the NVDA screen reader actually says, or drive an app with NVDA keys, using asc (Agent Speech Check). Use when verifying screen reader output, live regions, focus order, labels, or NVDA keyboard navigation in a Windows or web app, or the same with Orca on Linux.
 ---
 
 # asc: hear what NVDA says
@@ -23,6 +23,7 @@ stop and ask the user to switch to the mode this table suggests:
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation; only then add `--i-understand` |
 | Press keys in NVDA on a VM the user set up | `remote` (the user starts and connects that NVDA; `launch` is refused) |
+| Hear Orca on Linux: on this Linux machine, or one the user reaches over SSH | `orca` (the only mode on Linux; on Windows it needs `ssh`) |
 
 ## Rules
 
@@ -110,6 +111,17 @@ NVDA says, typed text included, so `asc stop` when you're done.
   NVDA's config folder while NVDA is not running (Windows PowerShell 5.1's `>`
   writes UTF-16): it then connects at startup, nothing to answer.
   Start the app on the VM yourself or ask the user, then `asc wait`.
+
+## Orca mode
+
+- `asc` starts its own Orca on a hidden display, so its keys reach no one's
+  desktop. On Windows, set the machine first:
+  `asc config set ssh USER@HOST --mode orca`. ssh never asks for a password:
+  if `asc start` exits 7 about ssh, ask the user to run `ssh USER@HOST` once.
+- Keys use NVDA's names: `NVDA+T` (or `Orca+T`) is Orca's Insert modifier.
+  `asc keys` is NVDA's reference, not Orca's.
+- `asc launch CMD` starts the app on Orca's display; there's no other way to
+  reach it.
 
 ## Exit codes
 

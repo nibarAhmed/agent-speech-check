@@ -22,7 +22,6 @@ import sys
 import threading
 import time
 import urllib.request
-import winreg
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -33,6 +32,9 @@ from agent_speech_check.errors import AscError
 from agent_speech_check.windows import spawn, tls, winapi
 from agent_speech_check.windows.paths import base_root, every_root, write_atomic
 from agent_speech_check.windows.wait import poll_until
+
+if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+    import winreg
 
 log = logging.getLogger(__name__)
 

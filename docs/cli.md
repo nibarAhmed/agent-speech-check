@@ -1,6 +1,6 @@
 # `asc` command reference
 
-`asc` (Agent Speech Check) lets an agent, a person, or CI use NVDA to inspect an application's accessibility through the speech NVDA actually produces. Use it to press keys, read speech as text, and assert expected output.
+`asc` (Agent Speech Check) lets an agent, a person, or CI use NVDA to inspect an application's accessibility through the speech NVDA actually produces. Use it to press keys, read speech as text, and assert expected output. On Linux, or over SSH from Windows, it does the same with Orca (see [Orca mode](#orca-mode)).
 
 This is the complete command and configuration reference. If you're new to `asc`, start with the [README](../README.md) first.
 
@@ -58,7 +58,7 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 | 4 | Refused, or busy (the message says which) |
 | 5 | Protocol error |
 | 6 | Internal error (a bug in `asc`; the message says where the log is) |
-| 7 | Setup needed: NVDA, Windows Sandbox, the Default Switch or a firewall rule; the hint says how |
+| 7 | Setup needed: NVDA, Windows Sandbox, the Default Switch, a firewall rule, Orca or ssh; the hint says how |
 | 130 | Interrupted (Ctrl+C) |
 
 ## Files
@@ -70,6 +70,7 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
 | `%LOCALAPPDATA%\agent-speech-check\instances\<name>\` | a [named instance's](#instances) `config.toml` and mode folders |
 | `%LOCALAPPDATA%\agent-speech-check\update\` | the last [update](#updates) check's `update.log` and `msiexec.log`, and the MSI it downloaded |
+| `~/.local/state/agent-speech-check/` | on Linux (or `$XDG_STATE_HOME/agent-speech-check/`), the same: `config.toml`, the orca folder and `instances/` |
 
 The certificate and key are created once and kept, because NVDA pins the
 certificate.
@@ -102,7 +103,8 @@ An `asc` installed by the MSI keeps itself up to date:
 
 ## Modes
 
-The `mode` setting (or `asc start --mode`) picks one of five.
+The `mode` setting (or `asc start --mode`) picks one of six. On Linux only
+orca mode runs: the others exit 2.
 
 ### Watch mode
 
@@ -240,6 +242,39 @@ joins shared mode without asking again: your consent to its keys is
 - It refuses with exit 4 unless you pass `--i-understand` to `asc start`, every time. It is never kept in `config.toml`.
 - It has a [panic key](#panic-key).
 
+### Orca mode
+
+`asc` starts its own Orca on a Linux machine: this one, when `asc` runs on
+Linux, or the one orca mode's `ssh` names
+(`asc config set ssh me@vm --mode orca`). That Orca runs on its own hidden X
+display (Xvfb, with openbox as its window manager), so its keys never reach
+your desktop and there is no panic key. It needs no audio device: `asc`
+records what Orca would say.
+
+- Needs Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and
+  python3 3.9 or later on that machine; exit 7 names what is missing. Nothing
+  is installed there: `asc` sends its helper over stdin at each start.
+- Orca runs once per user, so `asc start` exits 4 while that user runs
+  another Orca, your own included. Use another account for `asc`
+  (`ssh asc@localhost`).
+- Over ssh, `asc` runs your `ssh` with `BatchMode=yes`: your keys, agent,
+  ssh config and known hosts, and never a password prompt. If ssh needs an
+  answer, like a password or a new host key, `asc start` exits 7: run
+  `ssh me@vm` once yourself. Any other ssh failure, or a dropped connection,
+  exits 3. On Windows, orca mode needs `ssh` (exit 2 without it).
+- Gestures use NVDA's names: `NVDA+T` and `Orca+T` both press Insert, Orca's
+  desktop modifier. `asc keys` reads only NVDA's reference.
+- `asc type` sends each character as itself, so no keyboard layout is
+  involved.
+- `asc launch CMD` starts `CMD` on that display, split into words as a shell
+  would but run without one. Apps get a private home folder, empty at each
+  start.
+- `asc stop` ends Orca, the display and every app it launched, and removes
+  their temporary folder. So does the daemon ending or the connection
+  dropping. If the helper itself is killed, its processes still end, but the
+  folder (`/tmp/asc-orca-*`) stays.
+- `port` and the NVDA settings are refused (exit 2): nothing listens.
+
 ### Panic key
 
 In shared mode, and in desktop mode when `asc` launches its NVDA on this
@@ -284,9 +319,9 @@ the mode that uses them.
 
 ### Choosing a mode
 
-`asc start` uses `--mode`, or the `mode` setting, or watch. Each mode keeps its
-own settings in a table named after it (`[watch]`, `[desktop]`, `[sandbox]`,
-`[shared]`, `[remote]`) and its own folder. A mode without a table uses the
+`asc start` uses `--mode`, or the `mode` setting, or watch (orca on Linux).
+Each mode keeps its own settings in a table named after it (`[watch]`,
+`[desktop]`, `[sandbox]`, `[shared]`, `[remote]`, `[orca]`) and its own folder. A mode without a table uses the
 defaults below.
 
 One daemon runs per [instance](#instances). `asc start` exits 4 while one runs
@@ -316,7 +351,7 @@ own VM with remote mode, which runs only in a named instance.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `mode` | watch | the mode `asc start` uses without `--mode` |
+| `mode` | watch, orca on Linux | the mode `asc start` uses without `--mode` |
 | `panic_key` | Control+Shift+Alt+F12 | the [panic key](#panic-key), written as for `asc press`: Control, Alt or Windows (Shift may join them, NVDA can't), then one key that isn't a modifier |
 
 ### Command defaults
@@ -340,16 +375,18 @@ context.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `port` | watch and shared 6837, sandbox 16837, remote 26837, desktop a free one | relay port |
+| `port` | watch and shared 6837, sandbox 16837, remote 26837, desktop a free one | relay port (orca mode has none) |
 | `launch` | true | desktop only: false means `asc` starts no NVDA; you start one on this computer and connect it |
 | `host` | the Default Switch address | remote only: the IPv4 address of this computer the relay listens on |
+| `ssh` | none: this machine | orca only: the Linux machine Orca runs on, as `ssh` takes it (`me@vm`, or a `Host` from your ssh config) |
 | `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
 | `share` | none | sandbox: folders mapped read-only to `C:\share\<name>`, full paths |
 | `window` | tray | sandbox: its window in the tray, taskbar or show |
 | `nvda_settings` | none | `section.key=value` settings for an NVDA that `asc` launches, as `--nvda-setting` takes |
 
 `window` and `share` are refused (exit 2) outside sandbox mode, `launch`
-outside desktop mode, `host` outside remote mode, and `nvda_dir`
+outside desktop mode, `host` outside remote mode, `ssh` outside orca mode,
+`port` in orca mode, and `nvda_dir`
 and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
 `asc` writes itself are never kept.
 
@@ -358,7 +395,7 @@ and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
 ### `asc start`
 
 ```
-asc start [--mode {watch,desktop,sandbox,shared,remote}]
+asc start [--mode {watch,desktop,sandbox,shared,remote,orca}]
           [--nvda-setting SECTION.KEY=VALUE] [--window {tray,taskbar,show}]
           [--i-understand]
 ```
@@ -368,7 +405,7 @@ checks depends on the mode: see [Modes](#modes).
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--mode MODE` | the `mode` setting, or watch | the mode to start, with its settings |
+| `--mode MODE` | the `mode` setting, or watch (orca on Linux) | the mode to start, with its settings |
 | `--nvda-setting SECTION.KEY=VALUE` | the mode's `nvda_settings` | an `nvda.ini` setting for the NVDA `asc` launches (repeatable) |
 | `--window {tray,taskbar,show}` | sandbox mode's `window`, or tray | sandbox only: its window, for this start only |
 | `--i-understand` | off | shared mode: yes, send keys into my own session |
@@ -431,6 +468,8 @@ speech: 12 lines kept, latest 12
   example a wrong channel key), until NVDA next joins.
 - When the mode has a [panic key](#panic-key), it shows it.
 - If `asc` isn't running, it exits 3.
+- In orca mode the line is `orca: connected`, `over ssh: DEST` names the
+  machine, and there is no `browse/focus` line.
 - `--nvda-ini` prints, instead, an `nvda.ini` for remote mode's NVDA. See
   [remote mode](#remote-mode). Other modes exit 4.
 
@@ -555,7 +594,8 @@ asc type [--settle MS] [--timeout MS] TEXT
 ```
 
 Types `TEXT` one character at a time, mapped to keys with this computer's
-keyboard layout, then waits for one quiet period at the end. Prints the new
+keyboard layout (in orca mode, each character is sent as itself), then
+waits for one quiet period at the end. Prints the new
 speech like `press`. If any character can't be typed (for example emoji), it
 exits 2, lists them and sends nothing.
 
@@ -573,7 +613,7 @@ asc type "x@example.com" --settle 800
 ### `asc keys`
 
 ```
-asc keys [--mode {watch,desktop,sandbox,shared,remote}] [--layout {desktop,laptop}] [--lang LANG]
+asc keys [--mode {watch,desktop,sandbox,shared,remote,orca}] [--layout {desktop,laptop}] [--lang LANG]
          [--braille | --no-braille] [SEARCH ...]
 ```
 
@@ -589,7 +629,7 @@ h  heading
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `SEARCH` | none (all) | words that must all appear |
-| `--mode MODE` | the `mode` setting, or watch | whose `nvda_dir` to read |
+| `--mode MODE` | the `mode` setting, or watch (orca on Linux) | whose `nvda_dir` to read |
 | `--layout {desktop,laptop}` | `keys_layout`, desktop | the keyboard layout's keys |
 | `--lang LANG` | en | reference language, like `de` or `pt_BR`, falling back to `en` |
 | `--braille`, `--no-braille` | off | include rows for braille displays |
@@ -623,8 +663,8 @@ start the app on that machine and use `asc wait`.
 | `--title REGEX` | anything | wait until NVDA says this |
 | `--timeout MS` | `launch_timeout_ms`, 30000 | how long to wait, at most 600000 |
 
-- On timeout it exits 1 with what NVDA did say, numbered. Outside sandbox mode the
-  message ends with `New windows:`, the titles of windows that opened
+- On timeout it exits 1 with what NVDA did say, numbered. Outside sandbox and orca
+  mode the message ends with `New windows:`, the titles of windows that opened
   meanwhile, or `(none)`.
 - A command that can't start exits 2. NVDA disconnecting meanwhile is handled
   as in `wait`.
@@ -635,6 +675,7 @@ start the app on that machine and use `asc wait`.
   the app it starts, not the console.
 - `launch` brings the new window forward so NVDA hears it, except in watch
   mode, where it may stay behind.
+- In orca mode `CMD` runs on Orca's display (see [Orca mode](#orca-mode)).
 
 ```shell
 asc launch "C:\share\app\run.cmd" --title "My App"
@@ -703,6 +744,8 @@ the firewall rule sandbox or remote mode needs. Timings are not asked; change th
 - In a named [instance](#instances) it offers only desktop, sandbox and remote
   mode (remote by default). Remote mode takes the first port from 26837 that no
   other instance's remote mode has.
+- It doesn't offer orca mode, which has nothing to ask: use
+  `asc config set mode orca`, and `ssh` for another machine. On Linux it exits 2.
 - In the default instance, remote saves only `mode = "remote"` and says to run
   `asc setup --instance VMNAME`: remote mode runs only in a named instance.
 
@@ -728,7 +771,7 @@ Shows or changes the settings in `config.toml` (see
 | `path` | prints where `config.toml` is (works even when the file is broken) |
 
 - Mode settings go to the table of `--mode`, or of the `mode` setting (watch
-  unless set). Global settings (`mode`, `panic_key`) and command defaults take
+  unless set, orca on Linux). Global settings (`mode`, `panic_key`) and command defaults take
   no `--mode` (exit 2); `panic_key` and command defaults go to `[defaults]`.
 - Unsetting a mode's last setting removes its table.
 - Lists (`share`, `nvda_settings`) take several values and replace the whole
