@@ -147,12 +147,15 @@ class Session:
         missing = [name for name in PROGRAMS if shutil.which(name) is None]
         if missing:
             raise Failed("setup", "missing programs: " + ", ".join(missing))
-        found = subprocess.run(
-            ["orca", "--version"], capture_output=True, text=True, check=False, timeout=30
-        )
-        version = orca_version(found.stdout)
+        try:
+            found = subprocess.run(
+                ["orca", "--version"], capture_output=True, text=True, check=False, timeout=30
+            ).stdout
+        except subprocess.TimeoutExpired:
+            raise Failed("setup", "orca --version did not answer within 30 s") from None
+        version = orca_version(found)
         if version is None or version < MIN_ORCA:
-            raise Failed("setup", f"needs Orca 51 or later, found {found.stdout.strip()!r}")
+            raise Failed("setup", f"needs Orca 51 or later, found {found.strip()!r}")
         if others_running(os.getuid()):
             raise Failed("busy", "this user already runs Orca, and Orca runs once per user")
         secret = secrets.token_hex(16)
@@ -216,22 +219,27 @@ class Session:
         self.env.pop("WAYLAND_DISPLAY", None)
         self.env.setdefault("LANG", "C.UTF-8")
 
-    def _gdbus(self, path: str, method: str, *args: str) -> bool:
+    def _gdbus(self, path: str, method: str, *args: str, timeout: float = 30) -> bool:
         command = ["gdbus", "call", "--session", "--dest", SERVICE, "--object-path", path]
-        result = subprocess.run(
-            [*command, "--method", method, *args],
-            env=self.env,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            check=False,
-            timeout=30,
-        )
+        try:
+            result = subprocess.run(
+                [*command, "--method", method, *args],
+                env=self.env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return False
         return result.returncode == 0
 
     def _wait_orca(self) -> None:
         deadline = time.monotonic() + READY_TIMEOUT_S
         path = "/org/gnome/Orca1/Service"
-        while not self._gdbus(path, f"{SERVICE}.GetVersion"):
+        while not self._gdbus(
+            path, f"{SERVICE}.GetVersion", timeout=max(0.1, deadline - time.monotonic())
+        ):
             code = self.orca.poll()
             if code is not None:
                 raise Failed("setup", f"Orca exited with code {code}")
