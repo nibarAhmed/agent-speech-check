@@ -154,6 +154,10 @@ where 2026.2 in the same setup passed them all.
 
 Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and no audio.
 
+- **Orca 51 is the oldest that works.** Orca 50.3 (Ubuntu 26.04 LTS's package) publishes
+  `org.gnome.Orca.Service`, not `org.gnome.Orca1.Service`, and has no
+  `SetLogFileForTesting`, so it has nothing `asc` can record speech through.
+
 - **No speech server is needed.** Orca fails to connect to Speech Dispatcher, logs it, and
   carries on. It still sends everything it would say to the recorder that
   `SpeechPresenter.SetLogFileForTesting` starts.

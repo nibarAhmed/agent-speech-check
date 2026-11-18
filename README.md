@@ -40,7 +40,7 @@ The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/d
 
 On Windows, run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. To uninstall, use Settings > Apps.
 
-On Linux (64-bit x86 or Arm, glibc 2.28 or later), unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
+On Linux (64-bit x86 or Arm, glibc 2.28 or later), `asc` needs **Orca 51 or later**: check with `orca --version`. Older Orca, like the 50 in Ubuntu 26.04 LTS, lacks the D-Bus service `asc` records speech through, so `asc start` refuses it. Unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
 
 ```shell
 mkdir -p ~/.local/share ~/.local/bin

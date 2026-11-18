@@ -260,9 +260,11 @@ display (Xvfb, with openbox as its window manager), so its keys never reach
 your desktop and there is no panic key. It needs no audio device: `asc`
 records what Orca would say.
 
-- Needs Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and
-  python3 3.9 or later on that machine; exit 7 names what is missing. Nothing
-  is installed there: `asc` sends its helper over stdin at each start.
+- Needs **Orca 51 or later** (`orca --version`), Xvfb, openbox, xdotool,
+  dbus-daemon, gdbus and python3 3.9 or later on that machine; exit 7 names
+  what is missing. Older Orca, like the 50 in Ubuntu 26.04 LTS, lacks the D-Bus
+  service `asc` records speech through. Nothing is installed there: `asc` sends
+  its helper over stdin at each start.
 - Orca runs once per user, so `asc start` exits 4 while that user runs
   another Orca, your own included. Use another account for `asc`
   (`ssh asc@localhost`).

@@ -6,8 +6,8 @@ name: e2e
 on:
   # Every PR, docs too: a required check skipped by a path filter never reports.
   pull_request:
-  # Weekly too: asc downloads the latest NVDA, and the container the latest Orca, so
-  # a new release can break it with no PR to run these. Monday 06:00 UTC.
+  # Weekly too: asc downloads the latest NVDA, so a new release can break it with no
+  # PR to run these. Monday 06:00 UTC.
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
@@ -68,15 +68,18 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
-    # A rolling distro, for Orca 51 or later. Its packages still come from today's repo.
-    container: registry.opensuse.org/opensuse/tumbleweed@sha256:806c95a13322931c84d43f088aee444deb2f04affc2d82746e9625d8862c9872
+    # The newest Ubuntu, for Orca 51 or later (26.04 LTS has 50). When its support
+    # ends, move to the next release.
+    container: ubuntu:26.10@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2
     steps:
       - name: Install Orca and what asc runs with it
-        run: >-
-          zypper -n --gpg-auto-import-keys install --no-recommends
-          orca xorg-x11-server-Xvfb xdotool dbus-1-daemon at-spi2-core openbox
-          python3-gobject python3-gobject-Gdk typelib-1_0-Gtk-3_0 dejavu-fonts
-          git-core tar gzip
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            orca xvfb xdotool dbus-daemon libglib2.0-bin at-spi2-core openbox \
+            python3-gi gir1.2-gtk-3.0 fonts-dejavu-core git ca-certificates
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
