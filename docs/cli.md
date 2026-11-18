@@ -757,7 +757,8 @@ Asks a few questions and saves the answers in `config.toml`:
 2. Desktop and sandbox mode: which NVDA.
 3. Sandbox mode: the shared folders and the window.
 4. Remote mode: what the other machine runs, and its ssh destination.
-5. Watch, shared and remote mode: your NVDA's keyboard layout.
+5. Watch, shared and remote mode: your NVDA's keyboard layout (not asked when
+   the other machine runs Linux, where Orca reads).
 
 When they are missing, it offers to download NVDA for desktop mode and to add
 the firewall rule sandbox mode needs. Timings are not asked; change them with

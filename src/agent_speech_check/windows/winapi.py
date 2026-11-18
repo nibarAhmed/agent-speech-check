@@ -374,23 +374,27 @@ def kill_on_close_job(pid: int) -> int:
     job = _kernel32.CreateJobObjectW(None, None)
     if not job:
         raise ctypes.WinError(ctypes.get_last_error())
-    limits = _ExtendedLimits()
-    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-    if not _kernel32.SetInformationJobObject(
-        job,
-        JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
-        ctypes.byref(limits),
-        ctypes.sizeof(limits),
-    ):
-        raise ctypes.WinError(ctypes.get_last_error())
-    process = _kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
-    if not process:
-        raise ctypes.WinError(ctypes.get_last_error())
     try:
-        if not _kernel32.AssignProcessToJobObject(job, process):
+        limits = _ExtendedLimits()
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not _kernel32.SetInformationJobObject(
+            job,
+            JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
+            ctypes.byref(limits),
+            ctypes.sizeof(limits),
+        ):
             raise ctypes.WinError(ctypes.get_last_error())
-    finally:
-        _kernel32.CloseHandle(process)
+        process = _kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
+        if not process:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            if not _kernel32.AssignProcessToJobObject(job, process):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            _kernel32.CloseHandle(process)
+    except OSError:
+        _kernel32.CloseHandle(job)
+        raise
     return int(job)
 
 

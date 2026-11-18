@@ -9,7 +9,6 @@ error and exits rather than keep running half dead.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import functools
 import json
 import logging
@@ -460,9 +459,10 @@ class Daemon:
                 self.panic.stop()
             if tunnel is not None:
                 tunnel.cancel()
-                # Last, so a crash it raises skips no cleanup.
-                with contextlib.suppress(asyncio.CancelledError):
-                    await tunnel
+                # Last, so a crash it raises skips no cleanup. wait() lets our own cancel through.
+                await asyncio.wait([tunnel])
+                if not tunnel.cancelled():
+                    tunnel.result()
             log.info("stopped")
 
     def _stop_if_crashed(self, task: asyncio.Task[None]) -> None:
