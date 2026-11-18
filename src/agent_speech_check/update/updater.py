@@ -85,13 +85,12 @@ def marker() -> Path:
     return folder() / "installing.json"
 
 
-def asset_name(
-    version: str, system: str = sys.platform, machine: str = platform.machine()
-) -> str | None:
+def asset_name(version: str, system: str = sys.platform, machine: str | None = None) -> str | None:
     """The release asset that installs `version` here, if one is built for it."""
     if system == "win32":
         return f"agent-speech-check-{version}.msi"
-    if system == "linux" and machine == "x86_64":
+    # Not a default: on Windows platform.machine() asks WMI, at every asc's import.
+    if system == "linux" and (machine or platform.machine()) == "x86_64":
         return LINUX_ASSET
     return None
 
@@ -102,7 +101,7 @@ def _version(text: str) -> tuple[int, int, int] | None:
 
 
 def parse_release(
-    raw: object, system: str = sys.platform, machine: str = platform.machine()
+    raw: object, system: str = sys.platform, machine: str | None = None
 ) -> Release | None:
     """GitHub's latest release, if it has this platform's asset from this repo with a SHA-256."""
     if not isinstance(raw, dict):
@@ -223,11 +222,10 @@ def _running() -> bool:
     return any(state.folders(root) for root in every_root())
 
 
-def _others_running(exe: Path) -> bool:
-    """Another asc runs from this install: on Linux, from any of its versions."""
+def _images(exe: Path) -> list[Path]:
+    """The exes of this install that an asc may run from: on Linux, every version's."""
     root = install_root(exe) if sys.platform != "win32" else None
-    images = [exe] if root is None else [path / "asc" for path in (root / "versions").iterdir()]
-    return bool(winapi.others_running(*images))
+    return [exe] if root is None else [path / "asc" for path in (root / "versions").iterdir()]
 
 
 def start_if_due() -> None:
@@ -268,7 +266,10 @@ def run() -> None:
         if package is None:
             log.warning("the download's SHA-256 is not the one GitHub lists")
             return
-        idle = poll_until(lambda: not (_running() or _others_running(exe)), IDLE_WAIT_S, 0.5)
+        images = _images(exe)
+        idle = poll_until(
+            lambda: not (_running() or winapi.others_running(*images)), IDLE_WAIT_S, 0.5
+        )
         if not idle or not enabled():
             # The download is kept for the retry.
             defer(stamp(), time.time())
@@ -302,13 +303,13 @@ def _sha256(path: Path) -> str:
 def download(release: Release) -> Path | None:
     """The release's asset, if it matches its SHA-256. Kept until a newer one."""
     suffix = ".msi" if sys.platform == "win32" else ".tar.gz"
-    msi = folder() / f"agent-speech-check-{release.name}{suffix}"
-    msi.parent.mkdir(parents=True, exist_ok=True)
-    if msi.exists() and _sha256(msi) == release.sha256:
-        return msi
+    package = folder() / f"agent-speech-check-{release.name}{suffix}"
+    package.parent.mkdir(parents=True, exist_ok=True)
+    if package.exists() and _sha256(package) == release.sha256:
+        return package
     for old in folder().glob("agent-speech-check-*"):
         old.unlink(missing_ok=True)
-    partial = msi.with_suffix(".part")
+    partial = package.with_suffix(".part")
     try:
         with (
             tls.urlopen(release.url, DOWNLOAD_TIMEOUT_S) as response,
@@ -317,10 +318,10 @@ def download(release: Release) -> Path | None:
             shutil.copyfileobj(response, file)
         if _sha256(partial) != release.sha256:
             return None
-        partial.replace(msi)
+        partial.replace(package)
     finally:
         partial.unlink(missing_ok=True)
-    return msi
+    return package
 
 
 def install(msi: Path) -> None:
