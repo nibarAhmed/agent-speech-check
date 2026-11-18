@@ -60,6 +60,19 @@ def others_running(uid: int, proc: Path = Path("/proc")) -> bool:
     return False
 
 
+def children_of(pid: int, proc: Path = Path("/proc")) -> list[int]:
+    """Its child processes, from `/proc/N/stat`: `N (comm) state ppid ...`."""
+    found = []
+    for stat in proc.glob("[0-9]*/stat"):
+        try:
+            fields = stat.read_text().rsplit(")", 1)[1].split()
+        except (OSError, IndexError):
+            continue
+        if int(fields[1]) == pid:
+            found.append(int(stat.parent.name))
+    return found
+
+
 def remove_stale(temp: Path, uid: int, proc: Path = Path("/proc")) -> None:
     """Folders this user's helpers left when killed, which no `close` removed."""
     for folder in temp.glob("asc-orca-*"):
@@ -109,8 +122,10 @@ class Session:
         self.env = dict(os.environ)
         # Looked up before any fork: the child may only call it.
         prctl = ctypes.CDLL(None).prctl
-        pr_set_pdeathsig = 1
+        pr_set_pdeathsig, pr_set_child_subreaper = 1, 36
         self._die_with_parent = lambda: prctl(pr_set_pdeathsig, signal.SIGKILL)
+        # What leaves its group, like a daemon an app starts, becomes our child, for `close`.
+        prctl(pr_set_child_subreaper, 1)
 
     def start(self, args: list[str], **kwargs: Any) -> subprocess.Popen[bytes]:
         """Its own session, so teardown ends its whole group, and SIGKILL if this ends."""
@@ -286,6 +301,16 @@ class Session:
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
         for process in [*self.apps, *reversed(self.children), *filter(None, [self.xvfb])]:
             _end_group(process)
+        # Bounded: each round ends the orphans the last one left.
+        for _ in range(100):
+            orphans = children_of(os.getpid())
+            if not orphans:
+                break
+            for pid in orphans:
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, signal.SIGKILL)
+                with contextlib.suppress(ChildProcessError):
+                    os.waitpid(pid, 0)
         shutil.rmtree(self.folder, ignore_errors=True)
 
 

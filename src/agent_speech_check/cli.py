@@ -30,6 +30,7 @@ from agent_speech_check.errors import (
     BadArguments,
     BadSetting,
     InternalError,
+    KeysWindowsOnly,
     NeedsTerminal,
     NoCommand,
     NoFirewallNeeded,
@@ -95,7 +96,9 @@ def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
 
 def _add_mode(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--mode", choices=MODES, help="default: the mode setting, else watch (orca on Linux)"
+        "--mode",
+        choices=MODES,
+        help="default: the mode setting, else watch (orca, the only mode on Linux)",
     )
 
 
@@ -471,6 +474,8 @@ def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
+    if sys.platform != "win32":
+        raise KeysWindowsOnly
     # It names a folder, so nothing like ..\ may get in.
     if not re.fullmatch(r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?", args.lang):
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
@@ -818,9 +823,9 @@ COMMANDS: dict[str, Command] = {
     "start": Command(
         "start recording",
         """\
-Start the background daemon in --mode, or the mode setting (watch, orca on Linux),
-with that mode's settings from config.toml (see asc config). One daemon runs
-per instance: the other commands talk to it.
+Start the background daemon in --mode, or the mode setting (watch; on Linux,
+orca, the only mode there), with that mode's settings from config.toml (see
+asc config). One daemon runs per instance: the other commands talk to it.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
 keys. asc start asks your running NVDA to connect: answer Yes in NVDA, and trust

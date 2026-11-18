@@ -78,17 +78,19 @@ spell = "codespell"
 fmt-check = "ruff format --check ."
 lint = "ruff check ."
 types = "mypy"
+# Orca mode runs on Linux, where mypy on Windows would skip its sys.platform branches.
+types-linux = "mypy --platform linux src/agent_speech_check/orca tests/unit/test_orca.py tests/e2e/test_real_orca.py"
 dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup -p no:cacheprovider"
-static = ["spell", "fmt-check", "lint", "types", "dead", "deps"]
+static = ["spell", "fmt-check", "lint", "types", "types-linux", "dead", "deps"]
 check = ["static", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.
 [tool.poe.tasks.fast]
-sequence = ["spell", "fmt-check", "lint", "types", "dead", "unit"]
+sequence = ["spell", "fmt-check", "lint", "types", "types-linux", "dead", "unit"]
 ignore_fail = "return_non_zero"
 
 # ---------------------------------------------------------------- ruff

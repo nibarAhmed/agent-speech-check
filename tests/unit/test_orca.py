@@ -143,6 +143,18 @@ def test_another_orca_of_the_same_user(tmp_path: Path) -> None:
     assert not helper.others_running(uid + 1, tmp_path)
 
 
+def test_children_of_a_process(tmp_path: Path) -> None:
+    (tmp_path / "self").mkdir()  # not a pid: skipped
+    for pid, stat in [
+        ("10", "10 (bash) S 1 10"),
+        ("11", "11 (a) b) S 7 11"),
+        ("12", "12 (x) Z 7 1"),
+    ]:
+        (tmp_path / pid).mkdir()
+        (tmp_path / pid / "stat").write_text(stat)
+    assert sorted(helper.children_of(7, tmp_path)) == [11, 12]
+
+
 def test_folders_of_killed_helpers_are_removed(tmp_path: Path) -> None:
     proc, temp = tmp_path / "proc", tmp_path / "tmp"
     (proc / "41").mkdir(parents=True)

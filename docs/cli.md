@@ -104,7 +104,7 @@ An `asc` installed by the MSI keeps itself up to date:
 ## Modes
 
 The `mode` setting (or `asc start --mode`) picks one of six. On Linux only
-orca mode runs: the others exit 2.
+orca mode runs, so plain `asc start` starts it: the others exit 2.
 
 ### Watch mode
 
@@ -246,7 +246,7 @@ joins shared mode without asking again: your consent to its keys is
 
 `asc` starts its own Orca on a Linux machine: this one, when `asc` runs on
 Linux, or the one orca mode's `ssh` names
-(`asc config set ssh me@vm --mode orca`). That Orca runs on its own hidden X
+(`asc config set ssh me@vm`, plus `--mode orca` on Windows). That Orca runs on its own hidden X
 display (Xvfb, with openbox as its window manager), so its keys never reach
 your desktop and there is no panic key. It needs no audio device: `asc`
 records what Orca would say.
@@ -263,16 +263,18 @@ records what Orca would say.
   `ssh me@vm` once yourself. Any other ssh failure, or a dropped connection,
   exits 3. On Windows, orca mode needs `ssh` (exit 2 without it).
 - Gestures use NVDA's names: `NVDA+T` and `Orca+T` both press Insert, Orca's
-  desktop modifier. `asc keys` reads only NVDA's reference.
+  desktop modifier. `asc keys` reads only NVDA's reference, so it exits 2 on
+  Linux.
 - `asc type` sends each character as itself, so no keyboard layout is
   involved.
 - `asc launch CMD` starts `CMD` on that display, split into words as a shell
   would but run without one. Apps get a private home folder, empty at each
   start.
-- `asc stop` ends Orca, the display and every app it launched, and removes
-  their temporary folder. So does the daemon ending or the connection
-  dropping. If the helper itself is killed, its processes still end, and the
-  next `asc start` on that machine removes the folder (`/tmp/asc-orca-*`).
+- `asc stop` ends Orca, the display and every app it launched, with whatever
+  those apps started, and removes their temporary folder. So does the daemon
+  ending or the connection dropping. If the helper itself is killed, what it
+  started still ends, but not a program an app detached, and the next
+  `asc start` on that machine removes the folder (`/tmp/asc-orca-*`).
 - `port` and the NVDA settings are refused (exit 2): nothing listens.
 
 ### Panic key
@@ -637,7 +639,7 @@ h  heading
 - It reads `documentation\<lang>\keyCommands.html` from the mode's portable
   NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA (the
   running `nvda.exe`, the uninstall registry entry, then Program Files). If
-  none is found it exits 7 and says where it looked.
+  none is found it exits 7 and says where it looked. On Linux it exits 2.
 - Single letter navigation keys (`h  heading`) work in browse mode; add Shift
   to go back.
 
@@ -745,7 +747,8 @@ the firewall rule sandbox or remote mode needs. Timings are not asked; change th
   mode (remote by default). Remote mode takes the first port from 26837 that no
   other instance's remote mode has.
 - It doesn't offer orca mode, which has nothing to ask: use
-  `asc config set mode orca`, and `ssh` for another machine. On Linux it exits 2.
+  `asc config set mode orca` on Windows, and `ssh` for another machine. On
+  Linux it exits 2.
 - In the default instance, remote saves only `mode = "remote"` and says to run
   `asc setup --instance VMNAME`: remote mode runs only in a named instance.
 

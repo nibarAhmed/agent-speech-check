@@ -19,7 +19,8 @@ pytestmark = [
 ]
 
 # The system Python runs it: it has GTK's bindings, the venv's has not.
-FORM = """import gi
+FORM = """import subprocess
+import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 win = Gtk.Window(title="asc e2e form")
@@ -30,6 +31,8 @@ box.add(entry)
 box.add(Gtk.Button(label="Save"))
 win.add(box)
 win.connect("destroy", Gtk.main_quit)
+# Like a daemon an app starts: it leaves the app's process group.
+subprocess.Popen(["sleep", "3601"], start_new_session=True)
 win.show_all()
 win.present()
 Gtk.main()
@@ -42,8 +45,9 @@ def left_running() -> list[str]:
     # Zombies don't count: a container's first process may never reap them.
     return [
         p.info["name"]
-        for p in psutil.process_iter(["name", "status"])
-        if p.info["name"] in STARTED and p.info["status"] != psutil.STATUS_ZOMBIE
+        for p in psutil.process_iter(["name", "status", "cmdline"])
+        if (p.info["name"] in STARTED or p.info["cmdline"] == ["sleep", "3601"])
+        and p.info["status"] != psutil.STATUS_ZOMBIE
     ]
 
 
@@ -56,7 +60,7 @@ def test_orca_reads_a_form(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     form = tmp_path / "form.py"
     form.write_text(FORM, encoding="utf-8")
     assert not left_running()
-    started = run_asc("start", "--mode", "orca")
+    started = run_asc("start")  # orca, the one mode on Linux
     assert started.returncode == 0, started.stderr
     try:
         launched = run_asc("launch", f"/usr/bin/python3 {form}", "--title", "asc e2e form")

@@ -172,8 +172,6 @@ def _registry_dir() -> Path | None:
 def candidates() -> list[tuple[str, Path]]:
     """Where your own NVDA may be, in the order `asc keys` tries them."""
     found: list[tuple[str, Path]] = []
-    if sys.platform != "win32":
-        return found
     running = winapi.process_image("nvda.exe")
     if running is not None:
         found.append(("the running nvda.exe", running.parent))

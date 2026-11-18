@@ -2,15 +2,16 @@ import argparse
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import configobj
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini
+from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
-from agent_speech_check.errors import NvdaIniOnlyRemote
+from agent_speech_check.errors import KeysWindowsOnly, NvdaIniOnlyRemote
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -240,3 +241,9 @@ def test_printed_paths_are_real(
         assert logs == os.path.realpath(logs)
     finally:
         shutil.rmtree(os.path.realpath(root), ignore_errors=True)
+
+
+def test_no_keys_reference_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(KeysWindowsOnly):
+        run(["keys", "title"])

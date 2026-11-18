@@ -115,11 +115,11 @@ NVDA says, typed text included, so `asc stop` when you're done.
 ## Orca mode
 
 - `asc` starts its own Orca on a hidden display, so its keys reach no one's
-  desktop. On Windows, set the machine first:
+  desktop. On Linux, plain `asc start` runs it. On Windows, set the machine first:
   `asc config set ssh USER@HOST --mode orca`. ssh never asks for a password:
   if `asc start` exits 7 about ssh, ask the user to run `ssh USER@HOST` once.
 - Keys use NVDA's names: `NVDA+T` (or `Orca+T`) is Orca's Insert modifier.
-  `asc keys` is NVDA's reference, not Orca's.
+  `asc keys` is NVDA's reference, not Orca's, and exits 2 on Linux.
 - `asc launch CMD` starts the app on Orca's display; there's no other way to
   reach it.
 

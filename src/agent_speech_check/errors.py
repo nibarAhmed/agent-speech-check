@@ -468,6 +468,14 @@ class SetupWindowsOnly(UsageError):
         )
 
 
+class KeysWindowsOnly(UsageError):
+    def __init__(self) -> None:
+        super().__init__(
+            "asc keys reads NVDA's key reference, which only Windows has",
+            hint="gestures still use NVDA's names: NVDA+T or Orca+T is Orca's Insert+T",
+        )
+
+
 class OrcaNeedsSsh(UsageError):
     def __init__(self) -> None:
         super().__init__(

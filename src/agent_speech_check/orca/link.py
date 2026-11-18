@@ -226,6 +226,9 @@ class OrcaLink:
         """Start the helper and follow it until it ends. Never raises: what went
         wrong goes to `failure` and `last_error`, and the daemon keeps running."""
         command = helper_command(self.ssh)
+        flags = 0
+        if sys.platform == "win32":
+            flags = subprocess.CREATE_NO_WINDOW
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -233,7 +236,7 @@ class OrcaLink:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 limit=MAX_LINE,
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                creationflags=flags,
             )
         except OSError as error:
             detail = error.strerror or str(error)
