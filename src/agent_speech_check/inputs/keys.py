@@ -203,7 +203,7 @@ _MAX_UTF16_UNIT = 0xFFFF
 _TYPED_SPECIALS = {"\n": "enter", "\t": "tab"}
 
 
-def _gestures(text: str, one: Callable[[str], Gesture | None]) -> tuple[Gesture, ...]:
+def _gestures(text: str, one: Callable[[str], Gesture | None], why: str) -> tuple[Gesture, ...]:
     """Every character is checked first; if any can't be typed, nothing is."""
     gestures: list[Gesture] = []
     bad: list[str] = []
@@ -215,13 +215,13 @@ def _gestures(text: str, one: Callable[[str], Gesture | None]) -> tuple[Gesture,
         else:
             gestures.append(gesture)
     if bad:
-        raise UntypableText(list(dict.fromkeys(bad)))
+        raise UntypableText(list(dict.fromkeys(bad)), why)
     return tuple(gestures)
 
 
 def text_gestures(text: str) -> tuple[Gesture, ...]:
     """One gesture per character, from the current keyboard layout."""
-    return _gestures(text, _from_layout)
+    return _gestures(text, _from_layout, "with the current keyboard layout")
 
 
 def _from_layout(char: str) -> Gesture | None:
@@ -243,7 +243,7 @@ def _scan(char: str) -> tuple[int, int] | None:
 def typed_gestures(text: str) -> tuple[Gesture, ...]:
     """One gesture per character, for X: the keysym names the character, so no
     layout is needed."""
-    return _gestures(text, _for_x)
+    return _gestures(text, _for_x, "(control characters)")
 
 
 def _for_x(char: str) -> Gesture | None:

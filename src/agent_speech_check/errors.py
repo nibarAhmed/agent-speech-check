@@ -162,10 +162,10 @@ class BadGesture(UsageError):
 
 
 class UntypableText(UsageError):
-    def __init__(self, chars: Sequence[str]) -> None:
+    def __init__(self, chars: Sequence[str], why: str) -> None:
         shown = " ".join(_show(c) for c in chars)
         super().__init__(
-            f"cannot type these characters with the current keyboard layout: {shown}",
+            f"cannot type these characters {why}: {shown}",
             hint="nothing was sent; use asc press for special keys",
         )
 
