@@ -60,6 +60,19 @@ def others_running(uid: int, proc: Path = Path("/proc")) -> bool:
     return False
 
 
+def remove_stale(temp: Path, uid: int, proc: Path = Path("/proc")) -> None:
+    """Folders this user's helpers left when killed, which no `close` removed."""
+    for folder in temp.glob("asc-orca-*"):
+        try:
+            if folder.stat().st_uid != uid:
+                continue
+            pid = (folder / "pid").read_text().strip()
+        except OSError:
+            continue
+        if pid.isdigit() and not (proc / pid).exists():
+            shutil.rmtree(folder, ignore_errors=True)
+
+
 class Failed(Exception):
     def __init__(self, kind: str, reason: str) -> None:
         super().__init__(reason)
@@ -87,7 +100,9 @@ class Output:
 class Session:
     def __init__(self, out: Output) -> None:
         self.out = out
+        remove_stale(Path(tempfile.gettempdir()), os.getuid())
         self.folder = Path(tempfile.mkdtemp(prefix="asc-orca-"))
+        (self.folder / "pid").write_text(str(os.getpid()))
         self.children: list[subprocess.Popen[bytes]] = []
         self.apps: list[subprocess.Popen[bytes]] = []
         self.xvfb: subprocess.Popen[bytes] | None = None

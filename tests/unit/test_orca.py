@@ -143,6 +143,22 @@ def test_another_orca_of_the_same_user(tmp_path: Path) -> None:
     assert not helper.others_running(uid + 1, tmp_path)
 
 
+def test_folders_of_killed_helpers_are_removed(tmp_path: Path) -> None:
+    proc, temp = tmp_path / "proc", tmp_path / "tmp"
+    (proc / "41").mkdir(parents=True)
+    for name, pid in [("asc-orca-live", "41"), ("asc-orca-dead", "42"), ("asc-orca-new", None)]:
+        (temp / name / "home").mkdir(parents=True)
+        if pid is not None:
+            (temp / name / "pid").write_text(pid)
+    (temp / "other").mkdir()
+    uid = temp.stat().st_uid
+    helper.remove_stale(temp, uid + 1, proc)
+    assert (temp / "asc-orca-dead").exists()
+    helper.remove_stale(temp, uid, proc)
+    # A helper that hasn't written its pid yet may be starting.
+    assert sorted(p.name for p in temp.iterdir()) == ["asc-orca-live", "asc-orca-new", "other"]
+
+
 def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", str(tmp_path))
     speech = SpeechLog()

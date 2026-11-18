@@ -271,8 +271,8 @@ records what Orca would say.
   start.
 - `asc stop` ends Orca, the display and every app it launched, and removes
   their temporary folder. So does the daemon ending or the connection
-  dropping. If the helper itself is killed, its processes still end, but the
-  folder (`/tmp/asc-orca-*`) stays.
+  dropping. If the helper itself is killed, its processes still end, and the
+  next `asc start` on that machine removes the folder (`/tmp/asc-orca-*`).
 - `port` and the NVDA settings are refused (exit 2): nothing listens.
 
 ### Panic key
