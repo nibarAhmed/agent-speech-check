@@ -126,11 +126,11 @@ class SpeechLog:
         deadline = time.monotonic() + timeout_s
         checked = after
         while True:
-            check()
             for entry in self.since(checked).entries:
                 checked = entry.n
                 if entry.kind == "said" and pattern.search(entry.text):
                     return entry
+            check()
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return None

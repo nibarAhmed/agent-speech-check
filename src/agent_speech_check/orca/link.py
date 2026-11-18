@@ -45,7 +45,8 @@ BOOTSTRAP = "import sys;i=sys.stdin.buffer;exec(i.read(int(i.readline())))"
 # At import, so a frozen asc without the file fails at once, not at asc start.
 _HELPER = resources.files("agent_speech_check.orca").joinpath("helper.py").read_bytes()
 MAX_LINE = 1_000_000
-ACK_TIMEOUT_S = 10.0
+# Past the helper's 10 s xdotool timeout, so its error arrives first.
+ACK_TIMEOUT_S = 15.0
 STOP_TIMEOUT_S = 10.0
 STDERR_LINES = 20
 _SSH_FAILED = 255
@@ -213,22 +214,19 @@ class OrcaLink:
     def connected(self) -> bool:
         return self._ready
 
-    def check(self, since: int, *, drop_fails: bool) -> None:
-        """As `Relay.check`."""
+    def check(self, since: int, *, drop_fails: bool) -> None:  # noqa: ARG002
+        """As `Relay.check`, but any loss fails: unlike NVDA, Orca never comes back."""
         new = self.losses[since:]
         for reason in new:
             if reason is not None:
                 raise ProtocolError(reason)
-        if drop_fails and (new or not self.connected):
-            raise OrcaNotConnected
+        if new or not self.connected:
+            raise OrcaNotConnected(last_error=self.last_error)
 
     async def run(self) -> None:
         """Start the helper and follow it until it ends. Never raises: what went
         wrong goes to `failure` and `last_error`, and the daemon keeps running."""
         command = helper_command(self.ssh)
-        flags = 0
-        if sys.platform == "win32":
-            flags = subprocess.CREATE_NO_WINDOW
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -236,7 +234,7 @@ class OrcaLink:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 limit=MAX_LINE,
-                creationflags=flags,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except OSError as error:
             detail = error.strerror or str(error)

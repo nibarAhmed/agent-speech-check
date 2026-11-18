@@ -309,6 +309,7 @@ class Session:
             for pid in orphans:
                 with contextlib.suppress(ProcessLookupError):
                     os.kill(pid, signal.SIGKILL)
+            for pid in orphans:
                 with contextlib.suppress(ChildProcessError):
                     os.waitpid(pid, 0)
         shutil.rmtree(self.folder, ignore_errors=True)

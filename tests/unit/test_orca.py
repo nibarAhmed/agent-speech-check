@@ -171,6 +171,20 @@ def test_folders_of_killed_helpers_are_removed(tmp_path: Path) -> None:
     assert sorted(p.name for p in temp.iterdir()) == ["asc-orca-live", "asc-orca-new", "other"]
 
 
+def test_a_wait_fails_once_orca_is_gone() -> None:
+    speech = SpeechLog()
+    orca = OrcaLink(None, speech)
+    orca._dispatch(Ready("51.1"))
+    orca.check(0, drop_fails=False)
+    orca._dispatch(Record("speech", "bye"))
+    orca._ended(0, None)
+    check = lambda: orca.check(0, drop_fails=False)  # noqa: E731
+    found = asyncio.run(speech.wait_match(re.compile("bye"), 0, 1, check))
+    assert found is not None
+    with pytest.raises(OrcaNotConnected):
+        asyncio.run(speech.wait_match(re.compile("hello"), 0, 1, check))
+
+
 def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", str(tmp_path))
     speech = SpeechLog()

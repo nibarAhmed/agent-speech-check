@@ -460,19 +460,11 @@ class WindowsOnlyMode(UsageError):
         super().__init__(f"{mode} mode needs Windows", hint="on Linux, asc start --mode orca")
 
 
-class SetupWindowsOnly(UsageError):
-    def __init__(self) -> None:
+class WindowsOnlyCommand(UsageError):
+    def __init__(self, command: str) -> None:
         super().__init__(
-            "asc setup offers the Windows modes; on Linux only orca mode runs",
-            hint="asc start needs no setup; asc config set ssh USER@HOST reaches another machine",
-        )
-
-
-class KeysWindowsOnly(UsageError):
-    def __init__(self) -> None:
-        super().__init__(
-            "asc keys reads NVDA's key reference, which only Windows has",
-            hint="gestures still use NVDA's names: NVDA+T or Orca+T is Orca's Insert+T",
+            f"asc {command} needs Windows",
+            hint="on Linux, asc start runs Orca, here or over ssh",
         )
 
 

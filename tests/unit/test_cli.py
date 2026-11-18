@@ -11,7 +11,7 @@ import pytest
 from agent_speech_check import __version__
 from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
-from agent_speech_check.errors import KeysWindowsOnly, NvdaIniOnlyRemote
+from agent_speech_check.errors import NvdaIniOnlyRemote, WindowsOnlyCommand
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -243,7 +243,9 @@ def test_printed_paths_are_real(
         shutil.rmtree(os.path.realpath(root), ignore_errors=True)
 
 
-def test_no_keys_reference_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_windows_only_commands_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
-    with pytest.raises(KeysWindowsOnly):
-        run(["keys", "title"])
+    for name in ("keys", "get-nvda", "setup", "firewall-setup"):
+        assert COMMANDS[name].windows_only
+        with pytest.raises(WindowsOnlyCommand):
+            run([name])

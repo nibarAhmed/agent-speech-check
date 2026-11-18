@@ -706,6 +706,7 @@ the old one only once it is complete, so a failed run keeps the old one.
   the download against the SHA-1 NV Access lists. If NV Access can't be
   reached, it uses the installer it kept from the last download.
 - A failed download exits 3.
+- On Linux it exits 2.
 
 ```shell
 asc get-nvda
@@ -815,6 +816,7 @@ that switch between sandboxes; the relay itself listens only on its address.
   has one per port, `agent-speech-check remote relay PORT`, so each
   [instance](#instances) can have its own.
 - If the rule is already in place it says so and changes nothing.
+- On Linux it exits 2.
 - Run it again after updating Python or `asc`, since the rule names the
   program.
 - Remove one from an admin terminal with

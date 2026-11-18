@@ -30,16 +30,15 @@ from agent_speech_check.errors import (
     BadArguments,
     BadSetting,
     InternalError,
-    KeysWindowsOnly,
     NeedsTerminal,
     NoCommand,
     NoFirewallNeeded,
     NotRunning,
     NvdaIniOnlyRemote,
-    SetupWindowsOnly,
     UnrecognizedArguments,
     Updating,
     UsageError,
+    WindowsOnlyCommand,
     bad_field,
     numbered_lines,
 )
@@ -86,6 +85,7 @@ class Command:
     add_args: Callable[[argparse.ArgumentParser], None] | None = None
     # True for a command that works on one mode's settings.
     takes_mode: bool = False
+    windows_only: bool = False
 
 
 def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
@@ -474,8 +474,6 @@ def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
 
 
 def cmd_keys(args: argparse.Namespace) -> int:
-    if sys.platform != "win32":
-        raise KeysWindowsOnly
     # It names a folder, so nothing like ..\ may get in.
     if not re.fullmatch(r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?", args.lang):
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
@@ -786,8 +784,6 @@ def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
 
 def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
-    if sys.platform != "win32":
-        raise SetupWindowsOnly
     if (mode := session.running_mode(state_root())) is not None:
         raise AlreadyRunning(mode)
     path = config_file()
@@ -949,6 +945,7 @@ examples:
         cmd_keys,
         _keys_args,
         takes_mode=True,
+        windows_only=True,
     ),
     "launch": Command(
         "start an app and wait until NVDA speaks",
@@ -980,6 +977,7 @@ examples:
   asc get-nvda --installer nvda_2026.2.exe""",
         cmd_get_nvda,
         _get_nvda_args,
+        windows_only=True,
     ),
     "setup": Command(
         "choose your settings, by answering questions",
@@ -993,6 +991,7 @@ examples:
   asc setup --yes          replace existing settings without asking""",
         cmd_setup,
         _setup_args,
+        windows_only=True,
     ),
     "config": Command(
         "show or change one setting",
@@ -1026,6 +1025,7 @@ examples:
   asc firewall-setup --mode remote --instance vm1""",
         cmd_firewall_setup,
         takes_mode=True,
+        windows_only=True,
     ),
 }
 
@@ -1061,7 +1061,10 @@ def run(argv: Sequence[str] | None) -> int:
         os.environ[paths.INSTANCE_VAR] = paths.check_instance(args.instance)
     if args.command is None:
         raise NoCommand
-    return COMMANDS[args.command].run(args)
+    command = COMMANDS[args.command]
+    if command.windows_only and sys.platform != "win32":
+        raise WindowsOnlyCommand(args.command)
+    return command.run(args)
 
 
 def _utf8_streams() -> None:
