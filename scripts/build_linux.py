@@ -22,7 +22,7 @@ from agent_speech_check.update.updater import LINUX_MACHINES, LINUX_TOP, linux_a
 def linux_machine(platform: str) -> str:
     """PyInstaller freezes the running Python: the machine its binaries are for."""
     machine = platform.removeprefix("linux-")
-    if machine == platform or machine not in LINUX_MACHINES:
+    if machine not in LINUX_MACHINES:
         sys.exit(f"The Linux release needs 64-bit x86 or Arm Linux Python, this one is {platform}")
     return machine
 

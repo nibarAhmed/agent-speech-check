@@ -9,7 +9,6 @@ import os
 import socket
 import ssl
 import subprocess
-import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,18 +19,19 @@ from tests.fake_nvda import FakeNvda, Reply
 
 from agent_speech_check.daemon import session, state
 from agent_speech_check.remote.relay import fingerprint
+from agent_speech_check.windows import spawn
 from agent_speech_check.windows.wait import poll_until
 
 
-def asc_command() -> list[str]:
+def asc_command(*args: str) -> list[str]:
     """This checkout's asc, or the frozen one ASC_E2E_EXE names (e2e.yml's Orca job)."""
     exe = os.environ.get("ASC_E2E_EXE")
-    return [exe] if exe else [sys.executable, "-m", "agent_speech_check"]
+    return [exe, *args] if exe else spawn.asc_command(*args)
 
 
 def run_asc(*args: str, timeout: float = 60) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed interpreter and arguments
-        [*asc_command(), *args],
+        asc_command(*args),
         capture_output=True,
         encoding="utf-8",
         check=False,
@@ -42,7 +42,7 @@ def run_asc(*args: str, timeout: float = 60) -> subprocess.CompletedProcess[str]
 def start_asc(*args: str) -> subprocess.Popen[str]:
     """Run asc in the background, for a command that must still be running."""
     return subprocess.Popen(  # noqa: S603 - fixed interpreter and arguments
-        [*asc_command(), *args],
+        asc_command(*args),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         encoding="utf-8",
