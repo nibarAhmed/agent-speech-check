@@ -243,8 +243,9 @@ def test_printed_paths_are_real(
         shutil.rmtree(os.path.realpath(root), ignore_errors=True)
 
 
-def test_windows_only_commands_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     for name in ("keys", "get-nvda", "setup", "firewall-setup"):
         assert COMMANDS[name].windows_only
         with pytest.raises(WindowsOnlyCommand):
