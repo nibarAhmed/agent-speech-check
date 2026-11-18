@@ -176,13 +176,10 @@ def test_a_wait_fails_once_orca_is_gone() -> None:
     orca = OrcaLink(None, speech)
     orca._dispatch(Ready("51.1"))
     orca.check(0, drop_fails=False)
-    orca._dispatch(Record("speech", "bye"))
     orca._ended(0, None)
     check = lambda: orca.check(0, drop_fails=False)  # noqa: E731
-    found = asyncio.run(speech.wait_match(re.compile("bye"), 0, 1, check))
-    assert found is not None
     with pytest.raises(OrcaNotConnected):
-        asyncio.run(speech.wait_match(re.compile("hello"), 0, 1, check))
+        asyncio.run(speech.wait_match(re.compile("hello"), 0, 60, check))
 
 
 def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

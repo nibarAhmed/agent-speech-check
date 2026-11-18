@@ -34,6 +34,7 @@ from agent_speech_check.errors import (
     bad_field,
 )
 from agent_speech_check.inputs.keys import Key
+from agent_speech_check.orca import helper
 from agent_speech_check.remote.speech_log import SpeechLog
 from agent_speech_check.validate import Fields
 
@@ -45,8 +46,8 @@ BOOTSTRAP = "import sys;i=sys.stdin.buffer;exec(i.read(int(i.readline())))"
 # At import, so a frozen asc without the file fails at once, not at asc start.
 _HELPER = resources.files("agent_speech_check.orca").joinpath("helper.py").read_bytes()
 MAX_LINE = 1_000_000
-# Past the helper's 10 s xdotool timeout, so its error arrives first.
-ACK_TIMEOUT_S = 15.0
+# Past the helper's xdotool timeout, so its error arrives first.
+ACK_TIMEOUT_S = helper.XDOTOOL_TIMEOUT_S + 5
 STOP_TIMEOUT_S = 10.0
 STDERR_LINES = 20
 _SSH_FAILED = 255

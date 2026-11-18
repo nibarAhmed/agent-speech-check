@@ -39,6 +39,7 @@ PROGRAMS = ("Xvfb", "openbox", "xdotool", "dbus-daemon", "gdbus", "orca")
 MIN_ORCA = (51, 0)
 READY_TIMEOUT_S = 30.0
 SERVICE = "org.gnome.Orca1.Service"
+XDOTOOL_TIMEOUT_S = 10.0
 
 
 def orca_version(text: str) -> tuple[int, int] | None:
@@ -284,7 +285,7 @@ class Session:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=True,
-            timeout=10,
+            timeout=XDOTOOL_TIMEOUT_S,
         )
 
     def _launch(self, command: str) -> None:

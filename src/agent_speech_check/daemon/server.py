@@ -288,6 +288,7 @@ class Daemon:
         after `losses_before` (`len(relay.losses)` when the command began).
 
         A plain drop doesn't fail it: NVDA reconnects by itself about 5 s later.
+        Orca never comes back, so in orca mode any loss fails it.
         """
         check = functools.partial(self.link.check, losses_before, drop_fails=False)
         return await self.speech.wait_match(pattern, after, timeout_ms / 1000, check)
