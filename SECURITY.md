@@ -17,6 +17,6 @@ reproduce it and what an attacker could do with it.
   Shared mode uses watch mode's key and certificate, so an NVDA you connected for watch mode also
   joins shared mode without asking again. Shared mode starts only with `--i-understand`.
 - `asc` never writes your own NVDA configuration.
-- An MSI-installed `asc` updates itself only from this repository's GitHub releases, over HTTPS,
-  and only with an MSI whose SHA-256 matches the one GitHub lists. `auto_update = false` turns
-  this off.
+- An installed `asc` (the MSI, or the Linux tarball) updates itself only from this repository's
+  GitHub releases, over HTTPS, and only with an MSI or tarball whose SHA-256 matches the one GitHub
+  lists. `auto_update = false` turns this off.

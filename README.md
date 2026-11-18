@@ -32,13 +32,25 @@ asc stop
 | `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
 | `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM: run `asc setup --instance NAME` for each. |
-| `orca` | You test with Orca on Linux. `asc` starts its own Orca on a hidden display, on the Linux machine it runs on or one it reaches over SSH. It needs Orca 51 or later, Xvfb, openbox and xdotool there. |
+| `orca` | You test with Orca on Linux. `asc` starts its own Orca on a hidden display, on the Linux machine it runs on or one it reaches over SSH. It needs Orca 51 or later, Xvfb, openbox, xdotool and python3 there. |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 
 ## Install
 
-Run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. It [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates). To uninstall, use Settings > Apps.
+On Windows, run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. To uninstall, use Settings > Apps.
+
+On Linux (64-bit x86, glibc 2.28 or later), unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
+
+```shell
+mkdir -p ~/.local/share ~/.local/bin
+curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/download/agent-speech-check-linux-x86_64.tar.gz | tar -xz -C ~/.local/share
+ln -sf ~/.local/share/agent-speech-check/current/asc ~/.local/bin/asc
+```
+
+To uninstall, run `asc stop`, then delete `~/.local/share/agent-speech-check`, `~/.local/bin/asc` and, with your settings and data, `~/.local/state/agent-speech-check`.
+
+Either way, `asc` [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates).
 
 ## AI agent skill
 
@@ -67,7 +79,7 @@ uv run poe fast      # the quick loop: everything but deps and the slow tests
 ```
 
 - **End-to-end tests** run NVDA inside Windows Sandbox: `uv run python scripts/e2e_sandbox.py`. Never set `ASC_E2E_NVDA` on your own machine: those tests replace your running NVDA, and nothing starts it again.
-- **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download).
+- **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download). On Linux, `uv run python -m scripts.build_linux` builds the tarball.
 
 See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/CONTRIBUTING.md) for pull requests and the rules.
 

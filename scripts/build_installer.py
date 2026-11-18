@@ -61,9 +61,8 @@ def project() -> dict[str, Any]:
     return dict(pyproject["project"])
 
 
-def main() -> None:
-    require_x64(sysconfig.get_platform())
-    version = msi_version(project()["version"])
+def freeze() -> Path:
+    """PyInstaller's one-folder app, dist/asc, for the MSI and the Linux release."""
     subprocess.run(
         [
             "uv", "run", "--group", "build", "pyinstaller", "--noconfirm", "--onedir",
@@ -77,6 +76,13 @@ def main() -> None:
         check=True,
         cwd=ROOT,
     )  # fmt: skip
+    return DIST / "asc"
+
+
+def main() -> None:
+    require_x64(sysconfig.get_platform())
+    version = msi_version(project()["version"])
+    app = freeze()
     subprocess.run(["dotnet", "tool", "restore"], check=True, cwd=ROOT)
     extensions = wix_extensions()
     subprocess.run(
@@ -88,7 +94,7 @@ def main() -> None:
     subprocess.run(
         [
             "dotnet", "wix", "build", str(ROOT / "installer" / "asc.wxs"),
-            "-d", f"Version={version}", "-d", f"AppDir={DIST / 'asc'}",
+            "-d", f"Version={version}", "-d", f"AppDir={app}",
             *(arg for extension in extensions for arg in ("-ext", extension)),
             "-loc", str(ROOT / "installer" / "asc.wxl"),
             "-arch", "x64", "-wx", "-acceptEula", "wix7", "-o", str(msi),

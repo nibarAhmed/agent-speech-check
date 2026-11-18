@@ -105,8 +105,8 @@ human's sign-off before breaking it.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
 - Watch mode never sends keys; the daemon enforces this.
 - Shared mode starts only with `--i-understand`.
-- An MSI-installed `asc` updates itself only from this repository's GitHub releases, over HTTPS,
-  with an MSI whose SHA-256 matches the one GitHub lists.
+- An installed `asc` (the MSI, or the Linux tarball) updates itself only from this repository's
+  GitHub releases, over HTTPS, with an MSI or tarball whose SHA-256 matches the one GitHub lists.
 
 ## Writing
 

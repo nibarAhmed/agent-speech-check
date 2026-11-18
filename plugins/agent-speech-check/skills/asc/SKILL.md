@@ -6,7 +6,8 @@ description: Check what the NVDA screen reader actually says, or drive an app wi
 # asc: hear what NVDA says
 
 `asc` connects to NVDA over NVDA Remote Access and records every utterance as
-numbered lines. If `asc` isn't on PATH, ask the user to install the MSI from
+numbered lines. If `asc` isn't on PATH, ask the user to install it (the MSI on
+Windows, the tarball on Linux, as the README says) from
 https://github.com/nibarAhmed/agent-speech-check/releases/latest. `asc --help` and
 `asc <command> --help` are short and exact; trust them over this file.
 

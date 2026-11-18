@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from scripts.build_installer import msi_version, require_x64
+from scripts.build_linux import require_linux_x64
 
 
 @pytest.mark.parametrize("version", ["0.0.1", "1.2.3", "255.255.65535"])
@@ -26,3 +27,13 @@ def test_require_x64_accepts_64_bit_intel_python() -> None:
 def test_require_x64_refuses_python_that_would_freeze_other_binaries(platform: str) -> None:
     with pytest.raises(SystemExit, match="needs 64-bit x86 Python"):
         require_x64(platform)
+
+
+def test_require_linux_x64_accepts_64_bit_intel_linux_python() -> None:
+    require_linux_x64("linux-x86_64")
+
+
+@pytest.mark.parametrize("platform", ["linux-aarch64", "win-amd64"])
+def test_require_linux_x64_refuses_python_that_would_freeze_other_binaries(platform: str) -> None:
+    with pytest.raises(SystemExit, match="needs 64-bit x86 Linux Python"):
+        require_linux_x64(platform)
