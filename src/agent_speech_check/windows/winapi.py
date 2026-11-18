@@ -88,16 +88,16 @@ def image_path(pid: int) -> Path | None:
     return Path(exe) if exe else None
 
 
-def others_running(image: Path) -> list[int]:
-    """The pids of other processes running the exe at `image`. Ones that won't
-    say their exe are left out."""
-    wanted = os.path.normcase(image)
+def others_running(*images: Path) -> list[int]:
+    """The pids of other processes running an exe at one of `images`. Ones that
+    won't say their exe are left out."""
+    wanted = {os.path.normcase(image) for image in images}
     return [
         process.pid
         for process in psutil.process_iter(["exe"])
         if process.pid != os.getpid()
         and process.info["exe"]
-        and os.path.normcase(process.info["exe"]) == wanted
+        and os.path.normcase(process.info["exe"]) in wanted
     ]
 
 

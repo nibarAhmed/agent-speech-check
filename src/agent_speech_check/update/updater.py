@@ -227,7 +227,7 @@ def _others_running(exe: Path) -> bool:
     """Another asc runs from this install: on Linux, from any of its versions."""
     root = install_root(exe) if sys.platform != "win32" else None
     images = [exe] if root is None else [path / "asc" for path in (root / "versions").iterdir()]
-    return any(winapi.others_running(image) for image in images)
+    return bool(winapi.others_running(*images))
 
 
 def start_if_due() -> None:
