@@ -14,7 +14,6 @@ import json
 import logging
 import shlex
 import subprocess
-import sys
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -128,9 +127,11 @@ def keysym(key: Key) -> str:
 
 
 def helper_command(ssh: str | None) -> list[str]:
+    # The machine's own python3, here as over ssh: a frozen asc has no Python to run it.
+    command = ["python3", "-I", "-c", BOOTSTRAP]
     if ssh is None:
-        return [sys.executable, "-I", "-c", BOOTSTRAP]
-    remote = shlex.join(["python3", "-I", "-c", BOOTSTRAP])
+        return command
+    remote = shlex.join(command)
     # Keepalives, so a connection that drops silently ends ssh (code 255) in about 15 s.
     keepalive = ["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"]
     return ["ssh", "-T", "-o", "BatchMode=yes", *keepalive, "--", ssh, remote]

@@ -71,8 +71,7 @@ def test_control_characters_are_not_typed() -> None:
 
 
 def test_helper_command_local_and_over_ssh() -> None:
-    local = link.helper_command(None)
-    assert local[1:] == ["-I", "-c", link.BOOTSTRAP]
+    assert link.helper_command(None) == ["python3", "-I", "-c", link.BOOTSTRAP]
     remote = link.helper_command("me@vm")
     assert remote[:-1] == [
         *("ssh", "-T", "-o", "BatchMode=yes"),
