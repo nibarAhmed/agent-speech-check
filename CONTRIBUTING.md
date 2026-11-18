@@ -28,9 +28,9 @@ Contributions come in under the project's MIT license. There's no CLA.
   Fill in the template.
 - Solve one problem per pull request. Include every change it needs (code, tests, `docs/cli.md`,
   the skill). Cleanup, refactors and a second fix go in their own pull requests.
-- CI must pass. The `e2e` check runs the real-NVDA tests on a throwaway runner, but GitHub's
-  runners have no Windows Sandbox, so run the sandbox tests yourself when they apply (Setup,
-  step 4).
+- CI must pass. The `e2e` check passes when the real-NVDA tests, the Linux builds and the
+  real-Orca tests pass on throwaway runners. GitHub's runners have no Windows Sandbox, so run
+  the sandbox tests yourself when they apply (Setup, step 4).
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.

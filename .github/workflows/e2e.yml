@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
+  nvda:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -102,3 +102,19 @@ jobs:
         env:
           ASC_E2E_ORCA: "1"
         run: uv run pytest tests/unit/test_orca.py tests/e2e/test_real_orca.py -v -p no:cacheprovider
+
+  # The one check branch protection requires from this workflow, so jobs and matrix legs
+  # can change with no ruleset change. Add every new job to needs. always(): a skipped
+  # job reports success, so without it a failed need would pass this check.
+  e2e:
+    if: ${{ always() }}
+    needs: [nvda, linux, orca]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null
