@@ -178,9 +178,15 @@ def parse_message(line: bytes) -> Message | None:
     if f.has("ready"):
         return Ready(f.text("ready", max_len=100))
     if f.has("record"):
-        record = Fields(raw["record"], f"{where} record", ProtocolError)
-        kind = record.text("kind", max_len=100)
-        text = record.text("text", max_len=MAX_LINE, allow_empty=True) if kind == "speech" else None
+        # Orca wrote it, not the helper: like NVDA's relay, skip what this asc can't read.
+        try:
+            record = Fields(raw["record"], f"{where} record", ProtocolError)
+            kind = record.text("kind", max_len=100)
+            speech = kind == "speech"
+            text = record.text("text", max_len=MAX_LINE, allow_empty=True) if speech else None
+        except ProtocolError:
+            log.debug("skipped a record of Orca's that this asc can't read")
+            return None
         return Record(kind, text)
     if f.has("done"):
         error = f.opt_text("error", max_len=MAX_LINE)
@@ -295,6 +301,12 @@ class OrcaLink:
         self.last_error = error.message
         log.warning("Orca failed: %s", type(error).__name__)
 
+    def _lose(self, error: str) -> None:
+        """The link is gone, though the helper may still run: `_ended` follows."""
+        self._ready = False
+        self.losses.append(None)
+        self.last_error = error
+
     def _ended(self, code: int, reason: ProtocolError | None) -> None:
         was_ready, self._ready = self._ready, False
         for future in self._acks.values():
@@ -307,7 +319,7 @@ class OrcaLink:
         if was_ready:
             self.losses.append(None if reason is None else reason.message)
             self.last_error = self.last_error or f"Orca stopped (exit code {code})"
-        elif self.failure is None:
+        elif self.failure is None and not self.losses:
             self._fail(reason or self._exit_error(code))
         self.speech.activity()
 
@@ -346,7 +358,9 @@ class OrcaLink:
         try:
             return await asyncio.wait_for(future, ACK_TIMEOUT_S)
         except TimeoutError:
-            raise OrcaNotConnected from None
+            self._lose(f"Orca's helper did not answer within {ACK_TIMEOUT_S:g} s")
+            await self.stop()
+            raise OrcaNotConnected(last_error=self.last_error) from None
         finally:
             self._acks.pop(ident, None)
 

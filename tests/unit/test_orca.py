@@ -1,5 +1,7 @@
 import asyncio
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -112,17 +114,24 @@ def test_helper_messages(line: bytes, message: object) -> None:
         assert got == message
 
 
-@pytest.mark.parametrize(
-    "line",
-    [b"not json", b"[]", b'{"record": {"kind": "speech", "text": 5}}', b'{"failed": "why"}'],
-)
+@pytest.mark.parametrize("line", [b"not json", b"[]", b'{"done": "x"}', b'{"failed": "why"}'])
 def test_bad_helper_messages(line: bytes) -> None:
     with pytest.raises(ProtocolError):
         parse_message(line)
 
 
-def test_unknown_helper_message_is_skipped() -> None:
-    assert parse_message(b'{"later": 1}') is None
+# The helper passes Orca's records on as Orca wrote them: one asc can't read is skipped.
+@pytest.mark.parametrize(
+    "line",
+    [
+        b'{"later": 1}',
+        b'{"record": {"kind": "speech", "text": 5}}',
+        b'{"record": {"text": "OK"}}',
+        b'{"record": ["speech"]}',
+    ],
+)
+def test_unknown_helper_message_is_skipped(line: bytes) -> None:
+    assert parse_message(line) is None
 
 
 def test_orca_version() -> None:
@@ -179,6 +188,30 @@ def test_a_wait_fails_once_orca_is_gone() -> None:
     check = lambda: orca.check(0, drop_fails=False)  # noqa: E731
     with pytest.raises(OrcaNotConnected):
         asyncio.run(speech.wait_match(re.compile("hello"), 0, 60, check))
+
+
+def test_a_helper_that_stops_answering_is_a_lost_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(link, "ACK_TIMEOUT_S", 0.2)
+    hangs = "import sys; sys.stdin.buffer.read()"  # the peer under test never answers
+
+    async def scenario() -> OrcaLink:
+        orca = OrcaLink(None, SpeechLog())
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, "-c", hangs, stdin=subprocess.PIPE
+        )
+        orca._process, orca._stdin = process, process.stdin
+        orca._dispatch(Ready("51.1"))
+        with pytest.raises(OrcaNotConnected):
+            await orca.send_key(KEYS["tab"], pressed=True)
+        assert not orca.connected  # as asc status says
+        orca._ended(await process.wait(), None)
+        return orca
+
+    orca = asyncio.run(scenario())
+    assert orca.failure is None
+    assert orca.losses == [None]
+    assert orca.last_error is not None
+    assert "did not answer" in orca.last_error
 
 
 def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
