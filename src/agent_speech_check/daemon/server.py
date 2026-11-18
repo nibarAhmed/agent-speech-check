@@ -423,7 +423,10 @@ class Daemon:
         port = ipc_server.sockets[0].getsockname()[1]
         log.info("IPC on %d", port)
         # Outside the group: it ends after the relay, so key releases still reach NVDA.
-        tunnel = None if self.tunnel is None else asyncio.create_task(self.tunnel.run())
+        tunnel = None
+        if self.tunnel is not None:
+            tunnel = asyncio.create_task(self.tunnel.run())
+            tunnel.add_done_callback(self._stop_if_crashed)
         try:
             # Off the loop: copying the user's config (add-ons too) can take a while.
             await asyncio.to_thread(self._start_nvda)
@@ -443,10 +446,6 @@ class Daemon:
             # Before NVDA goes, so it can still answer the close.
             if self.relay is not None:
                 self.relay.disconnect()
-            if tunnel is not None:
-                tunnel.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await tunnel
             if self.orca is not None:
                 await self.orca.stop()
             if self.nvda is not None:
@@ -459,7 +458,17 @@ class Daemon:
             state.remove(self.folder)
             if self.panic is not None:
                 self.panic.stop()
+            if tunnel is not None:
+                tunnel.cancel()
+                # Last, so a crash it raises skips no cleanup.
+                with contextlib.suppress(asyncio.CancelledError):
+                    await tunnel
             log.info("stopped")
+
+    def _stop_if_crashed(self, task: asyncio.Task[None]) -> None:
+        """A crash ends the daemon, as one in the task group does."""
+        if not task.cancelled() and task.exception() is not None:
+            self.stopping.set()
 
 
 def _on_break(loop: asyncio.AbstractEventLoop, daemon: Daemon) -> None:
