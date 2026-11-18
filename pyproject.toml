@@ -78,7 +78,7 @@ spell = "codespell"
 fmt-check = "ruff format --check ."
 lint = "ruff check ."
 types = "mypy"
-# Orca mode runs on Linux, where mypy on Windows would skip its sys.platform branches.
+# Orca runs on Linux, where mypy on Windows would skip its sys.platform branches.
 types-linux = "mypy --platform linux src/agent_speech_check/orca src/agent_speech_check/remote/ssh.py src/agent_speech_check/update scripts/build_linux.py tests/unit/test_orca.py tests/unit/test_update.py tests/e2e/test_real_orca.py tests/unit/test_ssh.py tests/e2e/test_real_ssh.py"
 dead = "vulture"
 deps = "deptry src"

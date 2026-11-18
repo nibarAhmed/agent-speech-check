@@ -18,7 +18,7 @@ from pathlib import Path
 from agent_speech_check.errors import NvdaNotFound
 from agent_speech_check.windows import winapi
 
-if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+if sys.platform == "win32":  # asc also runs on Linux
     import winreg
 
 _HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}

@@ -36,7 +36,7 @@ from agent_speech_check.windows import spawn, tls, winapi
 from agent_speech_check.windows.paths import base_root, every_root, write_atomic
 from agent_speech_check.windows.wait import poll_until
 
-if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+if sys.platform == "win32":  # asc also runs on Linux
     import winreg
 
 log = logging.getLogger(__name__)

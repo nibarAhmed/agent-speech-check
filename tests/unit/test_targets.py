@@ -9,8 +9,8 @@ from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
 
 
-def resolve(path: Path, mode: str | None) -> Target:
-    return load(path).resolve(mode)
+def resolve(path: Path, mode: str | None, platform: str = "win32") -> Target:
+    return load(path, platform).resolve(mode)
 
 
 def write(tmp_path: Path, text: str) -> Path:
@@ -21,14 +21,22 @@ def write(tmp_path: Path, text: str) -> Path:
 
 def test_no_file_gives_watch_default(tmp_path: Path) -> None:
     target = resolve(tmp_path / "config.toml", None)
-    assert target == Target("watch", 6837, launch=False)
+    assert target == Target("watch", 6837, launch=False, os="windows")
 
 
 def test_mode_defaults() -> None:
-    assert defaults("desktop") == Target("desktop", 0, launch=True)
-    assert defaults("sandbox") == Target("sandbox", 16837, launch=False)
+    assert defaults("desktop") == Target("desktop", 0, launch=True, os="windows")
+    assert defaults("sandbox") == Target("sandbox", 16837, launch=False, os="windows")
+    # Remote mode's os is the other machine's, which the user names.
     assert defaults("remote") == Target("remote", 26837, launch=False)
-    assert defaults("orca") == Target("orca", 0, launch=False)
+
+
+def test_desktop_mode_on_linux_starts_orca() -> None:
+    desktop = defaults("desktop", platform="linux")
+    assert desktop == Target("desktop", 0, launch=False, os="linux")
+    assert (desktop.orca, desktop.launches_reader, desktop.launches_nvda) == (True, True, False)
+    assert not defaults("desktop").orca
+    assert Target.from_json(desktop.to_json()) == desktop
 
 
 def test_keys_follow_the_mode() -> None:
@@ -47,15 +55,15 @@ def test_panic_key_wherever_keys_reach_this_desktop() -> None:
     assert not replace(defaults("desktop"), launch=False).takes_panic_key
     assert not defaults("sandbox").takes_panic_key
     assert not defaults("remote").takes_panic_key
-    # Its keys go to a private X display, never this desktop.
-    assert not defaults("orca").takes_panic_key
+    # Orca's keys go to a private X display, never this desktop.
+    assert not defaults("desktop", platform="linux").takes_panic_key
     assert not defaults("watch").takes_panic_key
 
 
 def test_mode_setting_and_its_table(tmp_path: Path) -> None:
     path = write(tmp_path, 'mode = "desktop"\n[desktop]\nport = 16837\nlaunch = false\n')
     target = resolve(path, None)
-    assert target == Target("desktop", 16837, launch=False)
+    assert target == Target("desktop", 16837, launch=False, os="windows")
     assert resolve(path, "desktop") == target
     # Another mode, from --mode: its own table, or its defaults.
     assert resolve(path, "sandbox") == defaults("sandbox")
@@ -64,7 +72,7 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared, remote, orca"),
+        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared, remote"),
         # asc always launches NVDA in sandbox mode, and never elsewhere.
         ("[sandbox]\nlaunch = false\n", r"\[sandbox\] launch: expected only in desktop mode"),
         ("[remote]\nlaunch = true\n", r"\[remote\] launch: expected only in desktop mode"),
@@ -85,8 +93,8 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
         ("[watch]\nssh = 'me@vm'\n", "ssh: expected only in remote mode"),
         ("[sandbox]\nos = 'windows'\n", "os: expected only in remote mode"),
         ("[remote]\nos = 'macos'\n", "os: expected one of windows, linux"),
+        ("[orca]\nport = 7000\n", "expected only known keys, got orca"),
         # Nothing listens for Orca: the helper talks over its own stdio.
-        ("[orca]\nport = 7000\n", r"\[orca\] port: expected only where NVDA connects"),
         ("[remote]\nos = 'linux'\nport = 7000\n", "port: expected only where NVDA connects"),
         ("[remote]\nssh = '-oProxyCommand=x'\n", "ssh: expected an ssh destination"),
         ("[remote]\nssh = 'me@vm sh'\n", "ssh: expected an ssh destination"),
@@ -95,6 +103,23 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
 def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
     with pytest.raises(UsageError, match=message):
         resolve(write(tmp_path, text), None)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("port = 7000\n", r"\[desktop\] port: expected only where NVDA connects"),
+        ("launch = false\n", r"\[desktop\] launch: expected only in desktop mode on Windows"),
+        ("nvda_dir = 'C:/nvda'\n", "nvda_dir: expected only for an NVDA that asc launches"),
+        ("nvda_settings = ['speech.symbolLevel=1']\n", "nvda_settings: expected only for an NVDA"),
+    ],
+)
+def test_desktop_mode_on_linux_has_no_nvda_settings(
+    tmp_path: Path, text: str, message: str
+) -> None:
+    with pytest.raises(UsageError, match=message) as exc:
+        resolve(write(tmp_path, f"[desktop]\n{text}"), "desktop", "linux")
+    assert exc.value.exit_code == 2
 
 
 def test_panic_key_default_and_from_file(tmp_path: Path) -> None:
@@ -142,33 +167,20 @@ def test_remote_from_file_and_json(tmp_path: Path) -> None:
     assert Target.from_json(linux.to_json()) == linux
 
 
-@pytest.mark.parametrize(
-    ("text", "field", "hint"),
-    [
-        ("[remote]\nhost = '172.20.0.1'\n", r"\[remote\] host", "delete host from config.toml"),
-        ("[orca]\nssh = 'me@vm'\n", r"\[orca\] ssh", 'move ssh to [remote], with os = "linux"'),
-    ],
-)
-def test_settings_from_before_ssh_say_how_to_move(
-    tmp_path: Path, text: str, field: str, hint: str
-) -> None:
-    with pytest.raises(UsageError, match=f"^config.toml: {field}: ") as exc:
-        resolve(write(tmp_path, text), None)
+def test_a_host_from_before_ssh_says_how_to_move(tmp_path: Path) -> None:
+    with pytest.raises(UsageError, match=r"^config.toml: \[remote\] host: ") as exc:
+        resolve(write(tmp_path, "[remote]\nhost = '172.20.0.1'\n"), None)
     assert exc.value.exit_code == 2
-    assert hint in (exc.value.hint or "")
+    assert "delete host from config.toml" in (exc.value.hint or "")
 
 
 def test_modes_this_platform_runs() -> None:
-    remote = replace(defaults("remote"), os="windows", ssh="me@vm")
-    check_runnable(defaults("watch"), "win32")
-    check_runnable(defaults("orca"), "linux")
-    check_runnable(remote, "win32")
-    # The relay and ssh work from Linux too.
-    check_runnable(remote, "linux")
-    with pytest.raises(UsageError, match="watch mode needs Windows"):
-        check_runnable(defaults("watch"), "linux")
-    with pytest.raises(UsageError, match="orca mode runs Orca on this machine"):
-        check_runnable(defaults("orca"), "win32")
+    check_runnable(defaults("watch"))
+    check_runnable(defaults("desktop", platform="linux"))
+    # From either platform, since the relay and ssh work from Linux too.
+    check_runnable(replace(defaults("remote"), os="windows", ssh="me@vm"))
+    with pytest.raises(UsageError, match="sandbox mode needs Windows"):
+        check_runnable(defaults("sandbox", platform="linux"))
 
 
 @pytest.mark.parametrize(
@@ -177,7 +189,7 @@ def test_modes_this_platform_runs() -> None:
 )
 def test_remote_mode_needs_its_machine(ssh: str | None, os: str | None, missing: str) -> None:
     with pytest.raises(UsageError, match=f"^remote mode needs {missing}") as exc:
-        check_runnable(replace(defaults("remote"), ssh=ssh, os=os), "win32")
+        check_runnable(replace(defaults("remote"), ssh=ssh, os=os))
     assert exc.value.exit_code == 2
 
 

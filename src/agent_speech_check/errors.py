@@ -458,7 +458,7 @@ class WindowsOnlyMode(UsageError):
     def __init__(self, mode: str) -> None:
         super().__init__(
             f"{mode} mode needs Windows",
-            hint="on Linux, asc start --mode orca, or remote mode to reach another machine",
+            hint="on Linux, desktop mode runs Orca here, or remote mode reaches another machine",
         )
 
 
@@ -467,15 +467,6 @@ class WindowsOnlyCommand(UsageError):
         super().__init__(
             f"asc {command} needs Windows",
             hint="on Linux, asc start runs Orca here, or remote mode reaches another machine",
-        )
-
-
-class OrcaNeedsLinux(UsageError):
-    def __init__(self) -> None:
-        super().__init__(
-            "orca mode runs Orca on this machine, so it needs Linux",
-            hint="for Orca on another machine, use remote mode with os = linux: "
-            "asc config set os linux --mode remote --instance VMNAME",
         )
 
 

@@ -24,7 +24,7 @@ stop and ask the user to switch to the mode this table suggests:
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation; only then add `--i-understand` |
 | Press keys in NVDA on a VM the user set up | `remote` with `os windows` (over ssh; the user starts and connects that NVDA; `launch` is refused) |
-| Hear Orca on this Linux machine | `orca` (the default on Linux) |
+| Hear Orca on this Linux machine | `desktop` (the default on Linux) |
 | Hear Orca on another Linux machine, reached over ssh | `remote` with `os linux` |
 
 ## Rules
@@ -117,11 +117,11 @@ NVDA says, typed text included, so `asc stop` when you're done.
   writes UTF-16): it then connects at startup, nothing to answer.
   Start the app on the VM yourself or ask the user, then `asc wait`.
 
-## Orca mode
+## Orca
 
-- `asc` starts its own Orca on a hidden display, so its keys reach no one's
-  desktop. On Linux, plain `asc start` runs it. For Orca on another machine, use
-  remote mode with `os linux` (see the remote steps in Rules).
+- On Linux desktop mode starts its own Orca on a hidden display, so its keys
+  reach no one's desktop. Plain `asc start` runs it. For Orca on another
+  machine, use remote mode with `os linux` (see the remote steps in Rules).
 - It needs Orca 51 or later on that machine (`orca --version`), plus Xvfb,
   openbox, xdotool and python3. If `asc start` exits 7 naming one, ask the
   user to install or upgrade it: older Orca can't work.

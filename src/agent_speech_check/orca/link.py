@@ -1,4 +1,4 @@
-"""Orca mode's link: `helper.py` on this Linux machine, or on one asc reaches over ssh.
+"""The link to Orca: `helper.py` on this Linux machine, or on one asc reaches over ssh.
 
 It does the relay's job for `Keyboard` and the daemon: `connected`, `losses`,
 `check`, key events and `on_join`. asc sends the helper's source over stdin

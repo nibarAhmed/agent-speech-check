@@ -47,7 +47,7 @@ ERR_FILE = "daemon.err"
 TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
 # A sandbox boots and makes its portable NVDA first, which takes a while.
-CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "orca": 60.0, "remote": 60.0}
+CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "remote": 60.0}
 
 
 def status(folder: Path) -> dict[str, Any]:

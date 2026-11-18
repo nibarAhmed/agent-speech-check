@@ -73,7 +73,7 @@ def test_orca_reads_a_form(
     form = tmp_path / "form.py"
     form.write_text(FORM, encoding="utf-8")
     assert not left_running()
-    started = run_asc("start")  # orca, the default on Linux, or the instance's remote mode
+    started = run_asc("start")  # desktop, the default on Linux, or the instance's remote mode
     assert started.returncode == 0, started.stderr
     try:
         launched = run_asc("launch", f"/usr/bin/python3 {form}", "--title", "asc e2e form")

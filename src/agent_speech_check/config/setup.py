@@ -44,12 +44,10 @@ _MODE_ABOUT = {
     "shared": "asc presses keys in your own NVDA, in your own session",
     "remote": "NVDA or Orca on another machine, like a VM, that asc reaches over ssh",
 }
-# Orca mode runs only on Linux, where setup doesn't.
-_SETUP_MODES = tuple(m for m in prefs.MODES if m != "orca")
-MODES = _choices(_SETUP_MODES, _MODE_ABOUT, default="watch")
+MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
 # A named instance can't join your own NVDA (watch and shared mode).
 INSTANCE_MODES = _choices(
-    tuple(m for m in _SETUP_MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
+    tuple(m for m in prefs.MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
 )
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
@@ -163,7 +161,7 @@ def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...
     return {mode: questions[mode] for mode in prefs.MODES}
 
 
-# The answers each mode asks for, in order, where it runs (see `runs_here`).
+# The answers each mode asks for, in order, where it runs (see `runs_here` and `asks`).
 QUESTIONS = _per_mode(
     {
         "watch": ("keys_layout",),
@@ -171,7 +169,6 @@ QUESTIONS = _per_mode(
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
         "remote": ("os", "ssh", "keys_layout"),
-        "orca": (),
     }
 )
 
@@ -180,6 +177,12 @@ def runs_here(mode: str, *, named: bool) -> bool:
     """Whether the instance runs `mode`. The default instance keeps remote only
     as the preferred mode, so setup asks nothing more for it."""
     return named or not defaults(mode).named_only
+
+
+def asks(field: str, answered: dict[str, Any]) -> bool:
+    """Whether a question of `QUESTIONS` is asked, after the answers before it. The
+    layout is NVDA's, so it isn't asked when Orca reads."""
+    return not (field == "keys_layout" and answered.get("os") == "linux")
 
 
 def to_data(answers: Answers) -> dict[str, Any]:

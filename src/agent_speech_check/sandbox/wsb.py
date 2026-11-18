@@ -43,7 +43,7 @@ from agent_speech_check.validate import Fields
 from agent_speech_check.windows import powershell, spawn, winapi
 from agent_speech_check.windows.wait import poll_until
 
-if sys.platform == "win32":  # asc also runs on Linux, in orca mode
+if sys.platform == "win32":  # asc also runs on Linux
     import winreg
 
 log = logging.getLogger(__name__)

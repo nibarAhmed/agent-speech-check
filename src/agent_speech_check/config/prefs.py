@@ -29,14 +29,14 @@ from agent_speech_check.validate import Fields
 GLOBAL = "global"
 PER_MODE = "per mode"
 
-MODES = ("watch", "desktop", "sandbox", "shared", "remote", "orca")
-# Orca mode is the one mode that runs on Linux.
-DEFAULT_MODE = "watch" if sys.platform == "win32" else "orca"
+MODES = ("watch", "desktop", "sandbox", "shared", "remote")
+# On Linux desktop mode starts Orca, and watch mode doesn't run.
+DEFAULT_MODE = "watch" if sys.platform == "win32" else "desktop"
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
 # taskbar, or left alone.
 WINDOWS = ("tray", "taskbar", "show")
 LAYOUTS = ("desktop", "laptop")
-# What remote mode's machine runs: NVDA on Windows, Orca on Linux.
+# What the screen reader's machine runs: NVDA on Windows, Orca on Linux.
 OSES = ("windows", "linux")
 
 type Value = str | int | bool | list[str]

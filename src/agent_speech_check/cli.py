@@ -98,7 +98,7 @@ def _add_mode(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mode",
         choices=MODES,
-        help="default: the mode setting, else watch (orca on Linux)",
+        help="default: the mode setting, else watch (desktop on Linux)",
     )
 
 
@@ -773,8 +773,7 @@ def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
         return setup.Answers(mode), ()
     asked: dict[str, Any] = {}
     for field in setup.QUESTIONS[mode]:
-        # The layout is NVDA's, and Orca reads on a Linux machine.
-        if not (field == "keys_layout" and asked.get("os") == "linux"):
+        if setup.asks(field, asked):
             asked[field] = _ASKERS[field](ask, mode)
     if defaults(mode).launches_sandbox:
         _firewall_now(ask, defaults(mode).port)
@@ -819,8 +818,11 @@ COMMANDS: dict[str, Command] = {
         "start recording",
         """\
 Start the background daemon in --mode, or the mode setting (watch; on Linux,
-orca), with that mode's settings from config.toml (see
+desktop), with that mode's settings from config.toml (see
 asc config). One daemon runs per instance: the other commands talk to it.
+
+desktop mode: asc starts its own NVDA on this desktop. On Linux it starts Orca
+instead, on its own hidden display.
 
 watch mode: your own NVDA connects to asc and asc only listens. It never sends
 keys. asc start asks your running NVDA to connect: answer Yes in NVDA, and trust

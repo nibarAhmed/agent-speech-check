@@ -296,7 +296,7 @@ class Daemon:
         after `losses_before` (`len(relay.losses)` when the command began).
 
         A plain drop doesn't fail it: NVDA reconnects by itself about 5 s later.
-        Orca never comes back, so in orca mode any loss fails it.
+        Orca never comes back, so with Orca any loss fails it.
         """
         check = functools.partial(self.link.check, losses_before, drop_fails=False)
         return await self.speech.wait_match(pattern, after, timeout_ms / 1000, check)
@@ -366,7 +366,7 @@ class Daemon:
         return _new_speech(self.speech.since(start), start)
 
     def _relay_info(self) -> nvda_config.RelayAddress:
-        if self.relay is None:  # only an NVDA that asc launches asks, never in orca mode
+        if self.relay is None:  # only an NVDA that asc launches asks, never Orca
             raise RuntimeError
         credentials = self.relay.credentials
         return nvda_config.RelayAddress(
