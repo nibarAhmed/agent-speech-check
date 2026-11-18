@@ -69,7 +69,7 @@ def main() -> None:
             "uv", "run", "--group", "build", "pyinstaller", "--noconfirm", "--onedir",
             "--name", "asc", "--copy-metadata", "agent-speech-check",
             "--paths", str(ROOT / "src"),
-            # Sent as text to the Linux machine in orca mode, so never imported.
+            # Sent as text to the Linux machine in orca mode: the import bundles only bytecode.
             "--add-data", f"{ORCA_HELPER}{os.pathsep}agent_speech_check/orca",
             "--distpath", str(DIST), "--workpath", str(BUILD), "--specpath", str(BUILD),
             str(ROOT / "src" / "agent_speech_check" / "__main__.py"),
