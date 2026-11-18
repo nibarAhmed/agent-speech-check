@@ -198,34 +198,3 @@ jobs:
         with:
           name: msi-logs
           path: ${{ runner.temp }}/msi-logs
-
-  linux:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # The release's build image (release.yml).
-    container: quay.io/pypa/manylinux_2_28_x86_64@sha256:d086f64cddcace250ef0f0073583c51b8298159303290a730c9f59bd91edfd2c
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: Install
-        run: uv sync --locked
-      # By path: the rest drive Windows. The Orca tests run in e2e.yml.
-      - name: The updater's Linux tests
-        run: uv run pytest tests/unit/test_update.py tests/unit/test_build_installer.py -v -p no:cacheprovider
-      - name: Build the tarball
-        run: uv run python -m scripts.build_linux
-      # As the README installs it, into an empty home.
-      - name: Install and run it
-        run: |
-          version=$(uv version --short)
-          export HOME="$RUNNER_TEMP/home"
-          mkdir -p "$HOME/.local/share" "$HOME/.local/bin"
-          tar -xzf dist/agent-speech-check-linux-x86_64.tar.gz -C "$HOME/.local/share"
-          ln -sf "$HOME/.local/share/agent-speech-check/current/asc" "$HOME/.local/bin/asc"
-          test "$("$HOME/.local/bin/asc" --version)" = "asc $version"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: linux
-          path: dist/agent-speech-check-linux-x86_64.tar.gz

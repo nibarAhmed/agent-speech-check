@@ -44,7 +44,8 @@ log = logging.getLogger(__name__)
 REPO = "nibarAhmed/agent-speech-check"
 LATEST_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"
-LINUX_ASSET = "agent-speech-check-linux-x86_64.tar.gz"
+# `uname -m` of the Linux machines a tarball is built for.
+LINUX_MACHINES = ("x86_64", "aarch64")
 # The tarball's one top folder, which holds versions/V and the `current` link.
 LINUX_TOP = "agent-speech-check"
 # The entry the MSI writes; its InstallLocation is the folder it installed.
@@ -90,9 +91,14 @@ def asset_name(version: str, system: str = sys.platform, machine: str | None = N
     if system == "win32":
         return f"agent-speech-check-{version}.msi"
     # Not a default: on Windows platform.machine() asks WMI, at every asc's import.
-    if system == "linux" and (machine or platform.machine()) == "x86_64":
-        return LINUX_ASSET
+    machine = machine or platform.machine()
+    if system == "linux" and machine in LINUX_MACHINES:
+        return linux_asset(machine)
     return None
+
+
+def linux_asset(machine: str) -> str:
+    return f"agent-speech-check-linux-{machine}.tar.gz"
 
 
 def _version(text: str) -> tuple[int, int, int] | None:

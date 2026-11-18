@@ -108,8 +108,7 @@ An `asc` installed by the MSI, or unpacked from the Linux tarball as the
   later, at the next `asc stop`.
 - `asc config set auto_update false` turns it off. `false` in any instance's
   `config.toml` turns it off for all of them, since they share one `asc`.
-- Any other `asc`, like one run from a clone or on 64-bit Arm Linux, never
-  updates itself.
+- Any other `asc`, like one run from a clone, never updates itself.
 
 ## Modes
 

@@ -35,14 +35,18 @@ def test_parse_release() -> None:
 
 
 def test_parse_release_takes_the_asset_built_for_this_platform() -> None:
-    tarball = URL.replace("agent-speech-check-0.5.0.msi", updater.LINUX_ASSET)
     answer = github()
-    answer["assets"].append(
-        {"name": updater.LINUX_ASSET, "browser_download_url": tarball, "digest": f"sha256:{SHA}"}
-    )
-    assert updater.parse_release(answer, "linux", "x86_64") == Release((0, 5, 0), tarball, SHA)
+    tarballs = {}
+    for machine in ("x86_64", "aarch64"):
+        name = f"agent-speech-check-linux-{machine}.tar.gz"
+        tarballs[machine] = URL.replace("agent-speech-check-0.5.0.msi", name)
+        answer["assets"].append(
+            {"name": name, "browser_download_url": tarballs[machine], "digest": f"sha256:{SHA}"}
+        )
+    for machine, tarball in tarballs.items():
+        assert updater.parse_release(answer, "linux", machine) == Release((0, 5, 0), tarball, SHA)
     assert updater.parse_release(answer, "win32", "ARM64") == Release((0, 5, 0), URL, SHA)
-    assert updater.parse_release(answer, "linux", "aarch64") is None
+    assert updater.parse_release(answer, "linux", "riscv64") is None
     assert updater.parse_release(github(), "linux", "x86_64") is None
 
 
@@ -177,7 +181,7 @@ def test_unpack_switches_current_and_keeps_only_what_may_run(tmp_path: Path) -> 
     app = tmp_path / "app"
     app.mkdir()
     (app / "asc").write_bytes(b"0.5.0")
-    tarball = tmp_path / updater.LINUX_ASSET
+    tarball = tmp_path / "agent-speech-check-linux-x86_64.tar.gz"
     write_tarball(app, "0.5.0", tarball)
 
     updater.unpack(tarball, exe, "0.5.0")

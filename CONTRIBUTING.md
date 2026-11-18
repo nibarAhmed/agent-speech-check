@@ -42,9 +42,10 @@ The rules for code, tests and docs are in [AGENTS.md](AGENTS.md). They apply to 
 ## Releasing
 
 Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI, the
-winget manifests and the Linux tarball (on glibc 2.28, so it runs on that and newer) and attaches
+winget manifests and the Linux tarballs for x86 and Arm (on glibc 2.28, so it runs on that and newer) and attaches
 them to a GitHub Release. An installed `asc` updates itself from that release, so its assets keep
-their names: `agent-speech-check-VERSION.msi` and `agent-speech-check-linux-x86_64.tar.gz`.
+their names: `agent-speech-check-VERSION.msi` and `agent-speech-check-linux-MACHINE.tar.gz`, where
+MACHINE is `x86_64` or `aarch64`.
 
 1. In a pull request, set the new version in `pyproject.toml` and in both
    `plugins/agent-speech-check/.claude-plugin/plugin.json` and

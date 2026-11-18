@@ -40,11 +40,11 @@ The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/d
 
 On Windows, run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. To uninstall, use Settings > Apps.
 
-On Linux (64-bit x86, glibc 2.28 or later), unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
+On Linux (64-bit x86 or Arm, glibc 2.28 or later), unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
 
 ```shell
 mkdir -p ~/.local/share ~/.local/bin
-curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/download/agent-speech-check-linux-x86_64.tar.gz | tar -xz -C ~/.local/share
+curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/download/agent-speech-check-linux-$(uname -m).tar.gz | tar -xz -C ~/.local/share
 ln -sf ~/.local/share/agent-speech-check/current/asc ~/.local/bin/asc
 ```
 
