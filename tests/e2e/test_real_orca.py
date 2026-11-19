@@ -101,6 +101,61 @@ def test_orca_reads_a_form(
     )
 
 
+PAGE = """<!doctype html><html lang="en"><title>asc e2e page</title>
+<h1>Welcome heading</h1><p>Some text.</p><input aria-label="Search box"><h2>Second heading</h2>
+"""
+
+# Without them Firefox opens on its welcome and terms of use pages.
+PREFS = """user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.aboutwelcome.enabled", false);
+user_pref("browser.preonboarding.enabled", false);
+user_pref("termsofuse.bypassNotification", true);
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+user_pref("datareporting.policy.dataSubmissionEnabled", false);
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+"""
+
+
+def firefox_running() -> list[str]:
+    return [
+        p.info["name"]
+        for p in psutil.process_iter(["name", "status", "exe"])
+        if (p.info["exe"] or "").startswith("/usr/lib/firefox/")
+        and p.info["status"] != psutil.STATUS_ZOMBIE
+    ]
+
+
+def test_orca_browses_a_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    profile = tmp_path / "profile"
+    profile.mkdir()
+    (profile / "user.js").write_text(PREFS, encoding="utf-8")
+    page = tmp_path / "page.html"
+    page.write_text(PAGE, encoding="utf-8")
+    assert not left_running()
+    assert not firefox_running()
+    started = run_asc("start")
+    assert started.returncode == 0, started.stderr
+    try:
+        firefox = f"firefox --profile {profile} --no-remote {page.as_uri()}"
+        launched = run_asc("launch", firefox, "--title", "asc e2e page", "--timeout", "60000")
+        assert launched.returncode == 0, launched.stdout + launched.stderr
+        assert "mode: browse" in launched.stdout
+        heading = run_asc("press", "H", "--expect", "Second heading")
+        assert heading.returncode == 0, heading.stdout + heading.stderr
+        focus = run_asc("press", "Orca+A", "--expect", "Focus mode")
+        assert focus.returncode == 0, focus.stdout + focus.stderr
+        assert "browse/focus: focus" in run_asc("status").stdout.splitlines()
+    finally:
+        stopped = run_asc("stop")
+    assert stopped.returncode == 0, stopped.stderr
+    assert wait_until(lambda: not (left_running() or firefox_running() or left_folders())), (
+        left_running(),
+        firefox_running(),
+        left_folders(),
+    )
+
+
 WATCH_FORM = """import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
