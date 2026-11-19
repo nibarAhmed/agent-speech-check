@@ -49,6 +49,8 @@ WATCH_PORT = 6837
 # Fixed, so the firewall rule `asc firewall-setup` makes keeps matching.
 SANDBOX_PORT = 16837
 REMOTE_PORT = 26837
+# The modes Orca runs on this Linux machine. Remote mode runs it on another.
+ORCA_MODES = ("desktop", "watch")
 _PANIC = parse_hotkey(PANIC_KEY)
 
 
@@ -213,7 +215,7 @@ def check_runnable(target: Target) -> None:
         missing = [name for name in ("ssh", "os") if getattr(target, name) is None]
         if missing:
             raise RemoteNeedsMachine(missing)
-    elif target.orca and target.mode not in ("desktop", "watch"):
+    elif target.orca and target.mode not in ORCA_MODES:
         raise WindowsOnlyMode(target.mode)
 
 

@@ -39,7 +39,7 @@ class Asker:
 
 
 def test_prompts_are_plain_words() -> None:
-    prompt = setup.choice_prompt(setup.MODES)
+    prompt = setup.choice_prompt(setup.modes(named=False, platform="win32"))
     assert prompt == "Choose 1 to 5: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
@@ -106,7 +106,7 @@ def test_summary_says_none_and_your_folder() -> None:
     ],
 )
 def test_pick(answer: str, picked: str | None) -> None:
-    assert setup.pick(answer, setup.MODES) == picked
+    assert setup.pick(answer, setup.modes(named=False, platform="win32")) == picked
 
 
 @pytest.mark.parametrize(
@@ -136,7 +136,7 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert settings.resolve(None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
-    assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
+    assert out.index("Which mode should asc use?") < out.index("1  watch:")
     assert "Your settings:\n  Mode:             watch\n  Keyboard layout:  laptop\n" in out
     assert out.endswith(f"\nSettings saved: {os.path.realpath(root / 'config.toml')}\n")
     assert "[" not in out
@@ -207,6 +207,29 @@ def test_setup_remote_in_the_default_instance_keeps_only_the_mode(
     saved = (root / "config.toml").read_text(encoding="utf-8")
     assert 'mode = "remote"' in saved
     assert "[" not in saved
+
+
+def test_setup_on_linux_offers_what_orca_runs(
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Enter picks desktop mode, then save: Orca needs no NVDA folder or layout.
+    ask = Asker("", "y")
+    run_setup(ask, replace_without_asking=False, platform="linux")
+    out = capsys.readouterr().out
+    assert ask.prompts[0] == "Choose 1 to 3: "
+    assert "your own Orca" in out
+    assert "its own Orca on a hidden display (default)" in out
+    assert "Which NVDA" not in out
+    assert "keyboard layout" not in out
+    assert "While it runs" not in out
+    target = load(root / "config.toml", platform="linux").resolve(None)
+    assert (target.mode, target.orca) == ("desktop", True)
+    monkeypatch.setenv("ASC_INSTANCE", "vm3")
+    ask = Asker("", "linux", "me@vm", "y")
+    run_setup(ask, replace_without_asking=False, platform="linux")
+    assert ask.prompts[0] == "Choose 1 to 2: "
+    target = load(root / "instances" / "vm3" / "config.toml", platform="linux").resolve(None)
+    assert (target.mode, target.os, target.ssh) == ("remote", "linux", "me@vm")
 
 
 def test_setup_without_sandbox_says_how_to_get_it(

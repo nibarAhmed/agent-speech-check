@@ -782,8 +782,8 @@ asc setup [--yes]
 
 Asks a few questions and saves the answers in `config.toml`:
 
-1. The mode.
-2. Desktop and sandbox mode: which NVDA.
+1. The mode: on Linux, watch, desktop or remote.
+2. Desktop and sandbox mode: which NVDA (not asked for Orca).
 3. Sandbox mode: the shared folders and the window.
 4. Remote mode: what the other machine runs, and its ssh destination.
 5. Watch, shared and remote mode: your NVDA's keyboard layout (not asked for
@@ -807,8 +807,7 @@ the firewall rule sandbox mode needs. Timings are not asked; change them with
   `asc config` there.
 - It refuses with exit 4 while `asc` runs.
 - In a named [instance](#instances) it offers only desktop, sandbox and remote
-  mode (remote by default).
-- On Linux it exits 2.
+  mode (remote by default; on Linux, desktop and remote).
 - In the default instance, remote saves only `mode = "remote"` and says to run
   `asc setup --instance VMNAME`: remote mode runs only in a named instance.
 

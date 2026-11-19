@@ -11,11 +11,13 @@ low punctuation level. Around a word, the brackets can go and the word stays.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, fields
 from typing import Any
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.targets import defaults
+from agent_speech_check.config.prefs import default_mode
+from agent_speech_check.config.targets import ORCA_MODES, defaults
 
 
 @dataclass(frozen=True)
@@ -44,11 +46,26 @@ _MODE_ABOUT = {
     "shared": "asc presses keys in your own NVDA, in your own session",
     "remote": "NVDA or Orca on another machine, like a VM, that asc reaches over ssh",
 }
-MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
-# A named instance can't join your own screen reader (watch and shared mode).
-INSTANCE_MODES = _choices(
-    tuple(m for m in prefs.MODES if not defaults(m).own_reader), _MODE_ABOUT, default="remote"
-)
+_ORCA_ABOUT = {
+    "watch": "listen to your own Orca while you use it; never sends keys",
+    "desktop": "asc runs its own Orca on a hidden display",
+}
+
+
+def modes(*, named: bool, platform: str = sys.platform) -> tuple[Choice, ...]:
+    """The modes that run here. A named instance can't join your own screen reader
+    (watch and shared mode)."""
+    orca = defaults("desktop", platform=platform).orca
+    names = tuple(
+        mode
+        for mode in prefs.MODES
+        if (mode == "remote" or not orca or mode in ORCA_MODES)
+        and not (named and defaults(mode).own_reader)
+    )
+    about = {**_MODE_ABOUT, **_ORCA_ABOUT} if orca else _MODE_ABOUT
+    return _choices(names, about, default="remote" if named else default_mode(platform))
+
+
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
     Choice("folder", "a portable NVDA folder of your own"),
@@ -73,7 +90,10 @@ OSES = _choices(
     default="windows",
 )
 # Fails at import unless each question has exactly one default.
-for _question in (MODES, INSTANCE_MODES, NVDA_SOURCES, WINDOWS, LAYOUTS, OSES):
+for _question in (
+    *(modes(named=named, platform=p) for named in (False, True) for p in ("win32", "linux")),
+    *(NVDA_SOURCES, WINDOWS, LAYOUTS, OSES),
+):
     default_of(_question)
 
 
@@ -179,10 +199,11 @@ def runs_here(mode: str, *, named: bool) -> bool:
     return named or not defaults(mode).named_only
 
 
-def asks(field: str, answered: dict[str, Any]) -> bool:
-    """Whether a question of `QUESTIONS` is asked, after the answers before it. The
-    layout is NVDA's, so it isn't asked when Orca reads."""
-    return not (field == "keys_layout" and answered.get("os") == "linux")
+def asks(field: str, mode: str, answered: dict[str, Any], platform: str = sys.platform) -> bool:
+    """Whether a question of `QUESTIONS` is asked, after the answers before it. NVDA's
+    folder and layout aren't asked when Orca reads."""
+    nvda_only = field in ("nvda_dir", "keys_layout")
+    return not (nvda_only and defaults(mode, answered.get("os"), platform).orca)
 
 
 def to_data(answers: Answers) -> dict[str, Any]:

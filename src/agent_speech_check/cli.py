@@ -57,7 +57,7 @@ Agent Speech Check: use a screen reader (NVDA, or Orca on Linux) the way a
 blind user does. Press keys, read what it says as text, and check it.
 
 typical use:
-  asc setup                    choose your settings (once, Windows)
+  asc setup                    choose your settings (once)
   asc start                    start recording in your configured mode
   asc status                   whether the screen reader is connected, and how
   asc mark                     print the latest line number, N
@@ -711,17 +711,18 @@ def _firewall_now(ask: Ask, port: int) -> None:
     _offer(ask, question, lambda: _add_firewall_rule(port), firewall.setup_command())
 
 
-def _ask_mode(ask: Ask, *, named: bool) -> str:
-    modes = setup.INSTANCE_MODES if named else setup.MODES
+def _ask_mode(ask: Ask, *, named: bool, platform: str) -> str:
+    modes = setup.modes(named=named, platform=platform)
     while True:
-        mode = _ask_choice(ask, "How should asc work with NVDA?", modes)
+        mode = _ask_choice(ask, "Which mode should asc use?", modes)
+        target = defaults(mode, platform=platform)
         if mode == "sandbox":
             try:
                 wsb.require_available()
             except AscError as error:
                 print(f"{_sentence(error)} Pick another mode.")
                 continue
-        if mode == "desktop" and launcher.running():
+        if target.launches_portable and launcher.running():
             print("Note: desktop mode won't start while another NVDA runs.")
         if mode == "shared":
             print("Note: shared mode needs --i-understand at every asc start.")
@@ -730,7 +731,7 @@ def _ask_mode(ask: Ask, *, named: bool) -> str:
             print("asc setup --instance VMNAME. Agents make their own.")
         elif mode == "remote":
             print("Note: asc reaches it with ssh and a key, never a password.")
-        if mode in ("shared", "desktop"):
+        if target.takes_panic_key:
             print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
         return mode
 
@@ -780,22 +781,22 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
 }
 
 
-def _answers(ask: Ask) -> tuple[setup.Answers, tuple[str, ...]]:
+def _answers(ask: Ask, platform: str) -> tuple[setup.Answers, tuple[str, ...]]:
     """The answers, and which questions were asked."""
     named = paths.instance() is not None
-    mode = _ask_mode(ask, named=named)
+    mode = _ask_mode(ask, named=named, platform=platform)
     if not setup.runs_here(mode, named=named):
         return setup.Answers(mode), ()
     asked: dict[str, Any] = {}
     for field in setup.QUESTIONS[mode]:
-        if setup.asks(field, asked):
+        if setup.asks(field, mode, asked, platform):
             asked[field] = _ASKERS[field](ask, mode)
     if defaults(mode).launches_sandbox:
         _firewall_now(ask, defaults(mode).port)
     return setup.Answers(mode, **asked), tuple(asked)
 
 
-def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
+def run_setup(ask: Ask, *, replace_without_asking: bool, platform: str = sys.platform) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
     if (mode := session.running_mode(state_root())) is not None:
         raise AlreadyRunning(mode)
@@ -808,7 +809,7 @@ def run_setup(ask: Ask, *, replace_without_asking: bool) -> int:
             return 0
     print("Answer with a number or a name. Enter keeps the default.")
     print("Ctrl+C stops without saving.")
-    answers, fields = _answers(ask)
+    answers, fields = _answers(ask, platform)
     _section(*setup.summary_lines(answers, fields), "")
     if not _ask_yes(ask, "Save?", default=True):
         print("Nothing saved.")
@@ -1013,7 +1014,6 @@ examples:
   asc setup --yes          replace existing settings without asking""",
         cmd_setup,
         _setup_args,
-        windows_only=True,
     ),
     "config": Command(
         "show or change one setting",
