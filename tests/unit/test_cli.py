@@ -217,7 +217,7 @@ def test_status_says_why_the_tunnel_is_down(capsys: pytest.CaptureFixture[str]) 
         "tunnel": {"up": False, "error": "ssh me@vm failed: Host key verification failed."},
         "connected": True,
         "port": 6837,
-        "nvda_mode": "focus",
+        "browse_focus": "focus",
         "lines": 0,
         "latest": 0,
         "last_error": None,
@@ -225,6 +225,23 @@ def test_status_says_why_the_tunnel_is_down(capsys: pytest.CaptureFixture[str]) 
     _show_status(status)
     said = "over ssh: me@vm, tunnel down (ssh me@vm failed: Host key verification failed.)\n"
     assert said in capsys.readouterr().out
+
+
+def test_status_shows_orcas_browse_or_focus_mode(capsys: pytest.CaptureFixture[str]) -> None:
+    status = {
+        "mode": "desktop",
+        "keys": True,
+        "reader": "orca",
+        "ssh": None,
+        "connected": True,
+        "port": None,
+        "browse_focus": "browse",
+        "lines": 0,
+        "latest": 0,
+        "last_error": None,
+    }
+    _show_status(status)
+    assert "browse/focus: browse\n" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])

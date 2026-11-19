@@ -502,7 +502,7 @@ instance). Exits 3 if nothing runs.
 asc status [--nvda-ini]
 ```
 
-Shows the mode, whether `asc` is recording and NVDA is connected, the
+Shows the mode, whether `asc` is recording and the screen reader is connected, the
 browse/focus mode and the speech log:
 
 ```
@@ -514,13 +514,12 @@ speech: 12 lines kept, latest 12
 ```
 
 - When NVDA isn't connected it prints how to connect it.
-- `browse/focus` is `unknown` until NVDA first switches modes.
+- `browse/focus` is `unknown` until the screen reader first switches modes.
 - A `last error:` line says why the last failed connection was dropped (for
   example a wrong channel key), until NVDA next joins.
 - When the mode has a [panic key](#panic-key), it shows it.
 - If `asc` isn't running, it exits 3.
-- With Orca the line is `orca: connected`, and there is no `browse/focus`
-  line.
+- With Orca the line is `orca: connected`.
 - In remote mode `over ssh: DEST` names the machine, followed for NVDA by
   `tunnel up` or `tunnel down (WHY)`.
 - `--nvda-ini` prints, instead, an `nvda.ini` for remote mode's NVDA. See

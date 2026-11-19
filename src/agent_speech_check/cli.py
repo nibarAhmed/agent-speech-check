@@ -301,8 +301,7 @@ def _show_status(status: dict[str, Any]) -> None:
     # Nothing listens for Orca: asc starts or records it itself.
     if not status["connected"] and status["port"] is not None:
         print(_connect_line(status))
-    if reader == "nvda":
-        print(f"browse/focus: {status['nvda_mode']}")
+    print(f"browse/focus: {status['browse_focus']}")
     print(f"speech: {status['lines']} lines kept, latest {status['latest']}")
     if status.get("panic_key"):
         print(f"panic key: {status['panic_key']} stops asc and releases keys")
@@ -871,10 +870,10 @@ examples:
         _stop_args,
     ),
     "status": Command(
-        "show whether asc is recording and NVDA is connected",
+        "show whether asc is recording and the screen reader is connected",
         """\
-Show the mode, whether NVDA is connected, how to connect it, and the
-browse/focus mode (unknown until NVDA first switches).
+Show the mode, whether NVDA or Orca is connected, how to connect NVDA, and
+the browse/focus mode (unknown until the screen reader first switches).
 
 remote mode with os windows: --nvda-ini prints instead an nvda.ini for its NVDA,
 as desktop mode writes its own: Remote Access on, connecting to asc at startup

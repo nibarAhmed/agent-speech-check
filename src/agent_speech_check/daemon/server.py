@@ -258,7 +258,7 @@ class Daemon:
             "port": self._port(),
             "channel": None if credentials is None else credentials.channel,
             "fingerprint": None if credentials is None else credentials.fingerprint,
-            "nvda_mode": self.speech.mode,
+            "browse_focus": self.speech.mode,
             "lines": len(self.speech),
             "latest": self.speech.latest,
             "last_error": self.link.last_error,
