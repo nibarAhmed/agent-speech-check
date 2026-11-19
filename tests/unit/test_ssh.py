@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.errors import PortInUse, SshFailed, SshMissing, SshSetupNeeded
-from agent_speech_check.remote import ssh
+from agent_speech_check.system import ssh
 
 
 def test_tunnel_command() -> None:

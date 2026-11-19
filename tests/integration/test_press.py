@@ -14,7 +14,7 @@ from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
 from tests.integration.conftest import Env, run_asc, start_asc, wait_until
 
-from agent_speech_check.remote.speech_log import CAP
+from agent_speech_check.daemon.speech_log import CAP
 
 
 @pytest.fixture

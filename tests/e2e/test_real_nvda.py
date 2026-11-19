@@ -22,10 +22,9 @@ from pathlib import Path
 import pytest
 from tests.integration.conftest import free_port, run_asc, start_asc
 
-from agent_speech_check.nvda import invite
+from agent_speech_check.nvda import invite, relay
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
-from agent_speech_check.remote import relay
-from agent_speech_check.remote.relay import fingerprint
+from agent_speech_check.nvda.relay import fingerprint
 from agent_speech_check.system import paths, processes, winapi
 from agent_speech_check.system.wait import poll_until
 

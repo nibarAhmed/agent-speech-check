@@ -33,9 +33,8 @@ from agent_speech_check.errors import (
     SharedNeedsConsent,
     SshFailed,
 )
-from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.nvda import launcher, nvda_config, relay
 from agent_speech_check.orca.link import watch_secret
-from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths, processes, spawn
 from agent_speech_check.system.paths import relay_dir

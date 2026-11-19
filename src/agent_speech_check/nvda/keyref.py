@@ -15,8 +15,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from agent_speech_check.errors import NvdaNotFound, RemoteCommandFailed
-from agent_speech_check.remote import ssh
-from agent_speech_check.system import powershell, processes
+from agent_speech_check.system import powershell, processes, ssh
 
 _HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 # Single letter navigation is a list, not a table: "h: heading".
