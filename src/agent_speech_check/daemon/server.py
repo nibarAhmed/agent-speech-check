@@ -49,8 +49,8 @@ from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.remote.ssh import Tunnel
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.windows import winapi
-from agent_speech_check.windows.paths import mode_dir, relay_dir, state_root
+from agent_speech_check.system import winapi
+from agent_speech_check.system.paths import mode_dir, relay_dir, state_root
 
 if sys.platform != "win32":
     import fcntl

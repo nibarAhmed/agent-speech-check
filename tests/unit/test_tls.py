@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.remote import relay
-from agent_speech_check.windows import tls
+from agent_speech_check.system import tls
 
 
 def test_https_refuses_a_certificate_windows_does_not_trust(tmp_path: Path) -> None:

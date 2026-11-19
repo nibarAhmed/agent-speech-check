@@ -46,7 +46,7 @@ from agent_speech_check.nvda import launcher
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.windows import wait, winapi
+from agent_speech_check.system import wait, winapi
 
 
 def test_kill_on_close_job_kills_the_child() -> None:

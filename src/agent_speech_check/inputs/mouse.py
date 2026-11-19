@@ -10,7 +10,7 @@ starts an app (observed in Windows Sandbox: docs/findings.md, the foreground loc
 
 from __future__ import annotations
 
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import winapi
 
 
 def nudge() -> bool:

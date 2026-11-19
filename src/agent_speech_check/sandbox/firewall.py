@@ -20,8 +20,8 @@ import os
 import sys
 
 from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch, PowerShellTimedOut
-from agent_speech_check.windows import paths, winapi
-from agent_speech_check.windows.powershell import encoded, quote, run
+from agent_speech_check.system import paths, winapi
+from agent_speech_check.system.powershell import encoded, quote, run
 
 SANDBOX_RULE = "agent-speech-check sandbox relay"
 INTERFACE = "vEthernet (Default Switch)"

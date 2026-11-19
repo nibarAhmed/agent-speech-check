@@ -4,7 +4,7 @@ import pytest
 
 from agent_speech_check.errors import PowerShellTimedOut
 from agent_speech_check.sandbox import firewall
-from agent_speech_check.windows import powershell
+from agent_speech_check.system import powershell
 
 
 def test_create_script_is_narrow() -> None:

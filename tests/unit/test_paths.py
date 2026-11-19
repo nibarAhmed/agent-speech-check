@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.errors import BadInstance, SetupNeeded
-from agent_speech_check.windows import paths
-from agent_speech_check.windows.paths import write_atomic
+from agent_speech_check.system import paths
+from agent_speech_check.system.paths import write_atomic
 
 
 def test_write_atomic_writes_text_with_unix_newlines(tmp_path: Path) -> None:

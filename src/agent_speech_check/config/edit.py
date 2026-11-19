@@ -25,7 +25,7 @@ from tomlkit.items import Array, Table
 from agent_speech_check.config.prefs import GLOBAL, MODES, PER_MODE, PREFS, Pref, Value
 from agent_speech_check.config.targets import Config, Target
 from agent_speech_check.errors import BadPreference, FileUnusable
-from agent_speech_check.windows.paths import write_atomic
+from agent_speech_check.system.paths import write_atomic
 
 HEADER = "asc settings. Change them with asc config set, or start over with asc setup."
 _LINE = 100

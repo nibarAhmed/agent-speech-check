@@ -10,7 +10,7 @@ from agent_speech_check.inputs.keys import (
     parse_key,
     text_gestures,
 )
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import winapi
 
 
 def test_nvda_key_is_extended_insert() -> None:

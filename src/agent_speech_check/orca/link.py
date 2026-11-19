@@ -39,8 +39,8 @@ from agent_speech_check.inputs.keys import Key
 from agent_speech_check.orca import helper
 from agent_speech_check.remote import ssh
 from agent_speech_check.remote.speech_log import SpeechLog
+from agent_speech_check.system import paths
 from agent_speech_check.validate import Fields
-from agent_speech_check.windows import paths
 
 log = logging.getLogger(__name__)
 

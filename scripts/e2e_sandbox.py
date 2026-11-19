@@ -41,7 +41,7 @@ import windows_sshd
 
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system.wait import poll_until
 
 REPO = Path(__file__).resolve().parents[1]
 PYTHON = (REPO / ".python-version").read_text(encoding="utf-8").strip()

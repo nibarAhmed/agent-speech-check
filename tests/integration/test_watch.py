@@ -10,7 +10,7 @@ import pytest
 from tests.integration.conftest import Env, run_asc, wait_until
 
 from agent_speech_check.inputs.keys import parse_hotkey
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import winapi
 
 
 def test_watch_session(env: Env) -> None:

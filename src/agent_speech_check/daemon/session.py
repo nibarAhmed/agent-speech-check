@@ -36,9 +36,9 @@ from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.orca.link import watch_secret
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.windows import paths, spawn, winapi
-from agent_speech_check.windows.paths import relay_dir
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import paths, spawn, winapi
+from agent_speech_check.system.paths import relay_dir
+from agent_speech_check.system.wait import poll_until
 
 START_TIMEOUT_S = 15.0
 # Past the daemon's own worst case: 10 s for NVDA, then its window threads.

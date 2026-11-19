@@ -19,8 +19,8 @@ from tests.fake_nvda import FakeNvda, Reply
 
 from agent_speech_check.daemon import session, state
 from agent_speech_check.remote.relay import fingerprint
-from agent_speech_check.windows import spawn
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import spawn
+from agent_speech_check.system.wait import poll_until
 
 
 def asc_command(*args: str) -> list[str]:

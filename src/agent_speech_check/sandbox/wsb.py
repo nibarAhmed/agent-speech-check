@@ -39,9 +39,9 @@ from agent_speech_check.errors import (
     SandboxNeedsPro,
     WsbMissing,
 )
+from agent_speech_check.system import powershell, spawn, winapi
+from agent_speech_check.system.wait import poll_until
 from agent_speech_check.validate import Fields
-from agent_speech_check.windows import powershell, spawn, winapi
-from agent_speech_check.windows.wait import poll_until
 
 if sys.platform == "win32":
     import winreg

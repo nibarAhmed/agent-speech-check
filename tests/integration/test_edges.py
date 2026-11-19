@@ -26,8 +26,8 @@ from agent_speech_check.errors import (
     Updating,
 )
 from agent_speech_check.sandbox import firewall
+from agent_speech_check.system import winapi
 from agent_speech_check.update import updater
-from agent_speech_check.windows import winapi
 
 
 def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:

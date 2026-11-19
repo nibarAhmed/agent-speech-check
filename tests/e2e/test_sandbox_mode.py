@@ -20,8 +20,8 @@ from tests.integration.conftest import run_asc
 from agent_speech_check.daemon import state
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
-from agent_speech_check.windows import winapi
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import winapi
+from agent_speech_check.system.wait import poll_until
 
 pytestmark = [
     pytest.mark.e2e,

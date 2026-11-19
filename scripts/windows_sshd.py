@@ -17,8 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from agent_speech_check.windows import paths, tls
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import paths, tls
+from agent_speech_check.system.wait import poll_until
 
 VERSION = "10.4.0.0p1-Preview"
 URL = f"https://github.com/PowerShell/Win32-OpenSSH/releases/download/{VERSION}/OpenSSH-Win64.zip"

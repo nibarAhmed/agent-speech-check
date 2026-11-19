@@ -45,8 +45,8 @@ from agent_speech_check.errors import (
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.remote import protocol
 from agent_speech_check.remote.speech_log import SpeechLog
+from agent_speech_check.system.paths import write_atomic
 from agent_speech_check.validate import Fields
-from agent_speech_check.windows.paths import write_atomic
 
 log = logging.getLogger(__name__)
 

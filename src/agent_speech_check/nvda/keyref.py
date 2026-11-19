@@ -16,7 +16,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from agent_speech_check.errors import NvdaNotFound
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import winapi
 
 if sys.platform == "win32":
     import winreg

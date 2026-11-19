@@ -15,7 +15,7 @@ from tests.integration.conftest import Env, free_port, run_asc, wait_until
 
 from agent_speech_check.daemon import session
 from agent_speech_check.errors import AscStillRunning
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import winapi
 
 
 def _pid(env: Env, folder: str) -> int:

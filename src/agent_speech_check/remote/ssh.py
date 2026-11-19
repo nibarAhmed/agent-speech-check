@@ -22,7 +22,7 @@ from agent_speech_check.errors import (
     SshMissing,
     SshSetupNeeded,
 )
-from agent_speech_check.windows import paths, winapi
+from agent_speech_check.system import paths, winapi
 
 log = logging.getLogger(__name__)
 

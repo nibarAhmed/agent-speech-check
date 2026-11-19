@@ -46,10 +46,10 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.sandbox import firewall, wsb
+from agent_speech_check.system import paths
+from agent_speech_check.system.paths import config_file, mode_dir, state_root
+from agent_speech_check.system.wait import poll_until
 from agent_speech_check.update import updater
-from agent_speech_check.windows import paths
-from agent_speech_check.windows.paths import config_file, mode_dir, state_root
-from agent_speech_check.windows.wait import poll_until
 
 DESCRIPTION = """\
 Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
