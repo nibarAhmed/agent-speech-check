@@ -28,6 +28,7 @@ import json
 import os
 import re
 import secrets
+import select
 import shlex
 import shutil
 import signal
@@ -42,6 +43,8 @@ from typing import IO, Any
 PROGRAMS = ("Xvfb", "openbox", "xdotool", "dbus-daemon", "gdbus", "orca")
 MIN_ORCA = (51, 0)
 READY_TIMEOUT_S = 30.0
+# Xvfb's and dbus-daemon's each, which with Orca's stays inside `asc start`'s 60 s.
+STARTED_TIMEOUT_S = 10.0
 SERVICE = "org.gnome.Orca1.Service"
 XDOTOOL_TIMEOUT_S = 10.0
 MAX_RECORDS = 10_000
@@ -97,6 +100,21 @@ class Failed(Exception):
         super().__init__(reason)
         self.kind = kind
         self.reason = reason
+
+
+def first_line(fd: int, program: str, timeout_s: float = STARTED_TIMEOUT_S) -> str:
+    """The line `program` prints on `fd` once it has started, or "" if it exits first."""
+    deadline = time.monotonic() + timeout_s
+    data = b""
+    while b"\n" not in data:
+        left = deadline - time.monotonic()
+        if left <= 0 or not select.select([fd], [], [], left)[0]:
+            raise Failed("setup", f"{program} did not start within {timeout_s:g} s")
+        chunk = os.read(fd, 4096)
+        if not chunk:
+            break
+        data += chunk
+    return data.split(b"\n")[0].decode(errors="replace").strip()
 
 
 def help_pages(lang: str) -> dict[str, str]:
@@ -248,8 +266,10 @@ class Session:
         )
         self.children.remove(self.xvfb)  # ended last, after everything that draws on it
         os.close(write)
-        with os.fdopen(read) as pipe:
-            number = pipe.readline().strip()
+        try:
+            number = first_line(read, "Xvfb")
+        finally:
+            os.close(read)
         if not number.isdigit():
             raise Failed("setup", "Xvfb did not start")
         self.env["DISPLAY"] = f":{number}"
@@ -262,7 +282,7 @@ class Session:
             ],
             stdout=subprocess.PIPE,
         )
-        address = bus.stdout.readline().decode().strip() if bus.stdout else ""
+        address = first_line(bus.stdout.fileno(), "dbus-daemon") if bus.stdout else ""
         if not address:
             raise Failed("setup", "dbus-daemon did not start")
         self.env["DBUS_SESSION_BUS_ADDRESS"] = address

@@ -1,5 +1,6 @@
 import asyncio
 import io
+import os
 import re
 import subprocess
 import sys
@@ -250,3 +251,21 @@ def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         asyncio.run(keyboard.press((parse_gesture("Tab"),), 0, 1))
     with pytest.raises(OrcaNotConnected):
         orca.write_key(KEYS["tab"], pressed=True)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="select takes no pipes on Windows")
+@pytest.mark.parametrize(("printed", "line"), [(b"12\nmore\n", "12"), (b"12", None), (b"", None)])
+def test_a_child_that_never_prints_its_first_line_fails_setup(
+    printed: bytes, line: str | None
+) -> None:
+    read, write = os.pipe()
+    try:
+        os.write(write, printed)
+        if line is None:
+            with pytest.raises(helper.Failed, match="Xvfb did not start"):
+                helper.first_line(read, "Xvfb", 0.2)
+        else:
+            assert helper.first_line(read, "Xvfb", 0.2) == line
+    finally:
+        os.close(read)
+        os.close(write)
