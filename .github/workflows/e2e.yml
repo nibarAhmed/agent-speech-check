@@ -44,6 +44,16 @@ jobs:
           "ASC_E2E_NVDA=$nvda" >> $env:GITHUB_ENV
           "ASC_E2E_OUT=$out" >> $env:GITHUB_ENV
           "ASC_E2E_INSTALLER=$installer" >> $env:GITHUB_ENV
+      # Remote mode's other machine is this one, as in the Orca job: the same sshd setup the
+      # sandbox runs (scripts/windows_sshd.py).
+      - name: Let the runner ssh to localhost with a key
+        shell: pwsh
+        run: |
+          $zip = uv run python scripts/windows_sshd.py download "$env:RUNNER_TEMP"
+          if ($LASTEXITCODE -ne 0) { throw "download exit $LASTEXITCODE" }
+          uv run python scripts/windows_sshd.py install $zip
+          if ($LASTEXITCODE -ne 0) { throw "install exit $LASTEXITCODE" }
+          "ASC_E2E_SSH=localhost" >> $env:GITHUB_ENV
       # A step timeout, under the job's, so a hang still fails here and uploads the log.
       - name: e2e tests
         timeout-minutes: 20
@@ -70,7 +80,10 @@ jobs:
     timeout-minutes: 20
     # The newest Ubuntu, for Orca 51 or later (26.04 LTS has 50). When its support
     # ends, move to the next release.
-    container: ubuntu:26.10@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2
+    container:
+      image: ubuntu:26.10@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2
+      # An init reaps the Orca the watch test restarts: Orca counts a zombie Orca as running.
+      options: --init
     steps:
       - name: Install Orca and what asc runs with it
         env:

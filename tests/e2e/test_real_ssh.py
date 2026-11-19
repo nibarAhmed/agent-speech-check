@@ -1,5 +1,6 @@
 """Remote mode through a real ssh tunnel. They skip unless ASC_E2E_SSH names an ssh
-destination whose 127.0.0.1 is this machine, as e2e.yml's Orca job does with root@localhost.
+destination whose 127.0.0.1 is this machine, as e2e.yml does (root@localhost in its Orca job,
+localhost on Windows).
 A fake NVDA stands in for the one on the other machine.
 """
 
@@ -30,7 +31,7 @@ def tunnels(env: Env) -> list[int]:
     """The ssh processes this test's daemon runs."""
     folder = env.folder("remote", INSTANCE)
     pid = json.loads((folder / state.FILE).read_text(encoding="utf-8"))["pid"]
-    return [p.pid for p in psutil.Process(pid).children() if p.name() == "ssh"]
+    return [p.pid for p in psutil.Process(pid).children() if p.name() in ("ssh", "ssh.exe")]
 
 
 def is_free(port: int) -> bool:

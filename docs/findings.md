@@ -169,7 +169,8 @@ is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same ki
 - **Xvfb resets when its last client disconnects**, which drops any focus or keymap a client
   set, so it runs with `-noreset`.
 - **One Orca per user.** Orca refuses to start while another Orca runs as the same user
-  (`pgrep -u <uid> -x orca`). `orca --replace` ends the other one, so only the user runs it.
+  (`pgrep -u <uid> -x orca`), a zombie too: a container needs an init (`docker run --init`) to
+  reap an Orca it inherits. `orca --replace` ends the other one, so only the user runs it.
 - **The recording secret comes only from Orca's startup environment**
   (`ORCA_TEST_RPC_SECRET`). Orca zeroes its own `/proc/PID/environ`, so no one can read the
   secret off a running Orca. A wrong secret gets
@@ -186,6 +187,10 @@ is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same ki
 Remote mode with `os = "windows"`: Windows' OpenSSH client (`C:\Windows\System32\OpenSSH`) and
 Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
 
+- **Windows' sshd.** Win32-OpenSSH 10.4's sshd, in Windows Sandbox (`scripts/windows_sshd.py`),
+  carries the tunnel as Ubuntu's does: a real NVDA joins through it. For an administrator it
+  reads only `%ProgramData%\ssh\administrators_authorized_keys`, and only if no one but
+  Administrators and SYSTEM can write that file. Windows Sandbox has no ssh client of its own.
 - **When the tunnel is up.** With `-v`, ssh prints
   `debug1: remote forward success for: listen 127.0.0.1:PORT, connect ...` once the other side
   listens. Before that line, nothing on the other machine can reach the relay yet.

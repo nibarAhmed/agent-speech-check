@@ -46,8 +46,11 @@ def insert_held() -> bool:
     return bool(ctypes.windll.user32.GetAsyncKeyState(0x2D) & 0x8000)
 
 
-def wait_connected(timeout_s: float = 90) -> None:
-    connected = poll_until(lambda: "nvda: connected" in run_asc("status").stdout, timeout_s, 1)
+def wait_connected(*status_args: str, timeout_s: float = 90) -> None:
+    def connected_now() -> bool:
+        return "nvda: connected" in run_asc("status", *status_args).stdout
+
+    connected = poll_until(connected_now, timeout_s, 1)
     assert connected, "NVDA did not connect"
 
 
@@ -104,6 +107,47 @@ def test_real_nvda_joins_speaks_and_releases() -> None:
     pressed = run_asc("press", "NVDA+T", "--settle", "800")
     assert pressed.returncode == 0, pressed.stderr
     assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
+    assert not insert_held()
+
+
+@pytest.mark.skipif("ASC_E2E_SSH" not in os.environ, reason="needs ASC_E2E_SSH")
+def test_remote_nvda_joins_through_the_tunnel(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A VM's NVDA as SKILL.md sets one up, from `asc status --nvda-ini`. The VM is this
+    machine, reached over ssh as ASC_E2E_SSH says."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    instance = ("--instance", "e2e-nvda-ssh")
+    home = tmp_path / "agent-speech-check" / "instances" / instance[1]
+    home.mkdir(parents=True)
+    remote = (
+        f"[remote]\nos = 'windows'\nssh = '{os.environ['ASC_E2E_SSH']}'\nport = {free_port()}\n"
+    )
+    (home / "config.toml").write_text(remote, encoding="utf-8")
+    started = run_asc("start", "--mode", "remote", *instance)
+    assert started.returncode == 0, started.stderr
+    try:
+        config = tmp_path / "nvda_config"
+        config.mkdir()
+        ini = run_asc("status", "--nvda-ini", *instance)
+        assert ini.returncode == 0, ini.stderr
+        (config / "nvda.ini").write_text(ini.stdout, encoding="utf-8")
+        nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
+        log = nvda_log(request, tmp_path)
+        process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
+            [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
+        )
+        try:
+            wait_connected(*instance)
+            pressed = run_asc("press", "NVDA+T", "--settle", "800", *instance)
+            assert pressed.returncode == 0, pressed.stderr
+            assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
+        finally:
+            process.kill()
+            process.wait(30)
+    finally:
+        stopped = run_asc("stop", *instance)
+    assert stopped.returncode == 0, stopped.stderr
     assert not insert_held()
 
 
