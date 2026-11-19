@@ -139,7 +139,7 @@ disable_error_code = ["attr-defined"]
 # ---------------------------------------------------------------- vulture
 
 [tool.vulture]
-paths = ["src", "vulture_whitelist.py"]
+paths = ["src"]
 min_confidence = 60
 # Used, but not in a way vulture can see.
 ignore_names = [
