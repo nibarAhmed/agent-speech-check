@@ -208,7 +208,7 @@ def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
         nvda_ini({**status, "mode": "watch"})
 
 
-def test_status_says_why_the_tunnel_is_down(capsys: pytest.CaptureFixture[str]) -> None:
+def test_status_lines(capsys: pytest.CaptureFixture[str]) -> None:
     status = {
         "mode": "remote",
         "keys": True,
@@ -225,22 +225,7 @@ def test_status_says_why_the_tunnel_is_down(capsys: pytest.CaptureFixture[str]) 
     _show_status(status)
     said = "over ssh: me@vm, tunnel down (ssh me@vm failed: Host key verification failed.)\n"
     assert said in capsys.readouterr().out
-
-
-def test_status_shows_orcas_browse_or_focus_mode(capsys: pytest.CaptureFixture[str]) -> None:
-    status = {
-        "mode": "desktop",
-        "keys": True,
-        "reader": "orca",
-        "ssh": None,
-        "connected": True,
-        "port": None,
-        "browse_focus": "browse",
-        "lines": 0,
-        "latest": 0,
-        "last_error": None,
-    }
-    _show_status(status)
+    _show_status({**status, "reader": "orca", "browse_focus": "browse"})
     assert "browse/focus: browse\n" in capsys.readouterr().out
 
 

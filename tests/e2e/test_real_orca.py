@@ -49,8 +49,12 @@ def left_running() -> list[str]:
     # Zombies don't count: a container's first process may never reap them.
     return [
         p.info["name"]
-        for p in psutil.process_iter(["name", "status", "cmdline"])
-        if (p.info["name"] in STARTED or p.info["cmdline"] == ["sleep", "3601"])
+        for p in psutil.process_iter(["name", "status", "cmdline", "exe"])
+        if (
+            p.info["name"] in STARTED
+            or p.info["cmdline"] == ["sleep", "3601"]
+            or (p.info["exe"] or "").startswith("/usr/lib/firefox/")
+        )
         and p.info["status"] != psutil.STATUS_ZOMBIE
     ]
 
@@ -116,15 +120,6 @@ user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
 """
 
 
-def firefox_running() -> list[str]:
-    return [
-        p.info["name"]
-        for p in psutil.process_iter(["name", "status", "exe"])
-        if (p.info["exe"] or "").startswith("/usr/lib/firefox/")
-        and p.info["status"] != psutil.STATUS_ZOMBIE
-    ]
-
-
 def test_orca_browses_a_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     profile = tmp_path / "profile"
@@ -133,7 +128,6 @@ def test_orca_browses_a_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     page = tmp_path / "page.html"
     page.write_text(PAGE, encoding="utf-8")
     assert not left_running()
-    assert not firefox_running()
     started = run_asc("start")
     assert started.returncode == 0, started.stderr
     try:
@@ -149,9 +143,8 @@ def test_orca_browses_a_page(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     finally:
         stopped = run_asc("stop")
     assert stopped.returncode == 0, stopped.stderr
-    assert wait_until(lambda: not (left_running() or firefox_running() or left_folders())), (
+    assert wait_until(lambda: not left_running() and not left_folders()), (
         left_running(),
-        firefox_running(),
         left_folders(),
     )
 
