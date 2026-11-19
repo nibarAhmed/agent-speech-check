@@ -27,6 +27,7 @@ from typing import IO, Any
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon import ipc, state
+from agent_speech_check.daemon.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
@@ -41,16 +42,14 @@ from agent_speech_check.errors import (
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
 from agent_speech_check.inputs.keys import Gesture, Hotkey, text_gestures, typed_gestures
-from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.nvda import launcher, nvda_config, relay
+from agent_speech_check.nvda.relay import Relay
 from agent_speech_check.orca.link import OrcaLink, watch_secret
-from agent_speech_check.remote import relay
-from agent_speech_check.remote.relay import Relay
-from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
-from agent_speech_check.remote.ssh import Tunnel
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.system import winapi
 from agent_speech_check.system.paths import mode_dir, relay_dir, state_root
+from agent_speech_check.system.ssh import Tunnel
 
 if sys.platform != "win32":
     import fcntl

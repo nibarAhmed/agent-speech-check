@@ -1,1 +1,1 @@
-"""The NVDA that `asc` launches: getting it, its `nvda.ini`, and its key reference."""
+"""NVDA: launching it, its `nvda.ini`, its key reference, and the Remote Access relay it joins."""

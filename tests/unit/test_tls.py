@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.remote import relay
+from agent_speech_check.nvda import relay
 from agent_speech_check.system import tls
 
 

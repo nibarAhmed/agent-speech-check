@@ -18,7 +18,7 @@ import pytest
 from tests.fake_nvda import FakeNvda, Reply
 
 from agent_speech_check.daemon import session, state
-from agent_speech_check.remote.relay import fingerprint
+from agent_speech_check.nvda.relay import fingerprint
 from agent_speech_check.system import spawn
 from agent_speech_check.system.wait import poll_until
 

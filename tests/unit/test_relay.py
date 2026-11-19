@@ -11,14 +11,14 @@ from types import TracebackType
 import pytest
 from cryptography.hazmat.primitives import serialization
 
+from agent_speech_check.daemon.speech_log import SpeechLog
 from agent_speech_check.errors import (
     ProtocolError,
     RelayFileBroken,
     ServerSentError,
     SetupNeeded,
 )
-from agent_speech_check.remote import relay
-from agent_speech_check.remote.speech_log import SpeechLog
+from agent_speech_check.nvda import relay
 
 
 def _client_context() -> ssl.SSLContext:

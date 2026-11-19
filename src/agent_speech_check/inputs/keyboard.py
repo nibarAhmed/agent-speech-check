@@ -22,9 +22,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from agent_speech_check.config.targets import Target
+from agent_speech_check.daemon.speech_log import Since, SpeechLog
 from agent_speech_check.errors import KeysBusy, KeysRefused, NvdaNotConnected
 from agent_speech_check.inputs.keys import Gesture, Key
-from agent_speech_check.remote.speech_log import Since, SpeechLog
 
 
 class Link(Protocol):

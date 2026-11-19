@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.config.targets import Target
+from agent_speech_check.daemon.speech_log import SpeechLog
 from agent_speech_check.errors import (
     OrcaBusy,
     OrcaHelpNotFound,
@@ -32,7 +33,6 @@ from agent_speech_check.orca.link import (
     keysym,
     parse_message,
 )
-from agent_speech_check.remote.speech_log import SpeechLog
 
 
 @pytest.mark.parametrize(

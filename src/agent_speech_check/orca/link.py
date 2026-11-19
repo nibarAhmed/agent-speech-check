@@ -23,6 +23,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from agent_speech_check.daemon.speech_log import SpeechLog
 from agent_speech_check.errors import (
     AscError,
     FileUnusable,
@@ -39,9 +40,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.orca import helper
-from agent_speech_check.remote import ssh
-from agent_speech_check.remote.speech_log import SpeechLog
-from agent_speech_check.system import paths
+from agent_speech_check.system import paths, ssh
 from agent_speech_check.validate import Fields
 
 log = logging.getLogger(__name__)

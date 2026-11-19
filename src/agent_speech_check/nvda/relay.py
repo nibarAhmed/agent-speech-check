@@ -30,6 +30,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
+from agent_speech_check.daemon.speech_log import SpeechLog
 from agent_speech_check.errors import (
     AscError,
     FileUnusable,
@@ -43,8 +44,7 @@ from agent_speech_check.errors import (
     RelayKeyBroken,
 )
 from agent_speech_check.inputs.keys import Key
-from agent_speech_check.remote import protocol
-from agent_speech_check.remote.speech_log import SpeechLog
+from agent_speech_check.nvda import protocol
 from agent_speech_check.system.paths import write_atomic
 from agent_speech_check.validate import Fields
 
