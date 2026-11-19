@@ -939,7 +939,7 @@ examples:
         "type text and print what NVDA said",
         """\
 Type TEXT one character at a time, using this computer's keyboard layout
-(Orca: any character).
+(Orca: each character as itself).
 Every character is checked first; if any can't be typed, nothing is (exit 2).
 NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
 Prints the new speech numbered like press, or (nothing said after N).
