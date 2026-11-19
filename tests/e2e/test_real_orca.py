@@ -262,8 +262,25 @@ def test_watch_hears_your_own_orca(tmp_path: Path, desktop: list[psutil.Process]
     assert apps
 
 
-def test_keys_reads_orcas_own_help() -> None:
+@pytest.mark.parametrize("over_ssh", [False, True], ids=["here", "over ssh"])
+def test_keys_reads_orcas_own_help(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, over_ssh: bool
+) -> None:
+    if over_ssh:
+        destination = os.environ.get("ASC_E2E_SSH")
+        if not destination:
+            pytest.skip("needs ASC_E2E_SSH")
+        monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+        monkeypatch.setenv("ASC_INSTANCE", "e2e-orca-keys")
+        home = tmp_path / "state" / "agent-speech-check" / "instances" / "e2e-orca-keys"
+        home.mkdir(parents=True)
+        remote = f'mode = "remote"\n[remote]\nos = "linux"\nssh = "{destination}"\n'
+        (home / "config.toml").write_text(remote, encoding="utf-8")
+        # Only the other machine's help, which ssh reads with its own environment.
+        monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
     found = run_asc("keys", "browse", "mode")
-    assert "Orca+A  Switch between browse mode and focus mode" in found.stdout.splitlines()
+    assert "Orca+A  Switch between browse mode and focus mode" in found.stdout.splitlines(), (
+        found.stderr
+    )
     laptop = run_asc("keys", "--layout", "laptop", "title", "bar")
     assert laptop.stdout.splitlines() == ["Orca+Slash  Present the title bar"], laptop.stderr

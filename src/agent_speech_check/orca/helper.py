@@ -7,13 +7,14 @@ writes no file but a temporary folder, removed when it ends.
 
 Over stdin and stdout, one JSON object per line. In:
 - first `{}`, or `{"watch": "SECRET"}`: the secret the user's Orca was started with
+- or first `{"help": "fr"}`: `asc keys`, answered by `{"help": {PATH: PAGE}}` or `failed`
 - `{"key": "Insert", "down": true, "id": 1}`: an X keysym through xdotool; `id` asks for `done`
 - `{"launch": "gedit --new-window", "id": 2}`: start an app on the display
 Out:
 - `{"ready": "51.1"}`: Orca runs and its speech comes next
 - `{"record": {...}}`: one line of Orca's speech recording
 - `{"done": 1}`, or `{"done": 2, "error": "..."}`
-- `{"failed": "setup", "busy" or "watch", "reason": "..."}`, then it exits
+- `{"failed": "setup", "busy", "watch" or "help", "reason": "..."}`, then it exits
 
 Stdin closing, SIGTERM or SIGHUP ends it, and everything it started with it.
 """
@@ -96,6 +97,27 @@ class Failed(Exception):
         super().__init__(reason)
         self.kind = kind
         self.reason = reason
+
+
+def help_pages(lang: str) -> dict[str, str]:
+    """Orca's command pages in its help, by path: in `lang`, else in English (`C`)."""
+    looked: list[str] = []
+    variable = os.environ.get("XDG_DATA_DIRS") or os.pathsep.join(
+        ("/usr/local/share", "/usr/share")
+    )
+    bases = [base for base in variable.split(os.pathsep) if base]
+    for language in dict.fromkeys((lang, "C")):
+        for base in bases:
+            folder = Path(base) / "help" / language / "orca"
+            # Ubuntu links a language's pages into its language pack, which may be missing.
+            pages = sorted(p for p in folder.glob("commands_*.page") if p.is_file())
+            try:
+                if pages:
+                    return {str(p): p.read_text(encoding="utf-8", errors="replace") for p in pages}
+            except OSError as error:
+                raise Failed("help", f"cannot read Orca's help in {folder}: {error}") from None
+            looked.append(str(folder))
+    raise Failed("help", f"Orca's help not found. Looked in: {'; '.join(looked)}")
 
 
 class Output:
@@ -433,6 +455,12 @@ def main() -> None:
     signal.signal(signal.SIGHUP, _stop)
     out = Output(sys.stdout.buffer)
     first = json.loads(sys.stdin.buffer.readline() or b"{}")
+    if "help" in first:
+        try:
+            out.send({"help": help_pages(first["help"])})
+        except Failed as failed:
+            out.send({"failed": failed.kind, "reason": failed.reason})
+        return
     session = Session(out, first.get("watch"))
     try:
         try:

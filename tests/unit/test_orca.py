@@ -10,6 +10,7 @@ import pytest
 from agent_speech_check.config.targets import Target
 from agent_speech_check.errors import (
     OrcaBusy,
+    OrcaHelpNotFound,
     OrcaNotConnected,
     OrcaNotWatchable,
     OrcaSetupNeeded,
@@ -23,6 +24,7 @@ from agent_speech_check.orca import helper, link
 from agent_speech_check.orca.link import (
     Done,
     Failed,
+    Help,
     OrcaLink,
     Ready,
     Record,
@@ -88,10 +90,10 @@ def test_helper_command_local_and_over_ssh() -> None:
 
 
 def test_payload_is_what_the_bootstrap_reads() -> None:
-    length, rest = link.payload("s3cret").split(b"\n", 1)
+    length, rest = link.payload({"watch": "s3cret"}).split(b"\n", 1)
     assert rest[: int(length)] == Path(helper.__file__).read_bytes()
     assert rest[int(length) :] == b'{"watch": "s3cret"}\n'
-    assert link.payload(None).endswith(b"\n{}\n")
+    assert link.payload({}).endswith(b"\n{}\n")
 
 
 @pytest.mark.parametrize(
@@ -107,6 +109,8 @@ def test_payload_is_what_the_bootstrap_reads() -> None:
         (b'{"failed": "setup", "reason": "missing xdotool"}', OrcaSetupNeeded),
         (b'{"failed": "busy", "reason": "Orca runs"}', OrcaBusy),
         (b'{"failed": "watch", "reason": "no secret"}', OrcaNotWatchable),
+        (b'{"failed": "help", "reason": "not found"}', OrcaHelpNotFound),
+        (b'{"help": {"/a/commands_a.page": ""}}', Help({"/a/commands_a.page": ""})),
     ],
 )
 def test_helper_messages(line: bytes, message: object) -> None:
@@ -118,7 +122,9 @@ def test_helper_messages(line: bytes, message: object) -> None:
         assert got == message
 
 
-@pytest.mark.parametrize("line", [b"not json", b"[]", b'{"done": "x"}', b'{"failed": "why"}'])
+@pytest.mark.parametrize(
+    "line", [b"not json", b"[]", b'{"done": "x"}', b'{"failed": "why"}', b'{"help": {"/a": 1}}']
+)
 def test_bad_helper_messages(line: bytes) -> None:
     with pytest.raises(ProtocolError):
         parse_message(line)

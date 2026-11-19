@@ -496,9 +496,9 @@ def cmd_keys(args: argparse.Namespace) -> int:
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
     target = _target(args, _with_defaults(args, {"layout": "keys_layout"}))
     if target.orca:
-        commands = orca_keyref.commands(args.lang)
-    elif sys.platform != "win32":
-        raise WindowsOnlyCommand(args.command)
+        commands = orca_keyref.commands(args.lang, target.ssh)
+    elif target.ssh is not None:
+        commands = keyref.parse(keyref.remote_reference(target.ssh, args.lang))
     else:
         nvda_dirs, hint = _nvda_dirs(target)
         path = keyref.reference(nvda_dirs, args.lang, hint)
@@ -956,7 +956,7 @@ SEARCH word, one per line: KEY  NAME: DESCRIPTION. Needs no running asc.
 For NVDA, from its Commands Quick Reference: the portable copy in desktop
 mode, or in sandbox mode with nvda_dir, otherwise your own NVDA (the
 running nvda.exe, the uninstall registry entry, Program Files). For Orca,
-from its help on this machine (/usr/share/help).
+from its help (/usr/share/help). Remote mode reads the other machine's.
 In browse mode, single letters jump to elements; add Shift to go back.
 
 examples:

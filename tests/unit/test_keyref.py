@@ -8,6 +8,7 @@ import pytest
 
 from agent_speech_check.errors import FileUnusable, NvdaNotFound, OrcaHelpNotFound
 from agent_speech_check.nvda import keyref
+from agent_speech_check.orca import helper
 from agent_speech_check.orca import keyref as orca_keyref
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
@@ -171,10 +172,10 @@ def test_orca_help_in_the_language_falls_back_to_c(
     monkeypatch.setenv(
         "XDG_DATA_DIRS", os.pathsep.join(("", str(tmp_path / "x"), str(tmp_path / "share")))
     )
-    assert orca_keyref.pages("fr") == [help_dir / "fr" / "orca" / "commands_a.page"]
-    assert orca_keyref.pages("de") == [help_dir / "C" / "orca" / "commands_a.page"]
+    assert helper.help_pages("fr") == {str(help_dir / "fr" / "orca" / "commands_a.page"): ""}
+    assert helper.help_pages("de") == {str(help_dir / "C" / "orca" / "commands_a.page"): ""}
     with pytest.raises(FileUnusable) as exc:
-        orca_keyref.commands("fr")
+        orca_keyref.commands("fr", None)
     assert str(help_dir / "fr" / "orca" / "commands_a.page") in exc.value.message
 
 
@@ -183,6 +184,6 @@ def test_orca_help_not_found_says_where_it_looked(
 ) -> None:
     monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
     with pytest.raises(OrcaHelpNotFound) as exc:
-        orca_keyref.pages("en")
+        orca_keyref.commands("en", None)
     assert str(tmp_path / "help" / "C" / "orca") in exc.value.message
     assert exc.value.exit_code == 7

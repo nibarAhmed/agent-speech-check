@@ -1,5 +1,6 @@
-"""ssh as remote mode runs it: the tunnel NVDA connects back through, and what Orca's
-helper shares. ssh's stderr stays in memory: it is shown in an error, never logged."""
+"""ssh as remote mode runs it: the tunnel NVDA connects back through, what Orca's
+helper shares, and one-off commands like `asc keys`. ssh's stderr stays in memory:
+it is shown in an error, never logged."""
 
 from __future__ import annotations
 
@@ -42,6 +43,7 @@ _CHATTER = ("OpenSSH", "Authenticated to", "Transferred:", "Bytes per second:")
 # Only `-v` says when the other machine listens: this debug line.
 _FORWARDED = "remote forward success for: listen"
 _FORWARD_FAILED = "remote port forwarding failed"
+RUN_TIMEOUT_S = 60.0
 RETRY_FIRST_S = 1.0
 RETRY_MAX_S = 30.0
 
@@ -57,11 +59,37 @@ def tunnel_command(destination: str, port: int, local_port: int) -> list[str]:
 
 def failed(destination: str, lines: Sequence[str], code: int) -> AscError:
     """Why ssh exited with `code`, from its last lines of stderr."""
-    said = [line for line in lines if not line.startswith(_CHATTER)]
-    detail = said[-1] if said else f"exit code {code}"
+    detail = last_said(lines, code)
     if any(sign in line for line in lines for sign in _SETUP):
         return SshSetupNeeded(destination, detail)
     return SshFailed(destination, detail)
+
+
+def last_said(lines: Sequence[str], code: int) -> str:
+    said = [line for line in lines if not line.startswith(_CHATTER)]
+    return said[-1] if said else f"exit code {code}"
+
+
+def run(destination: str, remote: str, data: bytes = b"") -> tuple[int, bytes, str]:
+    """Run the command line `remote` there, with `data` as its stdin: its exit code, its
+    stdout, and the last line of its stderr. ssh's own failure raises."""
+    try:
+        done = subprocess.run(  # noqa: S603 - ssh, to the user's own destination
+            [*command(destination, "-T"), remote],
+            input=data,
+            capture_output=True,
+            check=False,
+            timeout=RUN_TIMEOUT_S,
+        )
+    except OSError as error:
+        raise SshMissing(error.strerror or str(error)) from None
+    except subprocess.TimeoutExpired:
+        raise SshFailed(destination, f"no answer in {RUN_TIMEOUT_S:.0f} s") from None
+    stderr = done.stderr.decode(errors="replace").splitlines()[-STDERR_LINES:]
+    lines = [line.rstrip()[:500] for line in stderr]
+    if done.returncode == FAILED:
+        raise failed(destination, lines, FAILED)
+    return done.returncode, done.stdout, last_said(lines, done.returncode)
 
 
 async def stderr_lines(stderr: asyncio.StreamReader) -> AsyncIterator[str]:

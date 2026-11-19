@@ -210,8 +210,7 @@ key. It needs no audio device: `asc` records what Orca would say.
   another Orca, your own included. Use watch mode to hear your own, or another
   account for `asc` (remote mode with `ssh = "asc@localhost"`).
 - Gestures use NVDA's names: `NVDA+T` and `Orca+T` both press Insert, Orca's
-  desktop modifier. `asc keys` reads only NVDA's reference, so it exits 2 on
-  Linux.
+  desktop modifier.
 - `asc type` sends each character as itself, so no keyboard layout is
   involved.
 - `asc launch CMD` starts `CMD` on that display, split into words as a shell
@@ -696,12 +695,12 @@ H and Shift+H  Next and previous heading
 - For NVDA it reads `documentation\<lang>\keyCommands.html` from the mode's
   portable NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA
   (the running `nvda.exe`, the uninstall registry entry, then Program Files).
-- For Orca (on Linux, or remote mode with `os = "linux"`) it reads Orca's
-  help on this machine, `help/<lang>/orca/commands_*.page` in each of
-  `$XDG_DATA_DIRS` (`/usr/local/share` and `/usr/share`), falling back to
-  English. Remote mode reads none from the other machine: run `asc keys` there.
-- If no reference is found it exits 7 and says where it looked. On Linux,
-  NVDA's reference can't be read: it exits 2.
+- For Orca it reads Orca's help, `help/<lang>/orca/commands_*.page` in each
+  of `$XDG_DATA_DIRS` (`/usr/local/share` and `/usr/share`), falling back to
+  English.
+- Remote mode reads the reference on the other machine over ssh: NVDA's,
+  found the same way, with `os = "windows"`, Orca's with `os = "linux"`.
+- If no reference is found it exits 7 and says where it looked.
 - Single letter navigation keys (`h  heading`) work in browse mode; add Shift
   to go back.
 

@@ -6,47 +6,27 @@ list of `Desktop: keys` and `Laptop: keys`. Keys are printed in asc's names.
 
 from __future__ import annotations
 
-import os
 from dataclasses import replace
-from pathlib import Path
 from xml.etree import ElementTree
 
-from agent_speech_check.errors import FileUnusable, OrcaHelpNotFound, UnknownKey
+from agent_speech_check.errors import FileUnusable, UnknownKey
 from agent_speech_check.inputs import keys
 from agent_speech_check.nvda.keyref import Command
+from agent_speech_check.orca import link
 
 _NS = "{http://projectmallard.org/1.0/}"
 _CLICKS = {"(double-clicked)": "twice", "(triple-clicked)": "three times"}
-_DATA_DIRS = os.pathsep.join(("/usr/local/share", "/usr/share"))
 
 
-def commands(lang: str) -> list[Command]:
-    """The commands on Orca's pages in `lang`, else in English."""
+def commands(lang: str, destination: str | None) -> list[Command]:
+    """The commands on Orca's pages in `lang`, else in English, here or on `destination`."""
     found: list[Command] = []
-    for page in pages(lang):
+    for path, page in link.help_pages(destination, lang).items():
         try:
-            found += parse(page.read_text(encoding="utf-8"))
-        except OSError as error:
-            raise FileUnusable.from_os(page, error) from None
-        except (UnicodeDecodeError, ElementTree.ParseError) as error:
-            raise FileUnusable(str(page), f"not Orca's help ({error})") from None
+            found += parse(page)
+        except ElementTree.ParseError as error:
+            raise FileUnusable(path, f"not Orca's help ({error})") from None
     return found
-
-
-def pages(lang: str) -> list[Path]:
-    """Orca's command pages in `lang`, else in English (`C`)."""
-    looked: list[str] = []
-    variable = os.environ.get("XDG_DATA_DIRS") or _DATA_DIRS
-    bases = [base for base in variable.split(os.pathsep) if base]
-    for language in dict.fromkeys((lang, "C")):
-        for base in bases:
-            folder = Path(base) / "help" / language / "orca"
-            # Ubuntu links a language's pages into its language pack, which may be missing.
-            found = sorted(p for p in folder.glob("commands_*.page") if p.is_file())
-            if found:
-                return found
-            looked.append(str(folder))
-    raise OrcaHelpNotFound(looked)
 
 
 def parse(page: str) -> list[Command]:

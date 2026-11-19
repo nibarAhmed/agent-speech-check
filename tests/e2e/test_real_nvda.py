@@ -140,6 +140,9 @@ def test_remote_nvda_joins_through_the_tunnel(
             pressed = run_asc("press", "NVDA+T", "--settle", "800", *instance)
             assert pressed.returncode == 0, pressed.stderr
             assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
+            # The VM's running NVDA's reference: this one has no other.
+            keys = run_asc("keys", "report", "title", "--mode", "remote", *instance)
+            assert keys.stdout.startswith("NVDA+t  Report title"), keys.stdout + keys.stderr
         finally:
             process.kill()
             process.wait(30)

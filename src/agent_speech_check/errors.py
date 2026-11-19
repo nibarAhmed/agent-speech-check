@@ -284,10 +284,15 @@ class NvdaNotFound(SetupNeeded):
 
 
 class OrcaHelpNotFound(SetupNeeded):
-    def __init__(self, looked: Sequence[str]) -> None:
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason, hint="install Orca on the machine it reads")
+
+
+class RemoteCommandFailed(SetupNeeded):
+    def __init__(self, destination: str, program: str, detail: str) -> None:
         super().__init__(
-            f"Orca's help not found. Looked in: {'; '.join(looked)}",
-            hint="install Orca, or run asc keys where Orca runs",
+            f"{program} on {destination} failed: {detail}",
+            hint=f"check that {program} runs there, as asc runs it over ssh",
         )
 
 

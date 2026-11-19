@@ -28,10 +28,12 @@ from agent_speech_check.errors import (
     FileUnusable,
     LaunchFailed,
     OrcaBusy,
+    OrcaHelpNotFound,
     OrcaNotConnected,
     OrcaNotWatchable,
     OrcaSetupNeeded,
     ProtocolError,
+    RemoteCommandFailed,
     SshMissing,
     bad_field,
 )
@@ -130,10 +132,26 @@ def helper_command(destination: str | None) -> list[str]:
     return [*ssh.command(destination, "-T"), shlex.join(command)]
 
 
-def payload(watch: str | None) -> bytes:
-    """The helper, then its first line: in watch mode, the secret the user's Orca runs with."""
-    start = {} if watch is None else {"watch": watch}
+def payload(start: dict[str, str]) -> bytes:
+    """The helper, then its first line."""
     return b"%d\n" % len(_HELPER) + _HELPER + json.dumps(start).encode() + b"\n"
+
+
+def help_pages(destination: str | None, lang: str) -> dict[str, str]:
+    """Orca's command pages by path, from its help here or on `destination`."""
+    if destination is None:
+        try:
+            return helper.help_pages(lang)
+        except helper.Failed as failed:
+            raise OrcaHelpNotFound(failed.reason) from None
+    remote = shlex.join(helper_command(None))
+    _, out, detail = ssh.run(destination, remote, payload({"help": lang}))
+    message = parse_message(out.splitlines()[-1]) if out.strip() else None
+    if isinstance(message, Help):
+        return message.pages
+    if isinstance(message, Failed):
+        raise message.error
+    raise RemoteCommandFailed(destination, "python3", detail)
 
 
 def watch_secret_file() -> Path:
@@ -185,7 +203,12 @@ class Failed:
     error: AscError
 
 
-type Message = Ready | Record | Done | Failed
+@dataclass(frozen=True)
+class Help:
+    pages: dict[str, str]
+
+
+type Message = Ready | Record | Done | Failed | Help
 
 
 def parse_message(line: bytes) -> Message | None:
@@ -200,29 +223,40 @@ def parse_message(line: bytes) -> Message | None:
     if f.has("ready"):
         return Ready(f.text("ready", max_len=100))
     if f.has("record"):
-        # Orca wrote it, not the helper: like NVDA's relay, skip what this asc can't read.
-        try:
-            record = Fields(raw["record"], f"{where} record", ProtocolError)
-            kind = record.text("kind", max_len=100)
-            speech = kind == "speech"
-            text = record.text("text", max_len=MAX_LINE, allow_empty=True) if speech else None
-        except ProtocolError:
-            log.debug("skipped a record of Orca's that this asc can't read")
-            return None
-        return Record(kind, text)
+        return _record(raw["record"])
     if f.has("done"):
         error = f.opt_text("error", max_len=MAX_LINE)
         return Done(f.number("done", low=1, high=2**53), None if error is None else error[:2000])
     if f.has("failed"):
-        kind = f.choice("failed", ("setup", "busy", "watch"))
+        kind = f.choice("failed", ("setup", "busy", "watch", "help"))
         reason = f.text("reason", max_len=2000)
         failure: AscError
-        if kind == "watch":
+        if kind == "help":
+            failure = OrcaHelpNotFound(reason)
+        elif kind == "watch":
             failure = OrcaNotWatchable(reason, restart_command(watch_secret_file()))
         else:
             failure = OrcaSetupNeeded(reason) if kind == "setup" else OrcaBusy(reason)
         return Failed(failure)
+    if f.has("help"):
+        pages = Fields(raw["help"], f"{where} help", ProtocolError)
+        return Help(
+            {path: pages.text(path, max_len=MAX_LINE, allow_empty=True) for path in pages.raw}
+        )
     return None
+
+
+def _record(raw: object) -> Record | None:
+    # Orca wrote it, not the helper: like NVDA's relay, skip what this asc can't read.
+    try:
+        record = Fields(raw, "Orca's helper record", ProtocolError)
+        kind = record.text("kind", max_len=100)
+        speech = kind == "speech"
+        text = record.text("text", max_len=MAX_LINE, allow_empty=True) if speech else None
+    except ProtocolError:
+        log.debug("skipped a record of Orca's that this asc can't read")
+        return None
+    return Record(kind, text)
 
 
 class OrcaLink:
@@ -286,7 +320,7 @@ class OrcaLink:
         stdin, stdout, stderr = _pipes(process)
         self._process, self._stdin = process, stdin
         self._drain = asyncio.create_task(self._keep_stderr(stderr))
-        stdin.write(payload(self.watch))
+        stdin.write(payload({} if self.watch is None else {"watch": self.watch}))
         reason = await self._follow(stdout)
         if reason is not None:
             await self.stop()
@@ -326,7 +360,7 @@ class OrcaLink:
                     future.set_result(error)
             case Failed(error=error):
                 self._fail(error)
-            case None:
+            case Help() | None:
                 pass
 
     def _fail(self, error: AscError) -> None:

@@ -348,5 +348,5 @@ class Config:
         return prefs.BY_NAME[name].default, "default"
 
 
-def load(path: Path, platform: str = sys.platform) -> Config:
-    return Config.from_data(_read(path), path.name, platform)
+def load(path: Path, platform: str | None = None) -> Config:
+    return Config.from_data(_read(path), path.name, platform or sys.platform)

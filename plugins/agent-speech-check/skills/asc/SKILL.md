@@ -92,7 +92,8 @@ commands (Orca's desktop layout, the one asc's own Orca uses):
 | Say the time | `NVDA+F12` | `Orca+T` |
 
 `asc keys WORDS` searches the screen reader's own key reference, as in
-`asc keys browse mode`; add `--layout laptop` for a laptop layout.
+`asc keys browse mode`; add `--layout laptop` for a laptop layout. In remote
+mode it reads the other machine's: pass the same `--instance`.
 
 - Before a key that acts (Enter, Space, `type`), confirm the target: reach it
   with `--expect`, as in `asc press Tab --expect "(?i)send"`, and act only if

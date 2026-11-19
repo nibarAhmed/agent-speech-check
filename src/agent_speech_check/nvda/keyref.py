@@ -15,8 +15,9 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
-from agent_speech_check.errors import NvdaNotFound
-from agent_speech_check.system import winapi
+from agent_speech_check.errors import NvdaNotFound, RemoteCommandFailed
+from agent_speech_check.remote import ssh
+from agent_speech_check.system import powershell, winapi
 
 if sys.platform == "win32":
     import winreg
@@ -183,6 +184,56 @@ def candidates() -> list[tuple[str, Path]]:
         if base:
             found.append((f"%{variable}%", Path(base) / "NVDA"))
     return found
+
+
+_NOT_FOUND = 3
+# `candidates` and `reference`, on the other machine. Raw bytes, so no console encoding.
+# Over a pipe PowerShell writes errors and progress as CLIXML: the trap writes one plain line.
+_REMOTE = r"""$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+$out = [Console]::OpenStandardOutput()
+$dirs = @()
+$nvda = Get-Process nvda -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1
+if ($nvda) { $dirs += , @('the running nvda.exe', (Split-Path $nvda.Path)) }
+foreach ($hive in 'HKLM:', 'HKCU:') {
+    $entry = Get-ItemProperty "$hive\UNINSTALL" -ErrorAction SilentlyContinue
+    if ($entry.InstallLocation) {
+        $dirs += , @('the NVDA uninstall registry entry', $entry.InstallLocation)
+        break
+    }
+}
+foreach ($name in 'ProgramFiles', 'ProgramFiles(x86)') {
+    $base = [Environment]::GetEnvironmentVariable($name)
+    if ($base) { $dirs += , @("%$name%", [IO.Path]::Combine($base, 'NVDA')) }
+}
+foreach ($dir in $dirs) {
+    foreach ($lang in @(LANG_CODE, 'en') | Select-Object -Unique) {
+        $file = [IO.Path]::Combine($dir[1], 'documentation', $lang, 'keyCommands.html')
+        if (Test-Path -LiteralPath $file -PathType Leaf) {
+            $bytes = [IO.File]::ReadAllBytes($file)
+            $out.Write($bytes, 0, $bytes.Length)
+            exit 0
+        }
+    }
+}
+$looked = ($dirs | ForEach-Object { "$($_[0]) ($($_[1]))" }) -join "`n"
+$bytes = [Text.Encoding]::UTF8.GetBytes($looked)
+$out.Write($bytes, 0, $bytes.Length)
+exit NOT_FOUND
+""".replace("UNINSTALL", _UNINSTALL).replace("NOT_FOUND", str(_NOT_FOUND))
+
+
+def remote_reference(destination: str, lang: str) -> str:
+    """keyCommands.html from the NVDA on `destination`, found as `candidates` finds it here."""
+    script = _REMOTE.replace("LANG_CODE", powershell.quote(lang))
+    code, out, detail = ssh.run(destination, powershell.command_line(script))
+    if code == 0:
+        return out.decode("utf-8", errors="replace")
+    if code == _NOT_FOUND:
+        looked = out.decode("utf-8", errors="replace").splitlines()
+        raise NvdaNotFound(looked, f"start NVDA on {destination}")
+    raise RemoteCommandFailed(destination, "powershell", detail)
 
 
 def reference(nvda_dirs: list[tuple[str, Path]], lang: str, hint: str) -> Path:

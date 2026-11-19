@@ -11,7 +11,7 @@ import pytest
 from agent_speech_check import __version__
 from agent_speech_check.cli import COMMANDS, _show_status, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
-from agent_speech_check.errors import NvdaIniOnlyRemote, WindowsOnlyCommand
+from agent_speech_check.errors import NvdaIniOnlyRemote, SshMissing, WindowsOnlyCommand
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -271,23 +271,27 @@ def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.Monk
         assert COMMANDS[name].windows_only
         with pytest.raises(WindowsOnlyCommand):
             run([name])
-    # NVDA's reference is read only on Windows.
+
+
+@pytest.mark.parametrize("os_name", ["windows", "linux"])
+def test_keys_in_remote_mode_reads_the_other_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, os_name: str
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
     config = tmp_path / "agent-speech-check" / "config.toml"
     config.parent.mkdir()
-    config.write_text('[remote]\nos = "windows"\nssh = "me@box"\n', encoding="utf-8")
-    with pytest.raises(WindowsOnlyCommand):
+    config.write_text(f'[remote]\nos = "{os_name}"\nssh = "me@box"\n', encoding="utf-8")
+    with pytest.raises(SshMissing):
         run(["keys", "--mode", "remote"])
 
 
-def test_keys_reads_orcas_help_where_orca_reads(
+def test_keys_reads_orcas_help_on_linux(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
-    config = tmp_path / "agent-speech-check" / "config.toml"
-    config.parent.mkdir()
-    config.write_text('[remote]\nos = "linux"\nssh = "me@box"\n', encoding="utf-8")
     page = tmp_path / "help" / "C" / "orca" / "commands_a.page"
     page.parent.mkdir(parents=True)
     keys = "<keyseq><key>Orca Modifier</key><key>T</key></keyseq>"
@@ -297,5 +301,5 @@ def test_keys_reads_orcas_help_where_orca_reads(
         f"<list>{item}{item}</list></page>",  # Orca's help repeats some commands
         encoding="utf-8",
     )
-    assert run(["keys", "--mode", "remote", "title"]) == 0
+    assert run(["keys", "--mode", "desktop", "title"]) == 0
     assert capsys.readouterr().out == "Orca+T  Present the title\n"
