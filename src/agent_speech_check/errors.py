@@ -15,7 +15,7 @@ import json
 import sys
 from collections.abc import Sequence
 from os import PathLike
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 
 class AscError(Exception):
@@ -221,9 +221,11 @@ class NotRunning(NotConnected):
         super().__init__("asc is not running (not recording)", hint="asc start")
 
 
-class NvdaNotConnected(NotConnected):
-    what = "NVDA is not connected"
-    next_step = "asc status shows how NVDA should connect"
+class ReaderNotConnected(NotConnected):
+    """What each reader's link raises; its subclasses name the reader."""
+
+    what = "the screen reader is not connected"
+    next_step = "asc status says why"
 
     def __init__(self, waited_ms: int | None = None, last_error: str | None = None) -> None:
         waited = "" if waited_ms is None else f" after waiting {waited_ms} ms"
@@ -231,7 +233,12 @@ class NvdaNotConnected(NotConnected):
         super().__init__(f"{self.what}{waited}{why}", hint=self.next_step)
 
 
-class OrcaNotConnected(NvdaNotConnected):
+class NvdaNotConnected(ReaderNotConnected):
+    what = "NVDA is not connected"
+    next_step = "asc status shows how NVDA should connect"
+
+
+class OrcaNotConnected(ReaderNotConnected):
     what = "Orca is not running"
     next_step = "asc status says why; asc stop, then asc start"
 
@@ -557,10 +564,11 @@ class NvdaIniOnlyRemote(Refused):
         super().__init__(message, hint=hint)
 
 
-class NvdaDidNotConnect(NotConnected):
-    def __init__(self, seconds: float, log_tail: str, reader: str = "NVDA") -> None:
+class ReaderDidNotConnect(NotConnected):
+    def __init__(self, seconds: float, log_tail: str, reader: Literal["nvda", "orca"]) -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
-        super().__init__(f"{reader} did not connect within {seconds:g} s, so asc stopped{tail}")
+        name = "Orca" if reader == "orca" else "NVDA"
+        super().__init__(f"{name} did not connect within {seconds:g} s, so asc stopped{tail}")
 
 
 class SandboxBusy(Refused):

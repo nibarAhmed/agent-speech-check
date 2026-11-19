@@ -224,7 +224,7 @@ def test_setup_on_linux_offers_what_orca_runs(
     assert "keyboard layout" not in out
     assert "While it runs" not in out
     target = load(root / "config.toml", platform="linux").resolve(None)
-    assert (target.mode, target.orca) == ("desktop", True)
+    assert (target.mode, target.reader) == ("desktop", "orca")
     monkeypatch.setenv("ASC_INSTANCE", "vm3")
     ask = Asker("", "linux", "me@vm", "y")
     run_setup(ask, replace_without_asking=False, platform="linux")

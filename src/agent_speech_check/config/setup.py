@@ -59,9 +59,10 @@ def modes(*, named: bool, platform: str = sys.platform) -> tuple[Choice, ...]:
     names = tuple(
         target.mode
         for target in targets
-        if (target.mode in ORCA_MODES or not target.orca) and not (named and target.own_reader)
+        if (target.mode in ORCA_MODES or target.reader == "nvda")
+        and not (named and target.own_reader)
     )
-    orca = defaults("desktop", platform=platform).orca
+    orca = defaults("desktop", platform=platform).reader == "orca"
     about = {**_MODE_ABOUT, **_ORCA_ABOUT} if orca else _MODE_ABOUT
     return _choices(names, about, default="remote" if named else default_mode(platform))
 
@@ -200,7 +201,7 @@ def asks(field: str, mode: str, answered: dict[str, Any], platform: str = sys.pl
     """Whether a question of `QUESTIONS` is asked, after the answers before it. NVDA's
     folder and layout aren't asked when Orca reads."""
     nvda_only = field in ("nvda_dir", "keys_layout")
-    return not (nvda_only and defaults(mode, answered.get("os"), platform).orca)
+    return not (nvda_only and defaults(mode, answered.get("os"), platform).reader == "orca")
 
 
 def to_data(answers: Answers) -> dict[str, Any]:

@@ -19,27 +19,48 @@ import re
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon.speech_log import Since, SpeechLog
-from agent_speech_check.errors import KeysBusy, KeysRefused, NvdaNotConnected
+from agent_speech_check.errors import AscError, KeysBusy, KeysRefused, ReaderNotConnected
 from agent_speech_check.inputs.keys import Gesture, Key
 
 
 class Link(Protocol):
-    """What keys go through: the relay NVDA joins, or Orca's helper."""
+    """The screen reader, as keys and the daemon reach it: the relay NVDA joins,
+    or Orca's helper."""
 
     on_join: Callable[[], None]
     losses: list[str | None]
+    last_error: str | None
 
     @property
     def connected(self) -> bool: ...
 
     @property
-    def not_connected(self) -> type[NvdaNotConnected]: ...
+    def not_connected(self) -> type[ReaderNotConnected]: ...
+
+    @property
+    def failure(self) -> AscError | None:
+        """Why the reader never got going, for `asc start` to raise."""
+        ...
 
     def check(self, since: int, *, drop_fails: bool) -> None: ...
+
+    def gestures(self, text: str) -> tuple[Gesture, ...]:
+        """What `asc type` presses to type `text`."""
+        ...
+
+    def status_fields(self) -> dict[str, Any]:
+        """Where NVDA connects, for `asc status`: nothing for Orca."""
+        ...
+
+    async def run(self) -> None:
+        """Follow the reader until cancelled, or until it ends for good."""
+        ...
+
+    async def stop(self) -> None: ...
 
     def write_key(self, key: Key, *, pressed: bool) -> object: ...
 
@@ -126,8 +147,8 @@ class Keyboard:
 
     def _release(self, keys: Iterable[Key]) -> None:
         for key in keys:
-            # NVDA gone: the key stays in `_pressed` and is released on rejoin.
-            with contextlib.suppress(NvdaNotConnected):
+            # The reader gone: the key stays in `_pressed`, released if NVDA rejoins.
+            with contextlib.suppress(self.link.not_connected):
                 self.link.write_key(key, pressed=False)
 
     def joined(self) -> None:

@@ -388,7 +388,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     folder = mode_dir(target.mode)
     status = session.start(target, folder)
     print(f"started: {target.mode}", flush=True)
-    if target.own_reader and not target.orca and config.value("connect")[0]:
+    if target.own_reader and target.reader == "nvda" and config.value("connect")[0]:
         status = _connect_own_reader(folder, status)
     _show_status(status)
     return 0
@@ -493,7 +493,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
     target = _target(args, _with_defaults(args, {"layout": "keys_layout"}))
     check_runnable(target)
-    if target.orca:
+    if target.reader == "orca":
         commands = orca_keyref.commands(args.lang, target.ssh)
     elif target.ssh is not None:
         commands = keyref.parse(keyref.remote_reference(target.ssh, args.lang))

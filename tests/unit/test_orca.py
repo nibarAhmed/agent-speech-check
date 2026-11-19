@@ -220,16 +220,19 @@ def test_a_helper_that_stops_answering_is_a_lost_link(monkeypatch: pytest.Monkey
     hangs = "import sys; sys.stdin.buffer.read()"  # the peer under test never answers
 
     async def scenario() -> OrcaLink:
-        orca = OrcaLink(None, SpeechLog())
+        speech = SpeechLog()
+        orca = OrcaLink(None, speech)
+        keyboard = Keyboard(Target("desktop", 0, launch=False, os="linux"), orca, speech)
         process = await asyncio.create_subprocess_exec(
             sys.executable, "-c", hangs, stdin=subprocess.PIPE
         )
         orca._process, orca._stdin = process, process.stdin
         orca._dispatch(Ready("51.1"))
-        both = orca.send_key(KEYS["tab"], pressed=True), orca.launch("gedit")
+        both = keyboard.press((parse_gesture("Tab"),), 0, 5), orca.launch("gedit")
         lost = await asyncio.gather(*both, return_exceptions=True)
         assert all(isinstance(error, OrcaNotConnected) for error in lost)
         assert not orca.connected  # as asc status says
+        keyboard.release_all()  # the Tab it may still hold, with Orca gone
         orca._ended(await process.wait(), None)
         return orca
 
