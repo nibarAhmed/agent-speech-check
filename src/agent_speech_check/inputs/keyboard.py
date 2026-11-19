@@ -147,7 +147,7 @@ class Keyboard:
 
     def _release(self, keys: Iterable[Key]) -> None:
         for key in keys:
-            # NVDA gone: the key stays in `_pressed` and is released on rejoin.
+            # The reader gone: the key stays in `_pressed`, released if NVDA rejoins.
             with contextlib.suppress(self.link.not_connected):
                 self.link.write_key(key, pressed=False)
 

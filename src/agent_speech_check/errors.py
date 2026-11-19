@@ -15,7 +15,7 @@ import json
 import sys
 from collections.abc import Sequence
 from os import PathLike
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 
 class AscError(Exception):
@@ -565,7 +565,7 @@ class NvdaIniOnlyRemote(Refused):
 
 
 class ReaderDidNotConnect(NotConnected):
-    def __init__(self, seconds: float, log_tail: str, reader: str) -> None:
+    def __init__(self, seconds: float, log_tail: str, reader: Literal["nvda", "orca"]) -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
         name = "Orca" if reader == "orca" else "NVDA"
         super().__init__(f"{name} did not connect within {seconds:g} s, so asc stopped{tail}")

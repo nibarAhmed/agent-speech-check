@@ -184,7 +184,7 @@ class Daemon:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        # NVDA's relay, which the daemon also listens on: nothing listens for Orca.
+        # The relay NVDA joins, which `run` listens on. Nothing listens for Orca.
         self.relay: Relay | None = None
         self.tunnel: Tunnel | None = None
         self.link: Link
@@ -273,7 +273,8 @@ class Daemon:
     def _failure(self) -> dict[str, Any] | None:
         """Why the sandbox, Orca or the tunnel never got going, for `asc start` to raise."""
         owners = (self.sandbox, self.link, self.tunnel)
-        failure = next((o.failure for o in owners if o is not None and o.failure), None)
+        failures = (owner.failure for owner in owners if owner is not None)
+        failure = next((f for f in failures if f is not None), None)
         return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
