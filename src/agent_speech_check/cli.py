@@ -496,8 +496,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
     target = _target(args, _with_defaults(args, {"layout": "keys_layout"}))
     if target.orca:
-        pages = orca_keyref.pages(args.lang)
-        commands = [c for page in pages for c in orca_keyref.parse(page.read_text("utf-8"))]
+        commands = orca_keyref.commands(args.lang)
     elif sys.platform != "win32":
         raise WindowsOnlyCommand(args.command)
     else:

@@ -11,7 +11,7 @@ from dataclasses import replace
 from pathlib import Path
 from xml.etree import ElementTree
 
-from agent_speech_check.errors import OrcaHelpNotFound, UnknownKey
+from agent_speech_check.errors import FileUnusable, OrcaHelpNotFound, UnknownKey
 from agent_speech_check.inputs import keys
 from agent_speech_check.nvda.keyref import Command
 
@@ -20,10 +20,24 @@ _CLICKS = {"(double-clicked)": "twice", "(triple-clicked)": "three times"}
 _DATA_DIRS = os.pathsep.join(("/usr/local/share", "/usr/share"))
 
 
+def commands(lang: str) -> list[Command]:
+    """The commands on Orca's pages in `lang`, else in English."""
+    found: list[Command] = []
+    for page in pages(lang):
+        try:
+            found += parse(page.read_text(encoding="utf-8"))
+        except OSError as error:
+            raise FileUnusable.from_os(page, error) from None
+        except (UnicodeDecodeError, ElementTree.ParseError) as error:
+            raise FileUnusable(str(page), f"not Orca's help ({error})") from None
+    return found
+
+
 def pages(lang: str) -> list[Path]:
     """Orca's command pages in `lang`, else in English (`C`)."""
     looked: list[str] = []
-    bases = (os.environ.get("XDG_DATA_DIRS") or _DATA_DIRS).split(os.pathsep)
+    variable = os.environ.get("XDG_DATA_DIRS") or _DATA_DIRS
+    bases = [base for base in variable.split(os.pathsep) if base]
     for language in dict.fromkeys((lang, "C")):
         for base in bases:
             folder = Path(base) / "help" / language / "orca"

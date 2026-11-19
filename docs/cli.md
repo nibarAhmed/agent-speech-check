@@ -700,7 +700,8 @@ H and Shift+H  Next and previous heading
   help on this machine, `help/<lang>/orca/commands_*.page` in each of
   `$XDG_DATA_DIRS` (`/usr/local/share` and `/usr/share`), falling back to
   English. Remote mode reads none from the other machine: run `asc keys` there.
-- If no reference is found it exits 7 and says where it looked.
+- If no reference is found it exits 7 and says where it looked. On Linux,
+  NVDA's reference can't be read: it exits 2.
 - Single letter navigation keys (`h  heading`) work in browse mode; add Shift
   to go back.
 

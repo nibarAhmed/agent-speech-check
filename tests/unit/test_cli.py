@@ -286,6 +286,12 @@ def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.Monk
         assert COMMANDS[name].windows_only
         with pytest.raises(WindowsOnlyCommand):
             run([name])
+    # NVDA's reference is read only on Windows.
+    config = tmp_path / "agent-speech-check" / "config.toml"
+    config.parent.mkdir()
+    config.write_text('[remote]\nos = "windows"\nssh = "me@box"\n', encoding="utf-8")
+    with pytest.raises(WindowsOnlyCommand):
+        run(["keys", "--mode", "remote"])
 
 
 def test_keys_reads_orcas_help_where_orca_reads(

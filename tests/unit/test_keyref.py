@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.errors import NvdaNotFound, OrcaHelpNotFound
+from agent_speech_check.errors import FileUnusable, NvdaNotFound, OrcaHelpNotFound
 from agent_speech_check.nvda import keyref
 from agent_speech_check.orca import keyref as orca_keyref
 
@@ -166,11 +166,16 @@ def test_orca_help_in_the_language_falls_back_to_c(
     # As Ubuntu ships a language's help: links into a language pack that may not be there.
     (help_dir / "de" / "orca").mkdir(parents=True)
     (help_dir / "de" / "orca" / "commands_a.page").symlink_to("nowhere")
+    # An empty entry is no folder, not the current one.
+    monkeypatch.chdir(tmp_path / "share")
     monkeypatch.setenv(
-        "XDG_DATA_DIRS", os.pathsep.join((str(tmp_path / "x"), str(tmp_path / "share")))
+        "XDG_DATA_DIRS", os.pathsep.join(("", str(tmp_path / "x"), str(tmp_path / "share")))
     )
     assert orca_keyref.pages("fr") == [help_dir / "fr" / "orca" / "commands_a.page"]
     assert orca_keyref.pages("de") == [help_dir / "C" / "orca" / "commands_a.page"]
+    with pytest.raises(FileUnusable) as exc:
+        orca_keyref.commands("fr")
+    assert str(help_dir / "fr" / "orca" / "commands_a.page") in exc.value.message
 
 
 def test_orca_help_not_found_says_where_it_looked(
