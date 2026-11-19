@@ -19,9 +19,10 @@ def write(tmp_path: Path, text: str) -> Path:
     return path
 
 
-def test_no_file_gives_watch_default(tmp_path: Path) -> None:
+def test_no_file_gives_the_platforms_default(tmp_path: Path) -> None:
     target = resolve(tmp_path / "config.toml", None)
     assert target == Target("watch", 6837, launch=False, os="windows")
+    assert resolve(tmp_path / "config.toml", None, "linux") == defaults("desktop", None, "linux")
 
 
 def test_mode_defaults() -> None:

@@ -96,6 +96,8 @@ def test_orca_reads_a_form(
             assert f'said: "{char}"' in typed.stdout, typed.stdout
         tab = run_asc("press", "Tab", "--expect", "(?i)save button")
         assert tab.returncode == 0, tab.stdout + tab.stderr
+        ini = run_asc("status", "--nvda-ini")
+        assert (ini.returncode, "Orca" in ini.stderr) == (4, True), ini.stderr
     finally:
         stopped = run_asc("stop")
     assert stopped.returncode == 0, stopped.stderr

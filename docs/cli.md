@@ -18,8 +18,9 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 - Results go to stdout and errors to stderr. An error prints
   `error: <message>` and, when there is one, `hint: <what to do>`. Bad
   arguments do too, with the command's `--help` as the hint, and exit 2.
-- `asc start`, `asc keys` and `asc config` take `--mode` (see
-  [Choosing a mode](#choosing-a-mode)). The rest talk to the
+- `asc start`, `asc keys`, `asc config` and `asc firewall-setup` take `--mode`
+  (see [Choosing a mode](#choosing-a-mode)). `stop`, `status`, `speech`,
+  `wait`, `mark`, `press`, `type` and `launch` talk to the
   [instance's](#instances) one daemon, whatever its mode.
 - `MS` values are milliseconds. A flag on the command beats the setting it
   defaults to (see [Command defaults](#command-defaults)).
@@ -40,7 +41,7 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 | | [`mark`](#asc-mark) | print the latest line number |
 | Input | [`press`](#asc-press) | press keys and print what NVDA said |
 | | [`type`](#asc-type) | type text and print what NVDA said |
-| | [`keys`](#asc-keys) | look up NVDA commands in NVDA's own reference |
+| | [`keys`](#asc-keys) | look up screen reader commands in its own reference |
 | | [`launch`](#asc-launch) | start an app and wait until NVDA speaks |
 | Setup | [`get-nvda`](#asc-get-nvda) | make the portable NVDA that desktop mode launches |
 | | [`setup`](#asc-setup) | choose your settings, by answering questions |
@@ -114,9 +115,9 @@ An `asc` installed by the MSI, or unpacked from the Linux tarball as the
 
 ## Modes
 
-The `mode` setting (or `asc start --mode`) picks one of five. On Linux desktop
-mode, which starts Orca, watch and remote mode run: plain `asc start` starts
-desktop mode, which needs nothing of yours. Sandbox and shared mode exit 2.
+The `mode` setting (or `asc start --mode`) picks one of five. On Linux only
+desktop (Orca on a hidden display, the default), watch and remote mode run;
+sandbox and shared mode exit 2.
 
 ### Watch mode
 
@@ -371,8 +372,7 @@ Each mode keeps its own settings in a table named after it (`[watch]`,
 defaults below.
 
 One daemon runs per [instance](#instances). `asc start` exits 4 while one runs
-in any mode, and `stop`, `status`, `speech`, `wait`, `mark`, `press`, `type`
-and `launch` talk to it without being told its mode.
+in any mode.
 
 ### Instances
 
@@ -434,8 +434,8 @@ context.
 outside desktop mode on Windows, `os` and `ssh` outside remote mode, `port` for Orca,
 and `nvda_dir`
 and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
-`asc` writes itself are never kept. Settings from before remote mode used
-ssh (`host` in `[remote]`) exit 2 with how to move them.
+`asc` writes itself are never kept. An old `host` in `[remote]` exits 2 with
+how to move it.
 
 ## Command reference
 
@@ -452,7 +452,7 @@ checks depends on the mode: see [Modes](#modes).
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--mode MODE` | the `mode` setting, or watch (desktop on Linux) | the mode to start, with its settings |
+| `--mode MODE` | the `mode` setting | the mode to start, with its settings |
 | `--nvda-setting SECTION.KEY=VALUE` | the mode's `nvda_settings` | an `nvda.ini` setting for the NVDA `asc` launches (repeatable) |
 | `--window {tray,taskbar,show}` | sandbox mode's `window`, or tray | sandbox only: its window, for this start only |
 | `--i-understand` | off | shared mode: yes, send keys into my own session |
@@ -488,7 +488,6 @@ instance). Exits 3 if nothing runs.
 
 - `--all` stops the daemon of every instance, ends an [update](#updates) check
   and starts none: run it before you delete `asc`.
-
 - A daemon that is there but doesn't answer (an older asc, or a stuck one)
   still counts as running, so `asc start` and `asc setup` refuse with exit 4. `asc stop` ends its process,
   with its NVDA or sandbox, but can't release held keys that way. The same
@@ -687,7 +686,7 @@ H and Shift+H  Next and previous heading
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `SEARCH` | none (all) | words that must all appear |
-| `--mode MODE` | the `mode` setting, or watch (desktop on Linux) | whose NVDA or Orca to read |
+| `--mode MODE` | the `mode` setting | whose NVDA or Orca to read |
 | `--layout {desktop,laptop}` | `keys_layout`, desktop | the keyboard layout's keys |
 | `--lang LANG` | en | reference language, like `de` or `pt_BR`, falling back to `en` |
 | `--braille`, `--no-braille` | off | include NVDA's rows for braille displays |
@@ -696,8 +695,8 @@ H and Shift+H  Next and previous heading
   portable NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA
   (the running `nvda.exe`, then the uninstall registry entry).
 - For Orca it reads Orca's help, `help/<lang>/orca/commands_*.page` in each
-  of `$XDG_DATA_DIRS` (`/usr/local/share` and `/usr/share`), falling back to
-  English.
+  of `$XDG_DATA_DIRS` (`/usr/local/share:/usr/share` when unset), falling
+  back to English.
 - Remote mode reads the reference on the other machine over ssh: NVDA's,
   found the same way, with `os = "windows"`, Orca's with `os = "linux"`.
 - If no reference is found it exits 7 and says where it looked.
@@ -788,8 +787,8 @@ Asks a few questions and saves the answers in `config.toml`:
 2. Desktop and sandbox mode: which NVDA.
 3. Sandbox mode: the shared folders and the window.
 4. Remote mode: what the other machine runs, and its ssh destination.
-5. Watch, shared and remote mode: your NVDA's keyboard layout (not asked when
-   the other machine runs Linux, where Orca reads).
+5. Watch, shared and remote mode: your NVDA's keyboard layout (not asked for
+   Orca).
 
 When they are missing, it offers to download NVDA for desktop mode and to add
 the firewall rule sandbox mode needs. Timings are not asked; change them with
@@ -835,9 +834,9 @@ Shows or changes the settings in `config.toml` (see
 | `unset` | goes back to the inherited value |
 | `path` | prints where `config.toml` is (works even when the file is broken) |
 
-- Mode settings go to the table of `--mode`, or of the `mode` setting (watch
-  unless set, desktop on Linux). Global settings (`mode`, `panic_key`) and command defaults take
-  no `--mode` (exit 2); `panic_key` and command defaults go to `[defaults]`.
+- Mode settings go to the table of `--mode`, or of the `mode` setting. Global
+  settings (`mode`, `panic_key`) and command defaults take no `--mode` (exit
+  2); `panic_key` and command defaults go to `[defaults]`.
 - Unsetting a mode's last setting removes its table.
 - Lists (`share`, `nvda_settings`) take several values and replace the whole
   list. Paths are made full paths. Booleans are `true` or `false`.
@@ -879,8 +878,8 @@ the relay itself listens only on its address.
   program.
 - Remove it from an admin terminal with
   `netsh advfirewall firewall delete rule name="agent-speech-check sandbox relay"`.
-  Remote mode no longer needs a rule: delete any made for it the same way, by
-  its name, `agent-speech-check remote relay PORT`.
+  Delete a rule named `agent-speech-check remote relay PORT`, made by an older
+  `asc`, the same way: remote mode needs none.
 
 ```shell
 asc firewall-setup --mode sandbox

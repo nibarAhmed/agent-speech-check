@@ -501,7 +501,8 @@ class OrcaSetupNeeded(SetupNeeded):
     def __init__(self, reason: str) -> None:
         super().__init__(
             f"Orca can't start: {reason}",
-            hint="install Orca 51 or later, Xvfb, openbox, xdotool and python3 there",
+            hint="install Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3"
+            " there",
         )
 
 
@@ -547,7 +548,10 @@ class LaunchElsewhere(Refused):
 
 
 class NvdaIniOnlyRemote(Refused):
-    def __init__(self, mode: str) -> None:
+    def __init__(self, mode: str, reader: str) -> None:
+        if reader == "orca":
+            super().__init__("--nvda-ini is for NVDA; asc starts Orca itself")
+            return
         super().__init__(
             f"--nvda-ini is for remote mode only; asc runs in {mode} mode",
             hint="asc status shows how to connect NVDA",

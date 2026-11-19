@@ -1,5 +1,5 @@
 """Thin wrappers (ctypes, and psutil for processes) for the few Win32 calls `asc`
-needs. Keep logic elsewhere."""
+needs. Keep logic elsewhere. The psutil ones also run on Linux."""
 
 from __future__ import annotations
 

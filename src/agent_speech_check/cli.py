@@ -53,11 +53,11 @@ from agent_speech_check.system.wait import poll_until
 from agent_speech_check.update import updater
 
 DESCRIPTION = """\
-Agent Speech Check: use NVDA the way a blind user does. Press keys, read what
-NVDA says as text, and check it.
+Agent Speech Check: use a screen reader (NVDA, or Orca on Linux) the way a
+blind user does. Press keys, read what it says as text, and check it.
 
 typical use:
-  asc setup                    choose your settings (once)
+  asc setup                    choose your settings (once, Windows)
   asc start                    start recording in your configured mode
   asc status                   how NVDA should connect, and whether it is
   asc mark                     print the latest line number, N
@@ -425,7 +425,7 @@ def cmd_stop(args: argparse.Namespace) -> int:
 def nvda_ini(status: dict[str, Any]) -> str:
     """The nvda.ini that connects a remote NVDA to this relay: desktop mode's base config."""
     if status["mode"] != "remote" or status["port"] is None:
-        raise NvdaIniOnlyRemote(status["mode"])
+        raise NvdaIniOnlyRemote(status["mode"], status["reader"])
     relay = nvda_config.RelayAddress(
         status["host"], status["port"], status["channel"], status["fingerprint"]
     )
@@ -938,7 +938,8 @@ examples:
     "type": Command(
         "type text and print what NVDA said",
         """\
-Type TEXT one character at a time, using this computer's keyboard layout.
+Type TEXT one character at a time, using this computer's keyboard layout
+(Orca: any character).
 Every character is checked first; if any can't be typed, nothing is (exit 2).
 NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
 Prints the new speech numbered like press, or (nothing said after N).
@@ -956,8 +957,8 @@ Print commands whose name, keys, description or section contain every
 SEARCH word, one per line: KEY  NAME: DESCRIPTION. Needs no running asc.
 For NVDA, from its Commands Quick Reference: the portable copy in desktop
 mode, or in sandbox mode with nvda_dir, otherwise your own NVDA (the
-running nvda.exe, then the uninstall registry entry). For Orca,
-from its help (/usr/share/help). Remote mode reads the other machine's.
+running nvda.exe, then the uninstall registry entry). For Orca, from
+its help in $XDG_DATA_DIRS. Remote mode reads the other machine's.
 In browse mode, single letters jump to elements; add Shift to go back.
 
 examples:

@@ -30,8 +30,15 @@ GLOBAL = "global"
 PER_MODE = "per mode"
 
 MODES = ("watch", "desktop", "sandbox", "shared", "remote")
-# On Linux desktop mode starts Orca.
-DEFAULT_MODE = "watch" if sys.platform == "win32" else "desktop"
+
+
+def default_mode(platform: str) -> str:
+    """On Linux desktop mode starts Orca."""
+    return "watch" if platform == "win32" else "desktop"
+
+
+DEFAULT_MODE = default_mode(sys.platform)
+
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
 # taskbar, or left alone.
 WINDOWS = ("tray", "taskbar", "show")

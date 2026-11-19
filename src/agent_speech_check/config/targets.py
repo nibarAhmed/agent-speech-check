@@ -31,7 +31,7 @@ import tomlkit
 import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS
+from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS, default_mode
 from agent_speech_check.errors import (
     BadInFile,
     ConfigFileError,
@@ -324,7 +324,7 @@ class Config:
     @classmethod
     def from_data(cls, data: dict[str, Any], file: str, platform: str = sys.platform) -> Config:
         top = Fields(data, file, UsageError, ("mode", "defaults", *MODES))
-        mode = top.choice("mode", MODES) if top.has("mode") else DEFAULT_MODE
+        mode = top.choice("mode", MODES) if top.has("mode") else default_mode(platform)
         globals_ = Fields(
             data.get("defaults", {}), f"{file}: [defaults]", UsageError, prefs.DEFAULTS_KEYS
         )

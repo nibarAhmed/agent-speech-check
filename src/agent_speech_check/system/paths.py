@@ -1,4 +1,5 @@
-"""Where `asc` keeps its state and logs: `%LOCALAPPDATA%\\agent-speech-check`.
+"""Where `asc` keeps its state and logs: `%LOCALAPPDATA%\\agent-speech-check`,
+or `$XDG_STATE_HOME/agent-speech-check` on Linux.
 
 A named instance (`ASC_INSTANCE`, or `--instance`) is a whole separate home in
 `instances\\<name>`: its own config, daemon and relay certificate.

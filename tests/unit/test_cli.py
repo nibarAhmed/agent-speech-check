@@ -205,13 +205,16 @@ def test_internal_error_in_a_group_names_the_inner_error(
 
 
 def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
-    status = {"mode": "remote", "host": "pc", "port": 26837, "channel": "key", "fingerprint": "f"}
+    status = {"mode": "remote", "reader": "nvda", "host": "pc", "port": 26837}
+    status |= {"channel": "key", "fingerprint": "f"}
     remote = configobj.ConfigObj(nvda_ini(status).splitlines())["remote"]
     server = remote["controlServer"]
     assert (server["host"], server["port"], server["key"]) == ("pc:26837", "26837", "key")
     assert remote["trustedCertificates"]["pc:26837"] == "f"
     with pytest.raises(NvdaIniOnlyRemote):
         nvda_ini({**status, "mode": "watch"})
+    with pytest.raises(NvdaIniOnlyRemote, match="Orca"):
+        nvda_ini({**status, "port": None, "reader": "orca"})
 
 
 def test_status_lines(capsys: pytest.CaptureFixture[str]) -> None:

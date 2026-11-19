@@ -1,4 +1,4 @@
-# Findings: how Windows and NVDA behave
+# Findings: how Windows, NVDA, Orca and ssh behave
 
 These are the experiments behind code in `asc` that would otherwise look odd: what Windows Sandbox, Windows' focus rules and NVDA did, including what didn't work. The wire protocol itself is in [protocol.md](protocol.md). Unless a section says otherwise, the setup was portable NVDA 2026.2 in Windows Sandbox on Windows 11 Pro (build 26200).
 
@@ -198,8 +198,8 @@ Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
   `Error: remote port forwarding failed for listen port PORT` and exits 255, the same code as a
   failed connection, so only the line tells the two apart.
 - **Cost.** Against a fake NVDA in the container, 80 presses each (press to its speech, with a
-  50 ms settle), and the old design's path (the fake straight to the relay across Docker's
-  network) as the baseline:
+  50 ms settle), and the fake straight to the relay across Docker's network as a
+  baseline:
 
   | Path | `asc start` | press median | press p95 |
   | --- | --- | --- | --- |

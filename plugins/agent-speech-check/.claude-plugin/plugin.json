@@ -2,7 +2,7 @@
   "name": "agent-speech-check",
   "displayName": "Agent Speech Check",
   "version": "0.5.1",
-  "description": "Hear what the NVDA screen reader says and drive apps with NVDA keys, using the asc CLI.",
+  "description": "Hear what the screen reader (NVDA or Orca) says and drive apps with its keys, using the asc CLI.",
   "author": { "name": "nibarAhmed" },
   "homepage": "https://github.com/nibarAhmed/agent-speech-check",
   "repository": "https://github.com/nibarAhmed/agent-speech-check",

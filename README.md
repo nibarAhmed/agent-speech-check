@@ -19,8 +19,8 @@ asc stop
 
 ## Requirements
 
-- Windows 11.
-- NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
+- Windows 11, or Linux with Orca 51 or later (see [Install](#install)).
+- On Windows, NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
 - Sandbox mode also needs Windows 11 24H2 or later (Pro, Enterprise or Education) with Windows Sandbox turned on.
 
 ## Choose a mode
@@ -28,10 +28,10 @@ asc stop
 | Mode | When to use it |
 |---|---|
 | `sandbox` | You want NVDA kept away from your desktop. It runs inside Windows Sandbox, and your own NVDA keeps running. |
-| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. On Linux it starts its own Orca on a hidden display instead, which needs Orca 51 or later, Xvfb, openbox, xdotool and python3. |
+| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. On Linux it starts its own Orca on a hidden display instead, which needs Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3. |
 | `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. On Linux it listens to your own Orca, which you restart once with the line `asc start` gives you. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
-| `remote` | The screen reader runs on a machine you manage, like a VM, that `asc` reaches over ssh. On Windows you start NVDA there and it connects to `asc` through an ssh tunnel; on Linux `asc` starts Orca there. One instance per machine: run `asc setup --instance NAME` for each. |
+| `remote` | The screen reader runs on a machine you manage, like a VM, that `asc` reaches over ssh. With `os = "windows"` you start NVDA there and it connects to `asc` through an ssh tunnel; with `os = "linux"` `asc` starts Orca there. One instance per machine: `asc setup --instance NAME` on Windows, or `asc config set` with `--instance NAME`. |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 
@@ -94,7 +94,7 @@ Speech can include passwords and private messages, and `asc` can press keys. [SE
 
 - [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
 - [NVDA Remote Access protocol](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
-- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
+- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules, NVDA versions, Orca and ssh behaved in experiments.
 
 ## License
 

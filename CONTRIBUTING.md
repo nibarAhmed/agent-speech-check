@@ -21,7 +21,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 - [docs/cli.md](docs/cli.md): every command and setting.
 - [docs/protocol.md](docs/protocol.md): how `asc` talks to NVDA, with the evidence.
-- [docs/findings.md](docs/findings.md): how Windows and NVDA behaved around it.
+- [docs/findings.md](docs/findings.md): how Windows, NVDA, Orca and ssh behaved around it.
 
 ## Pull requests
 

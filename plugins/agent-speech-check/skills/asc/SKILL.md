@@ -139,8 +139,8 @@ NVDA says, typed text included, so `asc stop` when you're done.
   one's desktop. `asc launch CMD` starts the app on that display; there's no
   other way to reach it.
 - It needs Orca 51 or later on that machine (`orca --version`), plus Xvfb,
-  openbox, xdotool and python3. If `asc start` exits 7 naming one, ask the
-  user to install or upgrade it: older Orca can't work.
+  openbox, xdotool, dbus-daemon, gdbus and python3. If `asc start` exits 7
+  naming one, ask the user to install or upgrade it: older Orca can't work.
 - To hear the user's own Orca, use watch mode. If `asc start --mode watch`
   exits 7 with a restart line, ask the user to run it in their desktop
   session (it restarts their Orca with asc's secret), then start again. Never
