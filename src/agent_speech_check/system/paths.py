@@ -1,4 +1,5 @@
-"""Where `asc` keeps its state and logs: `%LOCALAPPDATA%\\agent-speech-check`.
+"""Where `asc` keeps its state and logs: `%LOCALAPPDATA%\\agent-speech-check`,
+or `$XDG_STATE_HOME/agent-speech-check` on Linux.
 
 A named instance (`ASC_INSTANCE`, or `--instance`) is a whole separate home in
 `instances\\<name>`: its own config, daemon and relay certificate.
@@ -8,6 +9,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -20,9 +22,14 @@ _DEVICES = re.compile(r"con|prn|aux|nul|com\d|lpt\d")
 
 
 def base_root() -> Path:
-    """The default instance's home. It also keeps the NVDA every instance shares."""
-    local = os.environ.get("LOCALAPPDATA")
-    base = Path(local) if local else Path.home() / "AppData" / "Local"
+    """The default instance's home. It also keeps the NVDA every instance shares.
+    On Linux: `$XDG_STATE_HOME/agent-speech-check`."""
+    if sys.platform == "win32":
+        local = os.environ.get("LOCALAPPDATA")
+        base = Path(local) if local else Path.home() / "AppData" / "Local"
+    else:
+        state = os.environ.get("XDG_STATE_HOME")
+        base = Path(state) if state else Path.home() / ".local" / "state"
     return base / APP_DIR_NAME
 
 

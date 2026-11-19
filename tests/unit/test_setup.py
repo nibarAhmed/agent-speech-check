@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,7 @@ class Asker:
 
 
 def test_prompts_are_plain_words() -> None:
-    prompt = setup.choice_prompt(setup.MODES)
+    prompt = setup.choice_prompt(setup.modes(named=False, platform="win32"))
     assert prompt == "Choose 1 to 5: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
@@ -105,7 +106,7 @@ def test_summary_says_none_and_your_folder() -> None:
     ],
 )
 def test_pick(answer: str, picked: str | None) -> None:
-    assert setup.pick(answer, setup.MODES) == picked
+    assert setup.pick(answer, setup.modes(named=False, platform="win32")) == picked
 
 
 @pytest.mark.parametrize(
@@ -135,7 +136,7 @@ def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert settings.resolve(None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
-    assert out.index("How should asc work with NVDA?") < out.index("1  watch:")
+    assert out.index("Which mode should asc use?") < out.index("1  watch:")
     assert "Your settings:\n  Mode:             watch\n  Keyboard layout:  laptop\n" in out
     assert out.endswith(f"\nSettings saved: {os.path.realpath(root / 'config.toml')}\n")
     assert "[" not in out
@@ -172,30 +173,25 @@ def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture
     assert load(root / "config.toml").resolve(None).mode == "shared"
 
 
-def test_setup_remote_takes_a_port_no_other_instance_has(
+def test_setup_remote_asks_where_ssh_goes(
     root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    other = root / "instances" / "vm1"
-    other.mkdir(parents=True)
-    (other / "config.toml").write_text('mode = "remote"\n', encoding="utf-8")
-    # Another starts remote mode only with --mode, on a port of its own.
-    third = root / "instances" / "vm3"
-    third.mkdir()
-    (third / "config.toml").write_text("[remote]\nport = 26838\n", encoding="utf-8")
-    # The default instance never runs remote mode, so its port takes none.
-    default = 'mode = "remote"\n[remote]\nport = 26839\n'
-    (root / "config.toml").write_text(default, encoding="utf-8")
     monkeypatch.setenv("ASC_INSTANCE", "vm2")
-    # Mode (an instance can't join your own NVDA, so remote is the default),
-    # keyboard layout, no firewall rule now, save.
-    run_setup(Asker("watch", "", "", "n", "y"), replace_without_asking=False)
+    # Mode (an instance can't join your own NVDA, so remote is the default), Windows,
+    # an ssh option refused, the destination, keyboard layout, save.
+    ask = Asker("watch", "", "", "-oProxyCommand=x", "me@vm", "", "y")
+    run_setup(ask, replace_without_asking=False)
     out = capsys.readouterr().out
     assert "Answer 1 to 3, or a name." in out
-    assert "Note: port 26839, as another instance's remote mode has 26837." in out
-    assert "  Port:             26839\n" in out
-    # The firewall rule offered is for that port.
-    assert "Run asc firewall-setup --mode remote --instance vm2 later." in out
-    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).port == 26839
+    assert "an ssh destination, like me@vm" in out
+    assert "  Other machine runs:  windows\n  Reached with ssh:    me@vm\n" in out
+    assert "firewall" not in out
+    target = load(root / "instances" / "vm2" / "config.toml").resolve(None)
+    assert (target.os, target.ssh, target.tunnel) == ("windows", "me@vm", True)
+    # Orca reads there, so no NVDA keyboard layout is asked.
+    run_setup(Asker("", "linux", "me@vm", "y"), replace_without_asking=True)
+    assert "keyboard layout" not in capsys.readouterr().out
+    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).os == "linux"
 
 
 def test_setup_remote_in_the_default_instance_keeps_only_the_mode(
@@ -211,6 +207,29 @@ def test_setup_remote_in_the_default_instance_keeps_only_the_mode(
     saved = (root / "config.toml").read_text(encoding="utf-8")
     assert 'mode = "remote"' in saved
     assert "[" not in saved
+
+
+def test_setup_on_linux_offers_what_orca_runs(
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Enter picks desktop mode, then save: Orca needs no NVDA folder or layout.
+    ask = Asker("", "y")
+    run_setup(ask, replace_without_asking=False, platform="linux")
+    out = capsys.readouterr().out
+    assert ask.prompts[0] == "Choose 1 to 3: "
+    assert "your own Orca" in out
+    assert "its own Orca on a hidden display (default)" in out
+    assert "Which NVDA" not in out
+    assert "keyboard layout" not in out
+    assert "While it runs" not in out
+    target = load(root / "config.toml", platform="linux").resolve(None)
+    assert (target.mode, target.orca) == ("desktop", True)
+    monkeypatch.setenv("ASC_INSTANCE", "vm3")
+    ask = Asker("", "linux", "me@vm", "y")
+    run_setup(ask, replace_without_asking=False, platform="linux")
+    assert ask.prompts[0] == "Choose 1 to 2: "
+    target = load(root / "instances" / "vm3" / "config.toml", platform="linux").resolve(None)
+    assert (target.mode, target.os, target.ssh) == ("remote", "linux", "me@vm")
 
 
 def test_setup_without_sandbox_says_how_to_get_it(
@@ -267,7 +286,9 @@ def run(capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, str, str]:
     return code, captured.out, captured.err
 
 
-def test_config_set_get_list_unset(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_config_set_get_list_unset(
+    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     assert run(capsys, "config", "set", "settle_ms", "700") == (
         0,
         "settle_ms = 700 (global)\n",
@@ -290,6 +311,14 @@ def test_config_set_get_list_unset(root: Path, capsys: pytest.CaptureFixture[str
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
     assert load(root / "config.toml").resolve("sandbox").port == 7000
+    # As the hints write it: --instance after the action, too.
+    monkeypatch.delenv("ASC_INSTANCE", raising=False)
+    assert (
+        run(capsys, "config", "set", "ssh", "me@vm", "--mode", "remote", "--instance", "vm2")[0]
+        == 0
+    )
+    written = tomllib.loads((root / "instances" / "vm2" / "config.toml").read_text("utf-8"))
+    assert written["remote"]["ssh"] == "me@vm"
 
 
 def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -310,9 +339,9 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", "launch", "false", "--mode", "sandbox")
     assert code == 2
     assert "[sandbox] launch: expected only in desktop mode" in err
-    code, _, err = run(capsys, "config", "set", "host", "172.20.0.1", "--mode", "sandbox")
+    code, _, err = run(capsys, "config", "set", "os", "linux", "--mode", "sandbox")
     assert code == 2
-    assert "host: expected only in remote mode" in err
+    assert "os: expected only in remote mode" in err
     assert not (root / "config.toml").exists()
 
 

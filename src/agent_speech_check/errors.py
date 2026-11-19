@@ -12,6 +12,7 @@ below and override `__init__` to take their own fields.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Sequence
 from os import PathLike
 from typing import Any, ClassVar
@@ -162,10 +163,10 @@ class BadGesture(UsageError):
 
 
 class UntypableText(UsageError):
-    def __init__(self, chars: Sequence[str]) -> None:
+    def __init__(self, chars: Sequence[str], why: str) -> None:
         shown = " ".join(_show(c) for c in chars)
         super().__init__(
-            f"cannot type these characters with the current keyboard layout: {shown}",
+            f"cannot type these characters {why}: {shown}",
             hint="nothing was sent; use asc press for special keys",
         )
 
@@ -221,13 +222,18 @@ class NotRunning(NotConnected):
 
 
 class NvdaNotConnected(NotConnected):
+    what = "NVDA is not connected"
+    next_step = "asc status shows how NVDA should connect"
+
     def __init__(self, waited_ms: int | None = None, last_error: str | None = None) -> None:
         waited = "" if waited_ms is None else f" after waiting {waited_ms} ms"
         why = f"; last error: {last_error}" if last_error else ""
-        super().__init__(
-            f"NVDA is not connected{waited}{why}",
-            hint="asc status shows how NVDA should connect",
-        )
+        super().__init__(f"{self.what}{waited}{why}", hint=self.next_step)
+
+
+class OrcaNotConnected(NvdaNotConnected):
+    what = "Orca is not running"
+    next_step = "asc status says why; asc stop, then asc start"
 
 
 class DaemonStartFailed(NotConnected):
@@ -275,6 +281,19 @@ class NvdaNotFound(SetupNeeded):
     def __init__(self, looked: Sequence[str], hint: str) -> None:
         where = "; ".join(looked) if looked else "nowhere"
         super().__init__(f"NVDA not found. Looked in: {where}", hint=hint)
+
+
+class OrcaHelpNotFound(SetupNeeded):
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason, hint="install Orca, or make its help readable")
+
+
+class RemoteCommandFailed(SetupNeeded):
+    def __init__(self, destination: str, program: str, detail: str) -> None:
+        super().__init__(
+            f"{program} on {destination} failed: {detail}",
+            hint=f"check that {program} runs there, as asc runs it over ssh",
+        )
 
 
 class NvdaTooOld(SetupNeeded):
@@ -396,16 +415,15 @@ class FileUnusable(SetupNeeded):
 class NoDefaultSwitch(SetupNeeded):
     def __init__(self, interface: str) -> None:
         super().__init__(
-            f"no IPv4 address on {_show(interface)}, so the sandbox or VM can't reach asc",
-            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default "
-            "Switch; or in remote mode, asc config set host ADDRESS --mode remote",
+            f"no IPv4 address on {_show(interface)}, so the sandbox can't reach asc",
+            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default Switch",
         )
 
 
 class FirewallRuleMissing(SetupNeeded):
     def __init__(self, port: int, command: str) -> None:
         super().__init__(
-            f"no firewall rule lets NVDA on another machine reach asc on port {port}",
+            f"no firewall rule lets NVDA in Windows Sandbox reach asc on port {port}",
             hint=f"{command} (asks for admin rights once)",
         )
 
@@ -422,7 +440,7 @@ class NoFirewallNeeded(UsageError):
     def __init__(self, mode: str) -> None:
         super().__init__(
             f"{mode} mode needs no firewall rule",
-            hint="asc firewall-setup --mode sandbox, or --mode remote --instance NAME",
+            hint="only sandbox mode needs one: asc firewall-setup --mode sandbox",
         )
 
 
@@ -434,10 +452,10 @@ class BadInstance(UsageError):
         )
 
 
-class OwnNvdaInInstance(Refused):
+class OwnReaderInInstance(Refused):
     def __init__(self, mode: str) -> None:
         super().__init__(
-            f"{mode} mode uses your own NVDA, which only the default instance may join",
+            f"{mode} mode uses your own screen reader, which only the default instance may join",
             hint="use remote mode in a named instance, or leave out --instance",
         )
 
@@ -450,26 +468,99 @@ class RemoteNeedsInstance(Refused):
         )
 
 
+class WindowsOnlyMode(UsageError):
+    def __init__(self, mode: str) -> None:
+        super().__init__(
+            f"{mode} mode needs Windows",
+            hint="on Linux, desktop or watch mode, or remote mode to reach another machine",
+        )
+
+
+class WindowsOnlyCommand(UsageError):
+    def __init__(self, command: str) -> None:
+        super().__init__(
+            f"asc {command} needs Windows",
+            hint="on Linux, asc start runs Orca here, or remote mode reaches another machine",
+        )
+
+
+class RemoteNeedsMachine(UsageError):
+    def __init__(self, missing: Sequence[str]) -> None:
+        sets = ", then ".join(
+            f"asc config set {name} {'USER@HOST' if name == 'ssh' else 'windows|linux'}"
+            " --mode remote --instance VMNAME"
+            for name in missing
+        )
+        super().__init__(
+            f"remote mode needs {' and '.join(missing)}: which machine, and what it runs",
+            hint=sets,
+        )
+
+
+class OrcaSetupNeeded(SetupNeeded):
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"Orca can't start: {reason}",
+            hint="install Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3"
+            " there",
+        )
+
+
+class OrcaNotWatchable(SetupNeeded):
+    def __init__(self, reason: str, restart: str) -> None:
+        super().__init__(
+            f"asc can't hear your Orca: {reason}", hint=f"restart Orca for asc: {restart}"
+        )
+
+
+class OrcaBusy(Refused):
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"Orca can't start: {reason}",
+            hint="close that Orca, or run asc as another user",
+        )
+
+
+class SshSetupNeeded(SetupNeeded):
+    def __init__(self, destination: str, detail: str) -> None:
+        super().__init__(
+            f"ssh {destination} failed: {detail}",
+            hint=f"run ssh {destination} once by hand: asc needs a key, not a password",
+        )
+
+
+class SshMissing(SetupNeeded):
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"cannot run ssh: {detail}", hint="install the OpenSSH client")
+
+
+class SshFailed(NotConnected):
+    def __init__(self, destination: str, detail: str) -> None:
+        super().__init__(f"ssh {destination} failed: {detail}")
+
+
 class LaunchElsewhere(Refused):
     def __init__(self) -> None:
         super().__init__(
-            "remote mode can't start apps: NVDA runs on another machine",
+            "remote mode can't start apps on Windows: NVDA runs on another machine",
             hint="start the app there, then asc wait for its speech",
         )
 
 
 class NvdaIniOnlyRemote(Refused):
-    def __init__(self, mode: str) -> None:
-        super().__init__(
-            f"--nvda-ini is for remote mode only; asc runs in {mode} mode",
-            hint="asc status shows how to connect NVDA",
-        )
+    def __init__(self, mode: str, reader: str) -> None:
+        if reader == "orca":
+            message, hint = "--nvda-ini is for NVDA; Orca needs no nvda.ini", None
+        else:
+            message = f"--nvda-ini is for remote mode only; asc runs in {mode} mode"
+            hint = "asc status shows how to connect NVDA"
+        super().__init__(message, hint=hint)
 
 
 class NvdaDidNotConnect(NotConnected):
-    def __init__(self, seconds: float, log_tail: str) -> None:
+    def __init__(self, seconds: float, log_tail: str, reader: str = "NVDA") -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
-        super().__init__(f"NVDA did not connect within {seconds:g} s, so asc stopped{tail}")
+        super().__init__(f"{reader} did not connect within {seconds:g} s, so asc stopped{tail}")
 
 
 class SandboxBusy(Refused):
@@ -518,7 +609,9 @@ class KeysRefused(Refused):
     def __init__(self) -> None:
         super().__init__(
             "asc is in watch mode, which never sends keys",
-            hint="asc stop, then asc start --mode desktop or sandbox",
+            # On Windows your NVDA runs in watch mode, and desktop mode refuses to start beside it.
+            hint="asc stop, then asc start --mode "
+            + ("sandbox, or desktop" if sys.platform == "win32" else "desktop"),
         )
 
 

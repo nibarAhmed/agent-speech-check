@@ -17,12 +17,13 @@ import re
 import secrets
 import signal
 import subprocess
+import sys
 import time
 import traceback
 from collections.abc import Awaitable, Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon import ipc, state
@@ -32,7 +33,6 @@ from agent_speech_check.errors import (
     LaunchElsewhere,
     LaunchFailed,
     NoMatch,
-    NvdaNotConnected,
     PanicKeyTaken,
     SharedNeedsConsent,
     SinceAhead,
@@ -40,15 +40,20 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
-from agent_speech_check.inputs.keys import Hotkey
+from agent_speech_check.inputs.keys import Gesture, Hotkey, text_gestures, typed_gestures
 from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.orca.link import OrcaLink, watch_secret
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import Relay
 from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
+from agent_speech_check.remote.ssh import Tunnel
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.windows import winapi
-from agent_speech_check.windows.paths import mode_dir, relay_dir, state_root
+from agent_speech_check.system import winapi
+from agent_speech_check.system.paths import mode_dir, relay_dir, state_root
+
+if sys.platform != "win32":
+    import fcntl
 
 log = logging.getLogger(__name__)
 
@@ -123,10 +128,8 @@ def check_panic_key(key: Hotkey) -> None:
 
 
 def relay_host(target: Target) -> str:
-    """A sandbox or VM reaches the host only on the Default Switch, unless told otherwise."""
-    if target.host is not None:
-        return target.host
-    return firewall.default_switch_address() if target.listens_outside else relay.HOST
+    """A sandbox reaches the host only on the Default Switch."""
+    return firewall.default_switch_address() if target.launches_sandbox else relay.HOST
 
 
 def start_app(command: str) -> None:
@@ -134,7 +137,7 @@ def start_app(command: str) -> None:
     try:
         subprocess.Popen(  # noqa: S603 - the user's own app, run as asked
             command,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -182,13 +185,22 @@ class Daemon:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        self.relay = Relay(relay.load_or_create(relay_dir(target.mode)), self.speech)
-        self.keyboard = Keyboard(target, self.relay, self.speech)
+        # Orca's helper takes the relay's place: nothing listens for Orca.
+        self.relay: Relay | None = None
+        self.orca: OrcaLink | None = None
+        self.tunnel: Tunnel | None = None
+        self.link: Relay | OrcaLink
+        if target.orca:
+            watch = watch_secret() if target.mode == "watch" else None
+            self.link = self.orca = OrcaLink(target.ssh, self.speech, watch)
+        else:
+            credentials = relay.load_or_create(relay_dir(target.mode))
+            self.link = self.relay = Relay(credentials, self.speech)
+        self.keyboard = Keyboard(target, self.link, self.speech)
         self.stopping = asyncio.Event()
         self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
-        self.shown_host = relay.HOST
         # Commands in progress, in no set order. Status shows them, so a client can tell a
         # command has begun: each one takes its starting point before its first await.
         self.running: list[str] = []
@@ -234,33 +246,45 @@ class Daemon:
         return {"lines": lines, "dropped": dropped}
 
     def status(self) -> dict[str, Any]:
+        credentials = None if self.relay is None else self.relay.credentials
         return {
             "mode": self.target.mode,
             "keys": self.target.keys,
-            "connected": self.relay.connected,
-            "host": self.shown_host,
-            "port": self.relay.port,
-            "channel": self.relay.credentials.channel,
-            "fingerprint": self.relay.credentials.fingerprint,
-            "nvda_mode": self.speech.mode,
+            "reader": "orca" if self.orca is not None else "nvda",
+            "ssh": self.target.ssh,
+            "tunnel": None if self.tunnel is None else self.tunnel.state(),
+            "connected": self.link.connected,
+            "host": None if self.relay is None else self.relay.host,
+            "port": self._port(),
+            "channel": None if credentials is None else credentials.channel,
+            "fingerprint": None if credentials is None else credentials.fingerprint,
+            "browse_focus": self.speech.mode,
             "lines": len(self.speech),
             "latest": self.speech.latest,
-            "last_error": self.relay.last_error,
+            "last_error": self.link.last_error,
             "sandbox": None if self.sandbox is None else self.sandbox.state,
-            "sandbox_failure": self._sandbox_failure(),
+            "failure": self._failure(),
             "panic_key": None if self.panic is None else self.target.panic_key.text,
             "running": list(self.running),
         }
 
-    def _sandbox_failure(self) -> dict[str, Any] | None:
-        failure = None if self.sandbox is None else self.sandbox.failure
+    def _port(self) -> int | None:
+        """Where NVDA connects: on the other machine, for a tunnel."""
+        if self.relay is None:
+            return None
+        return self.target.port if self.tunnel else self.relay.port
+
+    def _failure(self) -> dict[str, Any] | None:
+        """Why the sandbox, Orca or the tunnel never got going, for `asc start` to raise."""
+        owner = self.sandbox or self.orca or self.tunnel
+        failure = None if owner is None else owner.failure
         return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
         self._check_since(args.since)
-        if not self.relay.connected:
-            raise NvdaNotConnected
-        losses_before = len(self.relay.losses)
+        if not self.link.connected:
+            raise self.link.not_connected
+        losses_before = len(self.link.losses)
         entry = await self._wait_match(args.regex, args.since, args.timeout_ms, losses_before)
         if entry is None:
             raise self._no_match(args.pattern, args.timeout_ms, args.since)
@@ -273,16 +297,17 @@ class Daemon:
         after `losses_before` (`len(relay.losses)` when the command began).
 
         A plain drop doesn't fail it: NVDA reconnects by itself about 5 s later.
+        Orca never comes back, so with Orca any loss fails it.
         """
-        check = functools.partial(self.relay.check, losses_before, drop_fails=False)
+        check = functools.partial(self.link.check, losses_before, drop_fails=False)
         return await self.speech.wait_match(pattern, after, timeout_ms / 1000, check)
 
     def _no_match(
         self, pattern: str, timeout_ms: int, after: int, windows: list[str] | None = None
     ) -> AscError:
         """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
-        if not self.relay.connected:
-            return NvdaNotConnected(timeout_ms, self.relay.last_error)
+        if not self.link.connected:
+            return self.link.not_connected(timeout_ms, self.link.last_error)
         lines, dropped = _fit(self.speech.since(after))
         said = numbered_lines(lines, after, dropped)
         return NoMatch(pattern, timeout_ms, said, windows)
@@ -296,24 +321,31 @@ class Daemon:
             raise self._no_match(args.expect or "", args.timeout_ms, pressed.after)
         return _new_speech(pressed.since, pressed.after)
 
+    def _typed(self, text: str) -> tuple[Gesture, ...]:
+        """X names each character by its keysym; Windows needs the layout's key for it."""
+        return typed_gestures(text) if self.orca is not None else text_gestures(text)
+
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
-            args.parsed, args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
+            self._typed(args.text), args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
         )
         return _new_speech(typed.since, typed.after)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
-        if self.target.mode == "remote":
+        if self.target.tunnel:
             raise LaunchElsewhere
-        if not self.relay.connected:
-            raise NvdaNotConnected
+        if not self.link.connected:
+            raise self.link.not_connected
         start = self.speech.latest
         # Before the launch, which can take seconds in a sandbox.
-        losses_before = len(self.relay.losses)
-        # The sandbox's windows can't be seen from here.
-        before = None if self.sandbox is not None else set(winapi.windows_titled(""))
+        losses_before = len(self.link.losses)
+        # The sandbox's and Orca's windows can't be seen from here.
+        seen = self.sandbox is None and self.orca is None
+        before = set(winapi.windows_titled("")) if seen else None
         if self.sandbox is not None:
             await self.sandbox.launch(args.command)
+        elif self.orca is not None:
+            await self.orca.launch(args.command)
         else:
             # Input only where the agent may send it: in watch mode the user drives.
             if self.target.keys and not mouse.nudge():
@@ -335,6 +367,8 @@ class Daemon:
         return _new_speech(self.speech.since(start), start)
 
     def _relay_info(self) -> nvda_config.RelayAddress:
+        if self.relay is None:  # only an NVDA that asc launches asks, never Orca
+            raise RuntimeError
         credentials = self.relay.credentials
         return nvda_config.RelayAddress(
             self.relay.host, self.relay.port, credentials.channel, credentials.fingerprint
@@ -365,15 +399,20 @@ class Daemon:
         log.warning("panic hotkey pressed: stopping")
         self.stopping.set()
 
+    async def _start_relay(self, relay: Relay) -> asyncio.Server:
+        host = await asyncio.to_thread(relay_host, self.target)
+        # A tunnel's port is on the other machine; here any free one does.
+        server = await relay.start(0 if self.target.tunnel else self.target.port, host)
+        log.info("relay on %s", relay.port)
+        if self.target.tunnel and self.target.ssh is not None:
+            self.tunnel = Tunnel(self.target.ssh, self.target.port, relay.port)
+        return server
+
     async def run(self) -> None:
         self._start_panic_key()
-        host = await asyncio.to_thread(relay_host, self.target)
-        relay_server = await self.relay.start(self.target.port, host)
-        # A VM's NVDA keeps the host it was given; the Default Switch address drifts.
-        if self.target.mode == "remote" and self.target.host is None:
-            self.shown_host = await asyncio.to_thread(firewall.switch_name, host)
-        else:
-            self.shown_host = host
+        relay_server = None
+        if self.relay is not None:
+            relay_server = await self._start_relay(self.relay)
         token = secrets.token_urlsafe(32)
         ipc_server = await asyncio.start_server(
             functools.partial(ipc.serve_one, token, self.handle),
@@ -382,32 +421,55 @@ class Daemon:
             limit=ipc.MAX_REQUEST,
         )
         port = ipc_server.sockets[0].getsockname()[1]
-        log.info("relay on %s, IPC on %d", self.relay.port, port)
+        log.info("IPC on %d", port)
+        # Outside the group: it ends after the relay, so key releases still reach NVDA.
+        tunnel = None
+        if self.tunnel is not None:
+            tunnel = asyncio.create_task(self.tunnel.run())
+            tunnel.add_done_callback(self._stop_if_crashed)
         try:
             # Off the loop: copying the user's config (add-ons too) can take a while.
             await asyncio.to_thread(self._start_nvda)
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
-                keepalive = group.create_task(self.relay.keepalive())
+                link = self.link
+                follow = group.create_task(
+                    link.keepalive() if isinstance(link, Relay) else link.run()
+                )
                 if self.target.launches_sandbox:
                     self.sandbox = SandboxSession(self.folder, self.target, self._relay_info())
                     group.create_task(self.sandbox.run())
                 await self.stopping.wait()
-                keepalive.cancel()
+                follow.cancel()
         finally:
             self.keyboard.release_all()
             # Before NVDA goes, so it can still answer the close.
-            self.relay.disconnect()
+            if self.relay is not None:
+                self.relay.disconnect()
+            if self.orca is not None:
+                await self.orca.stop()
             if self.nvda is not None:
                 self.nvda.stop()
             if self.sandbox is not None:
                 await self.sandbox.stop()
-            relay_server.close()
+            if relay_server is not None:
+                relay_server.close()
             ipc_server.close()
             state.remove(self.folder)
             if self.panic is not None:
                 self.panic.stop()
+            if tunnel is not None:
+                tunnel.cancel()
+                # Last, so a crash it raises skips no cleanup. wait() lets our own cancel through.
+                await asyncio.wait([tunnel])
+                if not tunnel.cancelled():
+                    tunnel.result()
             log.info("stopped")
+
+    def _stop_if_crashed(self, task: asyncio.Task[None]) -> None:
+        """A crash ends the daemon, as one in the task group does."""
+        if not task.cancelled() and task.exception() is not None:
+            self.stopping.set()
 
 
 def _on_break(loop: asyncio.AbstractEventLoop, daemon: Daemon) -> None:
@@ -417,8 +479,26 @@ def _on_break(loop: asyncio.AbstractEventLoop, daemon: Daemon) -> None:
 async def _main(target: Target, folder: Path) -> None:
     daemon = Daemon(target, folder)
     loop = asyncio.get_running_loop()
-    signal.signal(signal.SIGBREAK, lambda *_: _on_break(loop, daemon))
+    if sys.platform == "win32":
+        signal.signal(signal.SIGBREAK, lambda *_: _on_break(loop, daemon))
+    else:
+        loop.add_signal_handler(signal.SIGTERM, daemon.stopping.set)
     await daemon.run()
+
+
+def _only_daemon(root: Path) -> int | IO[bytes] | None:
+    """Take the lock that lets one daemon run per state folder, held until this
+    process exits. None if another daemon holds it."""
+    if sys.platform == "win32":
+        return winapi.take_mutex(winapi.mutex_name(root))
+    else:  # not after the return: mypy on Windows would check fcntl
+        lock = (root / "daemon.lock").open("ab")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.close()
+            return None
+        return lock
 
 
 def run(target_json: str) -> int:
@@ -427,7 +507,8 @@ def run(target_json: str) -> int:
     folder = mode_dir(target.mode)
     folder.mkdir(parents=True, exist_ok=True)
     _setup_logging(folder)
-    if winapi.take_mutex(winapi.mutex_name(state_root())) is None:
+    lock = _only_daemon(state_root())
+    if lock is None:
         raise AlreadyRunning
     log.info("starting %s mode", target.mode)
     try:

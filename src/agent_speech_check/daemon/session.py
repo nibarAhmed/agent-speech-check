@@ -5,12 +5,13 @@ from __future__ import annotations
 import errno
 import socket
 import subprocess
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from agent_speech_check.config.targets import Target
+from agent_speech_check.config.targets import Target, check_runnable
 from agent_speech_check.daemon import ipc, server, state
 from agent_speech_check.daemon.server import LOG_FILE
 from agent_speech_check.errors import (
@@ -25,18 +26,20 @@ from agent_speech_check.errors import (
     NotConnected,
     NotRunning,
     NvdaDidNotConnect,
-    OwnNvdaInInstance,
+    OwnReaderInInstance,
     PortInUse,
     RemoteNeedsInstance,
     SandboxBusy,
     SharedNeedsConsent,
+    SshFailed,
 )
 from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.orca.link import watch_secret
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.windows import paths, spawn, winapi
-from agent_speech_check.windows.paths import relay_dir
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import paths, processes, spawn
+from agent_speech_check.system.paths import relay_dir
+from agent_speech_check.system.wait import poll_until
 
 START_TIMEOUT_S = 15.0
 # Past the daemon's own worst case: 10 s for NVDA, then its window threads.
@@ -46,8 +49,7 @@ ERR_FILE = "daemon.err"
 TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
 # A sandbox boots and makes its portable NVDA first, which takes a while.
-CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0}
-CONNECT_POLL_S = 1.0
+CONNECT_TIMEOUT_S = {"watch": 60.0, "desktop": 60.0, "sandbox": 300.0, "remote": 60.0}
 
 
 def status(folder: Path) -> dict[str, Any]:
@@ -103,11 +105,11 @@ def _end(folder: Path) -> None:
         state.remove(folder)
         return
     try:
-        created = winapi.created_at(current.pid)
+        created = processes.created_at(current.pid)
         # A pid is reused only after its process is gone, so a process made after
         # the daemon wrote the file is some other program: leave it alone.
         if created is not None and created <= current.started:
-            winapi.terminate(current.pid, STOP_TIMEOUT_S)
+            processes.terminate(current.pid, STOP_TIMEOUT_S)
     except OSError:
         # It may still run, so the file stays: forgetting it would orphan it.
         raise DaemonUnstoppable([current.pid]) from None
@@ -143,8 +145,8 @@ def _check_nvda(target: Target) -> None:
 
 
 def _check_firewall(target: Target) -> None:
-    if not firewall.rule_ok(target.mode, target.port):
-        raise FirewallRuleMissing(target.port, firewall.setup_command(target.mode))
+    if not firewall.rule_ok(target.port):
+        raise FirewallRuleMissing(target.port, firewall.setup_command())
 
 
 def _check_sandbox(target: Target) -> None:
@@ -162,14 +164,15 @@ def _check_sandbox(target: Target) -> None:
 def check_instance(target: Target, command: str) -> None:
     """Refuse a mode this kind of instance doesn't run."""
     named = paths.instance() is not None
-    if target.own_nvda and named:
-        raise OwnNvdaInInstance(target.mode)
+    if target.own_reader and named:
+        raise OwnReaderInInstance(target.mode)
     if target.named_only and not named:
         raise RemoteNeedsInstance(command)
 
 
 def precheck(target: Target) -> None:
     """Check what the daemon would fail on, so the CLI exits with the right code."""
+    check_runnable(target)
     check_instance(target, "start")
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
@@ -178,41 +181,46 @@ def precheck(target: Target) -> None:
         launcher.refuse_if_running()
     if target.launches_sandbox:
         _check_sandbox(target)
-    if target.mode == "remote":
-        _check_firewall(target)
     # Last: it holds the hotkey for a moment, so only once nothing else refuses.
     if target.takes_panic_key:
         server.check_panic_key(target.panic_key)
 
 
-def sandbox_failure(current: dict[str, Any]) -> AscError | None:
-    """Why the daemon's sandbox failed, as it was raised there, or None."""
-    raw = current.get("sandbox_failure")
-    return None if raw is None else ipc.error_from(raw, "sandbox_failure")
+def failure(current: dict[str, Any]) -> AscError | None:
+    """Why the daemon's sandbox or Orca failed, as it was raised there, or None."""
+    raw = current.get("failure")
+    return None if raw is None else ipc.error_from(raw, "failure")
 
 
-def _wait_connected(target: Target, folder: Path) -> dict[str, Any]:
-    """For an NVDA that asc launches, wait until it has joined the relay."""
+def _wait_ready(target: Target, folder: Path) -> dict[str, Any]:
+    """Wait until the screen reader asc starts has joined, or the tunnel NVDA joins
+    through is up."""
     timeout_s = CONNECT_TIMEOUT_S[target.mode]
     deadline = time.monotonic() + timeout_s
     while True:
         current = status(folder)
-        if current["connected"]:
+        if current["tunnel"]["up"] if target.tunnel else current["connected"]:
             return current
-        failure = sandbox_failure(current)
-        if failure or time.monotonic() > deadline:
+        failed = failure(current)
+        if failed or time.monotonic() > deadline:
             stop(folder)
-            if failure:
-                raise failure
-            raise NvdaDidNotConnect(timeout_s, log_tail(folder))
-        time.sleep(CONNECT_POLL_S)
+            if failed:
+                raise failed
+            if target.tunnel:
+                raise SshFailed(str(target.ssh), f"no tunnel within {timeout_s:g} s")
+            reader = "Orca" if target.orca else "NVDA"
+            raise NvdaDidNotConnect(timeout_s, log_tail(folder), reader)
+        time.sleep(POLL_S)
 
 
 def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
-    relay.load_or_create(relay_dir(target.mode))
+    if not target.orca:
+        relay.load_or_create(relay_dir(target.mode))
+    elif target.mode == "watch":
+        watch_secret()
     # Only one daemon runs, whatever its mode, even one that no longer answers.
     for other in state.folders(folder.parent):
         running, silent = _probe(other)
@@ -220,11 +228,12 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
             raise DaemonNotAnswering(silent.message)
         if running:
             raise AlreadyRunning(other.name)
-    if target.port:
+    # A tunnel's port is on the other machine.
+    if target.port and not target.tunnel:
         _check_port_free(target)
     _wait_started(_spawn(target, folder), folder)
-    if target.launches_nvda:
-        return _wait_connected(target, folder)
+    if target.launches_reader or target.tunnel:
+        return _wait_ready(target, folder)
     return status(folder)
 
 
@@ -238,6 +247,14 @@ def _wait_started(process: subprocess.Popen[bytes], folder: Path) -> None:
         raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
 
 
+# Windows says WSAEACCES for a port another socket holds exclusively; Linux's EACCES
+# is a privileged port instead, which the daemon reports.
+if sys.platform == "win32":
+    _IN_USE = (errno.WSAEADDRINUSE, errno.WSAEACCES)
+else:
+    _IN_USE = (errno.EADDRINUSE,)
+
+
 def _check_port_free(target: Target) -> None:
     """Another instance's relay may hold the port, which the daemon could only
     report as a failed start. Probed on the relay's own address: on Windows a
@@ -246,7 +263,7 @@ def _check_port_free(target: Target) -> None:
         socket.create_server((server.relay_host(target), target.port)).close()
     except OSError as error:
         # Any other failure, like an address not ours, is the daemon's to report.
-        if error.errno not in (errno.WSAEADDRINUSE, errno.WSAEACCES):
+        if error.errno not in _IN_USE:
             return
         command = f"asc config set port PORT --mode {target.mode}{paths.instance_flag()}"
         raise PortInUse(target.port, command) from None
@@ -295,6 +312,6 @@ def stop_all(
     if stuck:
         raise DaemonUnstoppable(stuck)
     if image is not None and not poll_until(
-        lambda: not winapi.others_running(image), timeout_s, POLL_S
+        lambda: not processes.others_running(image), timeout_s, POLL_S
     ):
-        raise AscStillRunning(winapi.others_running(image))
+        raise AscStillRunning(processes.others_running(image))

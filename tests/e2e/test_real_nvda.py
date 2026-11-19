@@ -26,8 +26,8 @@ from agent_speech_check.nvda import invite
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import fingerprint
-from agent_speech_check.windows import paths, winapi
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import paths, processes, winapi
+from agent_speech_check.system.wait import poll_until
 
 pytestmark = [
     pytest.mark.e2e,
@@ -46,8 +46,11 @@ def insert_held() -> bool:
     return bool(ctypes.windll.user32.GetAsyncKeyState(0x2D) & 0x8000)
 
 
-def wait_connected(timeout_s: float = 90) -> None:
-    connected = poll_until(lambda: "nvda: connected" in run_asc("status").stdout, timeout_s, 1)
+def wait_connected(*status_args: str, timeout_s: float = 90) -> None:
+    def connected_now() -> bool:
+        return "nvda: connected" in run_asc("status", *status_args).stdout
+
+    connected = poll_until(connected_now, timeout_s, 1)
     assert connected, "NVDA did not connect"
 
 
@@ -58,6 +61,18 @@ def in_focus_mode() -> bool:
 def nvda_log(request: pytest.FixtureRequest, tmp_path: Path) -> Path:
     """This test's own NVDA log, where the e2e runs collect it."""
     return Path(os.environ.get("ASC_E2E_OUT", tmp_path)) / f"{request.node.name}.nvda.log"
+
+
+def start_nvda(request: pytest.FixtureRequest, tmp_path: Path, ini: str) -> subprocess.Popen[bytes]:
+    """The throwaway machine's portable NVDA, with its own config holding `ini`."""
+    config = tmp_path / "nvda_config"
+    config.mkdir()
+    (config / "nvda.ini").write_text(ini, encoding="utf-8")
+    nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
+    log = nvda_log(request, tmp_path)
+    return subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
+        [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
+    )
 
 
 @pytest.fixture
@@ -76,15 +91,8 @@ def real_nvda(
     assert started.returncode == 0, started.stderr
     folder = root / "desktop"
     channel = json.loads((folder / "relay.json").read_text(encoding="utf-8"))["channel"]
-    config = tmp_path / "nvda_config"
-    config.mkdir()
     ini = render(RelayAddress("127.0.0.1", port, channel, fingerprint(folder / "relay_cert.pem")))
-    (config / "nvda.ini").write_text(ini, encoding="utf-8")
-    nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
-    log = nvda_log(request, tmp_path)
-    process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
-        [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
-    )
+    process = start_nvda(request, tmp_path, ini)
     try:
         wait_connected()
         yield
@@ -104,6 +112,43 @@ def test_real_nvda_joins_speaks_and_releases() -> None:
     pressed = run_asc("press", "NVDA+T", "--settle", "800")
     assert pressed.returncode == 0, pressed.stderr
     assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
+    assert not insert_held()
+
+
+@pytest.mark.skipif("ASC_E2E_SSH" not in os.environ, reason="needs ASC_E2E_SSH")
+def test_remote_nvda_joins_through_the_tunnel(
+    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A VM's NVDA as SKILL.md sets one up, from `asc status --nvda-ini`. The VM is this
+    machine, reached over ssh as ASC_E2E_SSH says."""
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    instance = ("--instance", "e2e-nvda-ssh")
+    home = tmp_path / "agent-speech-check" / "instances" / instance[1]
+    home.mkdir(parents=True)
+    remote = (
+        f"[remote]\nos = 'windows'\nssh = '{os.environ['ASC_E2E_SSH']}'\nport = {free_port()}\n"
+    )
+    (home / "config.toml").write_text(remote, encoding="utf-8")
+    started = run_asc("start", "--mode", "remote", *instance)
+    assert started.returncode == 0, started.stderr
+    try:
+        ini = run_asc("status", "--nvda-ini", *instance)
+        assert ini.returncode == 0, ini.stderr
+        process = start_nvda(request, tmp_path, ini.stdout)
+        try:
+            wait_connected(*instance)
+            pressed = run_asc("press", "NVDA+T", "--settle", "800", *instance)
+            assert pressed.returncode == 0, pressed.stderr
+            assert re.match(r'[0-9]+ said: "', pressed.stdout), pressed.stdout
+            # The VM's running NVDA's reference: this one has no other.
+            keys = run_asc("keys", "report", "title", "--mode", "remote", *instance)
+            assert keys.stdout.startswith("NVDA+t  Report title"), keys.stdout + keys.stderr
+        finally:
+            process.kill()
+            process.wait(30)
+    finally:
+        stopped = run_asc("stop", *instance)
+    assert stopped.returncode == 0, stopped.stderr
     assert not insert_held()
 
 
@@ -198,7 +243,7 @@ def test_desktop_mode_end_to_end(
             if log.exists():
                 shutil.copy(log, nvda_log(request, tmp_path))
     assert stopped.returncode == 0
-    assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
+    assert poll_until(lambda: not processes.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()
 
 
@@ -252,21 +297,14 @@ def test_watch_start_gets_a_running_nvda_to_join(
     # but nothing tells it to connect.
     ini = render(RelayAddress("127.0.0.1", port, made.channel, made.fingerprint))
     assert "autoconnect = True" in ini
-    config = tmp_path / "nvda_config"
-    config.mkdir()
-    (config / "nvda.ini").write_text(
-        ini.replace("autoconnect = True", "autoconnect = False"), encoding="utf-8"
-    )
-    nvda = Path(os.environ["ASC_E2E_NVDA"]) / "nvda.exe"
-    log = nvda_log(request, tmp_path)
     # An earlier test's NVDA, killed, leaves the link scheme behind: without it,
     # the scheme being there means this NVDA is up.
     scheme = invite.HANDLER.removesuffix(r"\shell\open\command")
     for key in (invite.HANDLER, rf"{scheme}\shell\open", rf"{scheme}\shell", scheme):
         with contextlib.suppress(FileNotFoundError):
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
-    process = subprocess.Popen(  # noqa: S603 - the throwaway machine's portable NVDA
-        [str(nvda), f"--config-path={config}", f"--log-file={log}", "-l", "20"]
+    process = start_nvda(
+        request, tmp_path, ini.replace("autoconnect = True", "autoconnect = False")
     )
     try:
         # NVDA registers the link scheme once Remote Access is up.

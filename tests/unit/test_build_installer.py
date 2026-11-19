@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from scripts.build_installer import msi_version, require_x64
+from scripts.build_linux import linux_machine
 
 
 @pytest.mark.parametrize("version", ["0.0.1", "1.2.3", "255.255.65535"])
@@ -26,3 +27,14 @@ def test_require_x64_accepts_64_bit_intel_python() -> None:
 def test_require_x64_refuses_python_that_would_freeze_other_binaries(platform: str) -> None:
     with pytest.raises(SystemExit, match="needs 64-bit x86 Python"):
         require_x64(platform)
+
+
+def test_linux_machine_is_one_the_updater_takes() -> None:
+    assert linux_machine("linux-x86_64") == "x86_64"
+    assert linux_machine("linux-aarch64") == "aarch64"
+
+
+@pytest.mark.parametrize("platform", ["linux-armv7l", "linux-i686", "win-amd64"])
+def test_linux_machine_refuses_python_that_would_freeze_other_binaries(platform: str) -> None:
+    with pytest.raises(SystemExit, match="needs 64-bit x86 or Arm Linux Python"):
+        linux_machine(platform)

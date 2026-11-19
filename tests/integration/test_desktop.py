@@ -18,10 +18,10 @@ from tests import fake_nvda as f
 from tests.fake_nvda import FakeNvda
 from tests.integration.conftest import Env, run_asc, start_asc
 
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import processes
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
-NVDA_RUNNING = bool(winapi.process_ids("nvda.exe"))
+NVDA_RUNNING = bool(processes.process_ids("nvda.exe"))
 
 
 @pytest.fixture
@@ -147,7 +147,7 @@ def test_sandbox_needs_the_firewall_rule(env: Env, monkeypatch: pytest.MonkeyPat
     result = run_asc("start", "--mode", "sandbox")
     assert result.returncode == 7
     assert (
-        f"no firewall rule lets NVDA on another machine reach asc on port {env.port}"
+        f"no firewall rule lets NVDA in Windows Sandbox reach asc on port {env.port}"
         in result.stderr
     )
     assert "hint: asc firewall-setup --mode sandbox (asks" in result.stderr

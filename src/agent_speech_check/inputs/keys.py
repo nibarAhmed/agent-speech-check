@@ -8,10 +8,12 @@ Num Lock off: `Numpad5` is VK_CLEAR, not VK_NUMPAD5.
 from __future__ import annotations
 
 import difflib
+import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
-from agent_speech_check.windows import winapi
+from agent_speech_check.system import winapi
 
 
 @dataclass(frozen=True)
@@ -97,8 +99,10 @@ _NAMED: list[tuple[str, int, bool]] = [
 ]
 
 ALIASES: dict[str, str] = {
+    "orca": "nvda",  # the screen reader's own modifier, Insert on the desktop layout
     "ctrl": "control",
     "win": "windows",
+    "super": "windows",
     "esc": "escape",
     "return": "enter",
     "del": "delete",
@@ -200,27 +204,34 @@ _MAX_UTF16_UNIT = 0xFFFF
 _TYPED_SPECIALS = {"\n": "enter", "\t": "tab"}
 
 
-def text_gestures(text: str) -> tuple[Gesture, ...]:
-    """One gesture per character, from the current keyboard layout.
-
-    Every character is checked first; if any can't be typed, nothing is.
-    """
+def _gestures(text: str, one: Callable[[str], Gesture | None], why: str) -> tuple[Gesture, ...]:
+    """Every character is checked first; if any can't be typed, nothing is."""
     gestures: list[Gesture] = []
     bad: list[str] = []
     for char in text.replace("\r\n", "\n"):
         special = _TYPED_SPECIALS.get(char)
-        scan = None if special else _scan(char)
-        if special is not None:
-            gestures.append(Gesture((), KEYS[special]))
-        elif scan is None:
+        gesture = Gesture((), KEYS[special]) if special is not None else one(char)
+        if gesture is None:
             bad.append(char)
         else:
-            vk, state = scan
-            modifiers = tuple(MODIFIERS[name] for bit, name in _SHIFT_BITS if state & bit)
-            gestures.append(Gesture(modifiers, Key(char, vk, extended=False)))
+            gestures.append(gesture)
     if bad:
-        raise UntypableText(list(dict.fromkeys(bad)))
+        raise UntypableText(list(dict.fromkeys(bad)), why)
     return tuple(gestures)
+
+
+def text_gestures(text: str) -> tuple[Gesture, ...]:
+    """One gesture per character, from the current keyboard layout."""
+    return _gestures(text, _from_layout, "with the current keyboard layout")
+
+
+def _from_layout(char: str) -> Gesture | None:
+    scan = _scan(char)
+    if scan is None:
+        return None
+    vk, state = scan
+    modifiers = tuple(MODIFIERS[name] for bit, name in _SHIFT_BITS if state & bit)
+    return Gesture(modifiers, Key(char, vk, extended=False))
 
 
 def _scan(char: str) -> tuple[int, int] | None:
@@ -228,3 +239,15 @@ def _scan(char: str) -> tuple[int, int] | None:
     if ord(char) > _MAX_UTF16_UNIT:
         return None
     return winapi.vk_key_scan(char)
+
+
+def typed_gestures(text: str) -> tuple[Gesture, ...]:
+    """One gesture per character, for X: the keysym names the character, so no
+    layout is needed."""
+    return _gestures(text, _for_x, "(control characters)")
+
+
+def _for_x(char: str) -> Gesture | None:
+    if unicodedata.category(char) in ("Cc", "Cs"):
+        return None
+    return Gesture((), Key(char, 0, extended=False))

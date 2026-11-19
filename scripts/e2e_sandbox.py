@@ -2,18 +2,21 @@
 
 Never runs any NVDA binary on this machine: NVDA's command line acts on the
 copy that is already running (your screen reader). Everything NVDA happens
-inside the sandbox. This script only downloads the installer.
+inside the sandbox. This script only downloads the installer and Windows' OpenSSH
+server.
 
 Prepares `.e2e/` (git-ignored):
   in/py/       uv-managed CPython (relocatable, unlike the Store Python)
   in/site/     asc plus test dependencies, installed for that Python
   in/nvda_<v>.exe
+  in/OpenSSH-Win64-<v>.zip   sshd, for the real-ssh tests (scripts/windows_sshd.py)
   out/         written by the sandbox: progress.txt, pytest.txt, DONE
 
 Then starts the sandbox with `wsb`, the repo mapped read-only, runs the tests
 in its user session with `wsb exec`, and waits for DONE.
 The sandbox stops Windows Audio first (silent on the host), creates the
-portable NVDA at C:\\nvda, runs the e2e tests, and shuts itself down.
+portable NVDA at C:\\nvda, installs sshd so it can ssh to localhost, runs the
+e2e tests, and shuts itself down.
 
 The sandbox window is kept hidden behind an "asc e2e sandbox" tray icon, as in
 sandbox mode (see `sandbox/wsb.py`), so it never takes focus or catches keys typed
@@ -34,9 +37,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import windows_sshd
+
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system.wait import poll_until
 
 REPO = Path(__file__).resolve().parents[1]
 PYTHON = (REPO / ".python-version").read_text(encoding="utf-8").strip()
@@ -99,6 +104,7 @@ def prepare(nvda_version: str, sha1: str | None) -> None:
     # With a SHA-1, copied again from the checked download: a damaged copy would hang the run.
     if sha1 is not None or not installer.exists():
         shutil.copy2(launcher.download(nvda_version, sha1), installer)
+    windows_sshd.download(IN)
     if OUT.exists():
         shutil.rmtree(OUT)
     OUT.mkdir()
@@ -108,7 +114,7 @@ def write_cmd(nvda_version: str, pytest_args: list[str]) -> Path:
     python = python_exe()
     assert python is not None  # noqa: S101 - prepare() ran first
     py = f"{SANDBOX_IN}\\py\\{python.parent.name}\\python.exe"
-    args = " ".join(pytest_args)
+    args = subprocess.list2cmdline(pytest_args)
     cmd = WORK / "run.cmd"
     cmd.write_text(
         "@echo off\r\n"
@@ -129,6 +135,12 @@ def write_cmd(nvda_version: str, pytest_args: list[str]) -> Path:
         "set ASC_E2E_OUT=%OUT%\r\n"
         f"set PYTHONPATH={SANDBOX_IN}\\site;{SANDBOX_REPO}\r\n"
         "set PYTHONDONTWRITEBYTECODE=1\r\n"
+        # The sandbox has no ssh client of its own: the zip's, after any that's on PATH.
+        f"set PATH=%PATH%;{windows_sshd.SERVER}\r\n"
+        f"{py} {SANDBOX_REPO}\\scripts\\windows_sshd.py install {SANDBOX_IN}\\{windows_sshd.ZIP}"
+        " >> %OUT%\\progress.txt 2>&1\r\n"
+        # Even if that failed: the ssh tests then fail instead of skipping.
+        "set ASC_E2E_SSH=localhost\r\n"
         f"cd /d {SANDBOX_REPO}\r\n"
         f"{py} -m pytest -m e2e tests\\e2e -p no:cacheprovider -v {args}"
         " > %OUT%\\pytest.txt 2>&1\r\n"

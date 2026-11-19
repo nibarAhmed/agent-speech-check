@@ -2,15 +2,22 @@ import argparse
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import configobj
 import pytest
 
 from agent_speech_check import __version__
-from agent_speech_check.cli import COMMANDS, build_parser, main, nvda_ini
+from agent_speech_check.cli import COMMANDS, _show_status, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
-from agent_speech_check.errors import NvdaIniOnlyRemote
+from agent_speech_check.errors import (
+    NvdaIniOnlyRemote,
+    RemoteNeedsMachine,
+    SshMissing,
+    WindowsOnlyCommand,
+    WindowsOnlyMode,
+)
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -198,13 +205,43 @@ def test_internal_error_in_a_group_names_the_inner_error(
 
 
 def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
-    status = {"mode": "remote", "host": "pc", "port": 26837, "channel": "key", "fingerprint": "f"}
+    status = {
+        "mode": "remote",
+        "reader": "nvda",
+        "host": "pc",
+        "port": 26837,
+        "channel": "key",
+        "fingerprint": "f",
+    }
     remote = configobj.ConfigObj(nvda_ini(status).splitlines())["remote"]
     server = remote["controlServer"]
     assert (server["host"], server["port"], server["key"]) == ("pc:26837", "26837", "key")
     assert remote["trustedCertificates"]["pc:26837"] == "f"
     with pytest.raises(NvdaIniOnlyRemote):
         nvda_ini({**status, "mode": "watch"})
+    with pytest.raises(NvdaIniOnlyRemote, match="Orca"):
+        nvda_ini({**status, "port": None, "reader": "orca"})
+
+
+def test_status_lines(capsys: pytest.CaptureFixture[str]) -> None:
+    status = {
+        "mode": "remote",
+        "keys": True,
+        "reader": "nvda",
+        "ssh": "me@vm",
+        "tunnel": {"up": False, "error": "ssh me@vm failed: Host key verification failed."},
+        "connected": True,
+        "port": 6837,
+        "browse_focus": "focus",
+        "lines": 0,
+        "latest": 0,
+        "last_error": None,
+    }
+    _show_status(status)
+    said = "over ssh: me@vm, tunnel down (ssh me@vm failed: Host key verification failed.)\n"
+    assert said in capsys.readouterr().out
+    _show_status({**status, "reader": "orca", "browse_focus": "browse"})
+    assert "browse/focus: browse\n" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])
@@ -240,3 +277,49 @@ def test_printed_paths_are_real(
         assert logs == os.path.realpath(logs)
     finally:
         shutil.rmtree(os.path.realpath(root), ignore_errors=True)
+
+
+def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    for name in ("get-nvda", "firewall-setup"):
+        assert COMMANDS[name].windows_only
+        with pytest.raises(WindowsOnlyCommand):
+            run([name])
+
+
+@pytest.mark.parametrize(
+    ("os_line", "error"),
+    [('os = "windows"', SshMissing), ('os = "linux"', SshMissing), ("", RemoteNeedsMachine)],
+)
+def test_keys_in_remote_mode_reads_the_other_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, os_line: str, error: type[Exception]
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    config = tmp_path / "agent-speech-check" / "config.toml"
+    config.parent.mkdir()
+    config.write_text(f'[remote]\n{os_line}\nssh = "me@box"\n', encoding="utf-8")
+    with pytest.raises(error):
+        run(["keys", "--mode", "remote"])
+
+
+def test_keys_reads_orcas_help_on_linux(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
+    page = tmp_path / "help" / "C" / "orca" / "commands_a.page"
+    page.parent.mkdir(parents=True)
+    keys = "<keyseq><key>Orca Modifier</key><key>T</key></keyseq>"
+    item = f"<item><p>Present the title: {keys}</p></item>"
+    page.write_text(
+        '<page xmlns="http://projectmallard.org/1.0/" id="a"><title>A</title>'
+        f"<list>{item}{item}</list></page>",  # Orca's help repeats some commands
+        encoding="utf-8",
+    )
+    assert run(["keys", "--mode", "desktop", "title"]) == 0
+    assert capsys.readouterr().out == "Orca+T  Present the title\n"
+    with pytest.raises(WindowsOnlyMode):
+        run(["keys", "--mode", "sandbox", "title"])

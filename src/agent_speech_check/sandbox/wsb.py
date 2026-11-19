@@ -26,8 +26,8 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
-import winreg
 from dataclasses import dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -39,9 +39,9 @@ from agent_speech_check.errors import (
     SandboxNeedsPro,
     WsbMissing,
 )
+from agent_speech_check.system import powershell, processes, spawn, winapi
+from agent_speech_check.system.wait import poll_until
 from agent_speech_check.validate import Fields
-from agent_speech_check.windows import powershell, spawn, winapi
-from agent_speech_check.windows.wait import poll_until
 
 log = logging.getLogger(__name__)
 
@@ -287,6 +287,10 @@ def launch_command(command: str) -> str:
 
 
 def edition_id() -> str:
+    if sys.platform != "win32":
+        return ""
+    import winreg  # noqa: PLC0415 - only on Windows
+
     key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
         value, _ = winreg.QueryValueEx(key, "EditionID")
@@ -328,7 +332,7 @@ def running() -> list[str]:
 def wait_gone(timeout_s: float) -> bool:
     """Wait for the last sandbox VM to exit. Starting a new one before that
     attaches to the session that is logging off."""
-    return poll_until(lambda: not winapi.process_ids(VM_IMAGE), timeout_s, GONE_POLL_S)
+    return poll_until(lambda: not processes.process_ids(VM_IMAGE), timeout_s, GONE_POLL_S)
 
 
 def exec_as_user(sandbox_id: str, command: str) -> int:
@@ -494,7 +498,7 @@ def stop(sandbox_id: str) -> None:
 def guard(owner_pid: int, sandbox_id: str) -> None:
     """Wait for the owner process to end, however it ends, then stop its
     sandbox if that is still running. Runs as `asc _sandbox_guard`."""
-    winapi.wait_exit(owner_pid)
+    processes.wait_exit(owner_pid)
     if sandbox_id in running():
         stop(sandbox_id)
 

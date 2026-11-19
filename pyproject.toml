@@ -11,6 +11,7 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Environment :: Console",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Topic :: Software Development :: Testing",
     "Topic :: Adaptive Technologies",
@@ -77,17 +78,20 @@ spell = "codespell"
 fmt-check = "ruff format --check ."
 lint = "ruff check ."
 types = "mypy"
+# What `types` checks, as Linux sees it (mypy skips the other platform's sys.platform branches),
+# but the tests that drive Windows APIs: they run only there.
+types-linux = "mypy --platform linux --exclude 'tests/(unit/test_(invite|mouse|system)|e2e/test_real_nvda)[.]py$'"
 dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup"
 unit = "pytest tests/unit -q -n 4 --dist loadgroup -p no:cacheprovider"
-static = ["spell", "fmt-check", "lint", "types", "dead", "deps"]
+static = ["spell", "fmt-check", "lint", "types", "types-linux", "dead", "deps"]
 check = ["static", "test"]
 
 # A quicker gate than check. Runs every step even after a failure, so all problems
 # are reported at once.
 [tool.poe.tasks.fast]
-sequence = ["spell", "fmt-check", "lint", "types", "dead", "unit"]
+sequence = ["spell", "fmt-check", "lint", "types", "types-linux", "dead", "unit"]
 ignore_fail = "return_non_zero"
 
 # ---------------------------------------------------------------- ruff
@@ -114,6 +118,8 @@ select = [
 # The product's own waits and keepalives sleep on purpose; the sleep ban is for tests.
 "src/**" = ["TID251"]
 "tests/**" = ["S101", "PLR2004", "TRY003"]
+# It runs alone on the Linux machine: stdlib only, so no AscError, and programs from PATH.
+"src/agent_speech_check/orca/helper.py" = ["S603", "S607", "TRY003"]
 # Dev scripts and hooks print and run tools on purpose.
 "scripts/**" = ["T20", "S603", "S607"]
 ".claude/**" = ["T20", "S603", "S607"]
@@ -122,14 +128,19 @@ select = [
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "scripts/build_installer.py", "scripts/winget_manifest.py"]
+files = ["src", "tests", "scripts/build_installer.py", "scripts/build_linux.py", "scripts/winget_manifest.py", "scripts/windows_sshd.py", "scripts/e2e_linux.py"]
 mypy_path = ["src", ".", "stubs"]
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# Linux only, yet the Windows tests import it: mypy on Windows lacks os.killpg and the like.
+module = "agent_speech_check.orca.helper"
+disable_error_code = ["attr-defined"]
 
 # ---------------------------------------------------------------- vulture
 
 [tool.vulture]
-paths = ["src", "vulture_whitelist.py"]
+paths = ["src"]
 min_confidence = 60
 # Used, but not in a way vulture can see.
 ignore_names = [

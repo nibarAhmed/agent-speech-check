@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v1.2.3 releases that commit: the MSI and winget manifests go on a GitHub
-# Release. The tag must equal the version in pyproject.toml, so bump that first
+# Pushing a tag like v1.2.3 releases that commit: the MSI, winget manifests and Linux tarballs go
+# on a GitHub Release. The tag must equal the version in pyproject.toml, so bump that first
 # (CONTRIBUTING.md, Releasing).
 on:
   push:
@@ -59,8 +59,14 @@ jobs:
           path: dist/winget/*
           if-no-files-found: error
 
+  linux:
+    permissions:
+      contents: read
+    uses: $/.github/workflows/linux.yml
+
   github-release:
-    needs: build
+    # The build job checks the tag, so nothing is released without it.
+    needs: [build, linux]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

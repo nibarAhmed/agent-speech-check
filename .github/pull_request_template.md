@@ -19,8 +19,8 @@ change what for a breaking change. -->
 - `uv run poe check`: its final summary lines.
 - A changed command: a short `uv run asc` transcript, before and after. AGENTS.md (Testing
   policy) says how to run it safely.
-- Protocol or NVDA config changes: the result of `uv run python scripts/e2e_sandbox.py`, or why
-  it wasn't run.
+- Changes to how asc talks to NVDA or Orca: the related e2e tests (AGENTS.md, Testing policy)
+  and their result, or why they weren't run.
 - Anything you couldn't check. -->
 
 <!-- If an agent did the work, end with: Created with <model> in <harness>. -->

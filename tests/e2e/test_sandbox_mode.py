@@ -20,8 +20,8 @@ from tests.integration.conftest import run_asc
 from agent_speech_check.daemon import state
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import wsb
-from agent_speech_check.windows import winapi
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import processes, winapi
+from agent_speech_check.system.wait import poll_until
 
 pytestmark = [
     pytest.mark.e2e,
@@ -59,7 +59,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     (root / "config.toml").write_text(
         f"mode = 'sandbox'\n[sandbox]\nshare = ['{app.as_posix()}']\n", encoding="utf-8"
     )
-    users_nvda = sorted(winapi.process_ids("nvda.exe"))
+    users_nvda = sorted(processes.process_ids("nvda.exe"))
 
     started = run_asc("start", timeout=420)
     assert started.returncode == 0, started.stdout + started.stderr
@@ -69,7 +69,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         # The default, tray: the window is hidden, so none is visible.
         assert winapi.windows_titled(wsb.WINDOW_TITLE) == []
         # And focus went back: the sandbox client doesn't keep it.
-        client = winapi.process_ids("WindowsSandboxRemoteSession.exe")
+        client = processes.process_ids("WindowsSandboxRemoteSession.exe")
         assert winapi.window_pid(winapi.foreground()) not in client
         page = wsb.share_folder(str(app)) + "\\app.html"
         launched = run_asc("launch", f'mshta.exe "{page}"', "--title", "asc app")
@@ -115,7 +115,7 @@ def test_sandbox_mode_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         stopped = run_asc("stop", timeout=120)
     assert stopped.returncode == 0
     assert wsb.wait_gone(120)
-    assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
+    assert sorted(processes.process_ids("nvda.exe")) == users_nvda
 
 
 def test_sandbox_goes_when_its_daemon_is_killed(
@@ -193,7 +193,7 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
         "[speech]\nsymbolLevel = 300\nsynth = espeak\n", encoding="utf-8"
     )
     (user_config / "asc-marker.txt").write_text("x", encoding="utf-8")
-    users_nvda = sorted(winapi.process_ids("nvda.exe"))
+    users_nvda = sorted(processes.process_ids("nvda.exe"))
     (root / "config.toml").write_text(f"[sandbox]\nnvda_dir = '{portable}'\n", encoding="utf-8")
 
     started = run_asc("start", "--mode", "sandbox", timeout=420)
@@ -216,7 +216,7 @@ def test_sandbox_mode_with_your_portable(tmp_path: Path, monkeypatch: pytest.Mon
         stopped = run_asc("stop", timeout=120)
     assert stopped.returncode == 0
     assert wsb.wait_gone(120)
-    assert sorted(winapi.process_ids("nvda.exe")) == users_nvda
+    assert sorted(processes.process_ids("nvda.exe")) == users_nvda
     assert (
         (user_config / "nvda.ini").read_text(encoding="utf-8").startswith("[speech]\nsymbolLevel")
     )

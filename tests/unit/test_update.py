@@ -9,6 +9,7 @@ from typing import Any
 
 import psutil
 import pytest
+from scripts.build_linux import write_tarball
 
 from agent_speech_check.update import updater
 from agent_speech_check.update.updater import Release
@@ -27,10 +28,26 @@ def github(tag: str = "v0.5.0", **asset: Any) -> dict[str, Any]:
 
 
 def test_parse_release() -> None:
-    assert updater.parse_release(github()) == Release((0, 5, 0), URL, SHA)
-    assert updater.parse_release(github(digest=f"sha256:{SHA.upper()}")) == Release(
+    assert updater.parse_release(github(), "win32") == Release((0, 5, 0), URL, SHA)
+    assert updater.parse_release(github(digest=f"sha256:{SHA.upper()}"), "win32") == Release(
         (0, 5, 0), URL, SHA
     )
+
+
+def test_parse_release_takes_the_asset_built_for_this_platform() -> None:
+    answer = github()
+    tarballs = {}
+    for machine in ("x86_64", "aarch64"):
+        name = f"agent-speech-check-linux-{machine}.tar.gz"
+        tarballs[machine] = URL.replace("agent-speech-check-0.5.0.msi", name)
+        answer["assets"].append(
+            {"name": name, "browser_download_url": tarballs[machine], "digest": f"sha256:{SHA}"}
+        )
+    for machine, tarball in tarballs.items():
+        assert updater.parse_release(answer, "linux", machine) == Release((0, 5, 0), tarball, SHA)
+    assert updater.parse_release(answer, "win32", "ARM64") == Release((0, 5, 0), URL, SHA)
+    assert updater.parse_release(answer, "linux", "riscv64") is None
+    assert updater.parse_release(github(), "linux", "x86_64") is None
 
 
 @pytest.mark.parametrize(
@@ -50,7 +67,7 @@ def test_parse_release() -> None:
     ],
 )
 def test_parse_release_refuses_what_it_cannot_trust(answer: object) -> None:
-    assert updater.parse_release(answer) is None
+    assert updater.parse_release(answer, "win32") is None
 
 
 def test_newer() -> None:
@@ -77,10 +94,15 @@ def test_due(tmp_path: Path) -> None:
     assert updater.due(stamp, 2_000_000 + updater.RETRY_S)
 
 
-def test_enabled_unless_any_instance_turns_it_off(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.fixture
+def state_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """asc's state folders, under `tmp_path` on Windows and Linux alike."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+
+@pytest.mark.usefixtures("state_home")
+def test_enabled_unless_any_instance_turns_it_off(tmp_path: Path) -> None:
     home = tmp_path / "agent-speech-check"
     vm1 = home / "instances" / "vm1"
     vm1.mkdir(parents=True)
@@ -94,10 +116,8 @@ def test_enabled_unless_any_instance_turns_it_off(
     assert not updater.enabled()
 
 
-def test_installing_only_while_that_process_lives(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+@pytest.mark.usefixtures("state_home")
+def test_installing_only_while_that_process_lives() -> None:
     assert not updater.installing()
     child = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
     try:
@@ -117,10 +137,8 @@ def test_installing_only_while_that_process_lives(
     assert not updater.installing()
 
 
-def test_download_keeps_only_an_msi_with_the_listed_sha256(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+@pytest.mark.usefixtures("state_home")
+def test_download_keeps_only_an_msi_with_the_listed_sha256(tmp_path: Path) -> None:
     source = tmp_path / "served.msi"
     source.write_bytes(b"msi")
     good = hashlib.sha256(b"msi").hexdigest()
@@ -132,3 +150,44 @@ def test_download_keeps_only_an_msi_with_the_listed_sha256(
     msi = updater.download(Release((0, 5, 0), source.as_uri(), good))
     assert msi is not None
     assert msi.read_bytes() == b"msi"
+
+
+def installed(root: Path, *versions: str) -> Path:
+    """A Linux install at `root` with these versions, `current` at the last one: its asc."""
+    for version in versions:
+        (root / "versions" / version).mkdir(parents=True)
+        (root / "versions" / version / "asc").write_bytes(version.encode())
+    (root / "current").symlink_to(Path("versions") / versions[-1])
+    return root / "versions" / versions[-1] / "asc"
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+def test_install_root_is_where_the_tarball_was_unpacked(tmp_path: Path) -> None:
+    exe = installed(tmp_path / "agent-speech-check", "0.4.0")
+    assert updater.install_root(exe) == tmp_path / "agent-speech-check"
+    (tmp_path / "loose").mkdir()
+    assert updater.install_root(tmp_path / "loose" / "asc") is None
+    (tmp_path / "other" / "versions" / "0.4.0").mkdir(parents=True)
+    assert updater.install_root(tmp_path / "other" / "versions" / "0.4.0" / "asc") is None
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+def test_unpack_switches_current_and_keeps_only_what_may_run(tmp_path: Path) -> None:
+    root = tmp_path / "agent-speech-check"
+    exe = installed(root, "0.3.0", "0.4.0")
+    # What a crash mid-update left: a half-unpacked tarball and a half-made link.
+    (root / ".unpacking" / "junk").mkdir(parents=True)
+    (root / ".current").symlink_to("nowhere")
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "asc").write_bytes(b"0.5.0")
+    tarball = tmp_path / "agent-speech-check-linux-x86_64.tar.gz"
+    write_tarball(app, "0.5.0", tarball)
+
+    updater.unpack(tarball, exe, "0.5.0")
+
+    assert (root / "current" / "asc").read_bytes() == b"0.5.0"
+    assert (root / "current").readlink() == Path("versions", "0.5.0")
+    # The version this process runs from stays; the older one goes.
+    assert sorted(path.name for path in (root / "versions").iterdir()) == ["0.4.0", "0.5.0"]
+    assert sorted(path.name for path in root.iterdir()) == ["current", "versions"]

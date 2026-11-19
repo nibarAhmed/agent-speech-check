@@ -2,7 +2,7 @@
 
 **Let AI agents test your app with a real NVDA screen reader.**
 
-`asc` connects to NVDA, presses keys, and gives you what NVDA said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows.
+`asc` connects to NVDA, presses keys, and gives you what NVDA said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows. On Linux it does the same with Orca.
 
 ## Example
 
@@ -19,8 +19,8 @@ asc stop
 
 ## Requirements
 
-- Windows 11.
-- NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
+- Windows 11, or Linux with Orca 51 or later (see [Install](#install)).
+- On Windows, NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
 - Sandbox mode also needs Windows 11 24H2 or later (Pro, Enterprise or Education) with Windows Sandbox turned on.
 
 ## Choose a mode
@@ -28,16 +28,28 @@ asc stop
 | Mode | When to use it |
 |---|---|
 | `sandbox` | You want NVDA kept away from your desktop. It runs inside Windows Sandbox, and your own NVDA keeps running. |
-| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. |
-| `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
+| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. On Linux it starts its own Orca on a hidden display instead, which needs Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3. |
+| `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. On Linux it listens to your own Orca, which you restart once with the line `asc start` gives you. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
-| `remote` | NVDA runs in a VM you manage. You start NVDA there and connect it to `asc`, with one instance per VM: run `asc setup --instance NAME` for each. |
+| `remote` | The screen reader runs on a machine you manage, like a VM, that `asc` reaches over ssh. With `os = "windows"` you start NVDA there and it connects to `asc` through an ssh tunnel; with `os = "linux"` `asc` starts Orca there. One instance per machine: `asc setup --instance NAME`, or `asc config set` with `--instance NAME`. |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 
 ## Install
 
-Run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. It [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates). To uninstall, use Settings > Apps.
+On Windows, run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. To uninstall, use Settings > Apps.
+
+On Linux (64-bit x86 or Arm, glibc 2.28 or later), `asc` needs **Orca 51 or later**: check with `orca --version`. Older Orca, like the 50 in Ubuntu 26.04 LTS, lacks the D-Bus service `asc` records speech through, so `asc start` refuses it. Unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
+
+```shell
+mkdir -p ~/.local/share ~/.local/bin
+curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/download/agent-speech-check-linux-$(uname -m).tar.gz | tar -xz -C ~/.local/share
+ln -sf ~/.local/share/agent-speech-check/current/asc ~/.local/bin/asc
+```
+
+To uninstall, run `asc stop --all`, then delete `~/.local/share/agent-speech-check`, `~/.local/bin/asc` and, with your settings and data, `~/.local/state/agent-speech-check`. If you used watch mode, restart Orca or log out, so it drops `asc`'s secret.
+
+Either way, `asc` [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates).
 
 ## AI agent skill
 
@@ -65,8 +77,8 @@ uv run poe check     # everything: spelling, format, lint, types, dead code, dep
 uv run poe fast      # the quick loop: everything but deps and the slow tests
 ```
 
-- **End-to-end tests** run NVDA inside Windows Sandbox: `uv run python scripts/e2e_sandbox.py`. Never set `ASC_E2E_NVDA` on your own machine: those tests replace your running NVDA, and nothing starts it again.
-- **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download).
+- **End-to-end tests** run NVDA inside Windows Sandbox (`uv run python scripts/e2e_sandbox.py`) and Orca in a Linux container (`uv run python scripts/e2e_linux.py`, with Docker). Never set `ASC_E2E_NVDA` on your own machine: those tests replace your running NVDA, and nothing starts it again.
+- **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download). On Linux, `uv run python -m scripts.build_linux` builds the tarball.
 
 See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/CONTRIBUTING.md) for pull requests and the rules.
 
@@ -82,7 +94,7 @@ Speech can include passwords and private messages, and `asc` can press keys. [SE
 
 - [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
 - [NVDA Remote Access protocol](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
-- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules and NVDA versions behaved in experiments.
+- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules, NVDA versions, Orca and ssh behaved in experiments.
 
 ## License
 

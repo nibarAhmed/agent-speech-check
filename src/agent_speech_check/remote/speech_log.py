@@ -1,9 +1,9 @@
-"""What NVDA said, numbered, in memory only.
+"""What the screen reader said, numbered, in memory only.
 
 Lines are numbered from 1 and numbers are never reused. The log keeps the
 newest `CAP` lines. It also tracks browse/focus mode from NVDA's mode sounds
 (`focusMode.wav`, `browseMode.wav`) or, when the user turned those sounds off,
-from the spoken words "focus mode" and "browse mode".
+from the spoken words "focus mode" and "browse mode", which Orca says too.
 
 All methods run on the daemon's event loop.
 """

@@ -11,11 +11,13 @@ low punctuation level. Around a word, the brackets can go and the word stays.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, fields
 from typing import Any
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.targets import defaults
+from agent_speech_check.config.prefs import default_mode
+from agent_speech_check.config.targets import ORCA_MODES, defaults
 
 
 @dataclass(frozen=True)
@@ -42,13 +44,28 @@ _MODE_ABOUT = {
     "desktop": "asc runs its own silent NVDA on this desktop",
     "sandbox": "asc runs its own NVDA inside Windows Sandbox",
     "shared": "asc presses keys in your own NVDA, in your own session",
-    "remote": "you start NVDA on another machine, like a VM, and connect it to asc",
+    "remote": "NVDA or Orca on another machine, like a VM, that asc reaches over ssh",
 }
-MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
-# A named instance can't join your own NVDA (watch and shared mode).
-INSTANCE_MODES = _choices(
-    tuple(m for m in prefs.MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
-)
+_ORCA_ABOUT = {
+    "watch": "listen to your own Orca while you use it; never sends keys",
+    "desktop": "asc runs its own Orca on a hidden display",
+}
+
+
+def modes(*, named: bool, platform: str = sys.platform) -> tuple[Choice, ...]:
+    """The modes that run here, as `check_runnable` says. A named instance can't join
+    your own screen reader (watch and shared mode)."""
+    targets = [defaults(mode, platform=platform) for mode in prefs.MODES]
+    names = tuple(
+        target.mode
+        for target in targets
+        if (target.mode in ORCA_MODES or not target.orca) and not (named and target.own_reader)
+    )
+    orca = defaults("desktop", platform=platform).orca
+    about = {**_MODE_ABOUT, **_ORCA_ABOUT} if orca else _MODE_ABOUT
+    return _choices(names, about, default="remote" if named else default_mode(platform))
+
+
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
     Choice("folder", "a portable NVDA folder of your own"),
@@ -67,8 +84,13 @@ LAYOUTS = _choices(
     {"desktop": "NVDA's desktop keyboard layout", "laptop": "NVDA's laptop keyboard layout"},
     default="desktop",  # keys_layout's default in prefs
 )
+OSES = _choices(
+    prefs.OSES,
+    {"windows": "NVDA, already running there", "linux": "Orca, which asc starts there"},
+    default="windows",
+)
 # Fails at import unless each question has exactly one default.
-for _question in (MODES, INSTANCE_MODES, NVDA_SOURCES, WINDOWS, LAYOUTS):
+for _question in (NVDA_SOURCES, WINDOWS, LAYOUTS, OSES):
     default_of(_question)
 
 
@@ -129,7 +151,8 @@ class Answers:
     share: tuple[str, ...] = ()
     window: str = default_of(WINDOWS)
     keys_layout: str = default_of(LAYOUTS)
-    port: int | None = None  # None: the mode's default
+    os: str | None = None
+    ssh: str | None = None
 
 
 def _every_answer(labels: dict[str, str]) -> dict[str, str]:
@@ -144,7 +167,8 @@ LABELS = _every_answer(
         "share": "Shared folders",
         "window": "Window",
         "keys_layout": "Keyboard layout",
-        "port": "Port",
+        "os": "Other machine runs",
+        "ssh": "Reached with ssh",
     }
 )
 
@@ -154,14 +178,14 @@ def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...
     return {mode: questions[mode] for mode in prefs.MODES}
 
 
-# The answers each mode asks for, in order, where it runs (see `runs_here`).
+# The answers each mode asks for, in order, where it runs (see `runs_here` and `asks`).
 QUESTIONS = _per_mode(
     {
         "watch": ("keys_layout",),
         "desktop": ("nvda_dir",),
         "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
-        "remote": ("keys_layout", "port"),
+        "remote": ("os", "ssh", "keys_layout"),
     }
 )
 
@@ -170,6 +194,13 @@ def runs_here(mode: str, *, named: bool) -> bool:
     """Whether the instance runs `mode`. The default instance keeps remote only
     as the preferred mode, so setup asks nothing more for it."""
     return named or not defaults(mode).named_only
+
+
+def asks(field: str, mode: str, answered: dict[str, Any], platform: str = sys.platform) -> bool:
+    """Whether a question of `QUESTIONS` is asked, after the answers before it. NVDA's
+    folder and layout aren't asked when Orca reads."""
+    nvda_only = field in ("nvda_dir", "keys_layout")
+    return not (nvda_only and defaults(mode, answered.get("os"), platform).orca)
 
 
 def to_data(answers: Answers) -> dict[str, Any]:
@@ -182,8 +213,10 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["share"] = list(answers.share)
     if answers.window != default_of(WINDOWS):
         table["window"] = answers.window
-    if answers.port not in (None, defaults(answers.mode).port):
-        table["port"] = answers.port
+    if answers.os is not None:
+        table["os"] = answers.os
+    if answers.ssh is not None:
+        table["ssh"] = answers.ssh
     data: dict[str, Any] = {"mode": answers.mode}
     if table:
         data[answers.mode] = table
@@ -203,7 +236,7 @@ def summary_lines(answers: Answers, fields: tuple[str, ...]) -> list[str]:
     return ["Your settings:", *_columns(rows)]
 
 
-def _shown(value: str | tuple[str, ...] | int | None) -> tuple[str, ...]:
+def _shown(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
     """An answer as the summary says it, one line per folder. No NVDA folder
     means asc's own NVDA."""
     if value is None:

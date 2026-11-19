@@ -1,4 +1,4 @@
-# Findings: how Windows and NVDA behave
+# Findings: how Windows, NVDA, Orca and ssh behave
 
 These are the experiments behind code in `asc` that would otherwise look odd: what Windows Sandbox, Windows' focus rules and NVDA did, including what didn't work. The wire protocol itself is in [protocol.md](protocol.md). Unless a section says otherwise, the setup was portable NVDA 2026.2 in Windows Sandbox on Windows 11 Pro (build 26200).
 
@@ -47,12 +47,6 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
   an hour after the last sandbox closed, `vEthernet (Default Switch)` was gone.
   Starting a sandbox made it again with a new interface id (`3B811EAC...` became
   `DCBD0D9D...`) and, on other days, a new address.
-- **The name lasts.** `C:\Windows\System32\drivers\etc\hosts.ics` maps the
-  host's name (`DESKTOP-ABC1234.mshome.net`) to the switch's current address,
-  and a guest gets the host as its DNS server with suffix `mshome.net`. NVDA in
-  a sandbox connected by that name. The name must be lowercase: NVDA lowercases
-  the host before it looks up its trusted certificates, so a trust saved under
-  the mixed-case name failed with "Certificate validation failed".
 - **A firewall rule on that interface dies with it.** A rule made with
   `-InterfaceAlias 'vEthernet (Default Switch)'` is stored with the id the
   interface had then (`IF={...}` in the registry), not the name. After the
@@ -149,3 +143,72 @@ where 2026.2 in the same setup passed them all.
 - Sandbox mode also stops Windows Audio, so with 2025.1 it should hit the
   same failure (not observed).
 
+
+## Orca on Linux
+
+Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and no audio. What
+is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same kind of container.
+
+- **Orca 51 is the oldest that works.** Orca 50.3 (Ubuntu 26.04 LTS's package) publishes
+  `org.gnome.Orca.Service`, not `org.gnome.Orca1.Service`, and has no
+  `SetLogFileForTesting`, so it has nothing `asc` can record speech through.
+
+- **No speech server is needed.** Orca fails to connect to Speech Dispatcher, logs it, and
+  carries on. It still sends everything it would say to the recorder that
+  `SpeechPresenter.SetLogFileForTesting` starts.
+- **The recorder writes to a FIFO.** It opens the path for writing, one line per record, so a
+  named pipe works. The reader must open the pipe first, because Orca's open blocks until there
+  is a reader. A pipe nobody empties stalls Orca once about 64 KB wait in it, so the helper
+  reads it on a thread of its own. A reader killed with SIGKILL does no harm: Orca carries on.
+- **Orca's own key commands need a window manager.** With none, X input focus is `PointerRoot`
+  (window 1). libatspi puts its key grabs on the focus window, so every grab fails with
+  BadWindow (XInput opcode 131, minor 54), and Orca's debug log shows `Grab id for Insert: 0`.
+  Plain keys still reach the app and Orca still speaks focus changes, but Insert+T types a "t".
+  Setting the focus to the root window didn't help. With openbox running, the grabs work
+  (`Grab id for Insert: 273`) and Insert+T speaks the time.
+- **Xvfb resets when its last client disconnects**, which drops any focus or keymap a client
+  set, so it runs with `-noreset`.
+- **One Orca per user.** Orca refuses to start while another Orca runs as the same user
+  (`pgrep -u <uid> -x orca`), a zombie too: a container needs an init (`docker run --init`) to
+  reap an Orca it inherits. `orca --replace` ends the other one, so only the user runs it.
+- **The recording secret comes only from Orca's startup environment**
+  (`ORCA_TEST_RPC_SECRET`). Orca zeroes its own `/proc/PID/environ`, so no one can read the
+  secret off a running Orca. A wrong secret gets
+  `GDBus.Error:not.known.Error.PermissionError: invalid testing token`, and an Orca started
+  without one has no `SetLogFileForTesting` at all (UnknownMethod).
+- **Restarting with the secret.** `ORCA_TEST_RPC_SECRET=... setsid orca --replace` starts a new
+  Orca that takes the secret; the old one exits a moment later. `SetLogFileForTesting` with an
+  empty path stops the recording and leaves Orca running.
+- **Keys sent through `Atspi.generate_keyboard_event`** from a separate process produced no key
+  events at all in this setup. Keys sent through XTest (xdotool) work.
+
+## The ssh tunnel
+
+Remote mode with `os = "windows"`: Windows' OpenSSH client (`C:\Windows\System32\OpenSSH`) and
+Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
+
+- **Windows' sshd.** Win32-OpenSSH 10.4's sshd, in Windows Sandbox (`scripts/windows_sshd.py`),
+  carries the tunnel as Ubuntu's does: a real NVDA joins through it. For an administrator it
+  reads only `%ProgramData%\ssh\administrators_authorized_keys`, and only if no one but
+  Administrators and SYSTEM can write that file. Windows Sandbox has no ssh client of its own.
+- **When the tunnel is up.** With `-v`, ssh prints
+  `debug1: remote forward success for: listen 127.0.0.1:PORT, connect ...` once the other side
+  listens. Before that line, nothing on the other machine can reach the relay yet.
+- **A taken port.** With `ExitOnForwardFailure=yes`, ssh prints
+  `Error: remote port forwarding failed for listen port PORT` and exits 255, the same code as a
+  failed connection, so only the line tells the two apart.
+- **Cost.** Against a fake NVDA in the container, 80 presses each (press to its speech, with a
+  50 ms settle), and the fake straight to the relay across Docker's network as a
+  baseline:
+
+  | Path | `asc start` | press median | press p95 |
+  | --- | --- | --- | --- |
+  | straight to the relay | 0.7 s | 76 ms | 104 ms |
+  | tunnel, Windows' ssh | 0.8 s | 75 to 104 ms | 137 ms |
+  | tunnel, Git's ssh | 0.8 s | 76 ms | 104 ms |
+
+  Typing 10 characters took 263 ms on every path. Through Windows' ssh about half the replies
+  came about 60 ms late, and with a 50 ms settle some presses ended before their speech
+  arrived. The default 400 ms covers it. TCP_NODELAY on the relay's socket, or on the fake's,
+  changed nothing; a tty session (`-tt` for `-N`) moved every press to about 105 ms. Windows'
+  OpenSSH server wasn't measured.

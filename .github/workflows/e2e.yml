@@ -2,11 +2,12 @@ name: e2e
 
 # The real-NVDA tests, on a hosted runner: a throwaway VM with no one's NVDA to
 # replace, so the tests start a portable NVDA here, as they do in Windows Sandbox.
+# The real-Orca tests, in a throwaway Linux container, on each Linux release build.
 on:
   # Every PR, docs too: a required check skipped by a path filter never reports.
   pull_request:
-  # Weekly too: asc downloads the latest NVDA, so a new NVDA release can break it
-  # with no PR to run these. Monday 06:00 UTC.
+  # Weekly too: asc downloads the latest NVDA, so a new release can break it with no
+  # PR to run these. Monday 06:00 UTC.
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
@@ -19,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
+  nvda:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -43,6 +44,16 @@ jobs:
           "ASC_E2E_NVDA=$nvda" >> $env:GITHUB_ENV
           "ASC_E2E_OUT=$out" >> $env:GITHUB_ENV
           "ASC_E2E_INSTALLER=$installer" >> $env:GITHUB_ENV
+      # Remote mode's other machine is this one, as in the Orca job: the same sshd setup the
+      # sandbox runs (scripts/windows_sshd.py).
+      - name: Let the runner ssh to localhost with a key
+        shell: pwsh
+        run: |
+          $zip = uv run python scripts/windows_sshd.py download "$env:RUNNER_TEMP"
+          if ($LASTEXITCODE -ne 0) { throw "download exit $LASTEXITCODE" }
+          uv run python scripts/windows_sshd.py install $zip
+          if ($LASTEXITCODE -ne 0) { throw "install exit $LASTEXITCODE" }
+          "ASC_E2E_SSH=localhost" >> $env:GITHUB_ENV
       # A step timeout, under the job's, so a hang still fails here and uploads the log.
       - name: e2e tests
         timeout-minutes: 20
@@ -52,3 +63,103 @@ jobs:
         with:
           name: e2e-out
           path: ${{ runner.temp }}/e2e-out
+
+  linux:
+    uses: $/.github/workflows/linux.yml
+
+  orca:
+    needs: linux
+    strategy:
+      matrix:
+        include:
+          - machine: x86_64
+            runner: ubuntu-latest
+          - machine: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    # The newest Ubuntu, for Orca 51 or later (26.04 LTS has 50). When its support
+    # ends, move to the next release.
+    container:
+      image: ubuntu:26.10@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2
+      # An init reaps the Orca the watch test restarts: Orca counts a zombie Orca as running.
+      options: --init
+    steps:
+      - name: Install Orca and what asc runs with it
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            orca xvfb xdotool dbus-daemon libglib2.0-bin at-spi2-core openbox \
+            python3-gi gir1.2-gtk-3.0 fonts-dejavu-core git ca-certificates \
+            openssh-server openssh-client gpg
+          # Mozilla's Firefox, for browse mode: Ubuntu's is a snap, and snaps don't run here.
+          key=/etc/apt/keyrings/packages.mozilla.org.asc
+          install -d -m 0755 /etc/apt/keyrings
+          python3 -c "import sys, urllib.request; urllib.request.urlretrieve(*sys.argv[1:])" \
+            https://packages.mozilla.org/apt/repo-signing-key.gpg "$key"
+          test "$(gpg --show-keys --with-colons "$key" | awk -F: '/^fpr/{print $10}')" \
+            = 35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3
+          echo "deb [signed-by=$key] https://packages.mozilla.org/apt mozilla main" \
+            > /etc/apt/sources.list.d/mozilla.list
+          printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' \
+            > /etc/apt/preferences.d/mozilla
+          apt-get update
+          apt-get install -y --no-install-recommends firefox
+      # Remote mode's other machine is this one: its 127.0.0.1 is where NVDA joins. ssh reads
+      # /root/.ssh, not the job's HOME.
+      - name: Let root ssh to localhost with a key
+        run: |
+          mkdir -p /run/sshd /root/.ssh
+          chmod 700 /root/.ssh
+          ssh-keygen -q -t ed25519 -N '' -f /root/.ssh/id_ed25519
+          cp /root/.ssh/id_ed25519.pub /root/.ssh/authorized_keys
+          ssh-keygen -A
+          /usr/sbin/sshd
+          ssh-keyscan localhost > /root/.ssh/known_hosts
+          ssh -o BatchMode=yes root@localhost true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install
+        run: uv sync --locked
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: linux-${{ matrix.machine }}
+          path: ${{ runner.temp }}/tarball
+      # The release build, not this checkout. Without its current link it isn't installed,
+      # so it never updates itself here.
+      - name: Unpack the tarball
+        env:
+          MACHINE: ${{ matrix.machine }}
+        run: |
+          tar -xzf "$RUNNER_TEMP/tarball/agent-speech-check-linux-$MACHINE.tar.gz" -C "$RUNNER_TEMP"
+          rm "$RUNNER_TEMP/agent-speech-check/current"
+          echo "ASC_E2E_EXE=$(echo "$RUNNER_TEMP"/agent-speech-check/versions/*/asc)" >> "$GITHUB_ENV"
+      # By path: the other e2e and unit tests drive Windows.
+      - name: Orca and ssh tests
+        timeout-minutes: 10
+        env:
+          ASC_E2E_ORCA: "1"
+          ASC_E2E_SSH: root@localhost
+        run: >-
+          uv run pytest tests/unit/test_orca.py tests/unit/test_ssh.py
+          tests/e2e/test_real_orca.py tests/e2e/test_real_ssh.py -v -p no:cacheprovider
+
+  # The one check branch protection requires from this workflow, so jobs and matrix legs
+  # can change with no ruleset change. Add every new job to needs. always(): a skipped
+  # job reports success, so without it a failed need would pass this check.
+  e2e:
+    if: ${{ always() }}
+    needs: [nvda, linux, orca]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null

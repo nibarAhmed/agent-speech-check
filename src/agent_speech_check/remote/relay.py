@@ -45,8 +45,8 @@ from agent_speech_check.errors import (
 from agent_speech_check.inputs.keys import Key
 from agent_speech_check.remote import protocol
 from agent_speech_check.remote.speech_log import SpeechLog
+from agent_speech_check.system.paths import write_atomic
 from agent_speech_check.validate import Fields
-from agent_speech_check.windows.paths import write_atomic
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +153,8 @@ class Relay:
     can be sent, so the keyboard can release keys that a lost connection may
     have left down. It must not await, or a press could get in first.
     """
+
+    not_connected = NvdaNotConnected
 
     def __init__(
         self,

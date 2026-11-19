@@ -1,23 +1,53 @@
-"""Thin wrappers (ctypes, and psutil for processes) for the few Win32 calls `asc`
-needs. Keep logic elsewhere."""
+"""Thin ctypes wrappers for the few Win32 calls `asc` needs. Keep logic elsewhere."""
 
 from __future__ import annotations
 
-import contextlib
 import ctypes
 import hashlib
-import os
+import sys
 import threading
+import types
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
 
-import psutil
-
 ERROR_ALREADY_EXISTS = 183
 
-_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+class _Absent:
+    """A DLL off Windows, so this module imports on Linux: its functions can be set
+    up but not called."""
+
+    def __getattr__(self, name: str) -> types.SimpleNamespace:
+        return types.SimpleNamespace()
+
+
+def _dll(name: str) -> ctypes.CDLL:
+    if sys.platform != "win32":
+        return _Absent()  # type: ignore[return-value]
+    return ctypes.WinDLL(name, use_last_error=True)
+
+
+def _last_error() -> int:
+    if sys.platform != "win32":
+        return 0
+    return ctypes.get_last_error()
+
+
+def _win_error() -> OSError:
+    """The last Win32 error, to raise."""
+    if sys.platform != "win32":
+        return OSError("not Windows")
+    return ctypes.WinError(ctypes.get_last_error())
+
+
+if sys.platform == "win32":
+    _FUNCTYPE = ctypes.WINFUNCTYPE
+else:
+    _FUNCTYPE = ctypes.CFUNCTYPE
+
+_kernel32 = _dll("kernel32")
 _kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
 _kernel32.CreateMutexW.restype = wintypes.HANDLE
 
@@ -35,8 +65,8 @@ def take_mutex(name: str) -> int | None:
     """
     handle = _kernel32.CreateMutexW(None, False, name)
     if not handle:
-        raise ctypes.WinError(ctypes.get_last_error())
-    if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
+        raise _win_error()
+    if _last_error() == ERROR_ALREADY_EXISTS:
         _kernel32.CloseHandle(handle)
         return None
     return int(handle)
@@ -50,103 +80,9 @@ _kernel32.OpenProcess.restype = wintypes.HANDLE
 _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
 
-def process_ids(image: str) -> list[int]:
-    """Pids of running processes whose exe file name is `image` (case-insensitive)."""
-    image = image.lower()
-    return [
-        process.pid
-        for process in psutil.process_iter(["name"])
-        if (process.info["name"] or "").lower() == image
-    ]
-
-
-def image_path(pid: int) -> Path | None:
-    """The full exe path of a process. None if it's gone or won't say."""
-    try:
-        exe = psutil.Process(pid).exe()
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return None
-    return Path(exe) if exe else None
-
-
-def others_running(image: Path) -> list[int]:
-    """The pids of other processes running the exe at `image`. Ones that won't
-    say their exe are left out."""
-    wanted = os.path.normcase(image)
-    return [
-        process.pid
-        for process in psutil.process_iter(["exe"])
-        if process.pid != os.getpid()
-        and process.info["exe"]
-        and os.path.normcase(process.info["exe"]) == wanted
-    ]
-
-
-def wait_exit(pid: int) -> None:
-    """Block until a process exits, however it ends. Returns at once if it's gone."""
-    try:
-        psutil.Process(pid).wait()
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return
-
-
-def created_at(pid: int) -> float | None:
-    """When a running process started, in Unix seconds. None if it's gone.
-    Raises if it runs but won't say (access denied): that is not the same as gone."""
-    try:
-        return psutil.Process(pid).create_time()
-    except psutil.NoSuchProcess:
-        return None
-    except psutil.AccessDenied as error:
-        raise PermissionError from error
-
-
-KILL_WAIT_S = 10
-
-
-def terminate(pid: int, timeout_s: float) -> None:
-    """End a process and wait up to `timeout_s` for it to go. Nothing if it's
-    gone; raises if it can't be ended or is still there after the wait."""
-    try:
-        process = psutil.Process(pid)
-        process.terminate()
-        process.wait(timeout_s)
-    except psutil.NoSuchProcess:
-        return
-    except psutil.AccessDenied as error:
-        raise PermissionError from error
-    except psutil.TimeoutExpired as error:
-        raise TimeoutError from error
-
-
-def kill_tree(pid: int) -> list[int]:
-    """End a process and every process it started, wait up to KILL_WAIT_S for
-    them to go, and return the pids still running. Ending only the process
-    would orphan its children."""
-    try:
-        process = psutil.Process(pid)
-        family = [*process.children(recursive=True), process]
-    except psutil.NoSuchProcess:
-        return []
-    for member in family:
-        # One that refuses must not stop the rest: it is reported as left.
-        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
-            member.kill()
-    _, alive = psutil.wait_procs(family, timeout=KILL_WAIT_S)
-    return [member.pid for member in alive]
-
-
-def process_image(image: str) -> Path | None:
-    for pid in process_ids(image):
-        path = image_path(pid)
-        if path is not None:
-            return path
-    return None
-
-
 # ---------------------------------------------------------------- keyboard
 
-_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_user32 = _dll("user32")
 _user32.VkKeyScanW.argtypes = [wintypes.WCHAR]
 _user32.VkKeyScanW.restype = ctypes.c_short
 
@@ -165,7 +101,7 @@ def vk_key_scan(char: str) -> tuple[int, int] | None:
 SW_HIDE = 0
 SW_MINIMIZE = 6
 SW_RESTORE = 9
-_WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_WNDENUMPROC = _FUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 _user32.EnumWindows.argtypes = [_WNDENUMPROC, wintypes.LPARAM]
 _user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 _user32.IsWindowVisible.argtypes = [wintypes.HWND]
@@ -354,24 +290,28 @@ def kill_on_close_job(pid: int) -> int:
     including when this process crashes. Returns the job handle."""
     job = _kernel32.CreateJobObjectW(None, None)
     if not job:
-        raise ctypes.WinError(ctypes.get_last_error())
-    limits = _ExtendedLimits()
-    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-    if not _kernel32.SetInformationJobObject(
-        job,
-        JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
-        ctypes.byref(limits),
-        ctypes.sizeof(limits),
-    ):
-        raise ctypes.WinError(ctypes.get_last_error())
-    process = _kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
-    if not process:
-        raise ctypes.WinError(ctypes.get_last_error())
+        raise _win_error()
     try:
-        if not _kernel32.AssignProcessToJobObject(job, process):
-            raise ctypes.WinError(ctypes.get_last_error())
-    finally:
-        _kernel32.CloseHandle(process)
+        limits = _ExtendedLimits()
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not _kernel32.SetInformationJobObject(
+            job,
+            JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
+            ctypes.byref(limits),
+            ctypes.sizeof(limits),
+        ):
+            raise _win_error()
+        process = _kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
+        if not process:
+            raise _win_error()
+        try:
+            if not _kernel32.AssignProcessToJobObject(job, process):
+                raise _win_error()
+        finally:
+            _kernel32.CloseHandle(process)
+    except OSError:
+        _kernel32.CloseHandle(job)
+        raise
     return int(job)
 
 
@@ -381,7 +321,7 @@ def close_handle(handle: int) -> None:
 
 # ---------------------------------------------------------------- file version
 
-_version = ctypes.WinDLL("version", use_last_error=True)
+_version = _dll("version")
 _version.GetFileVersionInfoSizeW.argtypes = [wintypes.LPCWSTR, wintypes.LPDWORD]
 _version.GetFileVersionInfoSizeW.restype = wintypes.DWORD
 _version.GetFileVersionInfoW.argtypes = [
@@ -545,9 +485,7 @@ _TRAY_CLASS = "AgentSpeechCheckTray"
 _TRAY_ID = 1
 
 _LRESULT = ctypes.c_ssize_t
-_WNDPROC = ctypes.WINFUNCTYPE(
-    _LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
-)
+_WNDPROC = _FUNCTYPE(_LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
 
 
 class _WndClassEx(ctypes.Structure):
@@ -587,7 +525,7 @@ class _NotifyIconData(ctypes.Structure):
     )
 
 
-_shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+_shell32 = _dll("shell32")
 _shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.POINTER(_NotifyIconData)]
 _user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 _user32.DefWindowProcW.restype = _LRESULT
@@ -642,7 +580,7 @@ def _register_tray_class(instance: int) -> bool:
         window_class.lpszClassName = _TRAY_CLASS
         if _user32.RegisterClassExW(ctypes.byref(window_class)):
             return True
-        return ctypes.get_last_error() == _ERROR_CLASS_ALREADY_EXISTS
+        return _last_error() == _ERROR_CLASS_ALREADY_EXISTS
 
 
 class TrayIcon(_MessageThread):

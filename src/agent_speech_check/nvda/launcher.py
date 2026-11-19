@@ -14,6 +14,7 @@ import logging
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -35,9 +36,9 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
-from agent_speech_check.windows import tls, winapi
-from agent_speech_check.windows.paths import base_root
-from agent_speech_check.windows.wait import poll_until
+from agent_speech_check.system import processes, tls, winapi
+from agent_speech_check.system.paths import base_root
+from agent_speech_check.system.wait import poll_until
 
 log = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ def sha1_matches(path: Path, sha1: str) -> bool:
 
 
 def running() -> bool:
-    return bool(winapi.process_ids("nvda.exe"))
+    return bool(processes.process_ids("nvda.exe"))
 
 
 def refuse_if_running() -> None:
@@ -306,7 +307,7 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         process.wait(timeout_s)
     except subprocess.TimeoutExpired:
         # Its children too, or they would go on writing into `dest`.
-        left = winapi.kill_tree(process.pid)
+        left = processes.kill_tree(process.pid)
         if process.pid not in left:
             process.wait()  # it is gone, so this returns at once and records its exit
         raise InstallerTimedOut(timeout_s, left) from None
@@ -330,7 +331,7 @@ def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
     try:
         return subprocess.Popen(args)  # noqa: S603 - NVDA, or the NVDA installer
     except OSError as error:
-        if error.winerror not in NOT_A_PROGRAM:
+        if sys.platform != "win32" or error.winerror not in NOT_A_PROGRAM:
             # Access denied, for one: the program may be fine.
             raise FileUnusable.from_os(args[0], error) from None
         # Windows' text names the program as a literal %1.

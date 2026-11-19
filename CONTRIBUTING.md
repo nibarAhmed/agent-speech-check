@@ -8,9 +8,12 @@ Contributions come in under the project's MIT license. There's no CLA.
 2. Set it up as [Development](README.md#development) in the README explains.
 3. `uv run poe check` must pass before you open a pull request. While you work,
    `uv run poe fast` is the quicker loop.
-4. For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
-   NVDA: `uv run python scripts/e2e_sandbox.py`. They need Windows Sandbox (Windows 11 24H2 or
-   later, Pro, Enterprise or Education). If you can't run them, say so in the pull request.
+4. CI runs the end-to-end tests. For a change to how `asc` talks to NVDA or Orca, also run the
+   ones related to it, which AGENTS.md (Testing policy) lists: against a real NVDA with
+   `uv run python scripts/e2e_sandbox.py -k <tests>`, which needs Windows Sandbox (Windows 11 24H2
+   or later, Pro, Enterprise or Education), and against a real Orca with
+   `uv run python scripts/e2e_linux.py -k <tests>`, which needs Docker. If you can't run them,
+   say so in the pull request.
 5. Build the installer only when you change `installer/` or debug CI's `installer` check, which
    builds, installs, upgrades and uninstalls the MSI.
 
@@ -18,7 +21,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 
 - [docs/cli.md](docs/cli.md): every command and setting.
 - [docs/protocol.md](docs/protocol.md): how `asc` talks to NVDA, with the evidence.
-- [docs/findings.md](docs/findings.md): how Windows and NVDA behaved around it.
+- [docs/findings.md](docs/findings.md): how Windows, NVDA, Orca and ssh behaved around it.
 
 ## Pull requests
 
@@ -28,9 +31,9 @@ Contributions come in under the project's MIT license. There's no CLA.
   Fill in the template.
 - Solve one problem per pull request. Include every change it needs (code, tests, `docs/cli.md`,
   the skill). Cleanup, refactors and a second fix go in their own pull requests.
-- CI must pass. The `e2e` check runs the real-NVDA tests on a throwaway runner, but GitHub's
-  runners have no Windows Sandbox, so run the sandbox tests yourself when they apply (Setup,
-  step 4).
+- CI must pass. The `e2e` check passes when the real-NVDA tests, the Linux builds and the
+  real-Orca tests pass on throwaway runners. GitHub's runners have no Windows Sandbox, so run
+  the sandbox tests yourself when they apply (Setup, step 4).
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
@@ -41,8 +44,11 @@ The rules for code, tests and docs are in [AGENTS.md](AGENTS.md). They apply to 
 
 ## Releasing
 
-Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI and
-the winget manifests and attaches them to a GitHub Release.
+Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI, the
+winget manifests and the Linux tarballs for x86 and Arm (on glibc 2.28, so they run on that and
+newer) and attaches them to a GitHub Release. An installed `asc` updates itself from that release,
+so its assets keep their names: `agent-speech-check-VERSION.msi` and
+`agent-speech-check-linux-MACHINE.tar.gz`, where MACHINE is `x86_64` or `aarch64`.
 
 1. In a pull request, set the new version in `pyproject.toml` and in both
    `plugins/agent-speech-check/.claude-plugin/plugin.json` and

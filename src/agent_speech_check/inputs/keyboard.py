@@ -19,12 +19,31 @@ import re
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from typing import Protocol
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.errors import KeysBusy, KeysRefused, NvdaNotConnected
 from agent_speech_check.inputs.keys import Gesture, Key
-from agent_speech_check.remote.relay import Relay
 from agent_speech_check.remote.speech_log import Since, SpeechLog
+
+
+class Link(Protocol):
+    """What keys go through: the relay NVDA joins, or Orca's helper."""
+
+    on_join: Callable[[], None]
+    losses: list[str | None]
+
+    @property
+    def connected(self) -> bool: ...
+
+    @property
+    def not_connected(self) -> type[NvdaNotConnected]: ...
+
+    def check(self, since: int, *, drop_fails: bool) -> None: ...
+
+    def write_key(self, key: Key, *, pressed: bool) -> object: ...
+
+    async def send_key(self, key: Key, *, pressed: bool) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -35,16 +54,16 @@ class Pressed:
 
 
 class Keyboard:
-    def __init__(self, target: Target, relay: Relay, speech: SpeechLog) -> None:
+    def __init__(self, target: Target, link: Link, speech: SpeechLog) -> None:
         self.target = target
-        self.relay = relay
+        self.link = link
         self.speech = speech
         self._lock = asyncio.Lock()
         self._closed = False
         # Keys pressed since NVDA last joined. A release written just before a
         # drop may never arrive, so all of them are released on the next join.
         self._pressed: set[Key] = set()
-        relay.on_join = self.joined
+        link.on_join = self.joined
 
     async def press(
         self,
@@ -62,8 +81,8 @@ class Keyboard:
         """
         if not self.target.keys:
             raise KeysRefused
-        if not self.relay.connected:
-            raise NvdaNotConnected
+        if not self.link.connected:
+            raise self.link.not_connected
         deadline = time.monotonic() + timeout_s
         try:
             await asyncio.wait_for(self._lock.acquire(), timeout_s)
@@ -72,7 +91,7 @@ class Keyboard:
         try:
             start = self.speech.latest
             # Fail if NVDA was dropped while this press ran, even if it came back.
-            check = functools.partial(self.relay.check, len(self.relay.losses), drop_fails=True)
+            check = functools.partial(self.link.check, len(self.link.losses), drop_fails=True)
 
             for index, gesture in enumerate(gestures):
                 await self._send(gesture, check)
@@ -96,11 +115,11 @@ class Keyboard:
             for key in gesture.strokes:
                 if self._closed:
                     # Shutting down: release_all already ran, so press nothing new.
-                    raise NvdaNotConnected
+                    raise self.link.not_connected
                 check()
                 self._pressed.add(key)
                 down.append(key)
-                await self.relay.send_key(key, pressed=True)
+                await self.link.send_key(key, pressed=True)
         finally:
             self._release(reversed(down))
             self.speech.activity()
@@ -109,7 +128,7 @@ class Keyboard:
         for key in keys:
             # NVDA gone: the key stays in `_pressed` and is released on rejoin.
             with contextlib.suppress(NvdaNotConnected):
-                self.relay.write_key(key, pressed=False)
+                self.link.write_key(key, pressed=False)
 
     def joined(self) -> None:
         """NVDA joined: release every key a lost connection may have left down."""

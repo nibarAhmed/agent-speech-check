@@ -25,7 +25,7 @@ from tomlkit.items import Array, Table
 from agent_speech_check.config.prefs import GLOBAL, MODES, PER_MODE, PREFS, Pref, Value
 from agent_speech_check.config.targets import Config, Target
 from agent_speech_check.errors import BadPreference, FileUnusable
-from agent_speech_check.windows.paths import write_atomic
+from agent_speech_check.system.paths import write_atomic
 
 HEADER = "asc settings. Change them with asc config set, or start over with asc setup."
 _LINE = 100
@@ -126,6 +126,8 @@ def unset_value(config: Config, pref: Pref, where: str | None) -> dict[str, Any]
 
 
 def _target_value(target: Target, name: str) -> Value | None:
+    if name == "os" and target.mode != "remote":
+        return None  # the platform's, not a setting
     if name == "nvda_settings":
         return [setting.text for setting in target.settings]
     if name == "share":

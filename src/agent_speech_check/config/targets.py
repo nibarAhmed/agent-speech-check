@@ -12,7 +12,7 @@
     share = ['C:\\src\\app']
     nvda_settings = ["keyboard.speakTypedCharacters=False"]
 
-`mode` is what `asc start` uses without `--mode` (watch if not set). A mode
+`mode` is what `asc start` uses without `--mode` (if not set: watch, or desktop on Linux). A mode
 without a table gets its defaults. `--nvda-setting` and `--window` are added at
 `asc start` and are not kept. The whole file is checked when it is read, so a
 bad table fails every command, not only the ones that use it.
@@ -21,6 +21,7 @@ bad table fails every command, not only the ones that use it.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
@@ -30,11 +31,13 @@ import tomlkit
 import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.prefs import MODES, WINDOWS
+from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS, default_mode
 from agent_speech_check.errors import (
     ConfigFileError,
     FileUnusable,
+    RemoteNeedsMachine,
     UsageError,
+    WindowsOnlyMode,
     bad_field,
 )
 from agent_speech_check.inputs.keys import PANIC_KEY, Hotkey, parse_hotkey
@@ -46,6 +49,8 @@ WATCH_PORT = 6837
 # Fixed, so the firewall rule `asc firewall-setup` makes keeps matching.
 SANDBOX_PORT = 16837
 REMOTE_PORT = 26837
+# The modes Orca runs on this Linux machine. Remote mode runs it on another.
+ORCA_MODES = ("desktop", "watch")
 _PANIC = parse_hotkey(PANIC_KEY)
 
 
@@ -57,7 +62,10 @@ class Target:
     nvda_dir: str | None = None
     share: tuple[str, ...] = ()
     window: str | None = None  # sandbox mode; None: the default, tray
-    host: str | None = None  # remote mode; None: the Default Switch address
+    ssh: str | None = None  # remote mode: the machine NVDA or Orca runs on
+    # Where the screen reader runs: windows (NVDA) or linux (Orca). This machine, but
+    # remote mode's other machine, None until the user names it.
+    os: str | None = None
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
@@ -88,7 +96,8 @@ class Target:
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             share=f.opt_strings("share"),
             window=f.opt_text("window", max_len=20),
-            host=f.opt_text("host", max_len=40),
+            ssh=f.opt_text("ssh", max_len=255),
+            os=f.opt_text("os", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent"),
             panic_key=parse_hotkey(f.text("panic_key", max_len=40)),
@@ -101,8 +110,8 @@ class Target:
         return self.mode != "watch"
 
     @property
-    def own_nvda(self) -> bool:
-        """The user's own running NVDA joins (watch and shared mode)."""
+    def own_reader(self) -> bool:
+        """The user's own running screen reader joins (watch and shared mode)."""
         return self.mode in ("watch", "shared")
 
     @property
@@ -128,13 +137,23 @@ class Target:
         return self.mode == "sandbox"
 
     @property
-    def listens_outside(self) -> bool:
-        """NVDA on another machine joins, so the relay listens beyond loopback."""
-        return self.mode in ("sandbox", "remote")
+    def orca(self) -> bool:
+        """Orca reads, on this Linux machine or the remote one."""
+        return self.os == "linux"
+
+    @property
+    def tunnel(self) -> bool:
+        """NVDA on the remote Windows machine joins through an ssh reverse tunnel."""
+        return self.mode == "remote" and self.os == "windows"
 
     @property
     def launches_nvda(self) -> bool:
         return self.launches_portable or self.launches_sandbox
+
+    @property
+    def launches_reader(self) -> bool:
+        """asc starts the screen reader, so `asc start` waits until it joins."""
+        return self.launches_nvda or self.orca
 
     @property
     def sandbox_window(self) -> str:
@@ -152,13 +171,22 @@ class Target:
         return _checked(replace(self, window=window), "--window")
 
 
+def _check_launch(target: Target, where: str, value: object) -> None:
+    if target.mode != "desktop" or target.orca:
+        raise bad_field(UsageError, f"{where} launch", "only in desktop mode on Windows", value)
+
+
 def _checked(target: Target, where: str) -> Target:
-    if target.launch and target.mode != "desktop":
-        raise bad_field(UsageError, f"{where} launch", "only in desktop mode", target.launch)
-    if target.host is not None:
+    if target.launch:
+        _check_launch(target, where, target.launch)
+    if target.ssh is not None:
         if target.mode != "remote":
-            raise bad_field(UsageError, f"{where} host", "only in remote mode", target.host)
-        prefs.BY_NAME["host"].check(target.host, where)
+            raise bad_field(UsageError, f"{where} ssh", "only in remote mode", target.ssh)
+        prefs.BY_NAME["ssh"].check(target.ssh, where)
+    if target.os is not None:
+        prefs.BY_NAME["os"].check(target.os, where)
+    if target.orca and target.port != 0:
+        raise bad_field(UsageError, f"{where} port", "only where NVDA connects", target.port)
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
             UsageError, f"{where} nvda_dir", "only for an NVDA that asc launches", target.nvda_dir
@@ -180,14 +208,30 @@ def _checked(target: Target, where: str) -> Target:
     return target
 
 
-def defaults(mode: str) -> Target:
+def check_runnable(target: Target) -> None:
+    """Remote mode runs once it names its machine. On Linux only desktop and watch mode
+    run here."""
+    if target.mode == "remote":
+        missing = [name for name in ("ssh", "os") if getattr(target, name) is None]
+        if missing:
+            raise RemoteNeedsMachine(missing)
+    elif target.orca and target.mode not in ORCA_MODES:
+        raise WindowsOnlyMode(target.mode)
+
+
+def defaults(mode: str, os: str | None = None, platform: str = sys.platform) -> Target:
+    """`os` is for remote mode only: the others run where asc runs, on `platform`."""
+    if mode != "remote":
+        os = "windows" if platform == "win32" else "linux"
     ports = {
         "watch": WATCH_PORT,
         "shared": WATCH_PORT,
         "sandbox": SANDBOX_PORT,
         "remote": REMOTE_PORT,
     }
-    return Target(mode, ports.get(mode, 0), launch=mode == "desktop")
+    # Nothing connects to Orca.
+    port = 0 if os == "linux" else ports.get(mode, 0)
+    return Target(mode, port, launch=mode == "desktop" and os == "windows", os=os)
 
 
 def parse(text: str, where: str) -> dict[str, Any]:
@@ -215,13 +259,12 @@ def _read(path: Path) -> dict[str, Any]:
     return parse(text, str(path))
 
 
-def _from_table(mode: str, raw: object, file: str) -> Target:
+def _from_table(mode: str, raw: object, file: str, platform: str) -> Target:
     where = f"{file}: [{mode}]"
     f = Fields(raw, where, UsageError, prefs.MODE_KEYS)
     values = _checked_values(f, prefs.MODE_KEYS)
-    # Also refuses `launch = false`, which `_checked` can't tell from no launch at all.
-    if "launch" in values and mode != "desktop":
-        raise bad_field(UsageError, f"{where} launch", "only in desktop mode", values["launch"])
+    if "os" in values and mode != "remote":
+        raise bad_field(UsageError, f"{where} os", "only in remote mode", values["os"])
     settings = tuple(
         Setting.parse(text, f"{where} nvda_settings") for text in values.get("nvda_settings", [])
     )
@@ -232,7 +275,10 @@ def _from_table(mode: str, raw: object, file: str) -> Target:
         for key, value in values.items()
         if key in _TARGET_FIELDS
     }
-    target = replace(defaults(mode), **kept, settings=settings)
+    target = replace(defaults(mode, values.get("os"), platform), **kept, settings=settings)
+    # Also refuses `launch = false`, which `_checked` can't tell from no launch at all.
+    if "launch" in values:
+        _check_launch(target, where, values["launch"])
     return _checked(target, where)
 
 
@@ -250,24 +296,27 @@ class Config:
     `asc config` to change and write back."""
 
     data: Mapping[str, Any] = field(default_factory=dict)
-    mode: str = "watch"
+    mode: str = DEFAULT_MODE
     defaults: Mapping[str, prefs.Value] = field(default_factory=dict)
     modes: Mapping[str, Target] = field(default_factory=dict)
+    platform: str = sys.platform
 
     @classmethod
-    def from_data(cls, data: dict[str, Any], file: str) -> Config:
+    def from_data(cls, data: dict[str, Any], file: str, platform: str = sys.platform) -> Config:
         top = Fields(data, file, UsageError, ("mode", "defaults", *MODES))
-        mode = top.choice("mode", MODES) if top.has("mode") else "watch"
+        mode = top.choice("mode", MODES) if top.has("mode") else default_mode(platform)
         globals_ = Fields(
             data.get("defaults", {}), f"{file}: [defaults]", UsageError, prefs.DEFAULTS_KEYS
         )
-        modes = {name: _from_table(name, data[name], file) for name in MODES if name in data}
-        return cls(data, mode, _checked_values(globals_, prefs.DEFAULTS_KEYS), modes)
+        modes = {
+            name: _from_table(name, data[name], file, platform) for name in MODES if name in data
+        }
+        return cls(data, mode, _checked_values(globals_, prefs.DEFAULTS_KEYS), modes, platform)
 
     def resolve(self, mode: str | None) -> Target:
         """What `asc start` starts: `mode`, or the `mode` setting, with its table."""
         chosen = mode or self.mode
-        target = self.modes.get(chosen) or defaults(chosen)
+        target = self.modes.get(chosen) or defaults(chosen, platform=self.platform)
         return replace(target, panic_key=parse_hotkey(str(self.value("panic_key")[0])))
 
     def value(self, name: str) -> tuple[prefs.Value | None, str]:
@@ -279,5 +328,5 @@ class Config:
         return prefs.BY_NAME[name].default, "default"
 
 
-def load(path: Path) -> Config:
-    return Config.from_data(_read(path), path.name)
+def load(path: Path, platform: str | None = None) -> Config:
+    return Config.from_data(_read(path), path.name, platform or sys.platform)

@@ -2,8 +2,9 @@
 
 A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVDA
 Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
-evidence, is in `docs/protocol.md`; how Windows and NVDA behaved around it is in
-`docs/findings.md`. Windows only: the code and its tests drive Windows APIs.
+evidence, is in `docs/protocol.md`; how Windows, NVDA, Orca and ssh behaved around it is in
+`docs/findings.md`. Windows first: the code and its tests drive Windows APIs. On Linux, desktop
+and watch mode use Orca (`orca/`) instead of NVDA.
 
 ## Never
 
@@ -28,6 +29,7 @@ human's sign-off before breaking it.
 - `uv run poe check` (everything: spelling, format, lint, types, dead code, deps, tests)
 - `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
 - `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox)
+- `uv run python scripts/e2e_linux.py` (e2e against a real Orca in a Linux container, with Docker)
 
 ## Testing policy
 
@@ -50,9 +52,19 @@ human's sign-off before breaking it.
   evidence from real NVDA.
 - Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
   fakes.
-- For changes that touch the protocol or NVDA config, run the e2e tests against real NVDA
-  (`scripts/e2e_sandbox.py`), or state clearly that they weren't run. The e2e CI workflow also
-  runs the real-NVDA tests on PRs, but not the sandbox-mode ones.
+- CI (`e2e.yml`) runs every e2e test on every PR but sandbox mode's: GitHub's runners have no
+  Windows Sandbox. Locally, run only the e2e tests related to your change, as its proof, and say
+  in the handoff which ran: the rest is left to CI. Both scripts pass pytest arguments on (`-k`).
+  A change that touches none of these runs none.
+
+  | The change touches | Run |
+  |---|---|
+  | The relay, the protocol, keys or speech | `e2e_sandbox.py -k joins_speaks_and_releases` |
+  | Desktop mode on Windows or the NVDA config | `e2e_sandbox.py -k "desktop_mode or mode_sounds"` |
+  | Watch mode on Windows | `e2e_sandbox.py -k watch_start` |
+  | Remote mode or ssh | `-k "tunnel or taken_port"`, with both scripts |
+  | Orca, or desktop or watch mode on Linux | `e2e_linux.py` (`-k watch` for watch mode) |
+  | Sandbox mode | `tests/e2e/test_sandbox_mode.py` on the host, as its docstring says |
 - Some tests touch machine-wide state (window titles, the foreground window, global hotkeys,
   Windows Sandbox), so a real `asc` sandbox or daemon on this machine can make them fail. Check for
   one before blaming your change. When a test clashes, give it its own names, titles and hotkeys
@@ -104,8 +116,8 @@ human's sign-off before breaking it.
 - The daemon's control port listens on 127.0.0.1 only and needs its random token.
 - Watch mode never sends keys; the daemon enforces this.
 - Shared mode starts only with `--i-understand`.
-- An MSI-installed `asc` updates itself only from this repository's GitHub releases, over HTTPS,
-  with an MSI whose SHA-256 matches the one GitHub lists.
+- An installed `asc` (the MSI, or the Linux tarball) updates itself only from this repository's
+  GitHub releases, over HTTPS, with an MSI or tarball whose SHA-256 matches the one GitHub lists.
 
 ## Writing
 

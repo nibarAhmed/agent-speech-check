@@ -9,6 +9,9 @@ import pytest
 from tests import fake_nvda as f
 from tests.integration.conftest import Env, free_port, run_asc
 
+# Nothing listens on port 1, so ssh fails at once.
+UNREACHABLE = "[remote]\nos = 'windows'\nssh = 'ssh://me@127.0.0.1:1'\n"
+
 
 def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
     assert run_asc("start", "--mode", "desktop").returncode == 0
@@ -43,24 +46,24 @@ def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
     result = run_asc("start", "--mode", "shared", "--i-understand", "--instance", "vm1")
     assert result.returncode == 4
     assert "only the default instance may join" in result.stderr
-    # Refused before the firewall check, so an agent's forgotten --instance fails.
-    env.config(f"[remote]\nport = {free_port()}\nhost = '172.31.255.1'\n")
-    remote = run_asc("start", "--mode", "remote")
-    assert remote.returncode == 4, remote.stderr
-    assert "remote mode runs only in a named instance, one per VM" in remote.stderr
-    assert remote.stderr.endswith("hint: asc start --mode remote --instance VMNAME\n")
-    # Nor does it add a firewall rule the default instance can't use.
-    rule = run_asc("firewall-setup", "--mode", "remote")
-    assert rule.returncode == 4, rule.stderr
-    assert rule.stderr.endswith("hint: asc firewall-setup --mode remote --instance VMNAME\n")
+    env.config(UNREACHABLE)
+    result = run_asc("start", "--mode", "remote")
+    assert result.returncode == 4, result.stderr
+    assert "remote mode runs only in a named instance, one per VM" in result.stderr
+    assert result.stderr.endswith("hint: asc start --mode remote --instance VMNAME\n")
 
 
-def test_remote_mode_needs_its_firewall_rule(env: Env) -> None:
-    # A port no rule names. The host skips the Default Switch lookup.
-    env.config(f"[remote]\nport = {free_port()}\nhost = '172.31.255.1'\n", instance="vm2")
+def test_remote_mode_needs_a_machine_that_answers(env: Env) -> None:
+    env.config("[remote]\nos = 'windows'\n", instance="vm2")
     result = run_asc("start", "--mode", "remote", "--instance", "vm2")
-    assert result.returncode == 7, result.stderr
-    assert "hint: asc firewall-setup --mode remote --instance vm2" in result.stderr
+    assert result.returncode == 2, result.stderr
+    assert "remote mode needs ssh" in result.stderr
+    env.config(UNREACHABLE, instance="vm2")
+    result = run_asc("start", "--mode", "remote", "--instance", "vm2")
+    assert result.returncode == 3, result.stderr
+    assert "ssh ssh://me@127.0.0.1:1 failed: " in result.stderr
+    assert "Connection refused" in result.stderr
+    assert run_asc("status", "--instance", "vm2").returncode == 3
 
 
 @pytest.mark.usefixtures("env")
