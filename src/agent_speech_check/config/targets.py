@@ -109,8 +109,8 @@ class Target:
         return self.mode != "watch"
 
     @property
-    def own_nvda(self) -> bool:
-        """The user's own running NVDA joins (watch and shared mode)."""
+    def own_reader(self) -> bool:
+        """The user's own running screen reader joins (watch and shared mode)."""
         return self.mode in ("watch", "shared")
 
     @property

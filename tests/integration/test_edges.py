@@ -26,7 +26,7 @@ from agent_speech_check.errors import (
     Updating,
 )
 from agent_speech_check.sandbox import firewall
-from agent_speech_check.system import winapi
+from agent_speech_check.system import processes
 from agent_speech_check.update import updater
 
 
@@ -181,7 +181,7 @@ def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     stopped = run_asc("stop")
     assert stopped.returncode == 0, stopped.stderr
     assert not path.exists()
-    assert winapi.image_path(current["pid"]) is None
+    assert processes.image_path(current["pid"]) is None
 
 
 def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
@@ -193,9 +193,9 @@ def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
     try:
         assert run_asc("stop").returncode == 0
         assert not path.exists()
-        assert winapi.image_path(current["pid"]) is not None
+        assert processes.image_path(current["pid"]) is not None
     finally:
-        winapi.terminate(current["pid"], 10)
+        processes.terminate(current["pid"], 10)
 
 
 def test_stop_clears_a_state_file_without_a_pid(env: Env) -> None:
@@ -354,7 +354,7 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
         stopped = time.monotonic()
         assert run_asc("stop").returncode == 0
         left_s = 10 - (time.monotonic() - stopped)
-        gone = wait_until(lambda: winapi.image_path(pid) is None, left_s)
+        gone = wait_until(lambda: processes.image_path(pid) is None, left_s)
         assert gone, "the daemon waited on the silent peer"
 
 

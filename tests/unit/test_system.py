@@ -46,14 +46,14 @@ from agent_speech_check.nvda import launcher
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.system import wait, winapi
+from agent_speech_check.system import processes, wait, winapi
 
 
 def test_kill_on_close_job_kills_the_child() -> None:
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
         job = winapi.kill_on_close_job(child.pid)
-        assert winapi.image_path(child.pid) is not None
+        assert processes.image_path(child.pid) is not None
         winapi.close_handle(job)
         assert child.wait(10) is not None
     finally:
@@ -74,7 +74,7 @@ def test_kill_tree_ends_the_processes_it_started_too() -> None:
 
         assert wait.poll_until(sleeper_started, 10, 0.05)
         family = psutil.Process(parent.pid).children(recursive=True)
-        assert winapi.kill_tree(parent.pid) == []
+        assert processes.kill_tree(parent.pid) == []
         assert parent.wait(10) is not None
         assert not any(p.is_running() for p in family)
     finally:
@@ -86,18 +86,18 @@ def test_terminate_a_process_that_ended_but_is_still_held() -> None:
     but not terminated. It is gone, so terminate has nothing to do."""
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     child.wait(10)  # Popen keeps its handle open, so the pid stays openable.
-    winapi.terminate(child.pid, 1)
+    processes.terminate(child.pid, 1)
 
 
 def test_process_lookups() -> None:
-    me = winapi.image_path(os.getpid())
+    me = processes.image_path(os.getpid())
     assert me is not None
     assert me.suffix.lower() == ".exe"
-    assert os.getpid() in winapi.process_ids(me.name)
-    assert winapi.process_image(me.name) is not None
-    assert winapi.process_ids("no-such-image-asc.exe") == []
-    assert winapi.process_image("no-such-image-asc.exe") is None
-    assert winapi.image_path(0) is None
+    assert os.getpid() in processes.process_ids(me.name)
+    assert processes.process_image(me.name) is not None
+    assert processes.process_ids("no-such-image-asc.exe") == []
+    assert processes.process_image("no-such-image-asc.exe") is None
+    assert processes.image_path(0) is None
 
 
 # Tests keep windows by this title, never the real one: a sandbox that another
@@ -147,7 +147,7 @@ def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
     (tmp_path / "nvda.exe").write_bytes(b"")
-    if not winapi.process_ids("nvda.exe"):
+    if not processes.process_ids("nvda.exe"):
         pytest.skip("needs an NVDA running on this machine")
     with pytest.raises(NvdaAlreadyRunning):
         launcher.refuse_if_running()
@@ -381,9 +381,9 @@ def test_wsb_errors_for_an_unknown_sandbox() -> None:
 
 def test_wait_exit_returns_once_the_process_ends() -> None:
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
-    winapi.wait_exit(child.pid)
+    processes.wait_exit(child.pid)
     assert child.poll() is not None
-    winapi.wait_exit(child.pid)  # already gone: returns at once
+    processes.wait_exit(child.pid)  # already gone: returns at once
 
 
 def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:

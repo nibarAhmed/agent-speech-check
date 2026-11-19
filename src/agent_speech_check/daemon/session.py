@@ -25,7 +25,7 @@ from agent_speech_check.errors import (
     NotConnected,
     NotRunning,
     NvdaDidNotConnect,
-    OwnNvdaInInstance,
+    OwnReaderInInstance,
     PortInUse,
     RemoteNeedsInstance,
     SandboxBusy,
@@ -36,7 +36,7 @@ from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.orca.link import watch_secret
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.system import paths, spawn, winapi
+from agent_speech_check.system import paths, processes, spawn
 from agent_speech_check.system.paths import relay_dir
 from agent_speech_check.system.wait import poll_until
 
@@ -104,11 +104,11 @@ def _end(folder: Path) -> None:
         state.remove(folder)
         return
     try:
-        created = winapi.created_at(current.pid)
+        created = processes.created_at(current.pid)
         # A pid is reused only after its process is gone, so a process made after
         # the daemon wrote the file is some other program: leave it alone.
         if created is not None and created <= current.started:
-            winapi.terminate(current.pid, STOP_TIMEOUT_S)
+            processes.terminate(current.pid, STOP_TIMEOUT_S)
     except OSError:
         # It may still run, so the file stays: forgetting it would orphan it.
         raise DaemonUnstoppable([current.pid]) from None
@@ -163,8 +163,8 @@ def _check_sandbox(target: Target) -> None:
 def check_instance(target: Target, command: str) -> None:
     """Refuse a mode this kind of instance doesn't run."""
     named = paths.instance() is not None
-    if target.own_nvda and named:
-        raise OwnNvdaInInstance(target.mode)
+    if target.own_reader and named:
+        raise OwnReaderInInstance(target.mode)
     if target.named_only and not named:
         raise RemoteNeedsInstance(command)
 
@@ -303,6 +303,6 @@ def stop_all(
     if stuck:
         raise DaemonUnstoppable(stuck)
     if image is not None and not poll_until(
-        lambda: not winapi.others_running(image), timeout_s, POLL_S
+        lambda: not processes.others_running(image), timeout_s, POLL_S
     ):
-        raise AscStillRunning(winapi.others_running(image))
+        raise AscStillRunning(processes.others_running(image))

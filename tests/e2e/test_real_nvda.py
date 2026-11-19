@@ -26,7 +26,7 @@ from agent_speech_check.nvda import invite
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import fingerprint
-from agent_speech_check.system import paths, winapi
+from agent_speech_check.system import paths, processes, winapi
 from agent_speech_check.system.wait import poll_until
 
 pytestmark = [
@@ -243,7 +243,7 @@ def test_desktop_mode_end_to_end(
             if log.exists():
                 shutil.copy(log, nvda_log(request, tmp_path))
     assert stopped.returncode == 0
-    assert poll_until(lambda: not winapi.process_ids("nvda.exe"), 15, 0.5)
+    assert poll_until(lambda: not processes.process_ids("nvda.exe"), 15, 0.5)
     assert not insert_held()
 
 

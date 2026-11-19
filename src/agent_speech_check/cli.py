@@ -351,7 +351,7 @@ ANSWER_S = 60.0
 JOIN_POLL_S = 0.5
 
 
-def _connect_own_nvda(folder: Path, status: dict[str, Any]) -> dict[str, Any]:
+def _connect_own_reader(folder: Path, status: dict[str, Any]) -> dict[str, Any]:
     """Get the user's running NVDA to join without its Connect dialog.
 
     An NVDA that joined this relay before comes back by itself. Otherwise asc
@@ -391,8 +391,8 @@ def cmd_start(args: argparse.Namespace) -> int:
     folder = mode_dir(target.mode)
     status = session.start(target, folder)
     print(f"started: {target.mode}", flush=True)
-    if target.own_nvda and not target.orca and config.value("connect")[0]:
-        status = _connect_own_nvda(folder, status)
+    if target.own_reader and not target.orca and config.value("connect")[0]:
+        status = _connect_own_reader(folder, status)
     _show_status(status)
     return 0
 

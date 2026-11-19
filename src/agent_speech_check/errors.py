@@ -452,10 +452,10 @@ class BadInstance(UsageError):
         )
 
 
-class OwnNvdaInInstance(Refused):
+class OwnReaderInInstance(Refused):
     def __init__(self, mode: str) -> None:
         super().__init__(
-            f"{mode} mode uses your own NVDA, which only the default instance may join",
+            f"{mode} mode uses your own screen reader, which only the default instance may join",
             hint="use remote mode in a named instance, or leave out --instance",
         )
 

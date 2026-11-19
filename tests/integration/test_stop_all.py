@@ -16,7 +16,7 @@ from tests.integration.conftest import Env, free_port, run_asc, wait_until
 
 from agent_speech_check.daemon import session
 from agent_speech_check.errors import AscStillRunning
-from agent_speech_check.system import winapi
+from agent_speech_check.system import processes
 
 
 def _pid(env: Env, folder: str) -> int:
@@ -75,7 +75,7 @@ def test_stop_all_stops_every_daemon(env: Env, command: list[str]) -> None:
         "stopped: old-target\nstopped: watch\nstopped: instances/vm1/desktop\n"
     )
     # Run from source it has no asc.exe to wait for, so it may return a moment early.
-    assert wait_until(lambda: [winapi.image_path(pid) for pid in pids] == [None, None])
+    assert wait_until(lambda: [processes.image_path(pid) for pid in pids] == [None, None])
     assert list(env.root.glob("agent-speech-check/**/state.json")) == []
 
 

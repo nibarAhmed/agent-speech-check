@@ -32,7 +32,7 @@ from agent_speech_check import __version__
 from agent_speech_check.config.targets import load
 from agent_speech_check.daemon import state
 from agent_speech_check.errors import AscError
-from agent_speech_check.system import spawn, tls, winapi
+from agent_speech_check.system import processes, spawn, tls
 from agent_speech_check.system.paths import base_root, every_root, write_atomic
 from agent_speech_check.system.wait import poll_until
 
@@ -195,7 +195,7 @@ def checking() -> Path:
 
 
 def mark(path: Path, pid: int) -> None:
-    started = winapi.created_at(pid)
+    started = processes.created_at(pid)
     if started is None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -207,7 +207,7 @@ def _marked(path: Path) -> int | None:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
         # The start time tells a reused pid apart.
-        return int(raw["pid"]) if winapi.created_at(raw["pid"]) == raw["started"] else None
+        return int(raw["pid"]) if processes.created_at(raw["pid"]) == raw["started"] else None
     except (OSError, ValueError, TypeError, KeyError):
         return None
 
@@ -221,7 +221,7 @@ def stop_check() -> None:
     """For the installer: end an update check, which may otherwise run for minutes."""
     pid = _marked(checking())
     if pid is not None:
-        winapi.terminate(pid, winapi.KILL_WAIT_S)
+        processes.terminate(pid, processes.KILL_WAIT_S)
 
 
 def _running() -> bool:
@@ -274,7 +274,7 @@ def run() -> None:
             return
         images = _images(exe)
         idle = poll_until(
-            lambda: not (_running() or winapi.others_running(*images)), IDLE_WAIT_S, 0.5
+            lambda: not (_running() or processes.others_running(*images)), IDLE_WAIT_S, 0.5
         )
         if not idle or not enabled():
             # The download is kept for the retry.

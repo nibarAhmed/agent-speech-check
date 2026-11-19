@@ -45,9 +45,9 @@ _MODE_ABOUT = {
     "remote": "NVDA or Orca on another machine, like a VM, that asc reaches over ssh",
 }
 MODES = _choices(prefs.MODES, _MODE_ABOUT, default="watch")
-# A named instance can't join your own NVDA (watch and shared mode).
+# A named instance can't join your own screen reader (watch and shared mode).
 INSTANCE_MODES = _choices(
-    tuple(m for m in prefs.MODES if not defaults(m).own_nvda), _MODE_ABOUT, default="remote"
+    tuple(m for m in prefs.MODES if not defaults(m).own_reader), _MODE_ABOUT, default="remote"
 )
 NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),

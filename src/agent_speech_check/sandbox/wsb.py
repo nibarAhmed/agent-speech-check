@@ -39,7 +39,7 @@ from agent_speech_check.errors import (
     SandboxNeedsPro,
     WsbMissing,
 )
-from agent_speech_check.system import powershell, spawn, winapi
+from agent_speech_check.system import powershell, processes, spawn, winapi
 from agent_speech_check.system.wait import poll_until
 from agent_speech_check.validate import Fields
 
@@ -331,7 +331,7 @@ def running() -> list[str]:
 def wait_gone(timeout_s: float) -> bool:
     """Wait for the last sandbox VM to exit. Starting a new one before that
     attaches to the session that is logging off."""
-    return poll_until(lambda: not winapi.process_ids(VM_IMAGE), timeout_s, GONE_POLL_S)
+    return poll_until(lambda: not processes.process_ids(VM_IMAGE), timeout_s, GONE_POLL_S)
 
 
 def exec_as_user(sandbox_id: str, command: str) -> int:
@@ -497,7 +497,7 @@ def stop(sandbox_id: str) -> None:
 def guard(owner_pid: int, sandbox_id: str) -> None:
     """Wait for the owner process to end, however it ends, then stop its
     sandbox if that is still running. Runs as `asc _sandbox_guard`."""
-    winapi.wait_exit(owner_pid)
+    processes.wait_exit(owner_pid)
     if sandbox_id in running():
         stop(sandbox_id)
 

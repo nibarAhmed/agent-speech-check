@@ -35,7 +35,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
-from agent_speech_check.system import tls, winapi
+from agent_speech_check.system import processes, tls, winapi
 from agent_speech_check.system.paths import base_root
 from agent_speech_check.system.wait import poll_until
 
@@ -204,7 +204,7 @@ def sha1_matches(path: Path, sha1: str) -> bool:
 
 
 def running() -> bool:
-    return bool(winapi.process_ids("nvda.exe"))
+    return bool(processes.process_ids("nvda.exe"))
 
 
 def refuse_if_running() -> None:
@@ -306,7 +306,7 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         process.wait(timeout_s)
     except subprocess.TimeoutExpired:
         # Its children too, or they would go on writing into `dest`.
-        left = winapi.kill_tree(process.pid)
+        left = processes.kill_tree(process.pid)
         if process.pid not in left:
             process.wait()  # it is gone, so this returns at once and records its exit
         raise InstallerTimedOut(timeout_s, left) from None

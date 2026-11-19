@@ -35,7 +35,7 @@ def test_registered_only_when_the_link_scheme_has_a_command() -> None:
 
 
 def test_only_watch_and_shared_mode_use_your_own_nvda() -> None:
-    own = {mode: defaults(mode).own_nvda for mode in ("watch", "desktop", "sandbox", "shared")}
+    own = {mode: defaults(mode).own_reader for mode in ("watch", "desktop", "sandbox", "shared")}
     assert own == {"watch": True, "desktop": False, "sandbox": False, "shared": True}
 
 

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from agent_speech_check.errors import NvdaNotFound, RemoteCommandFailed
 from agent_speech_check.remote import ssh
-from agent_speech_check.system import powershell, winapi
+from agent_speech_check.system import powershell, processes
 
 if sys.platform == "win32":
     import winreg
@@ -172,7 +172,7 @@ def _registry_dir() -> Path | None:
 def candidates() -> list[tuple[str, Path]]:
     """Where your own NVDA may be, in the order `asc keys` tries them."""
     found: list[tuple[str, Path]] = []
-    running = winapi.process_image("nvda.exe")
+    running = processes.process_image("nvda.exe")
     if running is not None:
         found.append(("the running nvda.exe", running.parent))
     registry = _registry_dir()

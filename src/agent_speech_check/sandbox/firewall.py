@@ -20,7 +20,7 @@ import os
 import sys
 
 from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch, PowerShellTimedOut
-from agent_speech_check.system import paths, winapi
+from agent_speech_check.system import paths, processes
 from agent_speech_check.system.powershell import encoded, quote, run
 
 SANDBOX_RULE = "agent-speech-check sandbox relay"
@@ -79,7 +79,7 @@ def daemon_program() -> str:
     Under a venv, `python.exe` is a small launcher and the real interpreter is
     a child process, so the venv path would not match the socket's owner.
     """
-    image = winapi.image_path(os.getpid())
+    image = processes.image_path(os.getpid())
     return str(image) if image is not None else sys.executable
 
 
