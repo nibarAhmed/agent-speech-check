@@ -59,10 +59,10 @@ blind user does. Press keys, read what it says as text, and check it.
 typical use:
   asc setup                    choose your settings (once, Windows)
   asc start                    start recording in your configured mode
-  asc status                   how NVDA should connect, and whether it is
+  asc status                   whether the screen reader is connected, and how
   asc mark                     print the latest line number, N
-  asc wait --since N "OK"      block until NVDA says it after line N (regex)
-  asc speech --since N         what NVDA said after line N
+  asc wait --since N "OK"      block until it is said after line N (regex)
+  asc speech --since N         what was said after line N
   asc stop
 
 Speech is kept in memory only. Run asc COMMAND --help for details.

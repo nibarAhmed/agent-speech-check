@@ -550,12 +550,11 @@ class LaunchElsewhere(Refused):
 class NvdaIniOnlyRemote(Refused):
     def __init__(self, mode: str, reader: str) -> None:
         if reader == "orca":
-            super().__init__("--nvda-ini is for NVDA; asc starts Orca itself")
-            return
-        super().__init__(
-            f"--nvda-ini is for remote mode only; asc runs in {mode} mode",
-            hint="asc status shows how to connect NVDA",
-        )
+            message, hint = "--nvda-ini is for NVDA; Orca needs no nvda.ini", None
+        else:
+            message = f"--nvda-ini is for remote mode only; asc runs in {mode} mode"
+            hint = "asc status shows how to connect NVDA"
+        super().__init__(message, hint=hint)
 
 
 class NvdaDidNotConnect(NotConnected):
