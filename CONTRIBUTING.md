@@ -8,9 +8,12 @@ Contributions come in under the project's MIT license. There's no CLA.
 2. Set it up as [Development](README.md#development) in the README explains.
 3. `uv run poe check` must pass before you open a pull request. While you work,
    `uv run poe fast` is the quicker loop.
-4. For changes to the protocol or the NVDA config, also run the end-to-end tests against a real
-   NVDA: `uv run python scripts/e2e_sandbox.py`. They need Windows Sandbox (Windows 11 24H2 or
-   later, Pro, Enterprise or Education). If you can't run them, say so in the pull request.
+4. CI runs the end-to-end tests. For a change to how `asc` talks to NVDA or Orca, also run the
+   ones related to it, which AGENTS.md (Testing policy) lists: against a real NVDA with
+   `uv run python scripts/e2e_sandbox.py -k <tests>`, which needs Windows Sandbox (Windows 11 24H2
+   or later, Pro, Enterprise or Education), and against a real Orca with
+   `uv run python scripts/e2e_linux.py -k <tests>`, which needs Docker. If you can't run them,
+   say so in the pull request.
 5. Build the installer only when you change `installer/` or debug CI's `installer` check, which
    builds, installs, upgrades and uninstalls the MSI.
 
