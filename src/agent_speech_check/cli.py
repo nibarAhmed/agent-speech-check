@@ -161,6 +161,10 @@ def _press_args(parser: argparse.ArgumentParser) -> None:
     _timeout(parser)
 
 
+def _stop_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--all", action="store_true", help="every instance's daemon")
+
+
 def _type_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("text", metavar="TEXT")
     _settle(parser)
@@ -403,13 +407,18 @@ def _stop_every(roots: list[Path], image: Path | None) -> int:
     return stopped
 
 
-def cmd_stop(_: argparse.Namespace) -> int:
+def cmd_stop(args: argparse.Namespace) -> int:
+    roots = paths.every_root() if args.all else [state_root()]
     # A state file left behind counts as something to clear, not as nothing running.
-    found = bool(state.folders(state_root()))
-    stopped = _stop_every([state_root()], None)
+    found = any(state.folders(root) for root in roots)
+    if args.all:
+        # Before asc is deleted: no update check may run, or start.
+        updater.stop_check()
+    stopped = _stop_every(roots, None)
     if not (found or stopped):
         raise NotRunning
-    updater.start_if_due()
+    if not args.all:
+        updater.start_if_due()
     return 0
 
 
@@ -849,8 +858,10 @@ examples:
     "stop": Command(
         "stop recording and forget the speech",
         "Stop this instance's daemon, whatever its mode. Held keys are released. A\n"
-        "daemon that doesn't answer is ended.",
+        "daemon that doesn't answer is ended. --all stops every instance's daemon\n"
+        "and starts no update check: run it before you delete asc.",
         cmd_stop,
+        _stop_args,
     ),
     "status": Command(
         "show whether asc is recording and NVDA is connected",

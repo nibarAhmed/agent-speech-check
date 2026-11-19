@@ -84,9 +84,11 @@ settings and data" checkbox, and a silent uninstall keeps it only with
 The firewall rule from `asc firewall-setup` stays: delete it as
 [that command](#asc-firewall-setup) says.
 
-On Linux there is no uninstaller: after `asc stop`, delete
+On Linux there is no uninstaller: after `asc stop --all`, delete
 `~/.local/share/agent-speech-check`, `~/.local/bin/asc` and, with your
-settings and data, `~/.local/state/agent-speech-check`.
+settings and data, `~/.local/state/agent-speech-check`. If you used watch mode,
+your Orca keeps `asc`'s secret until it ends: restart it or
+log out to drop it.
 
 ## Updates
 
@@ -390,7 +392,7 @@ own VM with remote mode, which runs only in a named instance.
 - Ports must differ between running instances: `asc start` refuses one in use
   (exit 4). Desktop mode picks a free one. Remote mode's `port` is on the other
   machine, so it must differ only between instances that reach the same one.
-- `asc stop` stops only its own instance.
+- `asc stop` stops only its own instance; `asc stop --all` stops them all.
 
 ### Global settings
 
@@ -478,12 +480,15 @@ asc start --nvda-setting keyboard.speakTypedCharacters=False
 ### `asc stop`
 
 ```
-asc stop
+asc stop [--all]
 ```
 
 Releases any held keys, stops this instance's daemon and forgets the speech,
 and prints `stopped: MODE` (`stopped: instances/NAME/MODE` in a named
 instance). Exits 3 if nothing runs.
+
+- `--all` stops the daemon of every instance, ends an [update](#updates) check
+  and starts none: run it before you delete `asc`.
 
 - A daemon that is there but doesn't answer (an older asc, or a stuck one)
   still counts as running, so `asc start` and `asc setup` refuse with exit 4. `asc stop` ends its process,

@@ -1,4 +1,5 @@
-"""`asc _stop_all`: how the installer stops every daemon before it replaces or removes asc."""
+"""`asc _stop_all`, how the installer stops every daemon before it replaces or removes asc, and
+`asc stop --all`, how a person does before deleting it on Linux."""
 
 from __future__ import annotations
 
@@ -50,7 +51,8 @@ def _listening(port: int) -> bool:
     return True
 
 
-def test_stop_all_stops_every_daemon(env: Env) -> None:
+@pytest.mark.parametrize("command", [["_stop_all"], ["stop", "--all"]])
+def test_stop_all_stops_every_daemon(env: Env, command: list[str]) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     # And a named instance's.
     env.config(f"[desktop]\nport = {free_port()}\nlaunch = false\n", instance="vm1")
@@ -67,7 +69,7 @@ def test_stop_all_stops_every_daemon(env: Env) -> None:
     stale = {"pid": 1, "port": free_port(), "token": "old", "started": 0}
     (dead / "state.json").write_text(json.dumps(stale), encoding="utf-8")
 
-    result = run_asc("_stop_all")
+    result = run_asc(*command)
     assert result.returncode == 0, result.stderr
     assert result.stdout == (
         "stopped: old-target\nstopped: watch\nstopped: instances/vm1/desktop\n"

@@ -47,7 +47,7 @@ curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/down
 ln -sf ~/.local/share/agent-speech-check/current/asc ~/.local/bin/asc
 ```
 
-To uninstall, run `asc stop`, then delete `~/.local/share/agent-speech-check`, `~/.local/bin/asc` and, with your settings and data, `~/.local/state/agent-speech-check`.
+To uninstall, run `asc stop --all`, then delete `~/.local/share/agent-speech-check`, `~/.local/bin/asc` and, with your settings and data, `~/.local/state/agent-speech-check`. If you used watch mode, restart Orca or log out, so it drops `asc`'s secret.
 
 Either way, `asc` [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates).
 
