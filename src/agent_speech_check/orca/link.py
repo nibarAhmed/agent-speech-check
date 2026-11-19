@@ -1,9 +1,8 @@
 """The link to Orca: `helper.py` on this Linux machine, or on one asc reaches over ssh.
 
-It does the relay's job for `Keyboard` and the daemon: `connected`, `losses`,
-`check`, key events and `on_join`. asc sends the helper's source over stdin
-(see `BOOTSTRAP`), so nothing is installed on the other machine. Its stderr
-stays in memory: it is shown in an error, never logged.
+It is Orca's `Link` (`inputs/keyboard.py`), as the relay is NVDA's. asc sends
+the helper's source over stdin (see `BOOTSTRAP`), so nothing is installed on the
+other machine. Its stderr stays in memory: it is shown in an error, never logged.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ from agent_speech_check.errors import (
     SshMissing,
     bad_field,
 )
-from agent_speech_check.inputs.keys import Key
+from agent_speech_check.inputs.keys import Gesture, Key, typed_gestures
 from agent_speech_check.orca import helper
 from agent_speech_check.system import paths, ssh
 from agent_speech_check.validate import Fields
@@ -294,6 +293,13 @@ class OrcaLink:
                 raise ProtocolError(reason)
         if new or not self.connected:
             raise OrcaNotConnected(last_error=self.last_error)
+
+    def gestures(self, text: str) -> tuple[Gesture, ...]:
+        """X names each character by its keysym."""
+        return typed_gestures(text)
+
+    def status_fields(self) -> dict[str, Any]:
+        return {}
 
     async def run(self) -> None:
         """Start the helper and follow it until it ends. Never raises: what went

@@ -25,9 +25,9 @@ from agent_speech_check.errors import (
     FirewallRuleMissing,
     NotConnected,
     NotRunning,
-    NvdaDidNotConnect,
     OwnReaderInInstance,
     PortInUse,
+    ReaderDidNotConnect,
     RemoteNeedsInstance,
     SandboxBusy,
     SharedNeedsConsent,
@@ -207,8 +207,7 @@ def _wait_ready(target: Target, folder: Path) -> dict[str, Any]:
                 raise failed
             if target.tunnel:
                 raise SshFailed(str(target.ssh), f"no tunnel within {timeout_s:g} s")
-            reader = "Orca" if target.orca else "NVDA"
-            raise NvdaDidNotConnect(timeout_s, log_tail(folder), reader)
+            raise ReaderDidNotConnect(timeout_s, log_tail(folder), target.reader)
         time.sleep(POLL_S)
 
 
@@ -216,7 +215,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     """Start the daemon and return its status once it is ready."""
     precheck(target)
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
-    if not target.orca:
+    if target.reader == "nvda":
         relay.load_or_create(relay_dir(target.mode))
     elif target.mode == "watch":
         watch_secret()

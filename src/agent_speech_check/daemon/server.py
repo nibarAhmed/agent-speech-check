@@ -40,8 +40,8 @@ from agent_speech_check.errors import (
     numbered_lines,
 )
 from agent_speech_check.inputs import mouse
-from agent_speech_check.inputs.keyboard import Keyboard
-from agent_speech_check.inputs.keys import Gesture, Hotkey, text_gestures, typed_gestures
+from agent_speech_check.inputs.keyboard import Keyboard, Link
+from agent_speech_check.inputs.keys import Hotkey
 from agent_speech_check.nvda import launcher, nvda_config, relay
 from agent_speech_check.nvda.relay import Relay
 from agent_speech_check.orca.link import OrcaLink, watch_secret
@@ -184,14 +184,13 @@ class Daemon:
         self.target = target
         self.folder = folder
         self.speech = SpeechLog()
-        # Orca's helper takes the relay's place: nothing listens for Orca.
+        # NVDA's relay, which the daemon also listens on: nothing listens for Orca.
         self.relay: Relay | None = None
-        self.orca: OrcaLink | None = None
         self.tunnel: Tunnel | None = None
-        self.link: Relay | OrcaLink
-        if target.orca:
+        self.link: Link
+        if target.reader == "orca":
             watch = watch_secret() if target.mode == "watch" else None
-            self.link = self.orca = OrcaLink(target.ssh, self.speech, watch)
+            self.link = OrcaLink(target.ssh, self.speech, watch)
         else:
             credentials = relay.load_or_create(relay_dir(target.mode))
             self.link = self.relay = Relay(credentials, self.speech)
@@ -245,18 +244,14 @@ class Daemon:
         return {"lines": lines, "dropped": dropped}
 
     def status(self) -> dict[str, Any]:
-        credentials = None if self.relay is None else self.relay.credentials
         return {
             "mode": self.target.mode,
             "keys": self.target.keys,
-            "reader": "orca" if self.orca is not None else "nvda",
+            "reader": self.target.reader,
             "ssh": self.target.ssh,
             "tunnel": None if self.tunnel is None else self.tunnel.state(),
             "connected": self.link.connected,
-            "host": None if self.relay is None else self.relay.host,
-            "port": self._port(),
-            "channel": None if credentials is None else credentials.channel,
-            "fingerprint": None if credentials is None else credentials.fingerprint,
+            **self._address(),
             "browse_focus": self.speech.mode,
             "lines": len(self.speech),
             "latest": self.speech.latest,
@@ -267,16 +262,18 @@ class Daemon:
             "running": list(self.running),
         }
 
-    def _port(self) -> int | None:
-        """Where NVDA connects: on the other machine, for a tunnel."""
-        if self.relay is None:
-            return None
-        return self.target.port if self.tunnel else self.relay.port
+    def _address(self) -> dict[str, Any]:
+        """Where NVDA connects: on the other machine, for a tunnel. None for Orca."""
+        address: dict[str, Any] = dict.fromkeys(("host", "port", "channel", "fingerprint"))
+        address.update(self.link.status_fields())
+        if self.tunnel is not None:
+            address["port"] = self.target.port
+        return address
 
     def _failure(self) -> dict[str, Any] | None:
         """Why the sandbox, Orca or the tunnel never got going, for `asc start` to raise."""
-        owner = self.sandbox or self.orca or self.tunnel
-        failure = None if owner is None else owner.failure
+        owners = (self.sandbox, self.link, self.tunnel)
+        failure = next((o.failure for o in owners if o is not None and o.failure), None)
         return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
@@ -320,13 +317,12 @@ class Daemon:
             raise self._no_match(args.expect or "", args.timeout_ms, pressed.after)
         return _new_speech(pressed.since, pressed.after)
 
-    def _typed(self, text: str) -> tuple[Gesture, ...]:
-        """X names each character by its keysym; Windows needs the layout's key for it."""
-        return typed_gestures(text) if self.orca is not None else text_gestures(text)
-
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
-            self._typed(args.text), args.settle_ms / 1000, args.timeout_ms / 1000, settle_each=False
+            self.link.gestures(args.text),
+            args.settle_ms / 1000,
+            args.timeout_ms / 1000,
+            settle_each=False,
         )
         return _new_speech(typed.since, typed.after)
 
@@ -339,12 +335,12 @@ class Daemon:
         # Before the launch, which can take seconds in a sandbox.
         losses_before = len(self.link.losses)
         # The sandbox's and Orca's windows can't be seen from here.
-        seen = self.sandbox is None and self.orca is None
+        seen = self.sandbox is None and self.relay is not None
         before = set(winapi.windows_titled("")) if seen else None
         if self.sandbox is not None:
             await self.sandbox.launch(args.command)
-        elif self.orca is not None:
-            await self.orca.launch(args.command)
+        elif isinstance(self.link, OrcaLink):
+            await self.link.launch(args.command)
         else:
             # Input only where the agent may send it: in watch mode the user drives.
             if self.target.keys and not mouse.nudge():
@@ -431,10 +427,7 @@ class Daemon:
             await asyncio.to_thread(self._start_nvda)
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             async with asyncio.TaskGroup() as group:
-                link = self.link
-                follow = group.create_task(
-                    link.keepalive() if isinstance(link, Relay) else link.run()
-                )
+                follow = group.create_task(self.link.run())
                 if self.target.launches_sandbox:
                     self.sandbox = SandboxSession(self.folder, self.target, self._relay_info())
                     group.create_task(self.sandbox.run())
@@ -443,10 +436,7 @@ class Daemon:
         finally:
             self.keyboard.release_all()
             # Before NVDA goes, so it can still answer the close.
-            if self.relay is not None:
-                self.relay.disconnect()
-            if self.orca is not None:
-                await self.orca.stop()
+            await self.link.stop()
             if self.nvda is not None:
                 self.nvda.stop()
             if self.sandbox is not None:
