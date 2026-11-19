@@ -70,7 +70,7 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 | `%LOCALAPPDATA%\agent-speech-check\nvda\portable` | the portable NVDA that `asc get-nvda` makes |
 | `%LOCALAPPDATA%\agent-speech-check\instances\<name>\` | a [named instance's](#instances) `config.toml` and mode folders |
 | `%LOCALAPPDATA%\agent-speech-check\update\` | the last [update](#updates) check's `update.log` and `msiexec.log`, and the MSI it downloaded |
-| `~/.local/state/agent-speech-check/` | on Linux (or `$XDG_STATE_HOME/agent-speech-check/`), the same: `config.toml`, the desktop folder, `instances/`, and `update/` with `update.log` and the tarball |
+| `~/.local/state/agent-speech-check/` | on Linux (or `$XDG_STATE_HOME/agent-speech-check/`), the same: `config.toml`, the desktop folder, watch mode's `orca-secret`, `instances/`, and `update/` with `update.log` and the tarball |
 | `~/.local/share/agent-speech-check/` | on Linux, the installed `asc`: `versions/VERSION/` and the `current` link to the one that runs |
 
 The certificate and key are created once and kept, because NVDA pins the
@@ -112,9 +112,9 @@ An `asc` installed by the MSI, or unpacked from the Linux tarball as the
 
 ## Modes
 
-The `mode` setting (or `asc start --mode`) picks one of five. On Linux only
-desktop mode, which starts Orca, and remote mode run, so plain `asc start` starts desktop
-mode: the others exit 2.
+The `mode` setting (or `asc start --mode`) picks one of five. On Linux desktop
+mode, which starts Orca, watch and remote mode run: plain `asc start` starts
+desktop mode, which needs nothing of yours. Sandbox and shared mode exit 2.
 
 ### Watch mode
 
@@ -142,6 +142,20 @@ Your own NVDA, installed or portable, as it runs now. `asc` listens and never se
 - `asc` never launches your installed NVDA: a second NVDA restarts the running
   one.
 - To press keys in your running NVDA, use shared mode.
+
+On Linux, watch mode records your own Orca (51 or later) and starts nothing.
+Orca shares its speech only with a program that knows the secret Orca was
+started with, and reads that secret only when it starts:
+
+- `asc start` makes `asc`'s secret once and keeps it in
+  `~/.local/state/agent-speech-check/orca-secret`, which only you can read.
+- If no Orca runs, or yours runs without that secret, it exits 7 with the line
+  that restarts your Orca with it, for you to run in your desktop session.
+  Then `asc start` again. That Orca keeps the secret until it ends, so once a
+  login is enough. `asc` never restarts or ends your Orca itself.
+- Run `asc` in your desktop session, where it reaches your Orca on D-Bus.
+- `asc launch CMD` starts `CMD` on your desktop, and it stays when `asc` stops.
+- `asc stop` stops the recording. Your Orca keeps running.
 
 ### Desktop mode
 
@@ -191,8 +205,8 @@ key. It needs no audio device: `asc` records what Orca would say.
   lacks the D-Bus service `asc` records speech through. Nothing is installed
   there: `asc` sends its helper over stdin at each start.
 - Orca runs once per user, so `asc start` exits 4 while that user runs
-  another Orca, your own included. Use another account for `asc`
-  (remote mode with `ssh = "asc@localhost"`).
+  another Orca, your own included. Use watch mode to hear your own, or another
+  account for `asc` (remote mode with `ssh = "asc@localhost"`).
 - Gestures use NVDA's names: `NVDA+T` and `Orca+T` both press Insert, Orca's
   desktop modifier. `asc keys` reads only NVDA's reference, so it exits 2 on
   Linux.
@@ -709,7 +723,8 @@ that machine and use `asc wait`.
   the app it starts, not the console.
 - `launch` brings the new window forward so NVDA hears it, except in watch
   mode, where it may stay behind.
-- With Orca `CMD` runs on Orca's display (see [Desktop mode](#desktop-mode)).
+- With Orca `CMD` runs on Orca's display (see [Desktop mode](#desktop-mode)),
+  or in watch mode on your desktop.
 
 ```shell
 asc launch "C:\share\app\run.cmd" --title "My App"

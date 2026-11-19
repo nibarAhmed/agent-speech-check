@@ -1,23 +1,26 @@
-"""Runs on the Linux machine, local or over SSH: a private X display with its own Orca.
+"""Runs on the Linux machine, local or over SSH: a private X display with its own Orca,
+or in watch mode the user's own Orca, which it only records.
 
 asc sends this file over stdin to `python3 -I -c BOOTSTRAP` (see `link.py`), so
 it uses only the standard library and runs on any Python 3.9 or later. It
 writes no file but a temporary folder, removed when it ends.
 
 Over stdin and stdout, one JSON object per line. In:
+- first `{}`, or `{"watch": "SECRET"}`: the secret the user's Orca was started with
 - `{"key": "Insert", "down": true, "id": 1}`: an X keysym through xdotool; `id` asks for `done`
 - `{"launch": "gedit --new-window", "id": 2}`: start an app on the display
 Out:
 - `{"ready": "51.1"}`: Orca runs and its speech comes next
 - `{"record": {...}}`: one line of Orca's speech recording
 - `{"done": 1}`, or `{"done": 2, "error": "..."}`
-- `{"failed": "setup" or "busy", "reason": "..."}`, then it exits
+- `{"failed": "setup", "busy" or "watch", "reason": "..."}`, then it exits
 
 Stdin closing, SIGTERM or SIGHUP ends it, and everything it started with it.
 """
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import ctypes
 import json
@@ -40,6 +43,7 @@ MIN_ORCA = (51, 0)
 READY_TIMEOUT_S = 30.0
 SERVICE = "org.gnome.Orca1.Service"
 XDOTOOL_TIMEOUT_S = 10.0
+MAX_RECORDS = 10_000
 
 
 def orca_version(text: str) -> tuple[int, int] | None:
@@ -111,9 +115,37 @@ class Output:
                 pass  # asc is gone; stdin closing ends this too
 
 
+class Records:
+    """Orca's records on their way out. Taking one in never waits: Orca stops once its
+    recording pipe fills (64 KiB), so past `limit` the oldest are dropped."""
+
+    def __init__(self, limit: int = MAX_RECORDS) -> None:
+        self._lines: collections.deque[bytes] = collections.deque(maxlen=limit)
+        self._changed = threading.Condition()
+        self._ended = False
+
+    def drain(self, stream: IO[bytes]) -> None:
+        for line in stream:
+            with self._changed:
+                self._lines.append(line)
+                self._changed.notify()
+        with self._changed:
+            self._ended = True
+            self._changed.notify()
+
+    def take(self) -> bytes | None:
+        """The oldest line, or None once the stream has ended and all are taken."""
+        with self._changed:
+            self._changed.wait_for(lambda: self._lines or self._ended)
+            return self._lines.popleft() if self._lines else None
+
+
 class Session:
-    def __init__(self, out: Output) -> None:
+    def __init__(self, out: Output, watch: str | None) -> None:
         self.out = out
+        # The secret the user's own Orca runs with, in watch mode: then nothing is started.
+        self.watch = watch
+        self.recording = False
         remove_stale(Path(tempfile.gettempdir()), os.getuid())
         self.folder = Path(tempfile.mkdtemp(prefix="asc-orca-"))
         (self.folder / "pid").write_text(str(os.getpid()))
@@ -125,8 +157,9 @@ class Session:
         prctl = ctypes.CDLL(None).prctl
         pr_set_pdeathsig, pr_set_child_subreaper = 1, 36
         self._die_with_parent = lambda: prctl(pr_set_pdeathsig, signal.SIGKILL)
-        # What leaves its group, like a daemon an app starts, becomes our child, for `close`.
-        prctl(pr_set_child_subreaper, 1)
+        if watch is None:
+            # What leaves its group, like a daemon an app starts, becomes our child, for `close`.
+            prctl(pr_set_child_subreaper, 1)
 
     def start(self, args: list[str], **kwargs: Any) -> subprocess.Popen[bytes]:
         """Its own session, so teardown ends its whole group, and SIGKILL if this ends."""
@@ -144,6 +177,8 @@ class Session:
         return process
 
     def setup(self) -> str:
+        if self.watch is not None:
+            return self._join(self.watch)
         missing = [name for name in PROGRAMS if shutil.which(name) is None]
         if missing:
             raise Failed("setup", "missing programs: " + ", ".join(missing))
@@ -153,9 +188,7 @@ class Session:
             ).stdout
         except subprocess.TimeoutExpired:
             raise Failed("setup", "orca --version did not answer within 30 s") from None
-        version = orca_version(found)
-        if version is None or version < MIN_ORCA:
-            raise Failed("setup", f"needs Orca 51 or later, found {found.strip()!r}")
+        version = _new_enough(found)
         if others_running(os.getuid()):
             raise Failed("busy", "this user already runs Orca, and Orca runs once per user")
         secret = secrets.token_hex(16)
@@ -166,8 +199,24 @@ class Session:
         self.start(["openbox"])
         self.orca = self.start(["orca"])
         self._wait_orca()
-        self._record(secret)
-        return "{}.{}".format(*version)
+        if not self._record(secret):
+            raise Failed("setup", "Orca refused to record its speech")
+        return version
+
+    def _join(self, secret: str) -> str:
+        """Record the user's own Orca, on this session's D-Bus, and start nothing."""
+        if shutil.which("gdbus") is None:
+            raise Failed("setup", "missing programs: gdbus")
+        if not others_running(os.getuid()):
+            raise Failed("watch", "no Orca runs for this user")
+        found = self._gdbus("/org/gnome/Orca1/Service", f"{SERVICE}.GetVersion")
+        if found is None:
+            reason = "Orca doesn't answer: is it 51 or later, and asc in your desktop session?"
+            raise Failed("setup", reason)
+        version = _new_enough(found)
+        if not self._record(secret):
+            raise Failed("watch", "it wasn't started with asc's secret")
+        return version
 
     def _display(self) -> None:
         read, write = os.pipe()
@@ -219,7 +268,8 @@ class Session:
         self.env.pop("WAYLAND_DISPLAY", None)
         self.env.setdefault("LANG", "C.UTF-8")
 
-    def _gdbus(self, path: str, method: str, *args: str, timeout: float = 30) -> bool:
+    def _gdbus(self, path: str, method: str, *args: str, timeout: float = 30) -> str | None:
+        """What the method returned, as gdbus prints it, or None if it failed."""
         command = ["gdbus", "call", "--session", "--dest", SERVICE, "--object-path", path]
         try:
             result = subprocess.run(
@@ -227,18 +277,22 @@ class Session:
                 env=self.env,
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
+                text=True,
                 check=False,
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
             raise Failed("setup", "Orca did not answer on D-Bus") from None
-        return result.returncode == 0
+        return result.stdout if result.returncode == 0 else None
 
     def _wait_orca(self) -> None:
         deadline = time.monotonic() + READY_TIMEOUT_S
         path = "/org/gnome/Orca1/Service"
-        while not self._gdbus(
-            path, f"{SERVICE}.GetVersion", timeout=max(0.1, deadline - time.monotonic())
+        while (
+            self._gdbus(
+                path, f"{SERVICE}.GetVersion", timeout=max(0.1, deadline - time.monotonic())
+            )
+            is None
         ):
             code = self.orca.poll()
             if code is not None:
@@ -247,25 +301,31 @@ class Session:
                 raise Failed("setup", f"Orca did not answer within {READY_TIMEOUT_S:g} s")
             time.sleep(0.1)
 
-    def _record(self, secret: str) -> None:
+    def _record(self, secret: str) -> bool:
+        """Whether Orca took the secret and now writes its speech to us."""
         fifo = self.folder / "speech"
         os.mkfifo(fifo, 0o600)
+        records = Records()
         # The reader first: Orca's open for writing waits until one exists.
-        threading.Thread(target=self._forward, args=(fifo,), daemon=True).start()
-        path = "/org/gnome/Orca1/Service/SpeechPresenter"
-        method = "org.gnome.Orca1.SpeechPresenter.SetLogFileForTesting"
-        if not self._gdbus(path, method, secret, str(fifo)):
-            raise Failed("setup", "Orca refused to record its speech")
+        threading.Thread(target=_drain, args=(fifo, records), daemon=True).start()
+        threading.Thread(target=self._forward, args=(records,), daemon=True).start()
+        self.recording = self._set_log(secret, str(fifo))
+        return self.recording
 
-    def _forward(self, fifo: Path) -> None:
-        with fifo.open("rb") as records:
-            for line in records:
-                try:
-                    record = json.loads(line)
-                except ValueError:
-                    continue
-                self.out.send({"record": record})
-        # Orca closed it: Orca has stopped, so this ends too.
+    def _set_log(self, secret: str, path: str) -> bool:
+        """An empty path stops the recording."""
+        presenter = "/org/gnome/Orca1/Service/SpeechPresenter"
+        method = "org.gnome.Orca1.SpeechPresenter.SetLogFileForTesting"
+        return self._gdbus(presenter, method, secret, path) is not None
+
+    def _forward(self, records: Records) -> None:
+        for line in iter(records.take, None):
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            self.out.send({"record": record})
+        # Orca closed it: Orca has stopped or stopped recording, so this ends too.
         os.kill(os.getpid(), signal.SIGTERM)
 
     def handle(self, message: dict[str, Any]) -> None:
@@ -300,6 +360,16 @@ class Session:
         args = shlex.split(command)
         if not args:
             raise ValueError("no command")
+        if self.watch is not None:
+            # On the user's desktop, theirs from now on: it outlives asc, as on Windows.
+            subprocess.Popen(
+                args,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return
         app = self.start(args)
         self.children.remove(app)
         self.apps.append(app)
@@ -308,6 +378,13 @@ class Session:
         # Ending Orca ends its recording, which sends SIGTERM: it must not cut this short.
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         signal.signal(signal.SIGHUP, signal.SIG_IGN)
+        if self.watch is not None:
+            # The user's Orca keeps running: only its recording stops.
+            if self.recording:
+                with contextlib.suppress(Failed):
+                    self._set_log(self.watch, "")
+            shutil.rmtree(self.folder, ignore_errors=True)
+            return
         for process in [*self.apps, *reversed(self.children), *filter(None, [self.xvfb])]:
             _end_group(process)
         # Bounded: each round ends the orphans the last one left.
@@ -322,6 +399,18 @@ class Session:
                 with contextlib.suppress(ChildProcessError):
                     os.waitpid(pid, 0)
         shutil.rmtree(self.folder, ignore_errors=True)
+
+
+def _new_enough(version_text: str) -> str:
+    version = orca_version(version_text)
+    if version is None or version < MIN_ORCA:
+        raise Failed("setup", f"needs Orca 51 or later, found {version_text.strip()!r}")
+    return "{}.{}".format(*version)
+
+
+def _drain(fifo: Path, records: Records) -> None:
+    with fifo.open("rb") as stream:
+        records.drain(stream)
 
 
 def _end_group(process: subprocess.Popen[bytes]) -> None:
@@ -343,7 +432,8 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGHUP, _stop)
     out = Output(sys.stdout.buffer)
-    session = Session(out)
+    first = json.loads(sys.stdin.buffer.readline() or b"{}")
+    session = Session(out, first.get("watch"))
     try:
         try:
             out.send({"ready": session.setup()})

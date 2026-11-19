@@ -12,19 +12,24 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
+import secrets
 import shlex
 import subprocess
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from agent_speech_check.errors import (
     AscError,
+    FileUnusable,
     LaunchFailed,
     OrcaBusy,
     OrcaNotConnected,
+    OrcaNotWatchable,
     OrcaSetupNeeded,
     ProtocolError,
     SshMissing,
@@ -35,6 +40,7 @@ from agent_speech_check.orca import helper
 from agent_speech_check.remote import ssh
 from agent_speech_check.remote.speech_log import SpeechLog
 from agent_speech_check.validate import Fields
+from agent_speech_check.windows import paths
 
 log = logging.getLogger(__name__)
 
@@ -124,8 +130,36 @@ def helper_command(destination: str | None) -> list[str]:
     return [*ssh.command(destination, "-T"), shlex.join(command)]
 
 
-def payload() -> bytes:
-    return b"%d\n" % len(_HELPER) + _HELPER
+def payload(watch: str | None) -> bytes:
+    """The helper, then its first line: in watch mode, the secret the user's Orca runs with."""
+    start = {} if watch is None else {"watch": watch}
+    return b"%d\n" % len(_HELPER) + _HELPER + json.dumps(start).encode() + b"\n"
+
+
+def watch_secret_file() -> Path:
+    # One per user, as Orca is: watch mode runs only in the default instance.
+    return paths.base_root() / "orca-secret"
+
+
+def watch_secret(path: Path) -> str:
+    """The secret the user's own Orca must start with for watch mode, made once and kept."""
+    try:
+        if path.exists():
+            kept = path.read_text(encoding="ascii", errors="replace").strip()
+            if re.fullmatch(r"[0-9a-f]{32}", kept):
+                return kept
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        raise FileUnusable.from_os(path, error) from None
+    secret = secrets.token_hex(16)
+    paths.write_atomic(path, secret)  # only this user may read it (mkstemp's 0600)
+    return secret
+
+
+def restart_command(path: Path) -> str:
+    """The line that restarts the user's Orca with asc's secret, for them to run."""
+    secret = f"$(cat {shlex.quote(str(path))})"
+    return f"ORCA_TEST_RPC_SECRET={secret} setsid orca --replace >/dev/null 2>&1 &"
 
 
 @dataclass(frozen=True)
@@ -179,18 +213,27 @@ def parse_message(line: bytes) -> Message | None:
         error = f.opt_text("error", max_len=MAX_LINE)
         return Done(f.number("done", low=1, high=2**53), None if error is None else error[:2000])
     if f.has("failed"):
-        kind = f.choice("failed", ("setup", "busy"))
+        kind = f.choice("failed", ("setup", "busy", "watch"))
         reason = f.text("reason", max_len=2000)
-        return Failed(OrcaSetupNeeded(reason) if kind == "setup" else OrcaBusy(reason))
+        failure: AscError
+        if kind == "watch":
+            failure = OrcaNotWatchable(reason, restart_command(watch_secret_file()))
+        else:
+            failure = OrcaSetupNeeded(reason) if kind == "setup" else OrcaBusy(reason)
+        return Failed(failure)
     return None
 
 
 class OrcaLink:
     not_connected = OrcaNotConnected
 
-    def __init__(self, destination: str | None, speech: SpeechLog) -> None:
+    def __init__(
+        self, destination: str | None, speech: SpeechLog, watch: str | None = None
+    ) -> None:
         self.destination = destination
         self.speech = speech
+        # Watch mode's secret: then the helper records the user's own Orca.
+        self.watch = watch
         self.on_join: Callable[[], None] = lambda: None
         self.last_error: str | None = None
         # Why Orca never got ready, for `asc start` to raise.
@@ -242,7 +285,7 @@ class OrcaLink:
         stdin, stdout, stderr = _pipes(process)
         self._process, self._stdin = process, stdin
         self._drain = asyncio.create_task(self._keep_stderr(stderr))
-        stdin.write(payload())
+        stdin.write(payload(self.watch))
         reason = await self._follow(stdout)
         if reason is not None:
             await self.stop()

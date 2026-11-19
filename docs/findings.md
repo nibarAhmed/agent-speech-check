@@ -146,7 +146,8 @@ where 2026.2 in the same setup passed them all.
 
 ## Orca on Linux
 
-Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and no audio.
+Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and no audio. What
+is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same kind of container.
 
 - **Orca 51 is the oldest that works.** Orca 50.3 (Ubuntu 26.04 LTS's package) publishes
   `org.gnome.Orca.Service`, not `org.gnome.Orca1.Service`, and has no
@@ -157,7 +158,8 @@ Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and n
   `SpeechPresenter.SetLogFileForTesting` starts.
 - **The recorder writes to a FIFO.** It opens the path for writing, one line per record, so a
   named pipe works. The reader must open the pipe first, because Orca's open blocks until there
-  is a reader. A pipe nobody empties stalls Orca.
+  is a reader. A pipe nobody empties stalls Orca once about 64 KB wait in it, so the helper
+  reads it on a thread of its own. A reader killed with SIGKILL does no harm: Orca carries on.
 - **Orca's own key commands need a window manager.** With none, X input focus is `PointerRoot`
   (window 1). libatspi puts its key grabs on the focus window, so every grab fails with
   BadWindow (XInput opcode 131, minor 54), and Orca's debug log shows `Grab id for Insert: 0`.
@@ -167,7 +169,15 @@ Orca 51.1 on openSUSE Tumbleweed (AT-SPI 2.62.1), in a container with Xvfb and n
 - **Xvfb resets when its last client disconnects**, which drops any focus or keymap a client
   set, so it runs with `-noreset`.
 - **One Orca per user.** Orca refuses to start while another Orca runs as the same user
-  (`pgrep -u <uid> -x orca`). `--replace` would kill the other one, so `asc` never passes it.
+  (`pgrep -u <uid> -x orca`). `orca --replace` ends the other one, so only the user runs it.
+- **The recording secret comes only from Orca's startup environment**
+  (`ORCA_TEST_RPC_SECRET`). Orca zeroes its own `/proc/PID/environ`, so no one can read the
+  secret off a running Orca. A wrong secret gets
+  `GDBus.Error:not.known.Error.PermissionError: invalid testing token`, and an Orca started
+  without one has no `SetLogFileForTesting` at all (UnknownMethod).
+- **Restarting with the secret.** `ORCA_TEST_RPC_SECRET=... setsid orca --replace` starts a new
+  Orca that takes the secret; the old one exits a moment later. `SetLogFileForTesting` with an
+  empty path stops the recording and leaves Orca running.
 - **Keys sent through `Atspi.generate_keyboard_event`** from a separate process produced no key
   events at all in this setup. Keys sent through XTest (xdotool) work.
 

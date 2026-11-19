@@ -5,8 +5,12 @@ Orca for a user, so with your own Orca running these fail instead.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import re
+import subprocess
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import psutil
@@ -95,3 +99,116 @@ def test_orca_reads_a_form(
         left_running(),
         left_folders(),
     )
+
+
+WATCH_FORM = """import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
+win = Gtk.Window(title="asc e2e watch form")
+entry = Gtk.Entry()
+entry.get_accessible().set_name("Name")
+win.add(entry)
+win.connect("destroy", Gtk.main_quit)
+win.show_all()
+win.present()
+Gtk.main()
+"""
+
+
+def gdbus(method: str, *args: str) -> bool:
+    command = ["gdbus", "call", "--session", "--dest", "org.gnome.Orca1.Service"]
+    path = ["--object-path", "/org/gnome/Orca1/Service", "--method", method, *args]
+    run = [*command, *path]
+    done = subprocess.run(run, capture_output=True, check=False, timeout=30)  # noqa: S603 - fixed
+    return done.returncode == 0
+
+
+def ended(process: psutil.Process) -> bool:
+    # A container's first process may never reap what it inherits.
+    try:
+        return process.status() == psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return True
+
+
+def answers() -> bool:
+    return gdbus("org.gnome.Orca1.Service.GetVersion")
+
+
+@pytest.fixture
+def desktop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[psutil.Process]]:
+    """A user's own desktop session and Orca, as watch mode finds them. Yields what it
+    started, Orca last, for the test to add to: all of it is ended after."""
+    runtime = tmp_path / "run"
+    runtime.mkdir(mode=0o700)
+    for name, value in {
+        "XDG_RUNTIME_DIR": str(runtime),
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+        "GSETTINGS_BACKEND": "memory",
+        "GTK_A11Y": "atspi",
+        "NO_AT_BRIDGE": "0",
+        "GDK_BACKEND": "x11",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
+    started: list[psutil.Process] = []
+    try:
+        read, write = os.pipe()
+        xvfb = ["Xvfb", "-displayfd", str(write), "-noreset", "-screen", "0", "1024x768x24"]
+        started.append(psutil.Popen(xvfb, pass_fds=(write,), stderr=subprocess.DEVNULL))
+        os.close(write)
+        with os.fdopen(read) as display:
+            monkeypatch.setenv("DISPLAY", ":" + display.readline().strip())
+        bus = ["dbus-daemon", "--session", "--nofork", "--print-address"]
+        dbus = psutil.Popen([*bus, f"--address=unix:dir={runtime}"], stdout=subprocess.PIPE)
+        started.append(dbus)
+        assert dbus.stdout is not None
+        monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", dbus.stdout.readline().decode().strip())
+        started.append(psutil.Popen(["openbox"], stderr=subprocess.DEVNULL))
+        started.append(psutil.Popen(["orca"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        assert wait_until(answers, 30)
+        yield started
+    finally:
+        for process in reversed(started):
+            with contextlib.suppress(psutil.NoSuchProcess):
+                process.kill()
+        assert wait_until(lambda: all(map(ended, started)))
+
+
+def test_watch_hears_your_own_orca(tmp_path: Path, desktop: list[psutil.Process]) -> None:
+    app = tmp_path / "form.py"
+    app.write_text(WATCH_FORM, encoding="utf-8")
+    refused = run_asc("start", "--mode", "watch")
+    assert refused.returncode == 7, refused.stdout + refused.stderr
+    (line,) = re.findall(r"restart Orca for asc: (.+)", refused.stderr)
+    assert "orca --replace" in line
+    # As the user runs it, at their desktop.
+    shell = ["bash", "-c", f"{line} echo $!"]
+    restart = subprocess.run(shell, capture_output=True, text=True, check=True)  # noqa: S603 - asc's line
+    old, own = desktop[-1], psutil.Process(int(restart.stdout))
+    desktop.append(own)
+    assert isinstance(old, psutil.Popen)
+    assert wait_until(lambda: old.poll() is not None and answers(), 30)
+    started = run_asc("start", "--mode", "watch")
+    assert started.returncode == 0, started.stdout + started.stderr
+    try:
+        mark = run_asc("mark").stdout.split()[-1]
+        assert gdbus("org.gnome.Orca1.Service.SpeakMessage", "asc e2e watch")
+        heard = run_asc("wait", "--since", mark, "asc e2e watch")
+        assert heard.returncode == 0, heard.stdout + heard.stderr
+        launched = run_asc("launch", f"/usr/bin/python3 {app}", "--title", "asc e2e watch form")
+        assert launched.returncode == 0, launched.stdout + launched.stderr
+        assert "Name" in launched.stdout
+    finally:
+        stopped = run_asc("stop")
+        apps = [
+            p for p in psutil.process_iter(["cmdline"]) if str(app) in (p.info["cmdline"] or [])
+        ]
+        desktop.extend(apps)
+    assert stopped.returncode == 0, stopped.stderr
+    assert wait_until(lambda: not left_folders()), left_folders()
+    # The user's Orca, and the app on their desktop, outlive asc.
+    assert own.status() != psutil.STATUS_ZOMBIE
+    assert apps

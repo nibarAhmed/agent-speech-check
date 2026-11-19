@@ -829,6 +829,8 @@ keys. asc start asks your running NVDA to connect: answer Yes in NVDA, and trust
 the certificate the first time. It waits up to a minute for that. Until NVDA
 restarts, it then reconnects by itself. Turn the asking off with
 asc config set connect false, and connect in NVDA instead (asc status says how).
+On Linux it records your own Orca, which must have been started with asc's
+secret: if not, it exits 7 with the line that restarts Orca so.
 
 remote mode: the screen reader runs on another machine (a VM, say) that asc
 reaches with ssh and a key. With os windows, start NVDA there yourself: asc

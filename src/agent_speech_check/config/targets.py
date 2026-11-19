@@ -210,13 +210,13 @@ def _checked(target: Target, where: str) -> Target:
 
 
 def check_runnable(target: Target) -> None:
-    """Remote mode runs once it names its machine. On Linux the other modes but desktop
-    need Windows."""
+    """Remote mode runs once it names its machine. On Linux only desktop and watch mode
+    run here."""
     if target.mode == "remote":
         missing = [name for name in ("ssh", "os") if getattr(target, name) is None]
         if missing:
             raise RemoteNeedsMachine(missing)
-    elif target.orca and target.mode != "desktop":
+    elif target.orca and target.mode not in ("desktop", "watch"):
         raise WindowsOnlyMode(target.mode)
 
 
@@ -228,9 +228,11 @@ def defaults(mode: str, os: str | None = None, platform: str = sys.platform) -> 
         "watch": WATCH_PORT,
         "shared": WATCH_PORT,
         "sandbox": SANDBOX_PORT,
-        "remote": 0 if os == "linux" else REMOTE_PORT,
+        "remote": REMOTE_PORT,
     }
-    return Target(mode, ports.get(mode, 0), launch=mode == "desktop" and os == "windows", os=os)
+    # Nothing connects to Orca.
+    port = 0 if os == "linux" else ports.get(mode, 0)
+    return Target(mode, port, launch=mode == "desktop" and os == "windows", os=os)
 
 
 def parse(text: str, where: str) -> dict[str, Any]:

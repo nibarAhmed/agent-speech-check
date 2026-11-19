@@ -35,6 +35,8 @@ def test_desktop_mode_on_linux_starts_orca() -> None:
     desktop = defaults("desktop", platform="linux")
     assert desktop == Target("desktop", 0, launch=False, os="linux")
     assert (desktop.orca, desktop.launches_reader, desktop.launches_nvda) == (True, True, False)
+    # Watch mode on Linux joins the user's own Orca, which nothing connects to.
+    assert defaults("watch", platform="linux") == Target("watch", 0, launch=False, os="linux")
     assert not defaults("desktop").orca
     assert Target.from_json(desktop.to_json()) == desktop
 
@@ -177,10 +179,13 @@ def test_a_host_from_before_ssh_says_how_to_move(tmp_path: Path) -> None:
 def test_modes_this_platform_runs() -> None:
     check_runnable(defaults("watch"))
     check_runnable(defaults("desktop", platform="linux"))
+    check_runnable(defaults("watch", platform="linux"))
     # From either platform, since the relay and ssh work from Linux too.
     check_runnable(replace(defaults("remote"), os="windows", ssh="me@vm"))
     with pytest.raises(UsageError, match="sandbox mode needs Windows"):
         check_runnable(defaults("sandbox", platform="linux"))
+    with pytest.raises(UsageError, match="shared mode needs Windows"):
+        check_runnable(defaults("shared", platform="linux"))
 
 
 @pytest.mark.parametrize(

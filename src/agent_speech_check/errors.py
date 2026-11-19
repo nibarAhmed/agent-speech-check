@@ -458,7 +458,7 @@ class WindowsOnlyMode(UsageError):
     def __init__(self, mode: str) -> None:
         super().__init__(
             f"{mode} mode needs Windows",
-            hint="on Linux, desktop mode runs Orca here, or remote mode reaches another machine",
+            hint="on Linux, desktop or watch mode, or remote mode to reach another machine",
         )
 
 
@@ -488,6 +488,13 @@ class OrcaSetupNeeded(SetupNeeded):
         super().__init__(
             f"Orca can't start: {reason}",
             hint="install Orca 51 or later, Xvfb, openbox, xdotool and python3 there",
+        )
+
+
+class OrcaNotWatchable(SetupNeeded):
+    def __init__(self, reason: str, restart: str) -> None:
+        super().__init__(
+            f"asc can't hear your Orca: {reason}", hint=f"restart Orca for asc: {restart}"
         )
 
 
@@ -585,7 +592,7 @@ class KeysRefused(Refused):
     def __init__(self) -> None:
         super().__init__(
             "asc is in watch mode, which never sends keys",
-            hint="asc stop, then asc start --mode desktop or sandbox",
+            hint="asc stop, then asc start --mode desktop",
         )
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import io
 import re
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from agent_speech_check.config.targets import Target
 from agent_speech_check.errors import (
     OrcaBusy,
     OrcaNotConnected,
+    OrcaNotWatchable,
     OrcaSetupNeeded,
     ProtocolError,
     SshMissing,
@@ -86,9 +88,10 @@ def test_helper_command_local_and_over_ssh() -> None:
 
 
 def test_payload_is_what_the_bootstrap_reads() -> None:
-    length, script = link.payload().split(b"\n", 1)
-    assert int(length) == len(script)
-    assert script == Path(helper.__file__).read_bytes()
+    length, rest = link.payload("s3cret").split(b"\n", 1)
+    assert rest[: int(length)] == Path(helper.__file__).read_bytes()
+    assert rest[int(length) :] == b'{"watch": "s3cret"}\n'
+    assert link.payload(None).endswith(b"\n{}\n")
 
 
 @pytest.mark.parametrize(
@@ -103,6 +106,7 @@ def test_payload_is_what_the_bootstrap_reads() -> None:
         (b'{"done": 5, "error": "' + b"x" * 9000 + b'"}', Done(5, "x" * 2000)),
         (b'{"failed": "setup", "reason": "missing xdotool"}', OrcaSetupNeeded),
         (b'{"failed": "busy", "reason": "Orca runs"}', OrcaBusy),
+        (b'{"failed": "watch", "reason": "no secret"}', OrcaNotWatchable),
     ],
 )
 def test_helper_messages(line: bytes, message: object) -> None:
@@ -132,6 +136,20 @@ def test_bad_helper_messages(line: bytes) -> None:
 )
 def test_unknown_helper_message_is_skipped(line: bytes) -> None:
     assert parse_message(line) is None
+
+
+def test_taking_records_in_never_waits_for_them_to_go_out() -> None:
+    # An Orca whose recording pipe fills stops: in watch mode, the user's own.
+    records = helper.Records(limit=3)
+    records.drain(io.BytesIO(b"".join(b"%d\n" % n for n in range(10))))
+    assert list(iter(records.take, None)) == [b"7\n", b"8\n", b"9\n"]
+
+
+def test_watch_secret_is_made_once_and_kept(tmp_path: Path) -> None:
+    path = tmp_path / "state" / "orca-secret"
+    secret = link.watch_secret(path)
+    assert len(secret) == 32
+    assert link.watch_secret(path) == secret
 
 
 def test_orca_version() -> None:

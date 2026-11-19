@@ -19,7 +19,7 @@ stop and ask the user to switch to the mode this table suggests:
 
 | Need | Mode |
 |---|---|
-| Hear the user's own NVDA while you act some other way (browser tools, tests, the user) | `watch` (never sends keys) |
+| Hear the user's own NVDA (or Orca, on Linux) while you act some other way (browser tools, tests, the user) | `watch` (never sends keys) |
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
 | Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation; only then add `--i-understand` |
@@ -129,6 +129,10 @@ NVDA says, typed text included, so `asc stop` when you're done.
   `asc keys` is NVDA's reference, not Orca's, and exits 2 on Linux.
 - `asc launch CMD` starts the app on Orca's display; there's no other way to
   reach it.
+- To hear the user's own Orca, use watch mode. If `asc start --mode watch`
+  exits 7 with a restart line, ask the user to run it in their desktop
+  session (it restarts their Orca with asc's secret), then start again. Never
+  run it yourself: it replaces the Orca they rely on.
 
 ## Exit codes
 

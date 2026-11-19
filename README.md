@@ -29,7 +29,7 @@ asc stop
 |---|---|
 | `sandbox` | You want NVDA kept away from your desktop. It runs inside Windows Sandbox, and your own NVDA keeps running. |
 | `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. On Linux it starts its own Orca on a hidden display instead, which needs Orca 51 or later, Xvfb, openbox, xdotool and python3. |
-| `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. |
+| `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. On Linux it listens to your own Orca, which you restart once with the line `asc start` gives you. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
 | `remote` | The screen reader runs on a machine you manage, like a VM, that `asc` reaches over ssh. On Windows you start NVDA there and it connects to `asc` through an ssh tunnel; on Linux `asc` starts Orca there. One instance per machine: run `asc setup --instance NAME` for each. |
 

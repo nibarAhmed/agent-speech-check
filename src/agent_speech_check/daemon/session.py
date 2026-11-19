@@ -33,6 +33,7 @@ from agent_speech_check.errors import (
     SshFailed,
 )
 from agent_speech_check.nvda import launcher, nvda_config
+from agent_speech_check.orca.link import watch_secret, watch_secret_file
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.windows import paths, spawn, winapi
@@ -47,7 +48,7 @@ ERR_FILE = "daemon.err"
 TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
 # A sandbox boots and makes its portable NVDA first, which takes a while.
-CONNECT_TIMEOUT_S = {"desktop": 60.0, "sandbox": 300.0, "remote": 60.0}
+CONNECT_TIMEOUT_S = {"watch": 60.0, "desktop": 60.0, "sandbox": 300.0, "remote": 60.0}
 
 
 def status(folder: Path) -> dict[str, Any]:
@@ -217,6 +218,8 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     # The daemon loads these too, but an error there reaches the CLI only as an exit code.
     if not target.orca:
         relay.load_or_create(relay_dir(target.mode))
+    elif target.mode == "watch":
+        watch_secret(watch_secret_file())
     # Only one daemon runs, whatever its mode, even one that no longer answers.
     for other in state.folders(folder.parent):
         running, silent = _probe(other)
