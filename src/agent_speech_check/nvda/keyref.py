@@ -1,4 +1,4 @@
-"""`asc keys`: search NVDA's own Commands Quick Reference (`keyCommands.html`).
+"""`asc keys`: read NVDA's own Commands Quick Reference (`keyCommands.html`).
 
 The reference ships with every NVDA in `documentation\\<lang>\\`, so the keys
 always match the NVDA in use. Tables are read by their header names (Name,
