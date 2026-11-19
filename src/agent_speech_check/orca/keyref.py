@@ -11,7 +11,7 @@ from xml.etree import ElementTree
 
 from agent_speech_check.errors import FileUnusable, UnknownKey
 from agent_speech_check.inputs import keys
-from agent_speech_check.nvda.keyref import Command
+from agent_speech_check.inputs.keyref import Command
 from agent_speech_check.orca import link
 
 _NS = "{http://projectmallard.org/1.0/}"

@@ -40,6 +40,7 @@ from agent_speech_check.errors import (
     bad_field,
     numbered_lines,
 )
+from agent_speech_check.inputs.keyref import search as search_commands
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.orca import keyref as orca_keyref
@@ -501,7 +502,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
         nvda_dirs, hint = _nvda_dirs(target)
         path = keyref.reference(nvda_dirs, args.lang, hint)
         commands = keyref.parse(path.read_text(encoding="utf-8"))
-    found = keyref.search(commands, args.words, args.layout, braille=args.braille)
+    found = search_commands(commands, args.words, args.layout, braille=args.braille)
     _show_lines(list(dict.fromkeys(c.line(args.layout) for c in found)), "(no match)")
     return 0
 

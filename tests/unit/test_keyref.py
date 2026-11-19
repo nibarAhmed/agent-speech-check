@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.errors import FileUnusable, NvdaNotFound, OrcaHelpNotFound
+from agent_speech_check.inputs.keyref import BRAILLE_DISPLAYS, Command, search
 from agent_speech_check.nvda import keyref
 from agent_speech_check.orca import helper
 from agent_speech_check.orca import keyref as orca_keyref
@@ -15,15 +16,15 @@ FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 
 
 @pytest.fixture(scope="module")
-def commands() -> list[keyref.Command]:
+def commands() -> list[Command]:
     return keyref.parse(FIXTURE.read_text(encoding="utf-8"))
 
 
-def lines(commands: list[keyref.Command], *words: str, layout: str = "desktop") -> list[str]:
-    return [c.line(layout) for c in keyref.search(commands, list(words), layout)]
+def lines(commands: list[Command], *words: str, layout: str = "desktop") -> list[str]:
+    return [c.line(layout) for c in search(commands, list(words), layout)]
 
 
-def test_table_row(commands: list[keyref.Command]) -> None:
+def test_table_row(commands: list[Command]) -> None:
     assert lines(commands, "report", "title") == [
         "NVDA+t  Report title: Reports the title of the currently active window. "
         "Pressing twice will spell the information. Pressing three times will copy it "
@@ -31,38 +32,38 @@ def test_table_row(commands: list[keyref.Command]) -> None:
     ]
 
 
-def test_layouts_differ(commands: list[keyref.Command]) -> None:
+def test_layouts_differ(commands: list[Command]) -> None:
     desktop = lines(commands, "sleep mode", "toggle")
     laptop = lines(commands, "sleep mode", "toggle", layout="laptop")
     assert desktop[0].startswith("NVDA+shift+s  ")
     assert laptop[0].startswith("NVDA+shift+z  ")
 
 
-def test_single_key_column_used_for_both_layouts(commands: list[keyref.Command]) -> None:
-    date_time = keyref.search(commands, ["report date/time"], "laptop")
+def test_single_key_column_used_for_both_layouts(commands: list[Command]) -> None:
+    date_time = search(commands, ["report date/time"], "laptop")
     assert date_time[0].laptop == date_time[0].desktop == "NVDA+f12"
 
 
-def test_single_letter_navigation_list(commands: list[keyref.Command]) -> None:
+def test_single_letter_navigation_list(commands: list[Command]) -> None:
     assert lines(commands, "single letter", "heading") == [
         "h  heading",
         "1 to 9  headings at levels 1 to 9 respectively",
     ]
 
 
-def test_braille_displays_hidden_unless_asked(commands: list[keyref.Command]) -> None:
-    hidden = keyref.search(commands, ["report title"], "desktop")
-    shown = keyref.search(commands, ["report title"], "desktop", braille=True)
+def test_braille_displays_hidden_unless_asked(commands: list[Command]) -> None:
+    hidden = search(commands, ["report title"], "desktop")
+    shown = search(commands, ["report title"], "desktop", braille=True)
     assert len(shown) > len(hidden) == 1
-    assert {c.part for c in shown} >= {keyref.BRAILLE_DISPLAYS}
+    assert {c.part for c in shown} >= {BRAILLE_DISPLAYS}
 
 
-def test_rows_without_a_key_are_skipped(commands: list[keyref.Command]) -> None:
-    assert all(c.key("desktop").lower() != "none" for c in keyref.search(commands, [], "desktop"))
+def test_rows_without_a_key_are_skipped(commands: list[Command]) -> None:
+    assert all(c.key("desktop").lower() != "none" for c in search(commands, [], "desktop"))
 
 
-def test_matches_section_too(commands: list[keyref.Command]) -> None:
-    found = keyref.search(commands, ["single letter navigation"], "desktop")
+def test_matches_section_too(commands: list[Command]) -> None:
+    found = search(commands, ["single letter navigation"], "desktop")
     assert len(found) > 20
 
 
@@ -129,21 +130,21 @@ ORCA_PAGE = """<page xmlns="http://projectmallard.org/1.0/" type="topic" id="com
 
 def test_orca_page() -> None:
     commands = orca_keyref.parse(ORCA_PAGE)
-    assert [c.line("desktop") for c in keyref.search(commands, [], "desktop")] == [
+    assert [c.line("desktop") for c in search(commands, [], "desktop")] == [
         "Orca+W  Toggle the widget",
         "NumpadMinus twice  Spin the widget",
         "G and Shift+G  Next and previous gadget",
         "Control+Alt+Windows+Numpad5  Open the menu",
         "NumpadPlus  Whirl",
     ]
-    assert [c.line("laptop") for c in keyref.search(commands, [], "laptop")] == [
+    assert [c.line("laptop") for c in search(commands, [], "laptop")] == [
         "Orca+W  Toggle the widget",
         "Orca+RightBracket  Spin the widget",
         "G and Shift+G  Next and previous gadget",
         "Control+Alt+Windows+Numpad5  Open the menu",
         "Orca+Semicolon  Whirl",
     ]
-    assert [c.name for c in keyref.search(commands, ["gadgets"], "desktop")] == [
+    assert [c.name for c in search(commands, ["gadgets"], "desktop")] == [
         "Next and previous gadget",
         "Open the menu",
     ]

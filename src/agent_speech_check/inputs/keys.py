@@ -1,8 +1,9 @@
-"""Key names and gestures such as `NVDA+Shift+Down`, parsed into virtual-key codes.
+"""Key names and gestures such as `NVDA+Shift+Down`, parsed into virtual-key codes for
+NVDA and X keysyms for Orca.
 
 Names are matched without regard to case. Unknown names raise `UnknownKey` with
-close matches. Numpad keys are sent as NVDA's desktop layout expects them, with
-Num Lock off: `Numpad5` is VK_CLEAR, not VK_NUMPAD5.
+close matches. Numpad keys are sent as the desktop layouts expect them, with
+Num Lock off: `Numpad5` is VK_CLEAR and KP_Begin, not VK_NUMPAD5 and KP_5.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ class Key:
     name: str
     vk: int
     extended: bool
+    keysym: str
 
 
 @dataclass(frozen=True)
@@ -39,63 +41,63 @@ class Gesture:
 
 
 MODIFIERS: dict[str, Key] = {
-    "nvda": Key("NVDA", 0x2D, True),
-    "control": Key("Control", 0x11, False),
-    "shift": Key("Shift", 0x10, False),
-    "alt": Key("Alt", 0x12, False),
-    "windows": Key("Windows", 0x5B, True),
+    "nvda": Key("NVDA", 0x2D, True, "Insert"),
+    "control": Key("Control", 0x11, False, "Control_L"),
+    "shift": Key("Shift", 0x10, False, "Shift_L"),
+    "alt": Key("Alt", 0x12, False, "Alt_L"),
+    "windows": Key("Windows", 0x5B, True, "Super_L"),
 }
 
-_NAMED: list[tuple[str, int, bool]] = [
-    ("Tab", 0x09, False),
-    ("Enter", 0x0D, False),
-    ("Escape", 0x1B, False),
-    ("Space", 0x20, False),
-    ("Backspace", 0x08, False),
-    ("Delete", 0x2E, True),
-    ("Insert", 0x2D, True),
-    ("Home", 0x24, True),
-    ("End", 0x23, True),
-    ("PageUp", 0x21, True),
-    ("PageDown", 0x22, True),
-    ("Up", 0x26, True),
-    ("Down", 0x28, True),
-    ("Left", 0x25, True),
-    ("Right", 0x27, True),
-    ("CapsLock", 0x14, False),
-    ("NumLock", 0x90, True),
-    ("ScrollLock", 0x91, False),
-    ("PrintScreen", 0x2C, True),
-    ("Pause", 0x13, False),
-    ("Applications", 0x5D, True),
-    # Numpad with Num Lock off, as NVDA's desktop layout uses it.
-    ("Numpad0", 0x2D, False),
-    ("Numpad1", 0x23, False),
-    ("Numpad2", 0x28, False),
-    ("Numpad3", 0x22, False),
-    ("Numpad4", 0x25, False),
-    ("Numpad5", 0x0C, False),
-    ("Numpad6", 0x27, False),
-    ("Numpad7", 0x24, False),
-    ("Numpad8", 0x26, False),
-    ("Numpad9", 0x21, False),
-    ("NumpadDelete", 0x2E, False),
-    ("NumpadEnter", 0x0D, True),
-    ("NumpadPlus", 0x6B, False),
-    ("NumpadMinus", 0x6D, False),
-    ("NumpadMultiply", 0x6A, False),
-    ("NumpadDivide", 0x6F, True),
-    ("Comma", 0xBC, False),
-    ("Period", 0xBE, False),
-    ("Slash", 0xBF, False),
-    ("Backslash", 0xDC, False),
-    ("Semicolon", 0xBA, False),
-    ("Apostrophe", 0xDE, False),
-    ("LeftBracket", 0xDB, False),
-    ("RightBracket", 0xDD, False),
-    ("Minus", 0xBD, False),
-    ("Equals", 0xBB, False),
-    ("Grave", 0xC0, False),
+_NAMED: list[tuple[str, int, bool, str]] = [
+    ("Tab", 0x09, False, "Tab"),
+    ("Enter", 0x0D, False, "Return"),
+    ("Escape", 0x1B, False, "Escape"),
+    ("Space", 0x20, False, "space"),
+    ("Backspace", 0x08, False, "BackSpace"),
+    ("Delete", 0x2E, True, "Delete"),
+    ("Insert", 0x2D, True, "Insert"),
+    ("Home", 0x24, True, "Home"),
+    ("End", 0x23, True, "End"),
+    ("PageUp", 0x21, True, "Prior"),
+    ("PageDown", 0x22, True, "Next"),
+    ("Up", 0x26, True, "Up"),
+    ("Down", 0x28, True, "Down"),
+    ("Left", 0x25, True, "Left"),
+    ("Right", 0x27, True, "Right"),
+    ("CapsLock", 0x14, False, "Caps_Lock"),
+    ("NumLock", 0x90, True, "Num_Lock"),
+    ("ScrollLock", 0x91, False, "Scroll_Lock"),
+    ("PrintScreen", 0x2C, True, "Print"),
+    ("Pause", 0x13, False, "Pause"),
+    ("Applications", 0x5D, True, "Menu"),
+    # Numpad with Num Lock off, as NVDA's and Orca's desktop layouts use it.
+    ("Numpad0", 0x2D, False, "KP_Insert"),
+    ("Numpad1", 0x23, False, "KP_End"),
+    ("Numpad2", 0x28, False, "KP_Down"),
+    ("Numpad3", 0x22, False, "KP_Next"),
+    ("Numpad4", 0x25, False, "KP_Left"),
+    ("Numpad5", 0x0C, False, "KP_Begin"),
+    ("Numpad6", 0x27, False, "KP_Right"),
+    ("Numpad7", 0x24, False, "KP_Home"),
+    ("Numpad8", 0x26, False, "KP_Up"),
+    ("Numpad9", 0x21, False, "KP_Prior"),
+    ("NumpadDelete", 0x2E, False, "KP_Delete"),
+    ("NumpadEnter", 0x0D, True, "KP_Enter"),
+    ("NumpadPlus", 0x6B, False, "KP_Add"),
+    ("NumpadMinus", 0x6D, False, "KP_Subtract"),
+    ("NumpadMultiply", 0x6A, False, "KP_Multiply"),
+    ("NumpadDivide", 0x6F, True, "KP_Divide"),
+    ("Comma", 0xBC, False, "comma"),
+    ("Period", 0xBE, False, "period"),
+    ("Slash", 0xBF, False, "slash"),
+    ("Backslash", 0xDC, False, "backslash"),
+    ("Semicolon", 0xBA, False, "semicolon"),
+    ("Apostrophe", 0xDE, False, "apostrophe"),
+    ("LeftBracket", 0xDB, False, "bracketleft"),
+    ("RightBracket", 0xDD, False, "bracketright"),
+    ("Minus", 0xBD, False, "minus"),
+    ("Equals", 0xBB, False, "equal"),
+    ("Grave", 0xC0, False, "grave"),
 ]
 
 ALIASES: dict[str, str] = {
@@ -121,14 +123,14 @@ ALIASES: dict[str, str] = {
 
 
 def _all_keys() -> dict[str, Key]:
-    keys = {name.lower(): Key(name, vk, ext) for name, vk, ext in _NAMED}
+    keys = {name.lower(): Key(name, vk, ext, sym) for name, vk, ext, sym in _NAMED}
     keys.update(MODIFIERS)
     for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        keys[letter.lower()] = Key(letter, ord(letter), False)
+        keys[letter.lower()] = Key(letter, ord(letter), False, letter.lower())
     for digit in "0123456789":
-        keys[digit] = Key(digit, ord(digit), False)
+        keys[digit] = Key(digit, ord(digit), False, digit)
     for n in range(1, 25):
-        keys[f"f{n}"] = Key(f"F{n}", 0x6F + n, False)
+        keys[f"f{n}"] = Key(f"F{n}", 0x6F + n, False, f"F{n}")
     return keys
 
 
@@ -231,7 +233,7 @@ def _from_layout(char: str) -> Gesture | None:
         return None
     vk, state = scan
     modifiers = tuple(MODIFIERS[name] for bit, name in _SHIFT_BITS if state & bit)
-    return Gesture(modifiers, Key(char, vk, extended=False))
+    return Gesture(modifiers, Key(char, vk, False, _unicode_keysym(char)))
 
 
 def _scan(char: str) -> tuple[int, int] | None:
@@ -242,12 +244,16 @@ def _scan(char: str) -> tuple[int, int] | None:
 
 
 def typed_gestures(text: str) -> tuple[Gesture, ...]:
-    """One gesture per character, for X: the keysym names the character, so no
-    layout is needed."""
+    """One gesture per character, for X: the Unicode keysym names the character,
+    and xdotool maps it to a key even when the layout has none."""
     return _gestures(text, _for_x, "(control characters)")
 
 
 def _for_x(char: str) -> Gesture | None:
     if unicodedata.category(char) in ("Cc", "Cs"):
         return None
-    return Gesture((), Key(char, 0, extended=False))
+    return Gesture((), Key(char, 0, False, _unicode_keysym(char)))
+
+
+def _unicode_keysym(char: str) -> str:
+    return f"U{ord(char):04X}"
