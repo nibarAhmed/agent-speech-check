@@ -42,7 +42,7 @@ from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard
 from agent_speech_check.inputs.keys import Gesture, Hotkey, text_gestures, typed_gestures
 from agent_speech_check.nvda import launcher, nvda_config
-from agent_speech_check.orca.link import OrcaLink, watch_secret, watch_secret_file
+from agent_speech_check.orca.link import OrcaLink, watch_secret
 from agent_speech_check.remote import relay
 from agent_speech_check.remote.relay import Relay
 from agent_speech_check.remote.speech_log import Entry, Since, SpeechLog
@@ -191,7 +191,7 @@ class Daemon:
         self.tunnel: Tunnel | None = None
         self.link: Relay | OrcaLink
         if target.orca:
-            watch = watch_secret(watch_secret_file()) if target.mode == "watch" else None
+            watch = watch_secret() if target.mode == "watch" else None
             self.link = self.orca = OrcaLink(target.ssh, self.speech, watch)
         else:
             credentials = relay.load_or_create(relay_dir(target.mode))

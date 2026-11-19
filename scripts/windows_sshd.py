@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from agent_speech_check.windows import tls
+from agent_speech_check.windows import paths, tls
 from agent_speech_check.windows.wait import poll_until
 
 VERSION = "10.4.0.0p1-Preview"
@@ -39,9 +39,7 @@ def download(folder: Path) -> Path:
             data = response.read()
         if hashlib.sha256(data).hexdigest() != SHA256:
             sys.exit(f"{URL}: SHA-256 mismatch")
-        partial = zip_path.with_suffix(".part")
-        partial.write_bytes(data)
-        partial.replace(zip_path)
+        paths.write_atomic(zip_path, data)
     return zip_path
 
 

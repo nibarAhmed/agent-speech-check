@@ -13,7 +13,7 @@ import os
 import sys
 from urllib.parse import quote
 
-if sys.platform == "win32":  # asc also runs on Linux
+if sys.platform == "win32":
     import winreg
 
 # Under HKEY_CURRENT_USER, where NVDA registers the scheme.

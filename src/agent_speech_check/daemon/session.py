@@ -33,7 +33,7 @@ from agent_speech_check.errors import (
     SshFailed,
 )
 from agent_speech_check.nvda import launcher, nvda_config
-from agent_speech_check.orca.link import watch_secret, watch_secret_file
+from agent_speech_check.orca.link import watch_secret
 from agent_speech_check.remote import relay
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.windows import paths, spawn, winapi
@@ -219,7 +219,7 @@ def start(target: Target, folder: Path) -> dict[str, Any]:
     if not target.orca:
         relay.load_or_create(relay_dir(target.mode))
     elif target.mode == "watch":
-        watch_secret(watch_secret_file())
+        watch_secret()
     # Only one daemon runs, whatever its mode, even one that no longer answers.
     for other in state.folders(folder.parent):
         running, silent = _probe(other)

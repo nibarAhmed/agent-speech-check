@@ -171,9 +171,7 @@ class Target:
 
 
 def _check_launch(target: Target, where: str, value: object) -> None:
-    if target.mode != "desktop":
-        raise bad_field(UsageError, f"{where} launch", "only in desktop mode", value)
-    if target.orca:
+    if target.mode != "desktop" or target.orca:
         raise bad_field(UsageError, f"{where} launch", "only in desktop mode on Windows", value)
 
 

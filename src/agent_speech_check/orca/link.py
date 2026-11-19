@@ -141,8 +141,9 @@ def watch_secret_file() -> Path:
     return paths.base_root() / "orca-secret"
 
 
-def watch_secret(path: Path) -> str:
+def watch_secret(path: Path | None = None) -> str:
     """The secret the user's own Orca must start with for watch mode, made once and kept."""
+    path = path or watch_secret_file()
     try:
         if path.exists():
             kept = path.read_text(encoding="ascii", errors="replace").strip()
