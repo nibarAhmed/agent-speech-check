@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.cli import main, run_setup, say_update
+from agent_speech_check.cli import main
 from agent_speech_check.config import prefs, setup
+from agent_speech_check.config.prompts import run_setup, say_update
 from agent_speech_check.config.targets import load
 from agent_speech_check.errors import AscError
 from agent_speech_check.nvda.launcher import Release

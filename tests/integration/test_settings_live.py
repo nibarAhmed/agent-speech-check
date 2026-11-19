@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from tests.integration.conftest import Env, run_asc
 
-from agent_speech_check.cli import run_setup
+from agent_speech_check.config.prompts import run_setup
 from agent_speech_check.errors import AlreadyRunning
 
 

@@ -113,8 +113,9 @@ select = [
 "asyncio.sleep".msg = "Wait for a condition, not a fixed time. If the sleep is the behavior under test, add `# noqa: TID251` and say why."
 
 [tool.ruff.lint.per-file-ignores]
-# cli.py is the only module allowed to print.
+# Only cli.py and the terminal prompts it runs may print.
 "src/agent_speech_check/cli.py" = ["T20"]
+"src/agent_speech_check/config/prompts.py" = ["T20"]
 # The product's own waits and keepalives sleep on purpose; the sleep ban is for tests.
 "src/**" = ["TID251"]
 "tests/**" = ["S101", "PLR2004", "TRY003"]
