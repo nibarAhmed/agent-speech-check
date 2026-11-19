@@ -102,6 +102,7 @@ ALIASES: dict[str, str] = {
     "orca": "nvda",  # the screen reader's own modifier, Insert on the desktop layout
     "ctrl": "control",
     "win": "windows",
+    "super": "windows",
     "esc": "escape",
     "return": "enter",
     "del": "delete",

@@ -283,6 +283,14 @@ class NvdaNotFound(SetupNeeded):
         super().__init__(f"NVDA not found. Looked in: {where}", hint=hint)
 
 
+class OrcaHelpNotFound(SetupNeeded):
+    def __init__(self, looked: Sequence[str]) -> None:
+        super().__init__(
+            f"Orca's help not found. Looked in: {'; '.join(looked)}",
+            hint="install Orca, or run asc keys where Orca runs",
+        )
+
+
 class NvdaTooOld(SetupNeeded):
     def __init__(self, folder: str, version: str, minimum: str, hint: str) -> None:
         super().__init__(

@@ -626,7 +626,7 @@ could not hold them all.
 
 - Gestures are written as NVDA writes them: `Tab`, `H`, `NVDA+Tab`,
   `Control+Home`, `NVDA+Shift+Up`. Case doesn't matter. Aliases such as
-  `Ctrl`, `Esc`, `Del`, `PgDn` and `Win` work. Numpad keys are sent as NVDA's
+  `Ctrl`, `Esc`, `Del`, `PgDn`, `Win` and `Super` work. Numpad keys are sent as NVDA's
   desktop layout expects them, with Num Lock off. Look commands up with
   [`asc keys`](#asc-keys).
 - Every gesture is checked before the first is sent. An unknown key exits 2
@@ -670,7 +670,7 @@ asc keys [--mode {watch,desktop,sandbox,shared,remote}] [--layout {desktop,lapto
          [--braille | --no-braille] [SEARCH ...]
 ```
 
-Prints commands from NVDA's own Commands Quick Reference whose name, keys,
+Prints commands from the screen reader's own reference whose name, keys,
 description or section contain every `SEARCH` word, one per line, or
 `(no match)`. It needs no running `asc`.
 
@@ -679,18 +679,29 @@ NVDA+t  Report title: Reports the title of the currently active window. ...
 h  heading
 ```
 
+For Orca, keys are in `asc`'s names, ready for `asc press`:
+
+```
+Orca+NumpadEnter  Present the title bar
+H and Shift+H  Next and previous heading
+```
+
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `SEARCH` | none (all) | words that must all appear |
-| `--mode MODE` | the `mode` setting, or watch (desktop on Linux) | whose `nvda_dir` to read |
+| `--mode MODE` | the `mode` setting, or watch (desktop on Linux) | whose NVDA or Orca to read |
 | `--layout {desktop,laptop}` | `keys_layout`, desktop | the keyboard layout's keys |
 | `--lang LANG` | en | reference language, like `de` or `pt_BR`, falling back to `en` |
-| `--braille`, `--no-braille` | off | include rows for braille displays |
+| `--braille`, `--no-braille` | off | include NVDA's rows for braille displays |
 
-- It reads `documentation\<lang>\keyCommands.html` from the mode's portable
-  NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA (the
-  running `nvda.exe`, the uninstall registry entry, then Program Files). If
-  none is found it exits 7 and says where it looked. On Linux it exits 2.
+- For NVDA it reads `documentation\<lang>\keyCommands.html` from the mode's
+  portable NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA
+  (the running `nvda.exe`, the uninstall registry entry, then Program Files).
+- For Orca (on Linux, or remote mode with `os = "linux"`) it reads Orca's
+  help on this machine, `help/<lang>/orca/commands_*.page` in each of
+  `$XDG_DATA_DIRS` (`/usr/local/share` and `/usr/share`), falling back to
+  English. Remote mode reads none from the other machine: run `asc keys` there.
+- If no reference is found it exits 7 and says where it looked.
 - Single letter navigation keys (`h  heading`) work in browse mode; add Shift
   to go back.
 

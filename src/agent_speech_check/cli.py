@@ -45,6 +45,7 @@ from agent_speech_check.errors import (
 from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
+from agent_speech_check.orca import keyref as orca_keyref
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths
 from agent_speech_check.system.paths import config_file, mode_dir, state_root
@@ -495,11 +496,17 @@ def cmd_keys(args: argparse.Namespace) -> int:
     if not re.fullmatch(r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?", args.lang):
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
     target = _target(args, _with_defaults(args, {"layout": "keys_layout"}))
-    nvda_dirs, hint = _nvda_dirs(target)
-    path = keyref.reference(nvda_dirs, args.lang, hint)
-    commands = keyref.parse(path.read_text(encoding="utf-8"))
+    if target.orca:
+        pages = orca_keyref.pages(args.lang)
+        commands = [c for page in pages for c in orca_keyref.parse(page.read_text("utf-8"))]
+    elif sys.platform != "win32":
+        raise WindowsOnlyCommand(args.command)
+    else:
+        nvda_dirs, hint = _nvda_dirs(target)
+        path = keyref.reference(nvda_dirs, args.lang, hint)
+        commands = keyref.parse(path.read_text(encoding="utf-8"))
     found = keyref.search(commands, args.words, args.layout, braille=args.braille)
-    _show_lines([c.line(args.layout) for c in found], "(no match)")
+    _show_lines(list(dict.fromkeys(c.line(args.layout) for c in found)), "(no match)")
     return 0
 
 
@@ -944,14 +951,14 @@ examples:
         _type_args,
     ),
     "keys": Command(
-        "look up NVDA commands in NVDA's own reference",
+        "look up screen reader commands in its own reference",
         """\
-Print commands from NVDA's Commands Quick Reference whose name, keys,
-description or section contain every SEARCH word, one per line:
-KEY  NAME: DESCRIPTION. Needs no running asc. The reference comes from the
-NVDA the mode uses: its portable copy in desktop mode, or in sandbox mode
-with nvda_dir, otherwise your own NVDA (the running nvda.exe, the
-uninstall registry entry, Program Files).
+Print commands whose name, keys, description or section contain every
+SEARCH word, one per line: KEY  NAME: DESCRIPTION. Needs no running asc.
+For NVDA, from its Commands Quick Reference: the portable copy in desktop
+mode, or in sandbox mode with nvda_dir, otherwise your own NVDA (the
+running nvda.exe, the uninstall registry entry, Program Files). For Orca,
+from its help on this machine (/usr/share/help).
 In browse mode, single letters jump to elements; add Shift to go back.
 
 examples:
@@ -961,7 +968,6 @@ examples:
         cmd_keys,
         _keys_args,
         takes_mode=True,
-        windows_only=True,
     ),
     "launch": Command(
         "start an app and wait until NVDA speaks",

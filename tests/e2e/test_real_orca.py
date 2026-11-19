@@ -212,3 +212,10 @@ def test_watch_hears_your_own_orca(tmp_path: Path, desktop: list[psutil.Process]
     # The user's Orca, and the app on their desktop, outlive asc.
     assert own.status() != psutil.STATUS_ZOMBIE
     assert apps
+
+
+def test_keys_reads_orcas_own_help() -> None:
+    found = run_asc("keys", "browse", "mode")
+    assert "Orca+A  Switch between browse mode and focus mode" in found.stdout.splitlines()
+    laptop = run_asc("keys", "--layout", "laptop", "title", "bar")
+    assert laptop.stdout.splitlines() == ["Orca+Slash  Present the title bar"], laptop.stderr

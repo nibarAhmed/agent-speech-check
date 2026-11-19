@@ -265,7 +265,29 @@ def test_printed_paths_are_real(
 def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    for name in ("keys", "get-nvda", "setup", "firewall-setup"):
+    for name in ("get-nvda", "setup", "firewall-setup"):
         assert COMMANDS[name].windows_only
         with pytest.raises(WindowsOnlyCommand):
             run([name])
+
+
+def test_keys_reads_orcas_help_where_orca_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
+    config = tmp_path / "agent-speech-check" / "config.toml"
+    config.parent.mkdir()
+    config.write_text('[remote]\nos = "linux"\nssh = "me@box"\n', encoding="utf-8")
+    page = tmp_path / "help" / "C" / "orca" / "commands_a.page"
+    page.parent.mkdir(parents=True)
+    keys = "<keyseq><key>Orca Modifier</key><key>T</key></keyseq>"
+    item = f"<item><p>Present the title: {keys}</p></item>"
+    page.write_text(
+        '<page xmlns="http://projectmallard.org/1.0/" id="a"><title>A</title>'
+        f"<list>{item}{item}</list></page>",  # Orca's help repeats some commands
+        encoding="utf-8",
+    )
+    assert run(["keys", "--mode", "remote", "title"]) == 0
+    assert capsys.readouterr().out == "Orca+T  Present the title\n"
