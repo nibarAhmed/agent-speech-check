@@ -134,10 +134,14 @@ def relay_host(target: Target) -> str:
 
 def start_app(command: str) -> None:
     """Start the app under test, detached. Popen returns at once."""
+    if sys.platform == "win32":
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        flags = 0
     try:
         subprocess.Popen(  # noqa: S603 - the user's own app, run as asked
             command,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            creationflags=flags,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

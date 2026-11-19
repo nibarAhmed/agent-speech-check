@@ -43,9 +43,6 @@ from agent_speech_check.system import powershell, processes, spawn, winapi
 from agent_speech_check.system.wait import poll_until
 from agent_speech_check.validate import Fields
 
-if sys.platform == "win32":
-    import winreg
-
 log = logging.getLogger(__name__)
 
 WINDOW_TITLE = "Windows Sandbox"
@@ -290,6 +287,10 @@ def launch_command(command: str) -> str:
 
 
 def edition_id() -> str:
+    if sys.platform != "win32":
+        return ""
+    import winreg  # noqa: PLC0415 - only on Windows
+
     key_path = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
         value, _ = winreg.QueryValueEx(key, "EditionID")

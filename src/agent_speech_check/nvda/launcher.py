@@ -14,6 +14,7 @@ import logging
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -330,7 +331,7 @@ def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
     try:
         return subprocess.Popen(args)  # noqa: S603 - NVDA, or the NVDA installer
     except OSError as error:
-        if error.winerror not in NOT_A_PROGRAM:
+        if sys.platform != "win32" or error.winerror not in NOT_A_PROGRAM:
             # Access denied, for one: the program may be fine.
             raise FileUnusable.from_os(args[0], error) from None
         # Windows' text names the program as a literal %1.

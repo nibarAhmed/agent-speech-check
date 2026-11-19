@@ -5,6 +5,7 @@ from __future__ import annotations
 import errno
 import socket
 import subprocess
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -246,6 +247,12 @@ def _wait_started(process: subprocess.Popen[bytes], folder: Path) -> None:
         raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
 
 
+if sys.platform == "win32":
+    _IN_USE = (errno.WSAEADDRINUSE, errno.WSAEACCES)
+else:
+    _IN_USE = (errno.EADDRINUSE, errno.EACCES)
+
+
 def _check_port_free(target: Target) -> None:
     """Another instance's relay may hold the port, which the daemon could only
     report as a failed start. Probed on the relay's own address: on Windows a
@@ -254,7 +261,7 @@ def _check_port_free(target: Target) -> None:
         socket.create_server((server.relay_host(target), target.port)).close()
     except OSError as error:
         # Any other failure, like an address not ours, is the daemon's to report.
-        if error.errno not in (errno.WSAEADDRINUSE, errno.WSAEACCES):
+        if error.errno not in _IN_USE:
             return
         command = f"asc config set port PORT --mode {target.mode}{paths.instance_flag()}"
         raise PortInUse(target.port, command) from None

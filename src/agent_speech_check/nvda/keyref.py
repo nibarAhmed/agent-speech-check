@@ -18,9 +18,6 @@ from agent_speech_check.errors import NvdaNotFound, RemoteCommandFailed
 from agent_speech_check.remote import ssh
 from agent_speech_check.system import powershell, processes
 
-if sys.platform == "win32":
-    import winreg
-
 _HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 # Single letter navigation is a list, not a table: "h: heading".
 _LIST_ITEM = re.compile(r"([^:]{1,30}):\s+(.+)")
@@ -158,6 +155,10 @@ def search(
 
 
 def _registry_dir() -> Path | None:
+    if sys.platform != "win32":
+        return None
+    import winreg  # noqa: PLC0415 - only on Windows
+
     for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
         try:
             with winreg.OpenKey(hive, _UNINSTALL) as key:

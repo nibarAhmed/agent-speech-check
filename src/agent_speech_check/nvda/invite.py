@@ -13,9 +13,6 @@ import os
 import sys
 from urllib.parse import quote
 
-if sys.platform == "win32":
-    import winreg
-
 # Under HKEY_CURRENT_USER, where NVDA registers the scheme.
 HANDLER = r"Software\Classes\nvdaremote\shell\open\command"
 
@@ -29,6 +26,10 @@ def link(host: str, channel: str) -> str:
 def registered(command_key: str = HANDLER) -> bool:
     """Whether something takes the link. Without it, Windows would ask the user
     to pick an app."""
+    if sys.platform != "win32":
+        return False
+    import winreg  # noqa: PLC0415 - only on Windows
+
     try:
         winreg.OpenKey(winreg.HKEY_CURRENT_USER, command_key).Close()
     except OSError:
@@ -38,6 +39,8 @@ def registered(command_key: str = HANDLER) -> bool:
 
 def send(url: str) -> bool:
     """Hand the link to the running NVDA, and say whether Windows took it."""
+    if sys.platform != "win32":
+        return False
     try:
         os.startfile(url)  # noqa: S606 - a link asc built, for NVDA's own handler
     except OSError:

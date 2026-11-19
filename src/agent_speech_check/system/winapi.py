@@ -23,13 +23,29 @@ class _Absent:
         return types.SimpleNamespace()
 
 
-def _dll(name: str) -> ctypes.WinDLL:
+def _dll(name: str) -> ctypes.CDLL:
     if sys.platform != "win32":
-        return _Absent()  # type: ignore[unreachable, unused-ignore]
+        return _Absent()  # type: ignore[return-value]
     return ctypes.WinDLL(name, use_last_error=True)
 
 
-_FUNCTYPE = ctypes.WINFUNCTYPE if sys.platform == "win32" else ctypes.CFUNCTYPE
+def _last_error() -> int:
+    if sys.platform != "win32":
+        return 0
+    return ctypes.get_last_error()
+
+
+def _win_error() -> OSError:
+    """The last Win32 error, to raise."""
+    if sys.platform != "win32":
+        return OSError("not Windows")
+    return ctypes.WinError(ctypes.get_last_error())
+
+
+if sys.platform == "win32":
+    _FUNCTYPE = ctypes.WINFUNCTYPE
+else:
+    _FUNCTYPE = ctypes.CFUNCTYPE
 
 _kernel32 = _dll("kernel32")
 _kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
@@ -49,8 +65,8 @@ def take_mutex(name: str) -> int | None:
     """
     handle = _kernel32.CreateMutexW(None, False, name)
     if not handle:
-        raise ctypes.WinError(ctypes.get_last_error())
-    if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
+        raise _win_error()
+    if _last_error() == ERROR_ALREADY_EXISTS:
         _kernel32.CloseHandle(handle)
         return None
     return int(handle)
@@ -274,7 +290,7 @@ def kill_on_close_job(pid: int) -> int:
     including when this process crashes. Returns the job handle."""
     job = _kernel32.CreateJobObjectW(None, None)
     if not job:
-        raise ctypes.WinError(ctypes.get_last_error())
+        raise _win_error()
     try:
         limits = _ExtendedLimits()
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -284,13 +300,13 @@ def kill_on_close_job(pid: int) -> int:
             ctypes.byref(limits),
             ctypes.sizeof(limits),
         ):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise _win_error()
         process = _kernel32.OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, False, pid)
         if not process:
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise _win_error()
         try:
             if not _kernel32.AssignProcessToJobObject(job, process):
-                raise ctypes.WinError(ctypes.get_last_error())
+                raise _win_error()
         finally:
             _kernel32.CloseHandle(process)
     except OSError:
@@ -564,7 +580,7 @@ def _register_tray_class(instance: int) -> bool:
         window_class.lpszClassName = _TRAY_CLASS
         if _user32.RegisterClassExW(ctypes.byref(window_class)):
             return True
-        return ctypes.get_last_error() == _ERROR_CLASS_ALREADY_EXISTS
+        return _last_error() == _ERROR_CLASS_ALREADY_EXISTS
 
 
 class TrayIcon(_MessageThread):
