@@ -1,6 +1,6 @@
 """`asc setup`: its questions, how answers are read, and the config they make.
 
-`cli.py` asks the questions, since only it prints. Everything here is pure.
+`prompts.py` asks the questions and prints. Everything here is pure.
 
 Each question comes first, then its numbered choices, then a short prompt, as
 in other CLI setups. The text is read by screen readers, so the default is
