@@ -21,7 +21,7 @@ from typing import Any, NoReturn
 from agent_speech_check import __version__
 from agent_speech_check.config import edit, prefs, setup
 from agent_speech_check.config.prefs import MODES, WINDOWS
-from agent_speech_check.config.targets import Config, Target, defaults, load
+from agent_speech_check.config.targets import Config, Target, check_runnable, defaults, load
 from agent_speech_check.daemon import ipc, server, session, state
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
@@ -495,6 +495,7 @@ def cmd_keys(args: argparse.Namespace) -> int:
     if not re.fullmatch(r"[A-Za-z]{2,3}(_[A-Za-z]{2,4})?", args.lang):
         raise bad_field(UsageError, "--lang", "a language code like en or pt_BR", args.lang)
     target = _target(args, _with_defaults(args, {"layout": "keys_layout"}))
+    check_runnable(target)
     if target.orca:
         commands = orca_keyref.commands(args.lang, target.ssh)
     elif target.ssh is not None:

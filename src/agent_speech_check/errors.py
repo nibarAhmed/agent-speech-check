@@ -285,7 +285,7 @@ class NvdaNotFound(SetupNeeded):
 
 class OrcaHelpNotFound(SetupNeeded):
     def __init__(self, reason: str) -> None:
-        super().__init__(reason, hint="install Orca on the machine it reads")
+        super().__init__(reason, hint="install Orca, or make its help readable")
 
 
 class RemoteCommandFailed(SetupNeeded):

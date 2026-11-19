@@ -37,7 +37,11 @@ def test_tunnel_command() -> None:
             SshFailed,
             "Timeout, server vm not responding.",
         ),
-        ([], SshFailed, "exit code 255"),
+        (
+            ["Warning: Permanently added 'vm' (ED25519) to the list of known hosts."],
+            SshFailed,
+            "exit code 255",
+        ),
     ],
 )
 def test_why_ssh_failed(lines: list[str], error: type, detail: str) -> None:

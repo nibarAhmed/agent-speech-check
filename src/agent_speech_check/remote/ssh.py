@@ -38,8 +38,14 @@ _SETUP = (
     "REMOTE HOST IDENTIFICATION HAS CHANGED",
     "Could not resolve hostname",
 )
-# What `-v` adds without a `debug` prefix, which never says why ssh ended.
-_CHATTER = ("OpenSSH", "Authenticated to", "Transferred:", "Bytes per second:")
+# What ssh says without a `debug` prefix that never says why a command ended.
+_CHATTER = (
+    "OpenSSH",
+    "Authenticated to",
+    "Transferred:",
+    "Bytes per second:",
+    "Warning: Permanently added",
+)
 # Only `-v` says when the other machine listens: this debug line.
 _FORWARDED = "remote forward success for: listen"
 _FORWARD_FAILED = "remote port forwarding failed"
@@ -70,6 +76,10 @@ def last_said(lines: Sequence[str], code: int) -> str:
     return said[-1] if said else f"exit code {code}"
 
 
+def _clip(line: str) -> str:
+    return line.rstrip()[:500]
+
+
 def run(destination: str, remote: str, data: bytes = b"") -> tuple[int, bytes, str]:
     """Run the command line `remote` there, with `data` as its stdin: its exit code, its
     stdout, and the last line of its stderr. ssh's own failure raises."""
@@ -86,7 +96,7 @@ def run(destination: str, remote: str, data: bytes = b"") -> tuple[int, bytes, s
     except subprocess.TimeoutExpired:
         raise SshFailed(destination, f"no answer in {RUN_TIMEOUT_S:.0f} s") from None
     stderr = done.stderr.decode(errors="replace").splitlines()[-STDERR_LINES:]
-    lines = [line.rstrip()[:500] for line in stderr]
+    lines = [_clip(line) for line in stderr]
     if done.returncode == FAILED:
         raise failed(destination, lines, FAILED)
     return done.returncode, done.stdout, last_said(lines, done.returncode)
@@ -101,7 +111,7 @@ async def stderr_lines(stderr: asyncio.StreamReader) -> AsyncIterator[str]:
             continue  # an overlong line is dropped
         if not raw:
             return
-        yield raw.decode(errors="replace").rstrip()[:500]
+        yield _clip(raw.decode(errors="replace"))
 
 
 def _dies_with_asc() -> dict[str, Any]:

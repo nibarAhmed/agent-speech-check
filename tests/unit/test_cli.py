@@ -11,7 +11,13 @@ import pytest
 from agent_speech_check import __version__
 from agent_speech_check.cli import COMMANDS, _show_status, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
-from agent_speech_check.errors import NvdaIniOnlyRemote, SshMissing, WindowsOnlyCommand
+from agent_speech_check.errors import (
+    NvdaIniOnlyRemote,
+    RemoteNeedsMachine,
+    SshMissing,
+    WindowsOnlyCommand,
+    WindowsOnlyMode,
+)
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -273,16 +279,19 @@ def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.Monk
             run([name])
 
 
-@pytest.mark.parametrize("os_name", ["windows", "linux"])
+@pytest.mark.parametrize(
+    ("os_line", "error"),
+    [('os = "windows"', SshMissing), ('os = "linux"', SshMissing), ("", RemoteNeedsMachine)],
+)
 def test_keys_in_remote_mode_reads_the_other_machine(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, os_name: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, os_line: str, error: type[Exception]
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("PATH", str(tmp_path / "empty"))
     config = tmp_path / "agent-speech-check" / "config.toml"
     config.parent.mkdir()
-    config.write_text(f'[remote]\nos = "{os_name}"\nssh = "me@box"\n', encoding="utf-8")
-    with pytest.raises(SshMissing):
+    config.write_text(f'[remote]\n{os_line}\nssh = "me@box"\n', encoding="utf-8")
+    with pytest.raises(error):
         run(["keys", "--mode", "remote"])
 
 
@@ -303,3 +312,5 @@ def test_keys_reads_orcas_help_on_linux(
     )
     assert run(["keys", "--mode", "desktop", "title"]) == 0
     assert capsys.readouterr().out == "Orca+T  Present the title\n"
+    with pytest.raises(WindowsOnlyMode):
+        run(["keys", "--mode", "sandbox", "title"])
