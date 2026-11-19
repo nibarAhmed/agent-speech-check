@@ -30,7 +30,6 @@ from agent_speech_check.orca.link import (
     OrcaLink,
     Ready,
     Record,
-    keysym,
     parse_message,
 )
 
@@ -48,20 +47,12 @@ from agent_speech_check.orca.link import (
     ],
 )
 def test_keysyms(gesture: str, keysyms: list[str]) -> None:
-    assert [keysym(key) for key in parse_gesture(gesture).strokes] == keysyms
-
-
-def test_every_named_key_has_its_own_keysym() -> None:
-    """An NVDA key name is not an X keysym: a named key left out of the table would
-    reach xdotool as a name it doesn't know."""
-    for key in KEYS.values():
-        if len(key.name) > 1 and not re.fullmatch(r"F\d+", key.name):
-            assert key.name in link.KEYSYMS
+    assert [key.keysym for key in parse_gesture(gesture).strokes] == keysyms
 
 
 def test_typed_text_needs_no_keyboard_layout() -> None:
     gestures = typed_gestures("aB!é\r\n\t")
-    assert [keysym(g.key) for g in gestures] == [
+    assert [g.key.keysym for g in gestures] == [
         "U0061",
         "U0042",
         "U0021",
