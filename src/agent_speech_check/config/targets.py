@@ -33,7 +33,6 @@ import tomlkit.exceptions
 from agent_speech_check.config import prefs
 from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS, default_mode
 from agent_speech_check.errors import (
-    BadInFile,
     ConfigFileError,
     FileUnusable,
     RemoteNeedsMachine,
@@ -260,7 +259,6 @@ def _read(path: Path) -> dict[str, Any]:
 
 def _from_table(mode: str, raw: object, file: str, platform: str) -> Target:
     where = f"{file}: [{mode}]"
-    _check_moved(mode, raw, where)
     f = Fields(raw, where, UsageError, prefs.MODE_KEYS)
     values = _checked_values(f, prefs.MODE_KEYS)
     if "os" in values and mode != "remote":
@@ -280,26 +278,6 @@ def _from_table(mode: str, raw: object, file: str, platform: str) -> Target:
     if "launch" in values:
         _check_launch(target, where, values["launch"])
     return _checked(target, where)
-
-
-# Settings from before remote mode went over ssh, with the way to move them.
-_MOVED = {
-    ("remote", "host"): (
-        "remote mode now reaches its machine over ssh",
-        "delete host from config.toml, then asc config set ssh USER@HOST "
-        "--mode remote --instance VMNAME",
-    ),
-}
-
-
-def _check_moved(mode: str, raw: object, where: str) -> None:
-    if not isinstance(raw, Mapping):
-        return
-    for name in raw:
-        if (mode, name) in _MOVED:
-            message, hint = _MOVED[mode, name]
-            field_name = f"{where} {name}"
-            raise BadInFile(field_name, message, hint=hint)
 
 
 _TARGET_FIELDS = frozenset(field.name for field in fields(Target))

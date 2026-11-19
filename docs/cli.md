@@ -434,8 +434,7 @@ context.
 outside desktop mode on Windows, `os` and `ssh` outside remote mode, `port` for Orca,
 and `nvda_dir`
 and `nvda_settings` for an NVDA that `asc` doesn't launch. The NVDA settings
-`asc` writes itself are never kept. An old `host` in `[remote]` exits 2 with
-how to move it.
+`asc` writes itself are never kept.
 
 ## Command reference
 
@@ -878,8 +877,6 @@ the relay itself listens only on its address.
   program.
 - Remove it from an admin terminal with
   `netsh advfirewall firewall delete rule name="agent-speech-check sandbox relay"`.
-  Delete a rule named `agent-speech-check remote relay PORT`, made by an older
-  `asc`, the same way: remote mode needs none.
 
 ```shell
 asc firewall-setup --mode sandbox

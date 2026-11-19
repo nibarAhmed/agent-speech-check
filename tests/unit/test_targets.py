@@ -170,13 +170,6 @@ def test_remote_from_file_and_json(tmp_path: Path) -> None:
     assert Target.from_json(linux.to_json()) == linux
 
 
-def test_a_host_from_before_ssh_says_how_to_move(tmp_path: Path) -> None:
-    with pytest.raises(UsageError, match=r"^config.toml: \[remote\] host: ") as exc:
-        resolve(write(tmp_path, "[remote]\nhost = '172.20.0.1'\n"), None)
-    assert exc.value.exit_code == 2
-    assert "delete host from config.toml" in (exc.value.hint or "")
-
-
 def test_modes_this_platform_runs() -> None:
     check_runnable(defaults("watch"))
     check_runnable(defaults("desktop", platform="linux"))
