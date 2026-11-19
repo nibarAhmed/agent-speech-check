@@ -1,4 +1,5 @@
-"""The questions `asc setup` asks at a terminal, and the NVDA update offer.
+"""The questions `asc setup` asks at a terminal, the NVDA update offer, and the
+two actions they share with `asc get-nvda` and `asc firewall-setup`.
 
 What they ask and how answers are read is in `setup.py`; this module asks and
 says what happened. Only it and `cli.py` print.
@@ -21,7 +22,6 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths
-from agent_speech_check.system.paths import config_file, state_root
 
 type Ask = Callable[[str], str]
 
@@ -232,9 +232,9 @@ def _answers(ask: Ask, platform: str) -> tuple[setup.Answers, tuple[str, ...]]:
 
 def run_setup(ask: Ask, *, replace_without_asking: bool, platform: str = sys.platform) -> int:
     """Ask the questions, then write config.toml once. `ask` reads one answer."""
-    if (mode := session.running_mode(state_root())) is not None:
+    if (mode := session.running_mode(paths.state_root())) is not None:
         raise AlreadyRunning(mode)
-    path = config_file()
+    path = paths.config_file()
     print("asc setup")
     if path.exists() and not replace_without_asking:
         question = f"This replaces your settings in {path}. Continue?"
