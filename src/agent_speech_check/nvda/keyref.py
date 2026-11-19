@@ -8,7 +8,6 @@ remembers the heading it sits under, which searches also match.
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 from dataclasses import dataclass
@@ -179,10 +178,6 @@ def candidates() -> list[tuple[str, Path]]:
     registry = _registry_dir()
     if registry is not None:
         found.append(("the NVDA uninstall registry entry", registry))
-    for variable in ("ProgramFiles", "ProgramFiles(x86)"):
-        base = os.environ.get(variable)
-        if base:
-            found.append((f"%{variable}%", Path(base) / "NVDA"))
     return found
 
 
@@ -203,12 +198,8 @@ foreach ($hive in 'HKLM:', 'HKCU:') {
         break
     }
 }
-foreach ($name in 'ProgramFiles', 'ProgramFiles(x86)') {
-    $base = [Environment]::GetEnvironmentVariable($name)
-    if ($base) { $dirs += , @("%$name%", [IO.Path]::Combine($base, 'NVDA')) }
-}
 foreach ($dir in $dirs) {
-    foreach ($lang in @(LANG_CODE, 'en') | Select-Object -Unique) {
+    foreach ($lang in LANG_CODE, 'en') {
         $file = [IO.Path]::Combine($dir[1], 'documentation', $lang, 'keyCommands.html')
         if (Test-Path -LiteralPath $file -PathType Leaf) {
             $bytes = [IO.File]::ReadAllBytes($file)

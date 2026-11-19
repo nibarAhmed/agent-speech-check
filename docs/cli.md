@@ -694,7 +694,7 @@ H and Shift+H  Next and previous heading
 
 - For NVDA it reads `documentation\<lang>\keyCommands.html` from the mode's
   portable NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA
-  (the running `nvda.exe`, the uninstall registry entry, then Program Files).
+  (the running `nvda.exe`, then the uninstall registry entry).
 - For Orca it reads Orca's help, `help/<lang>/orca/commands_*.page` in each
   of `$XDG_DATA_DIRS` (`/usr/local/share` and `/usr/share`), falling back to
   English.

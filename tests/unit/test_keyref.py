@@ -81,12 +81,6 @@ def test_reference_not_found_says_where_it_looked(tmp_path: Path) -> None:
     assert exc.value.exit_code == 7
 
 
-def test_candidates_include_program_files(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("ProgramFiles", r"C:\PF")
-    labels = [label for label, _ in keyref.candidates()]
-    assert "%ProgramFiles%" in labels
-
-
 ORCA_PAGE = """<page xmlns="http://projectmallard.org/1.0/" type="topic" id="commands_widgets">
   <info><title type="link">Widgets</title></info>
   <title>Widget Commands</title>

@@ -956,7 +956,7 @@ Print commands whose name, keys, description or section contain every
 SEARCH word, one per line: KEY  NAME: DESCRIPTION. Needs no running asc.
 For NVDA, from its Commands Quick Reference: the portable copy in desktop
 mode, or in sandbox mode with nvda_dir, otherwise your own NVDA (the
-running nvda.exe, the uninstall registry entry, Program Files). For Orca,
+running nvda.exe, then the uninstall registry entry). For Orca,
 from its help (/usr/share/help). Remote mode reads the other machine's.
 In browse mode, single letters jump to elements; add Shift to go back.
 
