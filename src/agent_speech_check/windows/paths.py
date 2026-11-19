@@ -22,7 +22,7 @@ _DEVICES = re.compile(r"con|prn|aux|nul|com\d|lpt\d")
 
 def base_root() -> Path:
     """The default instance's home. It also keeps the NVDA every instance shares.
-    On Linux, where orca and remote mode run: `$XDG_STATE_HOME/agent-speech-check`."""
+    On Linux: `$XDG_STATE_HOME/agent-speech-check`."""
     if sys.platform == "win32":
         local = os.environ.get("LOCALAPPDATA")
         base = Path(local) if local else Path.home() / "AppData" / "Local"

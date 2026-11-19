@@ -12,6 +12,7 @@ below and override `__init__` to take their own fields.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Sequence
 from os import PathLike
 from typing import Any, ClassVar
@@ -592,7 +593,9 @@ class KeysRefused(Refused):
     def __init__(self) -> None:
         super().__init__(
             "asc is in watch mode, which never sends keys",
-            hint="asc stop, then asc start --mode desktop",
+            # On Windows your NVDA runs in watch mode, and desktop mode refuses to start beside it.
+            hint="asc stop, then asc start --mode "
+            + ("sandbox, or desktop" if sys.platform == "win32" else "desktop"),
         )
 
 

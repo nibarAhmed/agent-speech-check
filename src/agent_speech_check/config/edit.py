@@ -126,6 +126,8 @@ def unset_value(config: Config, pref: Pref, where: str | None) -> dict[str, Any]
 
 
 def _target_value(target: Target, name: str) -> Value | None:
+    if name == "os" and target.mode != "remote":
+        return None  # the platform's, not a setting
     if name == "nvda_settings":
         return [setting.text for setting in target.settings]
     if name == "share":

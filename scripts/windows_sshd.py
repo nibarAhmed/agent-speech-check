@@ -15,9 +15,9 @@ import os
 import shutil
 import subprocess
 import sys
-import urllib.request
 from pathlib import Path
 
+from agent_speech_check.windows import tls
 from agent_speech_check.windows.wait import poll_until
 
 VERSION = "10.4.0.0p1-Preview"
@@ -35,11 +35,13 @@ ADMIN_KEYS = (
 def download(folder: Path) -> Path:
     zip_path = folder / ZIP
     if not zip_path.exists():
-        with urllib.request.urlopen(URL, timeout=120) as response:
+        with tls.urlopen(URL, 120) as response:
             data = response.read()
         if hashlib.sha256(data).hexdigest() != SHA256:
             sys.exit(f"{URL}: SHA-256 mismatch")
-        zip_path.write_bytes(data)
+        partial = zip_path.with_suffix(".part")
+        partial.write_bytes(data)
+        partial.replace(zip_path)
     return zip_path
 
 

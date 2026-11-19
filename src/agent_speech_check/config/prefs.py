@@ -30,7 +30,7 @@ GLOBAL = "global"
 PER_MODE = "per mode"
 
 MODES = ("watch", "desktop", "sandbox", "shared", "remote")
-# On Linux desktop mode starts Orca, and watch mode doesn't run.
+# On Linux desktop mode starts Orca.
 DEFAULT_MODE = "watch" if sys.platform == "win32" else "desktop"
 # Where the sandbox window goes: hidden behind a tray icon, minimised on the
 # taskbar, or left alone.

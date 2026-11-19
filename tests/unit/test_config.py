@@ -174,6 +174,7 @@ def test_entries_say_where_each_value_comes_from() -> None:
     assert rows["settle_ms"] == (800, "global")
     assert rows["timeout_ms"] == (8000, "global")
     assert rows["keys_layout"] == ("desktop", "default")
+    assert rows["os"] == (None, "default")  # remote mode's alone
     watch = {name: (value, source) for name, value, source in edit.entries(settings, "watch")}
     assert watch["port"] == (7000, "watch")
     assert watch["mode"] == ("sandbox", "global")

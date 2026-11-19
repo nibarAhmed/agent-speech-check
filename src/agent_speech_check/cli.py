@@ -293,7 +293,7 @@ def _show_status(status: dict[str, Any]) -> None:
         else:
             up = ", tunnel down" + (f" ({tunnel['error']})" if tunnel["error"] else "")
         print(f"over ssh: {status['ssh']}{up}")
-    # Nothing listens for Orca: asc starts it itself.
+    # Nothing listens for Orca: asc starts or records it itself.
     if not status["connected"] and status["port"] is not None:
         print(_connect_line(status))
     if reader == "nvda":
@@ -387,7 +387,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     folder = mode_dir(target.mode)
     status = session.start(target, folder)
     print(f"started: {target.mode}", flush=True)
-    if target.own_nvda and config.value("connect")[0]:
+    if target.own_nvda and not target.orca and config.value("connect")[0]:
         status = _connect_own_nvda(folder, status)
     _show_status(status)
     return 0
