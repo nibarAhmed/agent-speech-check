@@ -48,8 +48,13 @@ def throwaway() -> bool:
 
 
 def powershell(script: str) -> None:
+    # Run from pwsh 7, PSModulePath points Windows PowerShell at pwsh's modules, so Get-Acl
+    # fails to load; without it Windows PowerShell builds its own.
+    env = {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
     subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], check=True
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=True,
+        env=env,
     )
 
 
