@@ -254,18 +254,23 @@ def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="select takes no pipes on Windows")
-@pytest.mark.parametrize(("printed", "line"), [(b"12\nmore\n", "12"), (b"12", None), (b"", None)])
-def test_a_child_that_never_prints_its_first_line_fails_setup(
-    printed: bytes, line: str | None
-) -> None:
+@pytest.mark.parametrize(("printed", "line"), [(b"12\nmore\n", "12"), (b"12", "12"), (b"", "")])
+def test_the_first_line_of_a_child_that_printed_or_exited(printed: bytes, line: str) -> None:
+    read, write = os.pipe()
+    os.write(write, printed)
+    os.close(write)
+    try:
+        assert helper.first_line(read, "Xvfb", 5) == line
+    finally:
+        os.close(read)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="select takes no pipes on Windows")
+def test_a_child_that_never_prints_its_first_line_fails_setup() -> None:
     read, write = os.pipe()
     try:
-        os.write(write, printed)
-        if line is None:
-            with pytest.raises(helper.Failed, match="Xvfb did not start"):
-                helper.first_line(read, "Xvfb", 0.2)
-        else:
-            assert helper.first_line(read, "Xvfb", 0.2) == line
+        with pytest.raises(helper.Failed, match="Xvfb did not start"):
+            helper.first_line(read, "Xvfb", 0.2)
     finally:
         os.close(read)
         os.close(write)

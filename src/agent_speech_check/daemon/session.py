@@ -247,10 +247,12 @@ def _wait_started(process: subprocess.Popen[bytes], folder: Path) -> None:
         raise DaemonStartFailed(code, START_TIMEOUT_S, log_tail(folder))
 
 
+# Windows says WSAEACCES for a port another socket holds exclusively; Linux's EACCES
+# is a privileged port instead, which the daemon reports.
 if sys.platform == "win32":
     _IN_USE = (errno.WSAEADDRINUSE, errno.WSAEACCES)
 else:
-    _IN_USE = (errno.EADDRINUSE, errno.EACCES)
+    _IN_USE = (errno.EADDRINUSE,)
 
 
 def _check_port_free(target: Target) -> None:

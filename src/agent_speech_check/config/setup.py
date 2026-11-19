@@ -53,15 +53,15 @@ _ORCA_ABOUT = {
 
 
 def modes(*, named: bool, platform: str = sys.platform) -> tuple[Choice, ...]:
-    """The modes that run here. A named instance can't join your own screen reader
-    (watch and shared mode)."""
-    orca = defaults("desktop", platform=platform).orca
+    """The modes that run here, as `check_runnable` says. A named instance can't join
+    your own screen reader (watch and shared mode)."""
+    targets = [defaults(mode, platform=platform) for mode in prefs.MODES]
     names = tuple(
-        mode
-        for mode in prefs.MODES
-        if (mode == "remote" or not orca or mode in ORCA_MODES)
-        and not (named and defaults(mode).own_reader)
+        target.mode
+        for target in targets
+        if (target.mode in ORCA_MODES or not target.orca) and not (named and target.own_reader)
     )
+    orca = defaults("desktop", platform=platform).orca
     about = {**_MODE_ABOUT, **_ORCA_ABOUT} if orca else _MODE_ABOUT
     return _choices(names, about, default="remote" if named else default_mode(platform))
 
@@ -90,10 +90,7 @@ OSES = _choices(
     default="windows",
 )
 # Fails at import unless each question has exactly one default.
-for _question in (
-    *(modes(named=named, platform=p) for named in (False, True) for p in ("win32", "linux")),
-    *(NVDA_SOURCES, WINDOWS, LAYOUTS, OSES),
-):
+for _question in (NVDA_SOURCES, WINDOWS, LAYOUTS, OSES):
     default_of(_question)
 
 

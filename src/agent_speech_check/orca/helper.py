@@ -43,7 +43,7 @@ from typing import IO, Any
 PROGRAMS = ("Xvfb", "openbox", "xdotool", "dbus-daemon", "gdbus", "orca")
 MIN_ORCA = (51, 0)
 READY_TIMEOUT_S = 30.0
-# Xvfb's and dbus-daemon's each, which with Orca's stays inside `asc start`'s 60 s.
+# Xvfb's and dbus-daemon's each, which with READY_TIMEOUT_S stays inside `asc start`'s 60 s.
 STARTED_TIMEOUT_S = 10.0
 SERVICE = "org.gnome.Orca1.Service"
 XDOTOOL_TIMEOUT_S = 10.0
