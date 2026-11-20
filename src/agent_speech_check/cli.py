@@ -57,15 +57,15 @@ blind user does. Press keys, read what it says as text, and check it.
 typical use:
   asc setup                    choose your settings (once)
   asc start                    start recording in your configured mode
-  asc status                   whether the screen reader is connected, and how
+  asc status                   check connection status and how to connect
   asc mark                     print the latest line number, N
-  asc wait --since N "OK"      block until it is said after line N (regex)
-  asc speech --since N         what was said after line N
+  asc wait --since N "OK"      wait until matching speech is said after line N (regex)
+  asc speech --since N         print what was said after line N
   asc stop
 
 Speech is kept in memory only. Run asc COMMAND --help for details.
---instance NAME (or ASC_INSTANCE) runs a separate asc, with its own config and
-daemon, next to the default one: one per agent, each with its own VM.
+--instance NAME (or ASC_INSTANCE) runs an isolated asc instance with its own
+config and daemon alongside the default one (useful for one per agent or VM).
 """
 
 EPILOG = (
@@ -139,7 +139,7 @@ def _status_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--nvda-ini",
         action="store_true",
-        help="remote mode: print the nvda.ini that connects that NVDA unattended",
+        help="remote mode (Windows): print an nvda.ini for unattended NVDA setup",
     )
 
 
@@ -206,10 +206,10 @@ def _setup_args(parser: argparse.ArgumentParser) -> None:
 
 
 CONFIG_HELP = {
-    "list": "show every setting, and where its value comes from",
+    "list": "show every setting and where its value comes from",
     "get": "print one setting's value",
-    "set": "change a setting (a list takes several values)",
-    "unset": "go back to the inherited value",
+    "set": "change a setting (list settings accept multiple values)",
+    "unset": "remove a setting and revert to the default",
     "path": "print where config.toml is",
 }
 
@@ -601,26 +601,25 @@ COMMANDS: dict[str, Command] = {
     "start": Command(
         "start recording",
         """\
-Start the background daemon in --mode, or the mode setting (watch; on Linux,
-desktop), with that mode's settings from config.toml (see
-asc config). One daemon runs per instance: the other commands talk to it.
+Start the background daemon using --mode or the configured default mode (watch
+on Windows, desktop on Linux) with that mode's settings from config.toml (see
+asc config). One daemon runs per instance and serves all other commands.
 
-desktop mode: asc starts its own NVDA on this desktop. On Linux it starts Orca
-instead, on its own hidden display.
+desktop mode: asc starts its own portable NVDA on this desktop. On Linux it
+starts Orca on a hidden virtual display instead.
 
-watch mode: your own NVDA connects to asc and asc only listens. It never sends
-keys. asc start asks your running NVDA to connect: answer Yes in NVDA, and trust
-the certificate the first time. It waits up to a minute for that. Until NVDA
-restarts, it then reconnects by itself. Turn the asking off with
-asc config set connect false, and connect in NVDA instead (asc status says how).
-On Linux it records your own Orca, which must have been started with asc's
-secret: if not, it exits 7 with the line that restarts Orca so.
+watch mode: records speech from your own screen reader without sending keys.
+On Windows, asc start invites your running NVDA to connect and waits up to a
+minute for you to answer Yes (and trust the certificate the first time). NVDA
+then reconnects automatically until it restarts. Disable automatic invites with
+asc config set connect false and connect manually in NVDA (see asc status).
+On Linux, watch mode records your running Orca, which must have been started
+with asc's secret; if not, asc start exits 7 with the restart command.
 
-remote mode: the screen reader runs on another machine (a VM, say) that asc
-reaches with ssh and a key. With os windows, start NVDA there yourself: asc
-opens an ssh tunnel, and NVDA connects through it to 127.0.0.1 on that machine,
-as asc status says. With os linux, asc starts Orca there. It runs only in a
-named instance, one per VM.
+remote mode: runs the screen reader on another machine (such as a VM) over ssh
+using key authentication. With os windows, start NVDA there yourself; asc opens
+an ssh tunnel to 127.0.0.1 on that machine (see asc status). With os linux, asc
+starts Orca there. Remote mode runs only in a named instance, one per machine.
 
 examples:
   asc start
@@ -632,22 +631,22 @@ examples:
     ),
     "stop": Command(
         "stop recording and forget the speech",
-        "Stop this instance's daemon, whatever its mode. Held keys are released. A\n"
-        "daemon that doesn't answer is ended. --all stops every instance's daemon\n"
-        "and starts no update check: run it before you delete asc.",
+        "Stop this instance's daemon (regardless of mode) and release any held keys.\n"
+        "Unresponsive daemons are terminated. --all stops every instance and skips\n"
+        "the background update check (run it before uninstalling asc).",
         cmd_stop,
         _stop_args,
     ),
     "status": Command(
         "show whether asc is recording and the screen reader is connected",
         """\
-Show the mode, whether NVDA or Orca is connected, how to connect NVDA, and
-the browse/focus mode (unknown until the screen reader first switches).
+Show the active mode, whether NVDA or Orca is connected, how to connect NVDA,
+and the browse/focus mode (unknown until the screen reader first switches).
 
-remote mode with os windows: --nvda-ini prints instead an nvda.ini for its NVDA,
-as desktop mode writes its own: Remote Access on, connecting to asc at startup
-with the certificate trusted, the silent synth, no welcome or update prompts.
-Save it as UTF-8 nvda.ini in that NVDA's config folder while NVDA is not running.
+--nvda-ini (remote mode with os windows): instead of status, print a
+ready-to-use nvda.ini that connects NVDA unattended (Remote Access enabled,
+certificate trusted, silent synth, no startup prompts). Save it as UTF-8
+nvda.ini in that NVDA's config folder while NVDA is closed.
 
 examples:
   asc status
@@ -656,10 +655,10 @@ examples:
         _status_args,
     ),
     "speech": Command(
-        "print what NVDA said after a line",
+        "print what the screen reader said after a line",
         """\
-Print what NVDA said after line N, one numbered line per utterance, plus
-mode changes. Take N from asc mark, or from the last line you read.
+Print what the screen reader said after line N, one numbered line per utterance,
+plus mode changes. Take N from asc mark, or from the last line you read.
 
 examples:
   asc speech --since 0       everything still kept
@@ -668,12 +667,12 @@ examples:
         _since,
     ),
     "wait": Command(
-        "wait until NVDA says something matching REGEX",
+        "wait until the screen reader says something matching REGEX",
         """\
-Return as soon as an utterance after line N matches REGEX (Python syntax,
-searched anywhere in the line; use (?i) to ignore case), and print it with
-its number, the next N. Exits 1 with what NVDA did say if nothing matched
-in time.
+Wait until an utterance after line N matches REGEX (Python regex, searched
+anywhere in the line; use (?i) to ignore case), then print it with its line
+number (use that number as the next --since). Exits 1 with what was said if
+nothing matches before the timeout.
 
 examples:
   asc wait --since 40 "OK button"
@@ -683,16 +682,16 @@ examples:
     ),
     "mark": Command(
         "print the latest line number",
-        "Print the number of the latest line: mark: N. Run it before the action, then\n"
+        "Print the number of the latest line: mark: N. Run it before an action, then\n"
         "pass N to wait or speech as --since N. Nothing is stored.",
         cmd_mark,
     ),
     "press": Command(
-        "press keys and print what NVDA said",
+        "press keys and print what was said",
         """\
-Send each gesture, wait until NVDA is quiet for --settle ms, and print only
-the new speech as numbered lines, or (nothing said after N). The last
-number, or N, is the next --since for wait or speech.
+Send each gesture, wait for --settle ms of quiet, and print only the new speech
+as numbered lines, or (nothing said after N). Pass the last printed line number
+(or N) as the next --since for wait or speech.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
 Watch mode refuses keys (exit 4).
 
@@ -705,13 +704,13 @@ examples:
         _press_args,
     ),
     "type": Command(
-        "type text and print what NVDA said",
+        "type text and print what was said",
         """\
-Type TEXT one character at a time, using this computer's keyboard layout
-(Orca: each character as itself).
-Every character is checked first; if any can't be typed, nothing is (exit 2).
-NVDA gets one --settle quiet period at the end. Watch mode refuses (exit 4).
-Prints the new speech numbered like press, or (nothing said after N).
+Type TEXT one character at a time using this computer's keyboard layout
+(with Orca, each character is sent directly). Every character is checked first;
+if any cannot be typed, nothing is sent (exit 2). Waits for one --settle quiet
+period after typing, then prints new speech like press.
+Watch mode refuses input (exit 4).
 
 examples:
   asc type "hello world"
@@ -722,13 +721,13 @@ examples:
     "keys": Command(
         "look up screen reader commands in its own reference",
         """\
-Print commands whose name, keys, description or section contain every
-SEARCH word, one per line: KEY  NAME: DESCRIPTION. Needs no running asc.
-For NVDA, from its Commands Quick Reference: the portable copy in desktop
-mode, or in sandbox mode with nvda_dir, otherwise your own NVDA (the
-running nvda.exe, then the uninstall registry entry). For Orca, from
-its help in $XDG_DATA_DIRS. Remote mode reads the other machine's.
-In browse mode, single letters jump to elements; add Shift to go back.
+Search the screen reader's command reference for entries whose name, keys,
+description, or section contain all SEARCH words (no running asc needed).
+Prints one match per line: KEY  NAME: DESCRIPTION.
+Reads NVDA's Commands Quick Reference (from the portable copy in desktop mode
+or sandbox mode with nvda_dir, otherwise your running or installed NVDA) or
+Orca's help files in $XDG_DATA_DIRS. Remote mode reads from the remote machine.
+In browse mode, single letters jump to elements; add Shift to move backward.
 
 examples:
   asc keys heading
@@ -739,14 +738,14 @@ examples:
         takes_mode=True,
     ),
     "launch": Command(
-        "start an app and wait until NVDA speaks",
+        "start an app and wait until the screen reader speaks",
         """\
-Start CMD and wait until NVDA says something matching --title (a regex), or
-anything at all if --title is left out. Prints what NVDA said, numbered
-like press.
-Default timeout 30000 ms. When asc runs NVDA in Windows Sandbox, CMD runs
-inside the sandbox, which has no Notepad or Edge: start your own app from C:\\share\\<folder>.
-Remote mode with os windows refuses (exit 4): start the app there, then asc wait.
+Start CMD and wait until the screen reader says text matching --title (a regex),
+or any speech if --title is omitted. Prints what was said, numbered like press.
+Default timeout is 30000 ms. In sandbox mode, CMD runs inside Windows Sandbox,
+which has no Notepad or Edge: launch your own app from C:\\share\\<folder>.
+Refused in remote mode with os windows (exit 4): start the app there, then use
+asc wait.
 
 examples:
   asc launch "C:\\share\\app\\run.cmd" --title "My App"
@@ -757,10 +756,10 @@ examples:
     "get-nvda": Command(
         "make the portable NVDA that desktop mode launches",
         """\
-Download NVDA from NV Access and make a portable copy for desktop mode, in
-%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Without --version, the
-latest NVDA; offline, the installer asc downloaded last. Refuses (exit 4) while
-any NVDA runs, because the NVDA installer would restart it.
+Download NVDA from NV Access and extract a portable copy for desktop mode to
+%LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Defaults to the latest
+release (or the last cached installer when offline). Refuses with exit 4 while
+any NVDA is running, because running the installer would restart it.
 
 examples:
   asc get-nvda
@@ -773,9 +772,9 @@ examples:
     "setup": Command(
         "choose your settings, by answering questions",
         """Ask a few questions and save the answers in config.toml: your mode and its
-settings. Running it again replaces all your settings. It needs a terminal;
-scripts and agents use asc config instead. Press Enter to keep a default, and
-Ctrl+C to stop without saving.
+settings. Running it again replaces all your settings. Requires a terminal;
+scripts and agents should use asc config instead. Press Enter to keep a default,
+or Ctrl+C to stop without saving.
 
 examples:
   asc setup
@@ -785,10 +784,10 @@ examples:
     ),
     "config": Command(
         "show or change one setting",
-        """Show or change the settings in config.toml. A mode's settings (port, share,
-...) go to --mode, or to the mode setting's. Global settings and command
-defaults (settle_ms, timeout_ms, ...) take no --mode. A flag on a command
-beats a command default.
+        """Show or change settings in config.toml. Mode-specific settings (port, share,
+etc.) apply to --mode, or to the configured default mode if --mode is omitted.
+Global settings and command defaults (settle_ms, timeout_ms, etc.) do not take
+--mode. Command-line flags override command defaults.
 
 examples:
   asc config list
@@ -801,13 +800,12 @@ examples:
     ),
     "firewall-setup": Command(
         "allow NVDA in Windows Sandbox to reach asc (asks for admin once)",
-        """Sandbox mode has NVDA in Windows Sandbox connect to asc on this computer's
-Hyper-V Default Switch address, which Windows Firewall blocks until a rule
-allows it. This command creates that rule after a Windows admin prompt: inbound
-TCP only, only from this computer's local subnets, only sandbox mode's port
-(16837 unless its port setting says another), only for the program running asc.
-Run it again after updating Python or asc, since the rule names the program.
-Other modes need no rule (exit 2).
+        """Create the Windows Firewall rule required by sandbox mode (prompts for admin
+rights). NVDA inside Windows Sandbox connects to asc on this computer's Hyper-V
+Default Switch address, which Windows Firewall blocks by default.
+The rule allows inbound TCP from local subnets only, on sandbox mode's port
+(default 16837), for this asc executable only. Re-run after updating Python or
+asc. Other modes need no firewall rule (exit 2).
 
 examples:
   asc firewall-setup --mode sandbox""",

@@ -1,7 +1,7 @@
 # Security
 
-`asc` handles sensitive data: NVDA's speech can include passwords, private messages and email,
-and `asc` can press keys on a computer.
+`asc` handles sensitive data: screen reader speech (NVDA or Orca) can include passwords, private
+messages and email, and `asc` can press keys on a computer.
 
 ## Reporting a problem
 

@@ -299,7 +299,7 @@ class RemoteCommandFailed(SetupNeeded):
     def __init__(self, destination: str, program: str, detail: str) -> None:
         super().__init__(
             f"{program} on {destination} failed: {detail}",
-            hint=f"check that {program} runs there, as asc runs it over ssh",
+            hint=f"verify that {program} works over ssh on {destination}",
         )
 
 
@@ -321,7 +321,7 @@ class ProgramWontStart(SetupNeeded):
 class PortableFailed(SetupNeeded):
     def __init__(self, folder: str) -> None:
         super().__init__(
-            f"the NVDA installer made no portable copy in {folder}",
+            f"the NVDA installer did not create a portable copy in {folder}",
             hint="check the installer, or let asc get-nvda download it again",
         )
 
@@ -330,14 +330,14 @@ class PortableNotReplaced(SetupNeeded):
     def __init__(self, folder: str, reason: str) -> None:
         super().__init__(
             f"cannot replace the portable NVDA in {folder}: {reason}",
-            hint="close what has its files open, then asc get-nvda",
+            hint="close any program using files in that folder, then run asc get-nvda",
         )
 
 
 class InstallerInUse(SetupNeeded):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(
-            f"the kept NVDA installer {path} is damaged and cannot be replaced: {reason}",
+            f"the cached NVDA installer {path} is corrupted and cannot be replaced: {reason}",
             hint="asc stop, then try again",
         )
 
@@ -391,7 +391,7 @@ class RelayFileBroken(SetupNeeded):
     def __init__(self, detail: str) -> None:
         super().__init__(
             detail,
-            hint="delete it; asc makes a new one, and NVDA needs the new key once",
+            hint="delete the file so asc can recreate it, then reconnect NVDA with the new key",
         )
 
 
@@ -508,8 +508,8 @@ class OrcaSetupNeeded(SetupNeeded):
     def __init__(self, reason: str) -> None:
         super().__init__(
             f"Orca can't start: {reason}",
-            hint="install Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3"
-            " there",
+            hint="install Orca 51+, Xvfb, openbox, xdotool, dbus-daemon, gdbus, and python3"
+            " on that machine",
         )
 
 
@@ -532,7 +532,7 @@ class SshSetupNeeded(SetupNeeded):
     def __init__(self, destination: str, detail: str) -> None:
         super().__init__(
             f"ssh {destination} failed: {detail}",
-            hint=f"run ssh {destination} once by hand: asc needs a key, not a password",
+            hint=f"run 'ssh {destination}' manually once: asc needs key auth, not a password",
         )
 
 
