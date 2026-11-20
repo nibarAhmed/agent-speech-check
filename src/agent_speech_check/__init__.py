@@ -1,4 +1,4 @@
-"""Agent Speech Check: let AI agents test your app with a real NVDA."""
+"""Agent Speech Check: let AI agents test your app with a real screen reader (NVDA or Orca)."""
 
 from importlib.metadata import PackageNotFoundError, version
 

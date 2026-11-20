@@ -145,7 +145,7 @@ jobs:
           ASC_E2E_ORCA: "1"
           ASC_E2E_SSH: root@localhost
         run: >-
-          uv run pytest tests/unit/test_orca.py tests/unit/test_ssh.py
+          uv run pytest tests/unit/test_orca.py tests/unit/test_ssh.py tests/unit/test_uninstall.py
           tests/e2e/test_real_orca.py tests/e2e/test_real_ssh.py -v -p no:cacheprovider
 
   # The one check branch protection requires from this workflow, so jobs and matrix legs

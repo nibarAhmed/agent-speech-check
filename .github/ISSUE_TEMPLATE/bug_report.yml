@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: >
-        Leave out anything private. NVDA's speech can contain passwords, messages or email,
+        Leave out anything private. Screen reader speech can contain passwords, messages or email,
         so check pasted output and logs first.
   - type: textarea
     id: what

@@ -98,7 +98,7 @@ def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[byte
 def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 2)
     try:
-        assert list(session.stop_all([env.root / "agent-speech-check"], image)) == []
+        assert list(session.stop_all([env.root / "agent-speech-check"], [image])) == []
         assert process.poll() is not None
     finally:
         process.kill()
@@ -108,7 +108,7 @@ def test_stop_all_names_processes_that_stay(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 60)
     try:
         with pytest.raises(AscStillRunning, match=rf"asc is still running \(pid {process.pid}\)"):
-            list(session.stop_all([env.root / "agent-speech-check"], image, timeout_s=0.5))
+            list(session.stop_all([env.root / "agent-speech-check"], [image], timeout_s=0.5))
         # Only waited on: never ended.
         assert process.poll() is None
     finally:

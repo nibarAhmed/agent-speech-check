@@ -302,12 +302,12 @@ class Daemon:
     def _no_match(
         self, pattern: str, timeout_ms: int, after: int, windows: list[str] | None = None
     ) -> AscError:
-        """Nothing matched in time: say what NVDA said, or that it went away and stayed away."""
+        """Nothing matched in time: say what the screen reader said, or that it went away."""
         if not self.link.connected:
             return self.link.not_connected(timeout_ms, self.link.last_error)
         lines, dropped = _fit(self.speech.since(after))
         said = numbered_lines(lines, after, dropped)
-        return NoMatch(pattern, timeout_ms, said, windows)
+        return NoMatch(pattern, timeout_ms, said, windows, self.target.reader)
 
     async def _press(self, args: ipc.PressArgs) -> dict[str, Any]:
         pressed = await self.keyboard.press(

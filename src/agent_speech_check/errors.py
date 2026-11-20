@@ -216,6 +216,14 @@ class NeedsTerminal(UsageError):
         )
 
 
+class UninstallNeedsConfirmation(UsageError):
+    def __init__(self) -> None:
+        super().__init__(
+            "asc uninstall asks to confirm, so it needs a terminal",
+            hint="pass --yes to uninstall without prompts",
+        )
+
+
 class NotRunning(NotConnected):
     def __init__(self) -> None:
         super().__init__("asc is not running (not recording)", hint="asc start")
@@ -491,6 +499,14 @@ class WindowsOnlyCommand(UsageError):
         )
 
 
+class LinuxOnlyCommand(UsageError):
+    def __init__(self, command: str) -> None:
+        super().__init__(
+            f"asc {command} is for Linux installs",
+            hint="on Windows, uninstall Agent Speech Check in Settings > Apps",
+        )
+
+
 class RemoteNeedsMachine(UsageError):
     def __init__(self, missing: Sequence[str]) -> None:
         sets = ", then ".join(
@@ -656,20 +672,30 @@ class DaemonUnstoppable(Refused):
             message, them = f"cannot end the asc daemon (pid {listed})", "it"
         else:
             message, them = f"cannot end the asc daemons (pid {listed})", "them"
-        super().__init__(message, hint=f"end {them} in Task Manager, then try again")
+        how = "in Task Manager" if sys.platform == "win32" else "with kill"
+        super().__init__(message, hint=f"end {them} {how}, then try again")
 
 
 class AscStillRunning(Refused):
     def __init__(self, pids: Sequence[int]) -> None:
+        how = "in Task Manager" if sys.platform == "win32" else "with kill"
         super().__init__(
             f"asc is still running (pid {', '.join(str(pid) for pid in pids)})",
-            hint="close it, or end it in Task Manager, then try again",
+            hint=f"close it, or end it {how}, then try again",
         )
 
 
 class Updating(Refused):
     def __init__(self) -> None:
         super().__init__("asc is installing an update", hint="try again in a minute")
+
+
+class NotTarballInstall(Refused):
+    def __init__(self) -> None:
+        super().__init__(
+            "asc was not installed from a Linux release tarball",
+            hint="remove it with the tool that installed it",
+        )
 
 
 class NvdaAlreadyRunning(Refused):
@@ -695,12 +721,14 @@ class NoMatch(ExpectationFailed):
         timeout_ms: int,
         said: str,
         windows: Sequence[str] | None = None,
+        reader: Literal["nvda", "orca"] = "nvda",
     ) -> None:
-        """`said`: what NVDA said, from `numbered_lines`, so the agent has its
-        next --since. `windows`: titles of the windows that opened during a
+        """`said`: what the screen reader said, from `numbered_lines`, so the agent
+        has its next --since. `windows`: titles of the windows that opened during a
         launch, when known."""
         message = f"no speech matched {_show(pattern)} within {timeout_ms} ms. "
-        message += f"NVDA said:\n{said}"
+        name = "Orca" if reader == "orca" else "NVDA"
+        message += f"{name} said:\n{said}"
         if windows is not None:
             shown = ", ".join(_show(title) for title in windows) or "(none)"
             message += f"\nNew windows: {shown}"

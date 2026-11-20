@@ -7,7 +7,7 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -281,13 +281,16 @@ def stop(folder: Path, *, timeout_s: float = STOP_TIMEOUT_S) -> None:
 
 
 def stop_all(
-    roots: list[Path], image: Path | None, *, timeout_s: float = STOP_TIMEOUT_S
+    roots: list[Path],
+    images: Sequence[Path] = (),
+    *,
+    timeout_s: float = STOP_TIMEOUT_S,
 ) -> Iterator[Path]:
-    """Stop every daemon under `roots`, for `asc stop` and the installer, yielding
-    the folder of each one stopped.
+    """Stop every daemon under `roots`, for `asc stop` and uninstall/installers,
+    yielding the folder of each one stopped.
 
     Tries them all before raising for any it couldn't end. Then waits for the
-    other processes running `image`: a stopped daemon still runs for a moment
+    other processes running `images`: a stopped daemon still runs for a moment
     after its state file goes, and a sandbox guard outlives its daemon. It never
     ends them, as they may be a person's own asc commands.
     """
@@ -309,7 +312,5 @@ def stop_all(
         yield folder
     if stuck:
         raise DaemonUnstoppable(stuck)
-    if image is not None and not poll_until(
-        lambda: not processes.others_running(image), timeout_s, POLL_S
-    ):
-        raise AscStillRunning(processes.others_running(image))
+    if images and not poll_until(lambda: not processes.others_running(*images), timeout_s, POLL_S):
+        raise AscStillRunning(processes.others_running(*images))

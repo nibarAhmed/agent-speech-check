@@ -1,5 +1,6 @@
 import inspect
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +106,8 @@ def test_no_match_after_launch_says_which_windows_opened() -> None:
     said = errors.numbered_lines([], 3)
     plain = errors.NoMatch("x", 5, said)
     assert plain.message.endswith("NVDA said:\n(nothing said after 3)")
+    orca = errors.NoMatch("x", 5, said, reader="orca")
+    assert orca.message.endswith("Orca said:\n(nothing said after 3)")
     opened = errors.NoMatch("x", 5, said, windows=["asc field"])
     assert opened.message.endswith('(nothing said after 3)\nNew windows: "asc field"')
     assert errors.NoMatch("x", 5, said, windows=[]).message.endswith("\nNew windows: (none)")
@@ -134,3 +137,9 @@ def test_several_unstoppable_daemons_are_named_in_the_plural() -> None:
     error = errors.DaemonUnstoppable([111, 222])
     assert error.message == "cannot end the asc daemons (pid 111, 222)"
     assert error.hint == "end them in Task Manager, then try again"
+
+
+def test_unstoppable_and_running_errors_say_kill_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert errors.DaemonUnstoppable([111]).hint == "end it with kill, then try again"
+    assert errors.AscStillRunning([111]).hint == "close it, or end it with kill, then try again"

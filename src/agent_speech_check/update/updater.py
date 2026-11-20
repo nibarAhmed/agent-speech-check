@@ -164,10 +164,15 @@ def enabled() -> bool:
 
 
 def install_root(exe: Path) -> Path | None:
-    """The folder the Linux tarball was unpacked into, if `exe` is ROOT/versions/V/asc
-    and ROOT/current is the link that picks a version."""
+    """The folder the Linux tarball was unpacked into, if `exe` is ROOT/versions/V/asc,
+    ROOT is named `agent-speech-check`, and ROOT/current is the link that picks a version."""
     root = exe.parent.parent.parent
-    if exe.parent.parent.name != "versions" or not (root / "current").is_symlink():
+    if (
+        exe.parent.parent.name != "versions"
+        or root.name != LINUX_TOP
+        or root == root.parent
+        or not (root / "current").is_symlink()
+    ):
         return None
     return root
 
@@ -228,10 +233,12 @@ def _running() -> bool:
     return any(state.folders(root) for root in every_root())
 
 
-def _images(exe: Path) -> list[Path]:
+def installed_images(exe: Path) -> list[Path]:
     """The exes of this install that an asc may run from: on Linux, every version's."""
     root = install_root(exe) if sys.platform != "win32" else None
-    return [exe] if root is None else [path / "asc" for path in (root / "versions").iterdir()]
+    if root is None:
+        return [exe]
+    return [path / "asc" for path in (root / "versions").iterdir() if path.is_dir()]
 
 
 def start_if_due() -> None:
@@ -272,7 +279,7 @@ def run() -> None:
         if package is None:
             log.warning("the download's SHA-256 is not the one GitHub lists")
             return
-        images = _images(exe)
+        images = installed_images(exe)
         idle = poll_until(
             lambda: not (_running() or processes.others_running(*images)), IDLE_WAIT_S, 0.5
         )

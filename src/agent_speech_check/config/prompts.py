@@ -22,6 +22,7 @@ from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import launcher
 from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths
+from agent_speech_check.update import uninstall
 
 type Ask = Callable[[str], str]
 
@@ -251,3 +252,20 @@ def run_setup(ask: Ask, *, replace_without_asking: bool, platform: str = sys.pla
     edit.save(path, setup.to_data(answers))
     print(f"Settings saved: {os.path.realpath(path)}")
     return 0
+
+
+def confirm_uninstall(ask: Ask, planned: uninstall.Plan, *, keep_data: bool) -> bool | None:
+    """Confirm removing a Linux tarball install, and ask whether to keep state when needed."""
+    print("This removes asc:")
+    for link in planned.links:
+        print(f"  {link}")
+    print(f"  {planned.root}")
+    if not keep_data and planned.state_exists:
+        print(f"Settings and data: {planned.state}")
+        keep_data = _ask_yes(ask, "Keep your settings and data?", default=False)
+    elif planned.state_exists:
+        print(f"Keeping settings and data: {planned.state}")
+    if not _ask_yes(ask, "Uninstall asc?", default=False):
+        print("Nothing removed.")
+        return None
+    return keep_data
