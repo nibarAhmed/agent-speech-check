@@ -8,6 +8,6 @@
   <String Id="KeepDataDlgTitle" Value="{\WixUI_Font_Title}Keep your settings?" />
   <String Id="KeepDataDlgDescription" Value="Choose what happens to the data of [ProductName]." />
   <String Id="KeepDataDlgBody"
-          Value="Removing [ProductName] also deletes its data folder, %LOCALAPPDATA%\agent-speech-check. It holds your settings, the logs, the relay certificate that NVDA trusts, and the portable NVDA that asc get-nvda made. Keep it to find everything again when you reinstall." />
+          Value="Removing [ProductName] also deletes its data folder (%LOCALAPPDATA%\agent-speech-check), which holds your settings, logs, the relay certificate that NVDA trusts, and the portable NVDA created by asc get-nvda. Keep this folder if you plan to reinstall and want to preserve your setup." />
   <String Id="KeepDataDlgCheckBox" Value="&amp;Keep my settings and data" />
 </WixLocalization>

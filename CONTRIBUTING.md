@@ -8,12 +8,13 @@ Contributions come in under the project's MIT license. There's no CLA.
 2. Set it up as [Development](README.md#development) in the README explains.
 3. `uv run poe check` must pass before you open a pull request. While you work,
    `uv run poe fast` is the quicker loop.
-4. CI runs the end-to-end tests. For a change to how `asc` talks to NVDA or Orca, also run the
-   ones related to it, which AGENTS.md (Testing policy) lists: against a real NVDA with
-   `uv run python scripts/e2e_sandbox.py -k <tests>`, which needs Windows Sandbox (Windows 11 24H2
-   or later, Pro, Enterprise or Education), and against a real Orca with
-   `uv run python scripts/e2e_linux.py -k <tests>`, which needs Docker. If you can't run them,
-   say so in the pull request.
+4. CI runs the end-to-end tests. If your change affects how `asc` talks to NVDA or Orca, run the
+   matching local e2e tests listed in [AGENTS.md](AGENTS.md#testing-policy):
+   - Real NVDA (needs Windows Sandbox on Windows 11 24H2+ Pro, Enterprise, or Education):
+     `uv run python scripts/e2e_sandbox.py -k <tests>`
+   - Real Orca (needs Docker): `uv run python scripts/e2e_linux.py -k <tests>`
+
+   If you cannot run them locally, say so in the pull request.
 5. Build the installer only when you change `installer/` or debug CI's `installer` check, which
    builds, installs, upgrades and uninstalls the MSI.
 
@@ -57,15 +58,16 @@ so its assets keep their names: `agent-speech-check-VERSION.msi` and
 2. Once it's merged, tag that commit on `main` and push the tag:
    `git tag -a v1.2.3 -m "v1.2.3"`, then `git push origin v1.2.3`. The workflow refuses a tag
    that isn't `v` plus the version in `pyproject.toml`, or that isn't on `main`.
-3. Once the release is out, submit it to winget: download its three
-   `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
-   `wingetcreate submit FOLDER`. Store a GitHub token first with `wingetcreate token --store`,
-   which signs you in through the browser, so the token stays out of your shell history. That
-   opens a pull request on `microsoft/winget-pkgs`. Without wingetcreate, open that pull request
-   from your fork of it, adding the three files under
-   `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`. Your first one asks you to sign Microsoft's
-   CLA, by replying `@microsoft-github-policy-service agree` on it. CI's `installer` check
-   already installs, lists and uninstalls the MSI with winget from these manifests.
+3. Once the release is published, submit it to winget (CI's `installer` check already tests
+   installing, listing, and uninstalling the MSI from these manifests):
+   - **With `wingetcreate`:** First store a GitHub token with `wingetcreate token --store` (it
+     signs in through your browser, keeping the token out of shell history). Then download the
+     release's three `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
+     `wingetcreate submit FOLDER` to open a pull request on `microsoft/winget-pkgs`.
+   - **Without `wingetcreate`:** Open a pull request from your fork of `microsoft/winget-pkgs`
+     adding those three files under `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`.
+   - On your first pull request, sign Microsoft's CLA by commenting
+     `@microsoft-github-policy-service agree`.
 
 ## Issues
 

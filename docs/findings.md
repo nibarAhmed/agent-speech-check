@@ -59,15 +59,15 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
 - A visible sandbox window takes keyboard focus on the host: keys typed on the
   host (Alt+Tab) reached the sandbox and opened its task switcher in the middle
   of a test. The sandbox keeps working while minimised.
-- Hidden (`ShowWindow` with `SW_HIDE`, no taskbar button) works as well as
-  minimised.
-- But hidden straight from the foreground, the client kept every key and click
-  on the host until the sandbox closed. Minimising first, then hiding, avoids
-  it.
-- The client also keeps focus once its window is minimised or hidden (the host's
-  NVDA says "Windows Sandbox pane"). So `asc` notes the focused window before
-  `wsb connect` and gives focus back to it while an out-of-sight client window
-  has it.
+- Hiding the window (`ShowWindow` with `SW_HIDE`, removing the taskbar button)
+  works as well as minimising it.
+- However, hiding the window directly while it is in the foreground causes the
+  sandbox client to trap all host keyboard and mouse input until the sandbox
+  closes. Minimising first and then hiding avoids this.
+- Even after being minimised or hidden, the client retains focus (the host's
+  NVDA announces "Windows Sandbox pane"). `asc` saves the previously focused
+  window before `wsb connect` and restores focus to it whenever a hidden or
+  minimised sandbox window holds focus.
 - **An app started through `wsb exec` doesn't get the foreground**, because of
   Windows' focus-stealing rules: `mshta` ran, but focus stayed on "Program
   Manager" and NVDA said nothing. `asc launch` therefore starts the app through
@@ -85,31 +85,35 @@ These are the experiments behind code in `asc` that would otherwise look odd: wh
 
 ## Starting an app: the foreground lock
 
-After recent input, Windows' foreground lock keeps a program started from a
-background process (the daemon) behind the window in front. This is the normal
-state on a real desktop. Observed in Windows Sandbox with the lock on, using
-NVDA's IO log and a `SetWinEventHook` listener:
+After recent user input, Windows' foreground lock prevents a program started by
+a background process (the daemon) from coming in front of the active window.
+This is the normal state on a real desktop. Observed in Windows Sandbox with the
+lock active, using NVDA's IO log and a `SetWinEventHook` listener:
 
-- The app (`mshta`) asks for the foreground. Windows refuses but still fires
-  `EVENT_SYSTEM_FOREGROUND` for its window. NVDA finds Program Manager still in
-  front, logs "Foreground took too long to change" and drops the event.
+- The app (`mshta`) requests the foreground. Windows denies the request but
+  still fires `EVENT_SYSTEM_FOREGROUND` for its window. NVDA checks the
+  foreground, sees Program Manager still in front, logs "Foreground took too
+  long to change", and drops the event.
 - Forcing the window forward afterwards (`AttachThreadInput`, then
-  `SetForegroundWindow`) works, but Windows fires no second foreground event, so
-  NVDA never learns of it. Same with a stock NVDA config. A switch forced this
-  way fires no `EVENT_SYSTEM_FOREGROUND` at all, even to another window.
-- These didn't help: `WaitForInputIdle` before focusing; `SW_RESTORE`,
-  minimise and restore, or hide and show before focusing; starting with
-  `SW_SHOWNOACTIVATE` (`mshta` activates anyway); `SwitchToThisWindow` (refused
-  like the app's own attempt); `AllowSetForegroundWindow` from the daemon
-  (error 5 while the lock is on, even when attached to the foreground thread).
-- A real Alt+Tab after the refusal brought the window forward, but NVDA picked
-  it up only at the next key: NVDA+T still said "Program Manager" in 2 of 3
-  runs, and `--expect` heard nothing in 3 of 3. Not usable for recovery.
-- What works: `SendInput` of one all-zero mouse input (`INPUT` type 0, which
-  moves nothing; size 40 on x64, where 48 fails silently and returns 0), then
-  `AllowSetForegroundWindow(ASFW_ANY)`. The app then comes forward by itself
-  and NVDA says its title and focus. `mouse.nudge` does this before
-  `asc launch` when the mode may send input.
+  `SetForegroundWindow`) moves it visually to the front, but Windows fires no
+  second `EVENT_SYSTEM_FOREGROUND` event (even when switching to a different
+  window, and even with a stock NVDA config), so NVDA never learns of the focus
+  change.
+- None of these helped: `WaitForInputIdle` before focusing; `SW_RESTORE`,
+  minimise/restore, or hide/show before focusing; launching with
+  `SW_SHOWNOACTIVATE` (`mshta` activates anyway); `SwitchToThisWindow` (denied
+  just like the app's own attempt); or calling `AllowSetForegroundWindow` from
+  the daemon (fails with error 5 while the lock is active, even when attached
+  to the foreground thread).
+- Sending a real Alt+Tab after the refusal brought the window forward, but NVDA
+  only noticed it on the next key: NVDA+T still announced "Program Manager" in
+  2 of 3 runs, and `--expect` received nothing in 3 of 3 runs. Not reliable for
+  recovery.
+- What works: call `SendInput` with one all-zero mouse input (`INPUT` type 0,
+  which moves nothing; must be 40 bytes on x64, because 48 bytes fails silently
+  and returns 0), then call `AllowSetForegroundWindow(ASFW_ANY)`. The launched
+  app then takes foreground on its own and NVDA announces its title and focus.
+  `mouse.nudge` runs this before `asc launch` in modes allowed to send input.
 - To confirm the lock is on before trusting a run, check that
   `AllowSetForegroundWindow` fails with error 5.
 
@@ -156,10 +160,12 @@ is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same ki
 - **No speech server is needed.** Orca fails to connect to Speech Dispatcher, logs it, and
   carries on. It still sends everything it would say to the recorder that
   `SpeechPresenter.SetLogFileForTesting` starts.
-- **The recorder writes to a FIFO.** It opens the path for writing, one line per record, so a
-  named pipe works. The reader must open the pipe first, because Orca's open blocks until there
-  is a reader. A pipe nobody empties stalls Orca once about 64 KB wait in it, so the helper
-  reads it on a thread of its own. A reader killed with SIGKILL does no harm: Orca carries on.
+- **The recorder writes to a FIFO.** Orca opens the path for writing and writes
+  one JSON line per record, so a named pipe works. The reader must open the pipe
+  first, because Orca's open blocks until a reader is attached. If nobody drains
+  the pipe, Orca stalls once the ~64 KB pipe buffer fills, so the helper drains
+  it continuously on a dedicated thread. Killing the reader with SIGKILL does no
+  harm: Orca carries on.
 - **Orca's own key commands need a window manager.** With none, X input focus is `PointerRoot`
   (window 1). libatspi puts its key grabs on the focus window, so every grab fails with
   BadWindow (XInput opcode 131, minor 54), and Orca's debug log shows `Grab id for Insert: 0`.
@@ -168,9 +174,11 @@ is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same ki
   (`Grab id for Insert: 273`) and Insert+T speaks the time.
 - **Xvfb resets when its last client disconnects**, which drops any focus or keymap a client
   set, so it runs with `-noreset`.
-- **One Orca per user.** Orca refuses to start while another Orca runs as the same user
-  (`pgrep -u <uid> -x orca`), a zombie too: a container needs an init (`docker run --init`) to
-  reap an Orca it inherits. `orca --replace` ends the other one, so only the user runs it.
+- **One Orca per user.** Orca refuses to start if another `orca` process exists
+  for the same UID (`pgrep -u <uid> -x orca`), including zombie processes (so
+  containers need an init process like `docker run --init` to reap exited Orca
+  processes). Because `orca --replace` kills the existing Orca, `asc` never runs
+  it and leaves that to the user.
 - **The recording secret comes only from Orca's startup environment**
   (`ORCA_TEST_RPC_SECRET`). Orca zeroes its own `/proc/PID/environ`, so no one can read the
   secret off a running Orca. A wrong secret gets
