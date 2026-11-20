@@ -15,7 +15,7 @@ import json
 import sys
 from collections.abc import Sequence
 from os import PathLike
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 
 
 class AscError(Exception):
@@ -221,9 +221,11 @@ class NotRunning(NotConnected):
         super().__init__("asc is not running (not recording)", hint="asc start")
 
 
-class NvdaNotConnected(NotConnected):
-    what = "NVDA is not connected"
-    next_step = "asc status shows how NVDA should connect"
+class ReaderNotConnected(NotConnected):
+    """What each reader's link raises; its subclasses name the reader."""
+
+    what = "the screen reader is not connected"
+    next_step = "asc status says why"
 
     def __init__(self, waited_ms: int | None = None, last_error: str | None = None) -> None:
         waited = "" if waited_ms is None else f" after waiting {waited_ms} ms"
@@ -231,7 +233,12 @@ class NvdaNotConnected(NotConnected):
         super().__init__(f"{self.what}{waited}{why}", hint=self.next_step)
 
 
-class OrcaNotConnected(NvdaNotConnected):
+class NvdaNotConnected(ReaderNotConnected):
+    what = "NVDA is not connected"
+    next_step = "asc status shows how NVDA should connect"
+
+
+class OrcaNotConnected(ReaderNotConnected):
     what = "Orca is not running"
     next_step = "asc status says why; asc stop, then asc start"
 
@@ -292,7 +299,7 @@ class RemoteCommandFailed(SetupNeeded):
     def __init__(self, destination: str, program: str, detail: str) -> None:
         super().__init__(
             f"{program} on {destination} failed: {detail}",
-            hint=f"check that {program} runs there, as asc runs it over ssh",
+            hint=f"verify that {program} works over ssh on {destination}",
         )
 
 
@@ -314,7 +321,7 @@ class ProgramWontStart(SetupNeeded):
 class PortableFailed(SetupNeeded):
     def __init__(self, folder: str) -> None:
         super().__init__(
-            f"the NVDA installer made no portable copy in {folder}",
+            f"the NVDA installer did not create a portable copy in {folder}",
             hint="check the installer, or let asc get-nvda download it again",
         )
 
@@ -323,14 +330,14 @@ class PortableNotReplaced(SetupNeeded):
     def __init__(self, folder: str, reason: str) -> None:
         super().__init__(
             f"cannot replace the portable NVDA in {folder}: {reason}",
-            hint="close what has its files open, then asc get-nvda",
+            hint="close any program using files in that folder, then run asc get-nvda",
         )
 
 
 class InstallerInUse(SetupNeeded):
     def __init__(self, path: str, reason: str) -> None:
         super().__init__(
-            f"the kept NVDA installer {path} is damaged and cannot be replaced: {reason}",
+            f"the cached NVDA installer {path} is corrupted and cannot be replaced: {reason}",
             hint="asc stop, then try again",
         )
 
@@ -384,7 +391,7 @@ class RelayFileBroken(SetupNeeded):
     def __init__(self, detail: str) -> None:
         super().__init__(
             detail,
-            hint="delete it; asc makes a new one, and NVDA needs the new key once",
+            hint="delete the file so asc can recreate it, then reconnect NVDA with the new key",
         )
 
 
@@ -501,8 +508,8 @@ class OrcaSetupNeeded(SetupNeeded):
     def __init__(self, reason: str) -> None:
         super().__init__(
             f"Orca can't start: {reason}",
-            hint="install Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3"
-            " there",
+            hint="install Orca 51+, Xvfb, openbox, xdotool, dbus-daemon, gdbus, and python3"
+            " on that machine",
         )
 
 
@@ -525,7 +532,7 @@ class SshSetupNeeded(SetupNeeded):
     def __init__(self, destination: str, detail: str) -> None:
         super().__init__(
             f"ssh {destination} failed: {detail}",
-            hint=f"run ssh {destination} once by hand: asc needs a key, not a password",
+            hint=f"run 'ssh {destination}' manually once: asc needs key auth, not a password",
         )
 
 
@@ -557,10 +564,11 @@ class NvdaIniOnlyRemote(Refused):
         super().__init__(message, hint=hint)
 
 
-class NvdaDidNotConnect(NotConnected):
-    def __init__(self, seconds: float, log_tail: str, reader: str = "NVDA") -> None:
+class ReaderDidNotConnect(NotConnected):
+    def __init__(self, seconds: float, log_tail: str, reader: Literal["nvda", "orca"]) -> None:
         tail = f"; last daemon log lines:{chr(10)}{log_tail}" if log_tail else ""
-        super().__init__(f"{reader} did not connect within {seconds:g} s, so asc stopped{tail}")
+        name = "Orca" if reader == "orca" else "NVDA"
+        super().__init__(f"{name} did not connect within {seconds:g} s, so asc stopped{tail}")
 
 
 class SandboxBusy(Refused):

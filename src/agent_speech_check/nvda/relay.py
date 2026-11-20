@@ -24,6 +24,7 @@ import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -43,7 +44,7 @@ from agent_speech_check.errors import (
     RelayFileBroken,
     RelayKeyBroken,
 )
-from agent_speech_check.inputs.keys import Key
+from agent_speech_check.inputs.keys import Gesture, Key, text_gestures
 from agent_speech_check.nvda import protocol
 from agent_speech_check.system.paths import write_atomic
 from agent_speech_check.validate import Fields
@@ -155,6 +156,8 @@ class Relay:
     """
 
     not_connected = NvdaNotConnected
+    # NVDA connects to the relay, which has nothing to start that could fail.
+    failure: AscError | None = None
 
     def __init__(
         self,
@@ -327,7 +330,20 @@ class Relay:
                 self.disconnect()
             raise NvdaNotConnected from None
 
-    async def keepalive(self) -> None:
+    def gestures(self, text: str) -> tuple[Gesture, ...]:
+        """Windows needs the keyboard layout's key for each character."""
+        return text_gestures(text)
+
+    def status_fields(self) -> dict[str, Any]:
+        return {
+            "host": self.host,
+            "port": self.port,
+            "channel": self.credentials.channel,
+            "fingerprint": self.credentials.fingerprint,
+        }
+
+    async def run(self) -> None:
+        """Keep NVDA's connection alive."""
         while True:
             await asyncio.sleep(KEEPALIVE_S)
             writer = self._writer
@@ -343,3 +359,6 @@ class Relay:
         if writer is not None:
             self._lost()
             writer.close()
+
+    async def stop(self) -> None:
+        self.disconnect()

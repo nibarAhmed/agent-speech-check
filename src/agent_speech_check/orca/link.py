@@ -1,9 +1,8 @@
 """The link to Orca: `helper.py` on this Linux machine, or on one asc reaches over ssh.
 
-It does the relay's job for `Keyboard` and the daemon: `connected`, `losses`,
-`check`, key events and `on_join`. asc sends the helper's source over stdin
-(see `BOOTSTRAP`), so nothing is installed on the other machine. Its stderr
-stays in memory: it is shown in an error, never logged.
+It is Orca's `Link` (`inputs/keyboard.py`), as the relay is NVDA's. asc sends
+the helper's source over stdin (see `BOOTSTRAP`), so nothing is installed on the
+other machine. Its stderr stays in memory: it is shown in an error, never logged.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ from agent_speech_check.errors import (
     SshMissing,
     bad_field,
 )
-from agent_speech_check.inputs.keys import Key
+from agent_speech_check.inputs.keys import Gesture, Key, typed_gestures
 from agent_speech_check.orca import helper
 from agent_speech_check.system import paths, ssh
 from agent_speech_check.validate import Fields
@@ -54,73 +53,6 @@ MAX_LINE = 1_000_000
 # Past the helper's xdotool timeout, so its error arrives first.
 ACK_TIMEOUT_S = helper.XDOTOOL_TIMEOUT_S + 5
 STOP_TIMEOUT_S = 10.0
-
-KEYSYMS = {
-    "NVDA": "Insert",
-    "Control": "Control_L",
-    "Shift": "Shift_L",
-    "Alt": "Alt_L",
-    "Windows": "Super_L",
-    "Tab": "Tab",
-    "Enter": "Return",
-    "Escape": "Escape",
-    "Space": "space",
-    "Backspace": "BackSpace",
-    "Delete": "Delete",
-    "Insert": "Insert",
-    "Home": "Home",
-    "End": "End",
-    "PageUp": "Prior",
-    "PageDown": "Next",
-    "Up": "Up",
-    "Down": "Down",
-    "Left": "Left",
-    "Right": "Right",
-    "CapsLock": "Caps_Lock",
-    "NumLock": "Num_Lock",
-    "ScrollLock": "Scroll_Lock",
-    "PrintScreen": "Print",
-    "Pause": "Pause",
-    "Applications": "Menu",
-    # Num Lock off, as for NVDA: Orca's desktop layout reviews with these.
-    "Numpad0": "KP_Insert",
-    "Numpad1": "KP_End",
-    "Numpad2": "KP_Down",
-    "Numpad3": "KP_Next",
-    "Numpad4": "KP_Left",
-    "Numpad5": "KP_Begin",
-    "Numpad6": "KP_Right",
-    "Numpad7": "KP_Home",
-    "Numpad8": "KP_Up",
-    "Numpad9": "KP_Prior",
-    "NumpadDelete": "KP_Delete",
-    "NumpadEnter": "KP_Enter",
-    "NumpadPlus": "KP_Add",
-    "NumpadMinus": "KP_Subtract",
-    "NumpadMultiply": "KP_Multiply",
-    "NumpadDivide": "KP_Divide",
-    "Comma": "comma",
-    "Period": "period",
-    "Slash": "slash",
-    "Backslash": "backslash",
-    "Semicolon": "semicolon",
-    "Apostrophe": "apostrophe",
-    "LeftBracket": "bracketleft",
-    "RightBracket": "bracketright",
-    "Minus": "minus",
-    "Equals": "equal",
-    "Grave": "grave",
-}
-
-
-def keysym(key: Key) -> str:
-    """The X keysym xdotool presses. A typed character (`typed_gestures`) is its
-    Unicode keysym, which xdotool maps to a key even when the layout has none."""
-    if key.vk == 0:
-        return f"U{ord(key.name):04X}"
-    if key.name in KEYSYMS:
-        return KEYSYMS[key.name]
-    return key.name.lower() if len(key.name) == 1 else key.name
 
 
 def helper_command(destination: str | None) -> list[str]:
@@ -295,6 +227,13 @@ class OrcaLink:
         if new or not self.connected:
             raise OrcaNotConnected(last_error=self.last_error)
 
+    def gestures(self, text: str) -> tuple[Gesture, ...]:
+        """X names each character by its keysym."""
+        return typed_gestures(text)
+
+    def status_fields(self) -> dict[str, Any]:
+        return {}
+
     async def run(self) -> None:
         """Start the helper and follow it until it ends. Never raises: what went
         wrong goes to `failure` and `last_error`, and the daemon keeps running."""
@@ -424,11 +363,11 @@ class OrcaLink:
 
     def write_key(self, key: Key, *, pressed: bool) -> None:
         """Queue one key event without waiting. Only `keyboard.Keyboard` sends keys."""
-        self._write({"key": keysym(key), "down": pressed})
+        self._write({"key": key.keysym, "down": pressed})
 
     async def send_key(self, key: Key, *, pressed: bool) -> None:
         """Send one key event and wait until xdotool has pressed it."""
-        name = keysym(key)
+        name = key.keysym
         error = await self._ask({"key": name, "down": pressed})
         if error is not None:
             reason = f"xdotool could not press {name}: {error}"

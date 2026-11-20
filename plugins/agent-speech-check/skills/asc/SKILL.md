@@ -43,22 +43,25 @@ On Linux only desktop, watch and remote mode exist.
   panic key from `asc status` before you send any.
 - If the user names their own portable NVDA, set it for desktop or sandbox mode
   (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
-- Never set `launch` yourself. Desktop mode with `launch = false` starts no
-  NVDA (the user starts one): it has no panic key, yet its keys reach an NVDA
-  on this computer, maybe the user's own: send keys only if the user asked.
-- Remote mode (configured, or the user names a machine) runs only in a named
-  instance. It leaves the user's settings alone, so set it up without asking
-  to switch modes. Use your own instance, named after the machine, with
-  `--instance NAME` (or `ASC_INSTANCE=NAME`) on every command, `asc stop`
-  too. Never share one with another agent. Set it up yourself:
+- Never change `launch` yourself. In desktop mode with `launch = false`, `asc`
+  starts no NVDA (the user connects one manually), so there is no panic key even
+  though keys may reach the user's desktop. Send keys only if the user explicitly
+  asked.
+- Use remote mode when it is already configured or when the user asks to test on
+  another machine. Because remote mode runs in its own named instance, setting it
+  up does not touch the user's default settings, so you do not need to ask before
+  configuring it. Pick an instance name for the machine (never share one with
+  another agent) and pass `--instance NAME` (or set `ASC_INSTANCE=NAME`) on every
+  command, including `asc stop`:
   1. `asc config set mode remote --instance NAME`, then
      `asc config set ssh USER@HOST --mode remote --instance NAME` and
      `asc config set os windows --mode remote --instance NAME` (`linux` for Orca).
-  2. `asc start --instance NAME`. ssh never asks for a password: if it exits
-     7 about ssh, ask the user to run `ssh USER@HOST` once. Otherwise follow its
-     hint, then start again.
-  3. With NVDA, tell the user what `asc status --instance NAME` says, so the
-     machine's NVDA can connect through the tunnel.
+  2. `asc start --instance NAME`. Because `ssh` runs non-interactively (no
+     password prompts), if it exits 7 with an SSH error, ask the user to run
+     `ssh USER@HOST` once to confirm host trust and key login. For other errors,
+     follow the printed hint and retry.
+  3. With NVDA, tell the user what `asc status --instance NAME` prints so the
+     remote NVDA can connect through the tunnel.
 
 ## Workflow
 
@@ -71,8 +74,9 @@ asc speech --since 40             # everything after the mark
 asc stop                          # when done
 ```
 
-- For `--since`, pass this step's mark, or N from `(nothing said after N)`.
-  Numbers restart with each `asc start`.
+- For `--since`, pass this step's mark, the last line number printed by the
+  previous command, or N from `(nothing said after N)`. Line numbers reset on
+  each `asc start`.
 - If `asc start` says `asc` already runs, another session may own it: stop it
   only if it's the wrong mode.
 - If a press's speech appears only in the next command's output, raise
@@ -95,56 +99,59 @@ commands (Orca's desktop layout, the one asc's own Orca uses):
 `asc keys browse mode`; add `--layout laptop` for a laptop layout. In remote
 mode it reads the other machine's: pass the same `--instance`.
 
-- Before a key that acts (Enter, Space, `type`), confirm the target: reach it
-  with `--expect`, as in `asc press Tab --expect "(?i)send"`, and act only if
-  that exited 0; otherwise check where the focus is. A loop acts only after it
-  matched; if it runs out, stop and look.
-- After starting or switching apps, name the window in front.
-- A press that says `unknown` or `window unavailable`, or a screen reader
-  command doing the app's own thing, means the app lacks focus, not that keys
-  are slow: bring it to the front, then retry with `--expect`.
-- Silence after an action may be the finding: confirm the action happened
-  before blaming the key.
+- Before sending an activating key (Enter, Space, or `type`), confirm focus is
+  on the intended control using `--expect` (for example,
+  `asc press Tab --expect "(?i)send"`). Act only when that command exits 0; if
+  it fails or a navigation loop hits its limit without matching, stop and inspect
+  focus before pressing anything else.
+- After starting or switching apps, check the active window title.
+- If a press speaks `unknown` or `window unavailable`, or a screen reader
+  shortcut triggers an app action instead, the app does not have focus (it is
+  not a timing issue). Bring the app to the front, then retry with `--expect`.
+- Silence after an action may itself be an accessibility bug: verify the action
+  actually happened before blaming the key.
 - `asc status` shows `browse/focus`, the mode the screen reader last switched to.
 
 ## Watch and shared mode with NVDA
 
-`asc start` asks the user's running NVDA to connect and can take over a minute,
-so give the command a timeout of two minutes or more:
-when it prints `sent NVDA a link`, tell the user to answer Yes in NVDA
-(and to trust the certificate the first time). If it ends with
-`nvda: not connected`, the user didn't answer or NVDA couldn't be asked: have
-them connect in NVDA (Tools, Remote Access, Connect, allow this computer to be
-controlled, the host and key `asc status` prints), then check `asc status`.
-Until NVDA restarts it reconnects by itself, in watch and in shared mode: they
-use the same key. Watch mode records everything
-NVDA says, typed text included, so `asc stop` when you're done.
+- Give `asc start` a command timeout of at least 2 minutes: it waits up to 10 s
+  for NVDA to reconnect on its own and up to 60 s for the user to approve the
+  invite link.
+- When it prints `sent NVDA a link`, tell the user to answer Yes in NVDA (and
+  trust the certificate on the first connection).
+- If it finishes with `nvda: not connected`, ask the user to connect manually in
+  NVDA (Tools > Remote Access > Connect > Allow this computer to be controlled)
+  using the host and key from `asc status`, then re-check `asc status`.
+- Once connected, NVDA reconnects automatically across `watch` and `shared` mode
+  (they share the same key) until NVDA restarts.
+- Watch mode records everything NVDA says, including typed text, so run
+  `asc stop` as soon as you finish.
 
 ## Apps
 
-- A `launch` that times out but lists a title under `New windows:` started
-  anyway. In watch mode the user may need to switch to that window.
-- Sandbox mode: your own app must come from a folder in sandbox mode's `share`
-  (`asc config set share DIR --mode sandbox`), seen inside as `C:\share\<name>`.
-- Remote mode with NVDA: the machine's NVDA connects only after the user ticks
-  Enable Remote Access in its settings, then connects as `asc status` says. Or,
-  in a VM you set up yourself, save `asc status --nvda-ini` as UTF-8 `nvda.ini`
-  in its NVDA's config folder while NVDA is not running (Windows PowerShell
-  5.1's `>` writes UTF-16): it then connects at startup, nothing to answer.
-  Start the app on the VM yourself or ask the user, then `asc wait`.
+- If `asc launch` times out but lists a title under `New windows:`, the app
+  started in the background. In watch mode, ask the user to switch to it.
+- Sandbox mode: your own app must live inside a folder configured in sandbox
+  mode's `share` (`asc config set share DIR --mode sandbox`), mapped inside the
+  sandbox as `C:\share\<name>`.
+- Remote mode with NVDA: on the remote machine, the user must enable Remote
+  Access in NVDA settings and connect using the details from `asc status`. For a
+  VM you manage yourself, save `asc status --nvda-ini` as UTF-8 `nvda.ini` in
+  NVDA's config folder while NVDA is closed so it connects automatically at
+  startup (avoid `>` in Windows PowerShell 5.1, which writes UTF-16). Start the
+  app on the VM or ask the user to, then run `asc wait`.
 
 ## Orca
 
-- Desktop mode starts its own Orca on a hidden display, so its keys reach no
-  one's desktop. `asc launch CMD` starts the app on that display; there's no
-  other way to reach it.
-- It needs Orca 51 or later on that machine (`orca --version`), plus Xvfb,
-  openbox, xdotool, dbus-daemon, gdbus and python3. If `asc start` exits 7
-  naming one, ask the user to install or upgrade it: older Orca can't work.
-- To hear the user's own Orca, use watch mode. If `asc start --mode watch`
-  exits 7 with a restart line, ask the user to run it in their desktop
-  session (it restarts their Orca with asc's secret), then start again. Never
-  run it yourself: it replaces the Orca they rely on.
+- Desktop mode starts its own Orca on a hidden display, so its keys never reach
+  anyone's desktop. Use `asc launch CMD` to start an app on that display.
+- Requires Orca 51 or later (`orca --version`), plus Xvfb, openbox, xdotool,
+  dbus-daemon, gdbus, and python3. If `asc start` exits 7 naming a missing tool
+  or old Orca, ask the user to install or upgrade it.
+- To hear the user's own Orca, use watch mode. If `asc start --mode watch` exits
+  7 with a restart command, ask the user to run it in their desktop session (it
+  restarts their Orca with `asc`'s recording secret), then run `asc start` again.
+  Never run that command yourself: it restarts the screen reader they rely on.
 
 ## Exit codes
 

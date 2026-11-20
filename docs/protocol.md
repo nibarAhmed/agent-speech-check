@@ -86,28 +86,30 @@ NVDA plays `disconnected.wav` on `client_left`.
 
 ### Asking a running NVDA to connect (watch and shared mode)
 
-For the user's own NVDA, which `asc` neither starts nor configures. Observed
-with portable NVDA 2026.3.1 in Windows Sandbox (the link, the question, Yes,
-and the rejoin after a relay restart, about 5.5 s later); the rest is
-source-derived (NVDA 2026.2).
+This applies to the user's own NVDA, which `asc` neither starts nor configures.
+The link flow, confirmation dialog, Yes approval, and automatic reconnect (~5.5 s
+after a relay restart) were observed with portable NVDA 2026.3.1 in Windows
+Sandbox; the remaining details below are source-derived from NVDA 2026.2.
 
-- While it runs with Remote Access on, NVDA registers the `nvdaremote://` link
-  scheme for the current user: `HKCU\Software\Classes\nvdaremote`, with the
-  command `nvda_slave.exe handleRemoteURL %1`. Observed with an installed
-  2026.3.1. A portable NVDA removes the key again when it exits, an installed
-  one keeps it.
-- The link is `nvdaremote://<host>:<port>?key=<channel>&mode=slave`. Opening it
-  hands it to the running NVDA. If none runs, nothing happens.
-- NVDA then asks, in a Yes/No box titled "Remote Access Connection Request"
-  with No as the default: "Do you wish to allow this computer to be controlled
-  on server ... with key ...?". Only on Yes does it connect, as in the
-  [handshake](#handshake-follower-nvda-to-our-relay). `asc` never answers it.
-- A fingerprint already in `trustedCertificates` is honored, so the trust
-  dialog only comes the first time.
-- If a session is connected or connecting, NVDA shows "Already Connected"
-  instead. And a follower that lost its relay keeps trying it every 5 s for as
-  long as NVDA runs (a refused connection too). So `asc start` first waits
-  10 s for NVDA to come back by itself, and sends the link only if it doesn't.
+- While running with Remote Access enabled, NVDA registers the `nvdaremote://`
+  URI scheme for the current user (`HKCU\Software\Classes\nvdaremote`, running
+  `nvda_slave.exe handleRemoteURL %1`). Observed with installed NVDA 2026.3.1.
+  A portable NVDA removes this key when it exits; an installed NVDA keeps it.
+- Opening `nvdaremote://<host>:<port>?key=<channel>&mode=slave` forwards the
+  request to the running NVDA. If NVDA is not running, nothing happens.
+- NVDA opens a Yes/No dialog titled "Remote Access Connection Request" (with No
+  selected by default): "Do you wish to allow this computer to be controlled on
+  server ... with key ...?". NVDA connects only if the user answers Yes, then
+  runs the [handshake](#handshake-follower-nvda-to-our-relay). `asc` never
+  answers this prompt.
+- If the relay's certificate fingerprint is already in `trustedCertificates`,
+  NVDA trusts it silently, so the certificate prompt appears only on the first
+  connection.
+- If a Remote Access session is already connected or connecting, NVDA displays
+  "Already Connected" instead. Once a follower has connected, if the relay goes
+  away NVDA keeps retrying every 5 s (even on connection refused) until NVDA
+  exits. Because of this, `asc start` waits up to 10 s for NVDA to reconnect on
+  its own before sending a link.
 
 ## Messages from NVDA (follower to leader)
 

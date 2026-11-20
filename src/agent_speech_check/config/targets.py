@@ -25,7 +25,7 @@ import sys
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field, fields, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import tomlkit
 import tomlkit.exceptions
@@ -52,6 +52,8 @@ REMOTE_PORT = 26837
 # The modes Orca runs on this Linux machine. Remote mode runs it on another.
 ORCA_MODES = ("desktop", "watch")
 _PANIC = parse_hotkey(PANIC_KEY)
+
+type Reader = Literal["nvda", "orca"]
 
 
 @dataclass(frozen=True)
@@ -137,9 +139,9 @@ class Target:
         return self.mode == "sandbox"
 
     @property
-    def orca(self) -> bool:
-        """Orca reads, on this Linux machine or the remote one."""
-        return self.os == "linux"
+    def reader(self) -> Reader:
+        """Orca reads on Linux, this machine or the remote one; NVDA on Windows."""
+        return "orca" if self.os == "linux" else "nvda"
 
     @property
     def tunnel(self) -> bool:
@@ -153,7 +155,7 @@ class Target:
     @property
     def launches_reader(self) -> bool:
         """asc starts the screen reader, so `asc start` waits until it joins."""
-        return self.launches_nvda or self.orca
+        return self.launches_nvda or self.reader == "orca"
 
     @property
     def sandbox_window(self) -> str:
@@ -172,7 +174,7 @@ class Target:
 
 
 def _check_launch(target: Target, where: str, value: object) -> None:
-    if target.mode != "desktop" or target.orca:
+    if target.mode != "desktop" or target.reader == "orca":
         raise bad_field(UsageError, f"{where} launch", "only in desktop mode on Windows", value)
 
 
@@ -185,7 +187,7 @@ def _checked(target: Target, where: str) -> Target:
         prefs.BY_NAME["ssh"].check(target.ssh, where)
     if target.os is not None:
         prefs.BY_NAME["os"].check(target.os, where)
-    if target.orca and target.port != 0:
+    if target.reader == "orca" and target.port != 0:
         raise bad_field(UsageError, f"{where} port", "only where NVDA connects", target.port)
     if target.nvda_dir is not None and not target.launches_nvda:
         raise bad_field(
@@ -215,7 +217,7 @@ def check_runnable(target: Target) -> None:
         missing = [name for name in ("ssh", "os") if getattr(target, name) is None]
         if missing:
             raise RemoteNeedsMachine(missing)
-    elif target.orca and target.mode not in ORCA_MODES:
+    elif target.reader == "orca" and target.mode not in ORCA_MODES:
         raise WindowsOnlyMode(target.mode)
 
 

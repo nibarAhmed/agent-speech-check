@@ -35,10 +35,10 @@ def test_mode_defaults() -> None:
 def test_desktop_mode_on_linux_starts_orca() -> None:
     desktop = defaults("desktop", platform="linux")
     assert desktop == Target("desktop", 0, launch=False, os="linux")
-    assert (desktop.orca, desktop.launches_reader, desktop.launches_nvda) == (True, True, False)
+    assert (desktop.reader, desktop.launches_reader, desktop.launches_nvda) == ("orca", True, False)
     # Watch mode on Linux joins the user's own Orca, which nothing connects to.
     assert defaults("watch", platform="linux") == Target("watch", 0, launch=False, os="linux")
-    assert not defaults("desktop").orca
+    assert defaults("desktop").reader == "nvda"
     assert Target.from_json(desktop.to_json()) == desktop
 
 
@@ -158,7 +158,7 @@ def test_remote_from_file_and_json(tmp_path: Path) -> None:
     target = resolve(write(tmp_path, text), "remote")
     assert (target.os, target.ssh, target.port) == ("windows", "me@vm.local", 26837)
     assert target.tunnel
-    assert not target.orca
+    assert target.reader == "nvda"
     assert not target.launches_reader
     assert Target.from_json(target.to_json()) == target
     # The daemon checks the destination too, since its target is an edge.
@@ -166,7 +166,12 @@ def test_remote_from_file_and_json(tmp_path: Path) -> None:
         Target.from_json(replace(target, ssh="-oProxyCommand=x").to_json())
     linux = resolve(write(tmp_path, "[remote]\nos = 'linux'\nssh = 'me@vm'\n"), "remote")
     # Orca over ssh: no port, no tunnel, and asc waits for the Orca it starts.
-    assert (linux.port, linux.tunnel, linux.orca, linux.launches_reader) == (0, False, True, True)
+    assert (linux.port, linux.tunnel, linux.reader, linux.launches_reader) == (
+        0,
+        False,
+        "orca",
+        True,
+    )
     assert Target.from_json(linux.to_json()) == linux
 
 

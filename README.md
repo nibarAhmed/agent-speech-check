@@ -15,7 +15,7 @@ asc press Shift+Tab --expect "expected accessible name"
 asc stop
 ```
 
-`asc get-nvda` downloads the portable NVDA that desktop mode runs, once. Each `asc press` prints what NVDA said, and `--expect` makes it fail when that text is missing. `asc speech --since 0` shows everything NVDA has said so far. Run `asc setup` to pick a default mode.
+`asc get-nvda` downloads a portable copy of NVDA for desktop mode (only needed once). Each `asc press` prints what NVDA said, and `--expect` fails the command if the output does not match. `asc speech --since 0` shows everything NVDA has said so far. Run `asc setup` to choose a default mode.
 
 ## Requirements
 
@@ -27,11 +27,11 @@ asc stop
 
 | Mode | When to use it |
 |---|---|
-| `sandbox` | You want NVDA kept away from your desktop. It runs inside Windows Sandbox, and your own NVDA keeps running. |
-| `desktop` | You want the simplest setup, or you're in CI. `asc` starts its own portable NVDA, and its keys land on your desktop. It won't start while another NVDA is running. On Linux it starts its own Orca on a hidden display instead, which needs Orca 51 or later, Xvfb, openbox, xdotool, dbus-daemon, gdbus and python3. |
-| `watch` | You want to hear the NVDA you already run. `asc` only listens and never presses keys. When it connects, NVDA asks you to allow it: answer Yes. On Linux it listens to your own Orca, which you restart once with the line `asc start` gives you. |
-| `shared` | You want `asc` to press keys in the NVDA you already run, in your real session. You have to pass `--i-understand`. |
-| `remote` | The screen reader runs on a machine you manage, like a VM, that `asc` reaches over ssh. With `os = "windows"` you start NVDA there and it connects to `asc` through an ssh tunnel; with `os = "linux"` `asc` starts Orca there. One instance per machine: `asc setup --instance NAME`, or `asc config set` with `--instance NAME`. |
+| `sandbox` | You want NVDA isolated from your desktop. It runs inside Windows Sandbox while your own NVDA keeps running undisturbed. |
+| `desktop` | You want the simplest setup, or you are running in CI. On Windows, `asc` starts its own portable NVDA and sends keys to your desktop (it refuses to start if another NVDA is already running). On Linux, `asc` starts its own Orca on a hidden virtual display (requires Orca 51+, Xvfb, openbox, xdotool, dbus-daemon, gdbus, and python3). |
+| `watch` | You want to record speech from your own running screen reader without letting `asc` press keys. On Windows, NVDA prompts you to allow the connection (answer Yes). On Linux, restart your Orca once with the command `asc start` prints. |
+| `shared` | You want `asc` to press keys in the NVDA you already run, inside your real Windows session. Requires `--i-understand` on every `asc start`. |
+| `remote` | The screen reader runs on another machine (such as a VM) reached over ssh. With `os = "windows"`, you start NVDA on that machine and it connects back through an ssh tunnel; with `os = "linux"`, `asc` starts Orca there. Uses one named instance per machine (`asc setup --instance NAME` or `asc config set ... --instance NAME`). |
 
 The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#modes) has the details on each mode.
 
@@ -39,7 +39,7 @@ The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/d
 
 On Windows, run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. To uninstall, use Settings > Apps.
 
-On Linux (64-bit x86 or Arm, glibc 2.28 or later), `asc` needs **Orca 51 or later**: check with `orca --version`. Older Orca, like the 50 in Ubuntu 26.04 LTS, lacks the D-Bus service `asc` records speech through, so `asc start` refuses it. Unpack the release into `~/.local/share` and link `asc` into `~/.local/bin`, which most distros put on `PATH`. The same lines also reinstall it:
+On Linux (64-bit x86 or Arm, glibc 2.28 or later), `asc` requires **Orca 51 or later** (check with `orca --version`). Older releases, such as Orca 50 in Ubuntu 26.04 LTS, lack the D-Bus service `asc` uses to record speech, so `asc start` refuses them. Unpack the release into `~/.local/share` and symlink `asc` into `~/.local/bin` (which most distros include on `PATH`). Running the same commands again reinstalls `asc`:
 
 ```shell
 mkdir -p ~/.local/share ~/.local/bin
@@ -47,9 +47,9 @@ curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/down
 ln -sf ~/.local/share/agent-speech-check/current/asc ~/.local/bin/asc
 ```
 
-To uninstall, run `asc stop --all`, then delete `~/.local/share/agent-speech-check`, `~/.local/bin/asc` and, with your settings and data, `~/.local/state/agent-speech-check`. If you used watch mode, restart Orca or log out, so it drops `asc`'s secret.
+To uninstall on Linux, run `asc stop --all`, then delete `~/.local/share/agent-speech-check` and `~/.local/bin/asc`. Delete `~/.local/state/agent-speech-check` as well if you want to remove your settings and data. If you used watch mode, restart Orca or log out so Orca drops `asc`'s recording secret.
 
-Either way, `asc` [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates).
+On both platforms, `asc` [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates).
 
 ## AI agent skill
 
@@ -86,7 +86,7 @@ See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main
 
 Speech can include passwords and private messages, and `asc` can press keys. [SECURITY.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/SECURITY.md) lists what it promises and how to report a problem privately.
 
-- `shared` mode, and `desktop` mode when its NVDA runs on your computer, send keys to your real session. There `Control+Shift+Alt+F12` (the `panic_key` setting) releases held keys and stops `asc` at once.
+- In `shared` mode and Windows `desktop` mode (when `asc` launches NVDA), keys go to your real desktop. Press `Control+Shift+Alt+F12` (configurable via `panic_key`) to release held keys and stop `asc` immediately.
 - Each mode's folder holds its relay certificate and channel key: keep it private.
 - Speech is never written to a log, but command output can contain it: treat it as sensitive.
 

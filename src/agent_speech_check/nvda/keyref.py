@@ -1,4 +1,4 @@
-"""`asc keys`: search NVDA's own Commands Quick Reference (`keyCommands.html`).
+"""`asc keys`: read NVDA's own Commands Quick Reference (`keyCommands.html`).
 
 The reference ships with every NVDA in `documentation\\<lang>\\`, so the keys
 always match the NVDA in use. Tables are read by their header names (Name,
@@ -10,42 +10,17 @@ from __future__ import annotations
 
 import re
 import sys
-from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
 from agent_speech_check.errors import NvdaNotFound, RemoteCommandFailed
+from agent_speech_check.inputs.keyref import Command
 from agent_speech_check.system import powershell, processes, ssh
 
 _HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
 # Single letter navigation is a list, not a table: "h: heading".
 _LIST_ITEM = re.compile(r"([^:]{1,30}):\s+(.+)")
 _UNINSTALL = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NVDA"
-
-
-BRAILLE_DISPLAYS = "SupportedBrailleDisplays"
-
-
-@dataclass(frozen=True)
-class Command:
-    part: str  # the id of the <h2> it sits under, the same in every language
-    section: str
-    name: str
-    desktop: str
-    laptop: str
-    description: str
-
-    def key(self, layout: str) -> str:
-        return self.laptop if layout == "laptop" else self.desktop
-
-    def line(self, layout: str) -> str:
-        described = f": {self.description}" if self.description else ""
-        return f"{self.key(layout)}  {self.name}{described}"
-
-    def matches(self, words: list[str]) -> bool:
-        text = " ".join((self.section, self.name, self.desktop, self.laptop, self.description))
-        lowered = text.lower()
-        return all(word.lower() in lowered for word in words)
 
 
 class _Parser(HTMLParser):
@@ -135,19 +110,6 @@ def parse(html: str) -> list[Command]:
     parser.feed(html)
     parser.close()
     return parser.commands
-
-
-def search(
-    commands: list[Command], words: list[str], layout: str, *, braille: bool = False
-) -> list[Command]:
-    """Commands matching every word, with a key in `layout`."""
-    return [
-        c
-        for c in commands
-        if c.matches(words)
-        and c.key(layout).lower() != "none"
-        and (braille or c.part != BRAILLE_DISPLAYS)
-    ]
 
 
 # ---------------------------------------------------------------- finding NVDA

@@ -39,6 +39,7 @@ body:
         - desktop
         - sandbox
         - shared
+        - remote
         - not sure, or asc wasn't started
     validations:
       required: true
@@ -53,14 +54,14 @@ body:
   - type: input
     id: nvda-version
     attributes:
-      label: NVDA version
-      placeholder: "2026.2"
+      label: Screen reader version (NVDA or Orca)
+      placeholder: "NVDA 2026.2 or Orca 51.1"
   - type: input
     id: windows-version
     attributes:
-      label: Windows version and edition
-      description: Run `winver`.
-      placeholder: Windows 11 Pro 24H2
+      label: OS version
+      description: On Windows, run `winver`. On Linux, include your distro and release.
+      placeholder: Windows 11 Pro 24H2 / Ubuntu 26.10
     validations:
       required: true
   - type: dropdown
@@ -68,6 +69,7 @@ body:
     attributes:
       label: Installed from
       options:
-        - MSI installer
+        - MSI installer (Windows)
+        - Release tarball (Linux)
         - GitHub (uv tool install git+https://github.com/nibarAhmed/agent-speech-check)
         - a clone, with uv run
