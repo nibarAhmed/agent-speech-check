@@ -1,8 +1,8 @@
 # Agent Speech Check (`asc`)
 
-**Let AI agents test your app with a real NVDA screen reader.**
+**Let AI agents test your app with a real screen reader (NVDA on Windows, Orca on Linux).**
 
-`asc` connects to NVDA, presses keys, and gives you what NVDA said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows. On Linux it does the same with Orca.
+`asc` connects to NVDA on Windows or Orca on Linux, presses keys, and gives you what the screen reader said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows or Linux.
 
 ## Example
 
@@ -15,7 +15,7 @@ asc press Shift+Tab --expect "expected accessible name"
 asc stop
 ```
 
-`asc get-nvda` downloads a portable copy of NVDA for desktop mode (only needed once). Each `asc press` prints what NVDA said, and `--expect` fails the command if the output does not match. `asc speech --since 0` shows everything NVDA has said so far. Run `asc setup` to choose a default mode.
+`asc get-nvda` downloads a portable copy of NVDA for Windows desktop mode (only needed once; on Linux, `asc start` launches Orca on a hidden display by default). Each `asc press` prints what the screen reader said, and `--expect` fails the command if the output does not match. `asc speech --since 0` shows everything said so far. Run `asc setup` to choose a default mode.
 
 ## Requirements
 
@@ -47,13 +47,13 @@ curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/down
 ln -sf ~/.local/share/agent-speech-check/current/asc ~/.local/bin/asc
 ```
 
-To uninstall on Linux, run `asc stop --all`, then delete `~/.local/share/agent-speech-check` and `~/.local/bin/asc`. Delete `~/.local/state/agent-speech-check` as well if you want to remove your settings and data. If you used watch mode, restart Orca or log out so Orca drops `asc`'s recording secret.
+To uninstall on Linux, run `asc uninstall` (pass `--keep-data` to keep your settings and data, or `--yes` to skip prompts). If you used watch mode, restart Orca or log out so Orca drops `asc`'s recording secret.
 
 On both platforms, `asc` [keeps itself up to date](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#updates).
 
 ## AI agent skill
 
-The [`asc` skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md) teaches Claude Code and Codex how to use `asc`: which mode fits the task, how to press keys safely, and how to check what NVDA said. Install it once and it works in all your projects:
+The [`asc` skill](https://github.com/nibarAhmed/agent-speech-check/blob/main/plugins/agent-speech-check/skills/asc/SKILL.md) teaches Claude Code and Codex how to use `asc`: which mode fits the task, how to press keys safely, and how to check what the screen reader said. Install it once and it works in all your projects:
 
 ```shell
 # Claude Code

@@ -24,9 +24,9 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
   this [instance](#instances), regardless of its mode.
 - `MS` values are in milliseconds. Command-line flags override the
   corresponding settings in `config.toml` (see [Command defaults](#command-defaults)).
-- Commands that need NVDA exit 3 if it isn't connected or drops meanwhile, and
-  5 if its connection broke the protocol. Commands that send keys (`press`,
-  `type`) refuse with exit 4 in watch mode.
+- Commands that need the screen reader exit 3 if it isn't connected or drops
+  meanwhile, and 5 if its connection broke the protocol. Commands that send keys
+  (`press`, `type`) refuse with exit 4 in watch mode.
 - Set `ASC_DEBUG=1` to print the traceback for an internal error (exit 6).
 
 ## Commands
@@ -35,18 +35,19 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 |---|---|---|
 | Recording | [`start`](#asc-start) | start recording in a mode |
 | | [`stop`](#asc-stop) | stop recording and forget the speech |
-| | [`status`](#asc-status) | show whether `asc` is recording and NVDA is connected |
-| Speech | [`speech`](#asc-speech) | print what NVDA said after a line |
-| | [`wait`](#asc-wait) | wait until NVDA says something matching `REGEX` |
+| | [`status`](#asc-status) | show whether `asc` is recording and the screen reader is connected |
+| Speech | [`speech`](#asc-speech) | print what the screen reader said after a line |
+| | [`wait`](#asc-wait) | wait until the screen reader says something matching `REGEX` |
 | | [`mark`](#asc-mark) | print the latest line number |
-| Input | [`press`](#asc-press) | press keys and print what NVDA said |
-| | [`type`](#asc-type) | type text and print what NVDA said |
+| Input | [`press`](#asc-press) | press keys and print what the screen reader said |
+| | [`type`](#asc-type) | type text and print what the screen reader said |
 | | [`keys`](#asc-keys) | look up screen reader commands in its own reference |
-| | [`launch`](#asc-launch) | start an app and wait until NVDA speaks |
+| | [`launch`](#asc-launch) | start an app and wait until the screen reader speaks |
 | Setup | [`get-nvda`](#asc-get-nvda) | make the portable NVDA that desktop mode launches |
 | | [`setup`](#asc-setup) | choose your settings, by answering questions |
 | | [`config`](#asc-config) | show or change one setting |
 | | [`firewall-setup`](#asc-firewall-setup) | allow NVDA in Windows Sandbox to reach `asc` (asks for admin once) |
+| | [`uninstall`](#asc-uninstall) | remove a Linux release install of asc |
 
 ## Exit codes
 
@@ -86,11 +87,13 @@ silent uninstall preserves it only when passed `KEEPDATA=1`
 `asc firewall-setup` is not removed on uninstall; remove it manually as
 [that command](#asc-firewall-setup) describes.
 
-On Linux there is no uninstaller: run `asc stop --all`, then delete
-`~/.local/share/agent-speech-check` and `~/.local/bin/asc`. Delete
-`~/.local/state/agent-speech-check` as well if you want to remove your settings
-and data. If you used watch mode, restart Orca or log out so Orca drops `asc`'s
-recording secret.
+On Linux, `asc uninstall` removes a tarball install: it stops every instance
+and background update check, removes `~/.local/share/agent-speech-check` and
+the `asc` symlink pointing to it, and asks whether to keep
+`~/.local/state/agent-speech-check` (pass `--keep-data` to keep your settings
+and data without asking, or `--yes` to remove everything without prompts). If
+you used watch mode, restart Orca or log out so Orca drops `asc`'s recording
+secret.
 
 ## Updates
 
@@ -570,8 +573,8 @@ speech: 12 lines kept, latest 12
 asc speech --since N
 ```
 
-Prints what NVDA said after line `N`, one numbered line per utterance, and
-mode changes:
+Prints what the screen reader said after line `N`, one numbered line per
+utterance, and mode changes:
 
 ```
 11 said: "Recycle Bin list item focused 1 of 2"
@@ -604,13 +607,13 @@ can't match the same line.
 | `--timeout MS` | `timeout_ms`, 5000 | how long to wait, at most 600000 |
 | `--since N` | (required) | look at lines after line `N`: this step's mark, or old speech can match |
 
-- On timeout it exits 1 and prints what NVDA did say, numbered like `speech`,
-  so its last number is still the next `--since`.
+- On timeout it exits 1 and prints what the screen reader did say, numbered like
+  `speech`, so its last number is still the next `--since`.
 - An `N` after the latest line exits 2, as in `speech`.
-- If NVDA disconnects during `wait`, `wait` keeps waiting because NVDA
-  reconnects on its own. If NVDA is still disconnected when the timeout expires,
-  `wait` exits 3 instead of 1 (including the last connection error, if any).
-  Unauthenticated connections that close before joining the channel do not
+- If the screen reader disconnects during `wait`, `wait` keeps waiting because
+  NVDA reconnects on its own. If it is still disconnected when the timeout
+  expires, `wait` exits 3 instead of 1 (including the last connection error, if
+  any). Unauthenticated connections that close before joining the channel do not
   interrupt `wait`.
 
 ```shell
@@ -635,8 +638,8 @@ asc wait --since 40 "Saved"   # 43 said: "File saved"
 asc wait --since 43 "Done"    # waits for speech after line 43
 ```
 
-`press`, `type` and `launch` take no `--since`: they print only what NVDA said
-while they ran, numbered the same way. Their last number, or `N` in
+`press`, `type` and `launch` take no `--since`: they print only what the screen
+reader said while they ran, numbered the same way. Their last number, or `N` in
 `(nothing said after N)`, is the next `--since`:
 
 ```shell
@@ -758,22 +761,22 @@ asc keys --layout laptop current line
 asc launch [--title REGEX] [--timeout MS] CMD
 ```
 
-Starts `CMD` and waits until NVDA says something matching `--title`, or
-anything at all if `--title` is left out, then for quiet. Prints what NVDA
-said, numbered like `press`. Remote mode with NVDA exits 4: start the app on
-that machine and use `asc wait`.
+Starts `CMD` and waits until the screen reader says something matching `--title`,
+or anything at all if `--title` is left out, then for quiet. Prints what the
+screen reader said, numbered like `press`. Remote mode with NVDA exits 4: start
+the app on that machine and use `asc wait`.
 
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `CMD` | (required) | the command to start |
-| `--title REGEX` | anything | wait until NVDA says this |
+| `--title REGEX` | anything | wait until the screen reader says this |
 | `--timeout MS` | `launch_timeout_ms`, 30000 | how long to wait, at most 600000 |
 
 - On timeout it exits 1 with what was said, numbered. In local Windows modes
   (not sandbox or Orca), the error ends with `New windows:` listing any windows
   that opened during the wait (or `(none)`).
-- A command that can't start exits 2. NVDA disconnecting meanwhile is handled
-  as in `wait`.
+- A command that can't start exits 2. The screen reader disconnecting meanwhile
+  is handled as in `wait`.
 - In sandbox mode `CMD` runs inside the sandbox,
   which has no Edge and no Notepad. Your own app must come from a path under
   `C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
@@ -928,4 +931,35 @@ the relay itself listens only on its address.
 
 ```shell
 asc firewall-setup --mode sandbox
+```
+
+### `asc uninstall`
+
+```
+asc uninstall [--keep-data] [--yes]
+```
+
+Removes an `asc` installation unpacked from a Linux release tarball (the files
+under `~/.local/share/agent-speech-check` and any `asc` symlink pointing into
+it). First cancels any background [update](#updates) check and stops every
+running instance's daemon.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--keep-data` | off | keep settings and data in `~/.local/state/agent-speech-check` |
+| `--yes` | off | uninstall without asking (deletes settings and data unless `--keep-data` is also passed) |
+
+- Without `--yes`, it asks whether to keep your settings and data (unless
+  `--keep-data` is given) and then asks to confirm uninstalling. Without a
+  terminal, it exits 2 without changing anything.
+- On Windows it exits 2 with a hint to use Settings > Apps.
+- Non-release installs on Linux (such as `uv tool` or running from a git clone)
+  exit 4 without changing anything.
+- If you used watch mode, restart Orca or log out so Orca drops `asc`'s
+  recording secret.
+
+```shell
+asc uninstall
+asc uninstall --keep-data
+asc uninstall --yes
 ```

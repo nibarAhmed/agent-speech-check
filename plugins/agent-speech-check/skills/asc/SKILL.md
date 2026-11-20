@@ -36,6 +36,7 @@ On Linux only desktop, watch and remote mode exist.
 - Never run `asc setup`: it asks questions and replaces all the user's settings.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
+- Never run `asc uninstall` unless the user explicitly asks to uninstall `asc`.
 - `asc firewall-setup` (sandbox mode) shows an admin prompt and adds a Windows Firewall rule.
   Ask the user first, unless they already said to go ahead, then run it
   yourself; they approve the prompt.

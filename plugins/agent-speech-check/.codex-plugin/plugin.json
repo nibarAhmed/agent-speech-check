@@ -6,6 +6,6 @@
   "homepage": "https://github.com/nibarAhmed/agent-speech-check",
   "repository": "https://github.com/nibarAhmed/agent-speech-check",
   "license": "MIT",
-  "keywords": ["accessibility", "nvda", "screen-reader", "testing"],
+  "keywords": ["accessibility", "nvda", "orca", "linux", "screen-reader", "testing"],
   "skills": "./skills/"
 }

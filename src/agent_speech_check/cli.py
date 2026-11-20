@@ -28,11 +28,13 @@ from agent_speech_check.errors import (
     BadArguments,
     BadSetting,
     InternalError,
+    LinuxOnlyCommand,
     NeedsTerminal,
     NoCommand,
     NoFirewallNeeded,
     NotRunning,
     NvdaIniOnlyRemote,
+    UninstallNeedsConfirmation,
     UnrecognizedArguments,
     Updating,
     UsageError,
@@ -48,7 +50,7 @@ from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths
 from agent_speech_check.system.paths import config_file, mode_dir, state_root
 from agent_speech_check.system.wait import poll_until
-from agent_speech_check.update import updater
+from agent_speech_check.update import uninstall, updater
 
 DESCRIPTION = """\
 Agent Speech Check: use a screen reader (NVDA, or Orca on Linux) the way a
@@ -85,6 +87,7 @@ class Command:
     # True for a command that works on one mode's settings.
     takes_mode: bool = False
     windows_only: bool = False
+    linux_only: bool = False
 
 
 def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
@@ -188,7 +191,7 @@ def _keys_args(parser: argparse.ArgumentParser) -> None:
 
 def _launch_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("app", metavar="CMD")
-    parser.add_argument("--title", metavar="REGEX", help="wait until NVDA says this")
+    parser.add_argument("--title", metavar="REGEX", help="wait until the screen reader says this")
     _timeout(parser, "launch_timeout_ms")
 
 
@@ -203,6 +206,19 @@ def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
 
 def _setup_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--yes", action="store_true", help="replace settings without asking")
+
+
+def _uninstall_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--keep-data",
+        action="store_true",
+        help="keep settings and data in ~/.local/state/agent-speech-check",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="uninstall without asking (deletes settings and data unless --keep-data)",
+    )
 
 
 CONFIG_HELP = {
@@ -395,10 +411,10 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
-def _stop_every(roots: list[Path], image: Path | None) -> int:
+def _stop_every(roots: list[Path], images: Sequence[Path] = ()) -> int:
     """Stop every daemon under `roots`, print each one stopped, and return how many."""
     stopped = 0
-    for folder in session.stop_all(roots, image):
+    for folder in session.stop_all(roots, images):
         where = folder.relative_to(paths.base_root()).as_posix()
         print(f"stopped: {where}")
         stopped += 1
@@ -412,7 +428,7 @@ def cmd_stop(args: argparse.Namespace) -> int:
     if args.all:
         # Before asc is deleted: no update check may run, or start.
         updater.stop_check()
-    stopped = _stop_every(roots, None)
+    stopped = _stop_every(roots)
     if not (found or stopped):
         raise NotRunning
     if not args.all:
@@ -595,6 +611,31 @@ def cmd_setup(args: argparse.Namespace) -> int:
     except (KeyboardInterrupt, EOFError):
         print("\nStopped, nothing saved.")
         return EXIT_INTERRUPTED
+
+
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    planned = uninstall.plan()
+    keep_data = args.keep_data
+    if not args.yes:
+        if not sys.stdin.isatty():
+            raise UninstallNeedsConfirmation
+        try:
+            chosen = prompts.confirm_uninstall(input, planned, keep_data=keep_data)
+        except (KeyboardInterrupt, EOFError):
+            print("\nNothing removed.")
+            return EXIT_INTERRUPTED
+        if chosen is None:
+            return 0
+        keep_data = chosen
+    updater.stop_check()
+    _stop_every(paths.every_root(), updater.installed_images(planned.exe))
+    for path in uninstall.remove_files(planned, keep_data=keep_data):
+        print(f"removed: {path}")
+    if keep_data and planned.state_exists:
+        print(f"kept: {planned.state}")
+    if planned.has_orca_secret:
+        print("Note: restart Orca or log out so Orca drops asc's recording secret.")
+    return 0
 
 
 COMMANDS: dict[str, Command] = {
@@ -813,6 +854,25 @@ examples:
         takes_mode=True,
         windows_only=True,
     ),
+    "uninstall": Command(
+        "remove a Linux release install of asc",
+        """Remove an asc installation unpacked from a Linux release tarball (the files
+under ~/.local/share/agent-speech-check and the asc symlink pointing into it).
+Stops every running daemon and background update check first.
+
+Asks whether to keep settings and data in ~/.local/state/agent-speech-check
+(or $XDG_STATE_HOME/agent-speech-check). Pass --keep-data to keep them without
+asking, or --yes to delete everything without prompts. On Windows, uninstall
+Agent Speech Check from Settings > Apps instead.
+
+examples:
+  asc uninstall
+  asc uninstall --keep-data
+  asc uninstall --yes""",
+        cmd_uninstall,
+        _uninstall_args,
+        linux_only=True,
+    ),
 }
 
 
@@ -830,9 +890,11 @@ def run(argv: Sequence[str] | None) -> int:
     if args_list == ["_stop_all"]:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.
-        image = Path(sys.executable) if getattr(sys, "frozen", False) else None
+        images = (
+            updater.installed_images(Path(sys.executable)) if getattr(sys, "frozen", False) else ()
+        )
         updater.stop_check()
-        _stop_every(paths.every_root(), image)
+        _stop_every(paths.every_root(), images)
         return 0
     if args_list == ["_update"]:
         # Hidden: the background update check that `asc stop` starts.
@@ -850,6 +912,8 @@ def run(argv: Sequence[str] | None) -> int:
     command = COMMANDS[args.command]
     if command.windows_only and sys.platform != "win32":
         raise WindowsOnlyCommand(args.command)
+    if command.linux_only and sys.platform != "linux":
+        raise LinuxOnlyCommand(args.command)
     return command.run(args)
 
 
