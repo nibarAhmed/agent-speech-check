@@ -540,7 +540,7 @@ instance). Exits 3 if nothing runs.
 ### `asc status`
 
 ```
-asc status [--nvda-ini]
+asc status [--nvda-ini | --all]
 ```
 
 Shows the mode, whether `asc` is recording and the screen reader is connected, the
@@ -563,6 +563,10 @@ speech: 12 lines kept, latest 12
 - With Orca the line is `orca: connected`.
 - In remote mode `over ssh: DEST` names the machine, followed for NVDA by
   `tunnel up` or `tunnel down (WHY)`.
+- `--all` lists every configured or running [instance](#instances) (the default
+  instance and each named one) with its mode, remote machine if any, and
+  whether it is running and connected. It exits 0 even when nothing runs, and
+  cannot be combined with `--nvda-ini` (exit 2).
 - `--nvda-ini` prints a ready-to-use `nvda.ini` for connecting a remote Windows
   NVDA unattended (see [Remote mode](#remote-mode)) instead of the normal
   status output. Exits 4 in other modes or with Orca.
@@ -663,7 +667,7 @@ could not hold them all.
 | Argument or option | Default | Meaning |
 |---|---|---|
 | `KEY` | (required) | a gesture: key names joined by `+` |
-| `--expect REGEX` | none | unless the new speech matches, exit 1 and print what was said, numbered |
+| `--expect REGEX` | none | wait up to `--timeout` for a match; on timeout, exit 1 and print what was said, numbered |
 | `--settle MS` | `settle_ms`, 400 | quiet period, 50 to 10000 |
 | `--timeout MS` | `timeout_ms`, 5000 | deadline for the whole command, including waiting for the keyboard |
 
@@ -863,7 +867,7 @@ the firewall rule sandbox mode needs. Timings are not asked; change them with
 ### `asc config`
 
 ```
-asc config list [--mode MODE]
+asc config [list] [--mode MODE]
 asc config get NAME [--mode MODE]
 asc config set NAME VALUE [VALUE ...] [--mode MODE]
 asc config unset NAME [--mode MODE]
@@ -871,11 +875,11 @@ asc config path
 ```
 
 Shows or changes the settings in `config.toml` (see
-[Configuration](#configuration)).
+[Configuration](#configuration)). Omitting `ACTION` defaults to `list`.
 
 | Action | Does |
 |---|---|
-| `list` | prints every setting as `name = value (source)`; the source is the mode's name, `global` or `default` |
+| `list` | prints every setting as `name = value (source)`; the source is the mode's name, `global` or `default` (default when `ACTION` is omitted) |
 | `get` | prints the value only |
 | `set` | changes it and prints `name = value (where)` |
 | `unset` | removes the setting and reverts to the default |

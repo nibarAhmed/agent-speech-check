@@ -96,10 +96,11 @@ def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
     )
 
 
-def _add_mode(parser: argparse.ArgumentParser) -> None:
+def _add_mode(parser: argparse.ArgumentParser, default: object = None) -> None:
     parser.add_argument(
         "--mode",
         choices=MODES,
+        default=default,
         help="default: the mode setting, else watch (desktop on Linux)",
     )
 
@@ -139,10 +140,16 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _status_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         "--nvda-ini",
         action="store_true",
         help="remote mode (Windows): print an nvda.ini for unattended NVDA setup",
+    )
+    group.add_argument(
+        "--all",
+        action="store_true",
+        help="list every configured or running instance",
     )
 
 
@@ -158,7 +165,9 @@ def _wait_args(parser: argparse.ArgumentParser) -> None:
 
 def _press_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("gestures", nargs="+", metavar="KEY")
-    parser.add_argument("--expect", metavar="REGEX", help="exit 1 unless the speech matches")
+    parser.add_argument(
+        "--expect", metavar="REGEX", help="wait up to --timeout for a match, else exit 1"
+    )
     _settle(parser)
     _timeout(parser)
 
@@ -231,7 +240,7 @@ CONFIG_HELP = {
 
 
 def _config_args(parser: argparse.ArgumentParser) -> None:
-    actions = parser.add_subparsers(dest="action", metavar="ACTION", required=True)
+    actions = parser.add_subparsers(dest="action", metavar="ACTION")
     for action, summary in CONFIG_HELP.items():
         sub = actions.add_parser(action, help=summary, description=summary)
         _add_instance(sub, argparse.SUPPRESS)
@@ -240,7 +249,7 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
         if action == "set":
             sub.add_argument("values", nargs="+", metavar="VALUE")
         if action != "path":
-            _add_mode(sub)
+            _add_mode(sub, argparse.SUPPRESS)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -446,7 +455,48 @@ def nvda_ini(status: dict[str, Any]) -> str:
     return nvda_config.render(relay)
 
 
+def _remote_label(os_name: str | None, ssh: str | None) -> str:
+    parts = [part for part in (os_name, ssh) if part]
+    return f"remote ({', '.join(parts)})" if parts else "remote"
+
+
+def _instance_summary(root: Path) -> str:
+    name = "default" if root == paths.base_root() else root.name
+    current, folder_mode = session.running_status(root)
+    if current is not None:
+        mode = current["mode"]
+        if mode == "remote":
+            os_name = "linux" if current["reader"] == "orca" else "windows"
+            mode_text = _remote_label(os_name, current["ssh"])
+        else:
+            mode_text = mode
+        conn = "connected" if current["connected"] else "not connected"
+        return f"{name}: {mode_text}, running, {current['reader']}: {conn}"
+    if folder_mode is not None:
+        return f"{name}: {folder_mode}, not answering"
+    try:
+        settings = load(root / "config.toml")
+    except AscError as error:
+        return f"{name}: bad config ({error.message})"
+    if "mode" in settings.data:
+        mode = settings.mode
+    elif name != "default" and len(settings.modes) == 1:
+        mode = next(iter(settings.modes))
+    else:
+        mode = settings.mode
+    if mode == "remote":
+        target = settings.resolve("remote")
+        mode_text = _remote_label(target.os, target.ssh)
+    else:
+        mode_text = mode
+    return f"{name}: {mode_text}, not running"
+
+
 def cmd_status(args: argparse.Namespace) -> int:
+    if args.all:
+        for root in paths.every_root():
+            print(_instance_summary(root))
+        return 0
     status = _call("status", {})
     if args.nvda_ini:
         print(nvda_ini(status), end="")
@@ -583,15 +633,18 @@ def _config_change(settings: Config, args: argparse.Namespace) -> int:
 
 
 def cmd_config(args: argparse.Namespace) -> int:
-    if args.action == "path":
+    action = args.action or "list"
+    if action == "path":
+        if args.mode is not None:
+            raise UnrecognizedArguments(["--mode", args.mode], "asc config path")
         # Not read, so it works on a file too broken to load.
         print(os.path.realpath(config_file()))
         return 0
     settings = load(config_file())
-    if args.action == "list":
+    if action == "list":
         for name, value, source in edit.entries(settings, args.mode):
             print(f"{name} = {edit.show(value)} ({source})")
-    elif args.action == "get":
+    elif action == "get":
         pref = prefs.find(args.name)
         values = {name: value for name, value, _ in edit.entries(settings, args.mode)}
         print(edit.show(values[pref.name]))
@@ -684,6 +737,9 @@ examples:
 Show the active mode, whether NVDA or Orca is connected, how to connect NVDA,
 and the browse/focus mode (unknown until the screen reader first switches).
 
+--all: list every configured or running instance (default and named), with its
+mode and whether it is running. Exits 0 even when nothing runs.
+
 --nvda-ini (remote mode with os windows): instead of status, print a
 ready-to-use nvda.ini that connects NVDA unattended (Remote Access enabled,
 certificate trusted, silent synth, no startup prompts). Save it as UTF-8
@@ -691,6 +747,7 @@ nvda.ini in that NVDA's config folder while NVDA is closed.
 
 examples:
   asc status
+  asc status --all
   asc status --nvda-ini --instance vm1""",
         cmd_status,
         _status_args,
@@ -733,6 +790,7 @@ examples:
 Send each gesture, wait for --settle ms of quiet, and print only the new speech
 as numbered lines, or (nothing said after N). Pass the last printed line number
 (or N) as the next --since for wait or speech.
+With --expect, asc waits up to --timeout for a match before exiting 1.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
 Watch mode refuses keys (exit 4).
 
@@ -825,12 +883,14 @@ examples:
     ),
     "config": Command(
         "show or change one setting",
-        """Show or change settings in config.toml. Mode-specific settings (port, share,
-etc.) apply to --mode, or to the configured default mode if --mode is omitted.
-Global settings and command defaults (settle_ms, timeout_ms, etc.) do not take
---mode. Command-line flags override command defaults.
+        """Show or change settings in config.toml. With no ACTION, prints every setting
+(same as asc config list). Mode-specific settings (port, share, etc.) apply to
+--mode, or to the configured default mode if --mode is omitted. Global settings
+and command defaults (settle_ms, timeout_ms, etc.) do not take --mode.
+Command-line flags override command defaults.
 
 examples:
+  asc config
   asc config list
   asc config set mode sandbox                   asc start uses sandbox mode
   asc config set share C:\\src\\app C:\\data --mode sandbox
@@ -838,6 +898,7 @@ examples:
   asc config unset settle_ms""",
         cmd_config,
         _config_args,
+        takes_mode=True,
     ),
     "firewall-setup": Command(
         "allow NVDA in Windows Sandbox to reach asc (asks for admin once)",

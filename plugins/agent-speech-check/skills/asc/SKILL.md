@@ -13,7 +13,7 @@ https://github.com/nibarAhmed/agent-speech-check/releases/latest. `asc --help` a
 
 ## Mode
 
-`asc start` uses the configured mode (`asc config` shows it). Pass `--mode`
+`asc start` uses the configured mode (`asc config list` shows it). Pass `--mode`
 only when the user asks for a mode. If the configured mode can't do the task,
 stop and ask the user to switch to the mode this table suggests:
 
@@ -49,7 +49,8 @@ On Linux only desktop, watch and remote mode exist.
   though keys may reach the user's desktop. Send keys only if the user explicitly
   asked.
 - Use remote mode when it is already configured or when the user asks to test on
-  another machine. Because remote mode runs in its own named instance, setting it
+  another machine. Run `asc status --all` first to see any already-configured or
+  running instances. Because remote mode runs in its own named instance, setting it
   up does not touch the user's default settings, so you do not need to ask before
   configuring it. Pick an instance name for the machine (never share one with
   another agent) and pass `--instance NAME` (or set `ASC_INSTANCE=NAME`) on every
@@ -101,10 +102,14 @@ commands (Orca's desktop layout, the one asc's own Orca uses):
 mode it reads the other machine's: pass the same `--instance`.
 
 - Before sending an activating key (Enter, Space, or `type`), confirm focus is
-  on the intended control using `--expect` (for example,
-  `asc press Tab --expect "(?i)send"`). Act only when that command exits 0; if
-  it fails or a navigation loop hits its limit without matching, stop and inspect
-  focus before pressing anything else.
+  on the intended control. Use `--expect` when you expect that press to match
+  (for example, `asc press Tab --expect "(?i)send"` or asserting an action's
+  result): `--expect` waits up to `--timeout` (default 5 s) before failing.
+- When stepping through controls with `Tab` or arrow keys to find one, call
+  `asc press Tab` without `--expect` (it returns after `settle_ms`) and inspect
+  its output rather than discarding it or burning 5 s per miss. If a search
+  loop hits its limit without matching, stop and inspect focus before pressing
+  anything else.
 - After starting or switching apps, check the active window title.
 - If a press speaks `unknown` or `window unavailable`, or a screen reader
   shortcut triggers an app action instead, the app does not have focus (it is

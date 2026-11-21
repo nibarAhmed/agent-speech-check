@@ -479,7 +479,9 @@ class RemoteNeedsInstance(Refused):
     def __init__(self, command: str) -> None:
         super().__init__(
             "remote mode runs only in a named instance, one per VM",
-            hint=f"asc {command} --mode remote --instance VMNAME",
+            hint=(
+                f"asc {command} --mode remote --instance VMNAME (asc status --all lists instances)"
+            ),
         )
 
 

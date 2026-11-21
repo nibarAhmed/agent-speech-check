@@ -37,6 +37,14 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
         monkeypatch.delenv("ASC_INSTANCE")
         # The default instance runs on.
         assert run_asc("status").returncode == 0
+        # status --all lists running and stopped instances side by side.
+        all_status = run_asc("status", "--all")
+        assert all_status.returncode == 0, all_status.stderr
+        assert all_status.stdout.splitlines() == [
+            "default: desktop, running, nvda: connected",
+            "vm1: desktop, not running",
+            "vm2: desktop, not running",
+        ]
     finally:
         first.close()
         second.close()
@@ -50,7 +58,9 @@ def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
     result = run_asc("start", "--mode", "remote")
     assert result.returncode == 4, result.stderr
     assert "remote mode runs only in a named instance, one per VM" in result.stderr
-    assert result.stderr.endswith("hint: asc start --mode remote --instance VMNAME\n")
+    assert result.stderr.endswith(
+        "hint: asc start --mode remote --instance VMNAME (asc status --all lists instances)\n"
+    )
 
 
 def test_remote_mode_needs_a_machine_that_answers(env: Env) -> None:
