@@ -142,10 +142,61 @@ def test_bad_arguments_hint_names_the_parser_that_refused_them(
 def test_bad_config_action_arguments_are_a_short_usage_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert main(["config"]) == 2
+    assert main(["config", "get"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("error: the following arguments are required: ACTION\n")
-    assert err.endswith("hint: asc config --help\n")
+    assert err.startswith("error: the following arguments are required: NAME\n")
+    assert err.endswith("hint: asc config get --help\n")
+    assert main(["config", "--mode", "watch", "path"]) == 2
+    assert capsys.readouterr().err.endswith("hint: asc config path --help\n")
+
+
+def test_config_without_action_defaults_to_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.delenv("ASC_INSTANCE", raising=False)
+    assert main(["config"]) == 0
+    bare = capsys.readouterr().out
+    assert main(["config", "list"]) == 0
+    assert bare == capsys.readouterr().out
+    assert main(["config", "--mode", "desktop"]) == 0
+    bare_mode = capsys.readouterr().out
+    assert main(["config", "list", "--mode", "desktop"]) == 0
+    assert bare_mode == capsys.readouterr().out
+
+
+def test_status_all_lists_configured_instances(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.delenv("ASC_INSTANCE", raising=False)
+    base = tmp_path / "agent-speech-check"
+    base.mkdir()
+    (base / "config.toml").write_text('mode = "remote"\n', encoding="utf-8")
+    vm1 = base / "instances" / "vm1"
+    vm1.mkdir(parents=True)
+    # Only a [remote] table, as `asc config set ... --mode remote --instance vm1` writes.
+    (vm1 / "config.toml").write_text('[remote]\nos = "windows"\nssh = "me@vm"\n', encoding="utf-8")
+    box = base / "instances" / "linux-box"
+    box.mkdir(parents=True)
+    (box / "config.toml").write_text(
+        'mode = "remote"\n[remote]\nos = "linux"\nssh = "me@box"\n', encoding="utf-8"
+    )
+    broken = base / "instances" / "broken"
+    broken.mkdir(parents=True)
+    (broken / "config.toml").write_text("not = [valid\n", encoding="utf-8")
+
+    assert main(["status", "--all"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "default: remote, not running"
+    assert lines[1].startswith("broken: bad config (")
+    assert lines[2] == "linux-box: remote (linux, me@box), not running"
+    assert lines[3] == "vm1: remote (windows, me@vm), not running"
+
+    assert main(["status", "--all", "--nvda-ini"]) == 2
+    assert capsys.readouterr().err.endswith("hint: asc status --help\n")
 
 
 def test_unexpected_exception_is_internal_error(

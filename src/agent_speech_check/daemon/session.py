@@ -94,6 +94,19 @@ def running_mode(root: Path) -> str | None:
     return next((folder.name for folder in state.folders(root) if is_running(folder)), None)
 
 
+def running_status(root: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """The running daemon's status under `root`, or `(None, mode)` if it doesn't answer.
+    Returns `(None, None)` when nothing runs."""
+    for folder in state.folders(root):
+        try:
+            return status(folder), folder.name
+        except NotRunning:
+            continue
+        except NotConnected:
+            return None, folder.name
+    return None, None
+
+
 def _end(folder: Path) -> None:
     """End a daemon that can't be asked to stop. Its NVDA goes with it (a
     kill-on-close job) and so does its sandbox (the guard)."""
