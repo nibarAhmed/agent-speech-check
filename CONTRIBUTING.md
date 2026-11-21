@@ -45,9 +45,9 @@ The rules for code, tests and docs are in [AGENTS.md](AGENTS.md). They apply to 
 
 ## Releasing
 
-Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI, the
-winget manifests and the Linux tarballs for x86 and Arm (on glibc 2.28, so they run on that and
-newer) and attaches them to a GitHub Release. An installed `asc` updates itself from that release,
+Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI and the
+Linux tarballs for x86 and Arm (on glibc 2.28, so they run on that and newer) and attaches only
+those to a GitHub Release. The winget manifests it writes stay on the workflow run. An installed `asc` updates itself from that release,
 so its assets keep their names: `agent-speech-check-VERSION.msi` and
 `agent-speech-check-linux-MACHINE.tar.gz`, where MACHINE is `x86_64` or `aarch64`.
 
@@ -62,8 +62,9 @@ so its assets keep their names: `agent-speech-check-VERSION.msi` and
    installing, listing, and uninstalling the MSI from these manifests):
    - **With `wingetcreate`:** First store a GitHub token with `wingetcreate token --store` (it
      signs in through your browser, keeping the token out of shell history). Then download the
-     release's three `nibarAhmed.AgentSpeechCheck*.yaml` files into an empty folder and run
-     `wingetcreate submit FOLDER` to open a pull request on `microsoft/winget-pkgs`.
+     three manifests from the release's workflow run into an empty folder,
+     `gh run download RUN_ID -n winget -D FOLDER`, and run `wingetcreate submit FOLDER` to open a
+     pull request on `microsoft/winget-pkgs`.
    - **Without `wingetcreate`:** Open a pull request from your fork of `microsoft/winget-pkgs`
      adding those three files under `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`.
    - On your first pull request, sign Microsoft's CLA by commenting

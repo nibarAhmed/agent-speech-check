@@ -23,4 +23,9 @@ change what for a breaking change. -->
   and their result, or why they weren't run.
 - Anything you couldn't check. -->
 
-<!-- If an agent did the work, end with: Created with <model> in <harness>. -->
+## Who did the work
+
+<!-- If agents did the work, one line per role that happened, like:
+- Written by <model>, in <harness>
+- Reviewed by <model>, in <harness>
+Otherwise delete this section. -->
