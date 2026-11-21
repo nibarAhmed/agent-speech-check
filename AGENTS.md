@@ -135,5 +135,8 @@ human's sign-off before breaking it.
   follow-up.
 - Fill in `.github/pull_request_template.md`, also when you write the body yourself:
   `gh pr create --body` skips the template.
+- Credit agents only in the PR's `## Who did the work` section. No `Co-authored-by` trailers
+  for models in commits and no "Generated with" footers: GitHub folds commit trailers into the
+  squash commit.
 - Update `docs/cli.md` and `plugins/agent-speech-check/skills/asc/SKILL.md` with every command change.
 - Don't commit plans, research notes or scratch files. Keep them outside the repo.

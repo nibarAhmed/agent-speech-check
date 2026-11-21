@@ -1,6 +1,6 @@
 [project]
 name = "agent-speech-check"
-version = "0.6.0"
+version = "0.7.0"
 description = "Let AI agents test your app with a real screen reader (NVDA or Orca): press keys, read speech, check it."
 readme = "README.md"
 license = "MIT"

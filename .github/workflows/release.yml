@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v1.2.3 releases that commit: the MSI, winget manifests and Linux tarballs go
-# on a GitHub Release. The tag must equal the version in pyproject.toml, so bump that first
+# Pushing a tag like v1.2.3 releases that commit: the MSI and Linux tarballs go on a GitHub
+# Release. The winget manifests stay on the workflow run, for the winget-pkgs submission. The tag must equal the version in pyproject.toml, so bump that first
 # (CONTRIBUTING.md, Releasing).
 on:
   push:
@@ -85,9 +85,9 @@ jobs:
         # draft, which a re-run finishes. A published release is already complete.
         run: |
           if ! draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null); then
-            gh release create "$TAG" assets/* --verify-tag --title "$TAG" --generate-notes
+            gh release create "$TAG" assets/*.msi assets/*.tar.gz --verify-tag --title "$TAG" --generate-notes
           elif [ "$draft" = true ]; then
-            gh release upload "$TAG" assets/* --clobber
+            gh release upload "$TAG" assets/*.msi assets/*.tar.gz --clobber
             gh release edit "$TAG" --draft=false
           else
             echo "$TAG is already released"
