@@ -169,7 +169,7 @@ known_first_party = ["agent_speech_check"]
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
 pythonpath = ["."]
-markers = ["e2e: needs a real NVDA or Orca (Windows Sandbox, Linux container, or the e2e CI workflow)"]
+markers = ["e2e: needs a real NVDA or Orca (Linux container or the e2e CI workflow)"]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 

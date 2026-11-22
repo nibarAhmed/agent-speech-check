@@ -4,7 +4,7 @@ localhost, as e2e.yml's Orca job does on Linux.
   download FOLDER   fetch the pinned zip into FOLDER and print its path (any machine)
   install ZIP       install and start sshd, and let this user ssh to localhost with a key
 
-install runs only in Windows Sandbox or on a CI runner: it replaces any sshd service and
+install runs only on a CI runner: it replaces any sshd service and
 writes this user's ~/.ssh.
 """
 
@@ -44,7 +44,7 @@ def download(folder: Path) -> Path:
 
 
 def throwaway() -> bool:
-    return os.environ.get("USERNAME") == "WDAGUtilityAccount" or "GITHUB_ACTIONS" in os.environ
+    return "GITHUB_ACTIONS" in os.environ
 
 
 def powershell(script: str) -> None:
@@ -67,7 +67,7 @@ def keyscan() -> str:
 
 def install(zip_path: Path) -> None:
     if not throwaway():
-        sys.exit("install only in Windows Sandbox or on a CI runner")
+        sys.exit("install only on a CI runner")
     shutil.unpack_archive(zip_path, SERVER.parent)
     powershell(f"& '{SERVER / 'install-sshd.ps1'}'")
     powershell("Start-Service sshd")

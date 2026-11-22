@@ -10,5 +10,3 @@ dist/
 .wix/
 *.spec
 .claude/settings.local.json
-# e2e harness: portable Python, downloaded NVDA, sandbox outputs
-.e2e/

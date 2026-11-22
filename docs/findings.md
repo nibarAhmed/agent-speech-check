@@ -135,9 +135,9 @@ lock active, using NVDA's IO log and a `SetWinEventHook` listener:
 ## NVDA 2025.1
 
 Remote Access is built in from 2025.1, but `asc` needs 2026.2.
-`scripts/e2e_sandbox.py --nvda-version 2025.1` ran `tests/e2e/test_real_nvda.py`
-in Windows Sandbox, with Windows Audio stopped as usual: every test failed,
-where 2026.2 in the same setup passed them all.
+Running `tests/e2e/test_real_nvda.py` against NVDA 2025.1 with Windows Audio
+stopped as usual (reproducible via `gh workflow run e2e.yml -f nvda_version=2025.1`):
+every test failed, where 2026.2 in the same setup passed them all.
 - NVDA joined the relay, but asc never got any speech (`wait` timed out, not
   disconnected).
 - NVDA's log: on joining, it plays a Remote Access cue; with no audio device,
@@ -195,8 +195,8 @@ is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same ki
 Remote mode with `os = "windows"`: Windows' OpenSSH client (`C:\Windows\System32\OpenSSH`) and
 Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
 
-- **Windows' sshd.** Win32-OpenSSH 10.4's sshd, in Windows Sandbox (`scripts/windows_sshd.py`),
-  carries the tunnel as Ubuntu's does: a real NVDA joins through it. For an administrator it
+- **Windows' sshd.** Win32-OpenSSH 10.4's sshd (`scripts/windows_sshd.py`), run on the Windows CI
+  runner, carries the tunnel as Ubuntu's does: a real NVDA joins through it. For an administrator it
   reads only `%ProgramData%\ssh\administrators_authorized_keys`, and only if no one but
   Administrators and SYSTEM can write that file. Windows Sandbox has no ssh client of its own.
 - **When the tunnel is up.** With `-v`, ssh prints
