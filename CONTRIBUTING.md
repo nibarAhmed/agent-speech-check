@@ -70,5 +70,7 @@ so its assets keep their names: `agent-speech-check-VERSION.msi` and
 
 ## Issues
 
-Use the bug report or feature request form. Report security problems privately, as
+Report bugs with the bug report form. Suggest features in
+[Discussions](https://github.com/nibarAhmed/agent-speech-check/discussions/categories/ideas).
+Report security problems privately, as
 [SECURITY.md](SECURITY.md) explains, never in an issue.
