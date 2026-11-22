@@ -13,8 +13,8 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 - In the synopses, `[X]` is optional, `UPPERCASE` is a value you supply,
   `{a,b}` means pick one, `A | B` means one or the other, and `X ...` can
   repeat. Options may go before or after the arguments.
-- `asc --help` lists the commands, `asc COMMAND --help` describes one, and
-  `asc --version` prints the version.
+- `asc --help` (`-h`) lists the commands, `asc COMMAND --help` describes one,
+  and `asc --version` (`-V`) prints the version.
 - Results go to stdout and errors to stderr. An error prints
   `error: <message>` and, when there is one, `hint: <what to do>`. Bad
   arguments do too, with the command's `--help` as the hint, and exit 2.
@@ -642,8 +642,9 @@ asc type [--settle MS] [--timeout MS] TEXT
 Types `TEXT` one character at a time, mapped to keys with this computer's
 keyboard layout (with Orca, each character is sent as itself), then
 waits for one quiet period at the end. Prints the new
-speech like `press`. If any character can't be typed (for example emoji), it
-exits 2, lists them and sends nothing.
+speech like `press`. If any character can't be typed (for example emoji on
+Windows, or control characters with Orca), it exits 2, lists them and sends
+nothing.
 
 | Argument or option | Default | Meaning |
 |---|---|---|

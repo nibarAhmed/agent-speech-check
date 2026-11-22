@@ -182,8 +182,9 @@ every key it may have left down.
 - **Connection dropped:** NVDA reconnects about 5 s later. Keys it held stay
   held (see above).
 - **Error message:** NVDA's source has a relay `error` message, for example
-  `{"type":"error","message":"incorrect_password"}` for a wrong channel key
-  (source-derived, not observed). `asc`'s relay never sends one.
+  `{"type":"error","message":"incorrect_password"}` for a wrong channel key.
+  `asc`'s relay sends `incorrect_password` when refusing a join with the wrong
+  channel key or role; NVDA's own handling of it is source-derived, not observed.
 - **Unknown types:** a newer NVDA may send types not listed here. `asc` ignores
   them instead of failing.
 
@@ -221,6 +222,9 @@ askedAllowUsageStats = True
 allowUsageStats = False
 [speech]
 synth = silence
+[audio]
+soundVolumeFollowsVoice = False
+soundVolume = 0
 [keyboard]
 keyboardLayout = desktop
 [virtualBuffers]

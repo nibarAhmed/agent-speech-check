@@ -57,18 +57,30 @@ def test_docs_name_only_real_settings() -> None:
         assert named <= set(prefs.BY_NAME), f"{doc.name}: {named - set(prefs.BY_NAME)}"
 
 
-def test_version(capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize("flag", ["--version", "-V"])
+def test_version(capsys: pytest.CaptureFixture[str], flag: str) -> None:
     with pytest.raises(SystemExit) as exc:
-        main(["--version"])
+        main([flag])
     assert exc.value.code == 0
     assert capsys.readouterr().out.strip() == f"asc {__version__}"
 
 
-def test_help_points_to_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
+def test_help_layout_and_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--help"])
     assert exc.value.code == 0
-    assert "/docs/cli.md#exit-codes" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "positional arguments:" not in out
+    assert out.index("options:") < out.index("commands:") < out.index("examples:")
+    assert "/docs/cli.md#exit-codes" in out
+
+    with pytest.raises(SystemExit) as exc:
+        main(["press", "--help"])
+    assert exc.value.code == 0
+    press_out = capsys.readouterr().out
+    assert press_out.index("positional arguments:") < press_out.index("options:")
+    assert press_out.index("options:") < press_out.index("examples:")
+    assert "key gesture(s)" in press_out
 
 
 def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:

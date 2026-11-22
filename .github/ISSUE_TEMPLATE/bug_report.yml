@@ -47,7 +47,6 @@ body:
     attributes:
       label: asc version
       description: The output of `asc --version`.
-      placeholder: asc 0.0.1
     validations:
       required: true
   - type: input
