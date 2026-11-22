@@ -25,8 +25,9 @@ NVDA_RUNNING = bool(processes.process_ids("nvda.exe"))
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:
-    assert run_asc("start", "--mode", "desktop").returncode == 0
-    fake = env.fake("desktop")
+    started = run_asc("start", "--mode", "shared", "--i-understand")
+    assert started.returncode == 0, started.stderr
+    fake = env.fake("watch")
     yield fake
     fake.close()
 
@@ -55,15 +56,24 @@ def test_type_refused_in_watch_mode() -> None:
 
 
 @pytest.mark.xdist_group("desktop")
-def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
-    app = f'"{sys.executable}" -c "import time; time.sleep(3)"'
-    launching = start_asc("launch", app, "--title", "My App")
-    env.wait_running("desktop", "launch")
+def test_launch_waits_for_the_title(
+    env: Env, nvda: FakeNvda, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    (work / "app.py").write_text(
+        "import pathlib, time; pathlib.Path('ran.txt').write_text('ok'); time.sleep(3)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(work)
+    launching = start_asc("launch", f'"{sys.executable}" app.py', "--title", "My App")
+    env.wait_running("shared", "launch")
     nvda.say("Loading")
     nvda.say("My App window")
-    out, _ = launching.communicate(timeout=30)
-    assert launching.returncode == 0
+    out, err = launching.communicate(timeout=30)
+    assert launching.returncode == 0, err
     assert out.splitlines() == ['1 said: "Loading"', '2 said: "My App window"']
+    assert (work / "ran.txt").read_text(encoding="utf-8") == "ok"
 
 
 @pytest.mark.xdist_group("desktop")
@@ -71,11 +81,23 @@ def test_launch_errors(nvda: FakeNvda) -> None:
     missing = run_asc("launch", "no-such-program-asc.exe")
     assert missing.returncode == 3
     assert 'cannot start "no-such-program-asc.exe"' in missing.stderr
+    crashed = run_asc(
+        "launch",
+        f'"{sys.executable}" -c "raise SystemExit(2)"',
+        "--title",
+        "Never",
+        "--timeout",
+        "5000",
+    )
+    assert crashed.returncode == 1
+    assert "New windows: (none)" in crashed.stderr
+    assert "Process exited with code 2" in crashed.stderr
     app = f'"{sys.executable}" -c pass'
     silent = run_asc("launch", app, "--title", "Never", "--timeout", "300")
     assert silent.returncode == 1
     assert 'no speech matched "Never" within 300 ms' in silent.stderr
     assert "New windows: (none)" in silent.stderr
+    assert "Process exited" not in silent.stderr
     assert nvda.held == set()
 
 

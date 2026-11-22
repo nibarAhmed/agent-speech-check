@@ -6,6 +6,7 @@ A fake NVDA stands in for the one on the other machine.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import socket
@@ -31,7 +32,12 @@ def tunnels(env: Env) -> list[int]:
     """The ssh processes this test's daemon runs."""
     folder = env.folder("remote", INSTANCE)
     pid = json.loads((folder / state.FILE).read_text(encoding="utf-8"))["pid"]
-    return [p.pid for p in psutil.Process(pid).children() if p.name() in ("ssh", "ssh.exe")]
+    found: list[int] = []
+    for child in psutil.Process(pid).children():
+        with contextlib.suppress(psutil.NoSuchProcess):
+            if child.name() in ("ssh", "ssh.exe"):
+                found.append(child.pid)
+    return found
 
 
 def is_free(port: int) -> bool:

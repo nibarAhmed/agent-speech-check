@@ -29,7 +29,7 @@ async def test_connection_that_never_joins_is_dropped(tmp_path: Path) -> None:
     server = await r.start(0)
     context = _client_context()
     async with server:
-        reader, writer = await asyncio.open_connection(r.host, r.port, ssl=context)
+        reader, writer = await asyncio.open_connection(relay.HOST, r.port, ssl=context)
         started = time.monotonic()
         assert await asyncio.wait_for(reader.read(), 5) == b""
         assert 0.4 < time.monotonic() - started < 3
@@ -112,7 +112,7 @@ async def test_a_flood_of_blank_lines_before_the_join_is_skipped(tmp_path: Path)
     context = _client_context()
     join = {"type": "join", "channel": credentials.channel, "connection_type": "slave"}
     async with server:
-        reader, writer = await asyncio.open_connection(r.host, r.port, ssl=context)
+        reader, writer = await asyncio.open_connection(relay.HOST, r.port, ssl=context)
         writer.write(b"\n" * 5000 + json.dumps(join).encode() + b"\n")
         reply = json.loads(await asyncio.wait_for(reader.readline(), 5))
         writer.close()

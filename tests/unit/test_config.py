@@ -72,12 +72,12 @@ def _config(data: dict[str, Any]) -> Config:
 
 def test_mode_setting_goes_to_the_mode_settings_table() -> None:
     settings = _config({"mode": "desktop", "desktop": {"port": 7000}})
-    pref = prefs.find("launch")
+    pref = prefs.find("nvda_dir")
     where = edit.owner(settings, pref, None)
     assert where == "desktop"
-    data, value = edit.set_value(settings, pref, ["False"], where)
-    assert value is False
-    assert data["desktop"] == {"port": 7000, "launch": False}
+    data, value = edit.set_value(settings, pref, ["C:\\nvda"], where)
+    assert value == str(Path("C:\\nvda").absolute())
+    assert data["desktop"] == {"port": 7000, "nvda_dir": value}
     assert settings.data["desktop"] == {"port": 7000}  # a copy was changed
     assert edit.owner(settings, pref, "remote") == "remote"
 
@@ -92,7 +92,7 @@ def test_any_mode_setting_makes_its_table() -> None:
 
 def test_command_defaults_are_global_only() -> None:
     """Commands talk to whichever daemon runs, so no mode can hold their defaults."""
-    settings = _config({"desktop": {"launch": False}})
+    settings = _config({"desktop": {"port": 7000}})
     data, _ = edit.set_value(settings, prefs.find("settle_ms"), ["600"], None)
     assert data["defaults"] == {"settle_ms": 600}
     assert _config(data).value("settle_ms") == (600, "global")
@@ -125,7 +125,7 @@ def test_values_are_converted_by_type() -> None:
     with pytest.raises(UsageError, match="expected a whole number"):
         prefs.find("port").parse(["x"])
     with pytest.raises(UsageError, match="expected true or false"):
-        prefs.find("launch").parse(["yes"])
+        prefs.find("connect").parse(["yes"])
     with pytest.raises(UsageError, match="takes one value"):
         prefs.find("mode").parse(["watch", "desktop"])
 
@@ -143,8 +143,8 @@ def test_unknown_setting_suggests() -> None:
 
 
 def test_clashes_are_refused_when_checked() -> None:
-    data, _ = edit.set_value(_config({}), prefs.find("launch"), ["false"], "watch")
-    with pytest.raises(UsageError, match="launch: expected only in desktop mode"):
+    data, _ = edit.set_value(_config({}), prefs.find("nvda_dir"), ["C:\\nvda"], "watch")
+    with pytest.raises(UsageError, match="nvda_dir: expected only for an NVDA that asc launches"):
         _config(data)
 
 

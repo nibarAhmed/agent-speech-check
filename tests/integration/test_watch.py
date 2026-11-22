@@ -58,6 +58,7 @@ def test_watch_session(env: Env) -> None:
         refused = run_asc("press", "Tab")
         assert refused.returncode == 3
         assert "watch mode, which never sends keys" in refused.stderr
+        assert "--mode shared --i-understand" in refused.stderr
         assert not any(m.get("type") == "key" for m in fake.received)
 
         missed = run_asc("wait", "nope", "--since", "1", "--timeout", "200")
@@ -157,14 +158,14 @@ def test_start_refuses_a_relay_port_in_use(env: Env) -> None:
 
 def test_one_daemon_at_a_time(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
-    second = run_asc("start", "--mode", "desktop")
+    second = run_asc("start", "--mode", "shared", "--i-understand")
     assert second.returncode == 3
     assert "asc is already running in watch mode" in second.stderr
     assert "hint: asc stop" in second.stderr
-    assert not (env.folder("desktop") / "state.json").exists()
+    assert not (env.folder("shared") / "state.json").exists()
     assert run_asc("stop").stdout == "stopped: watch\n"
-    assert run_asc("start", "--mode", "desktop").returncode == 0
-    assert "mode: desktop (keys allowed)" in run_asc("status").stdout
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
+    assert "mode: shared (keys allowed)" in run_asc("status").stdout
 
 
 @pytest.mark.usefixtures("env")

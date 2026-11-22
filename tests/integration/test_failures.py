@@ -17,25 +17,25 @@ from tests.integration.conftest import Env, run_asc, start_asc, tls_client, wait
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:
-    assert run_asc("start", "--mode", "desktop").returncode == 0
-    fake = env.fake("desktop")
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
+    fake = env.fake("watch")
     yield fake
     fake.close()
 
 
 def test_status_lists_the_commands_in_progress(env: Env, nvda: FakeNvda) -> None:
-    assert env.running("desktop") == []
+    assert env.running("shared") == []
     waiting = start_asc("wait", "later", "--since", "0", "--timeout", "8000")
-    env.wait_running("desktop", "wait")
-    assert env.running("desktop") == ["wait"]
+    env.wait_running("shared", "wait")
+    assert env.running("shared") == ["wait"]
     nvda.say("later")
     assert 'said: "later"' in waiting.communicate(timeout=30)[0]
-    assert env.running("desktop") == []
+    assert env.running("shared") == []
 
 
 def test_a_strangers_bad_connection_does_not_fail_a_wait(env: Env, nvda: FakeNvda) -> None:
     waiting = start_asc("wait", "later", "--since", "0", "--timeout", "8000")
-    env.wait_running("desktop", "wait")
+    env.wait_running("shared", "wait")
     with tls_client(env.port) as sock:
         sock.sendall(b"{not json\n")
         assert sock.recv(4096) == b""
@@ -55,7 +55,7 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
     env: Env, nvda: FakeNvda, command: tuple[str, ...]
 ) -> None:
     running = start_asc(*command, "--timeout", "8000")
-    env.wait_running("desktop", command[0])
+    env.wait_running("shared", command[0])
     nvda.send_raw(b"{not json\n")
     _, err = running.communicate(timeout=30)
     assert running.returncode == 3, err
@@ -64,7 +64,7 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
 
 def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeNvda) -> None:
     waiting = start_asc("wait", "never", "--since", "0", "--timeout", "3000")
-    env.wait_running("desktop", "wait")
+    env.wait_running("shared", "wait")
     nvda.close()
     _, err = waiting.communicate(timeout=30)
     assert waiting.returncode == 3, err
@@ -76,7 +76,7 @@ def test_a_rejected_message_from_nvda_keeps_its_values_out_of_the_log(
 ) -> None:
     # Speech in the wrong shape: a string where NVDA sends a list.
     nvda.send({"type": "speak", "sequence": "my password"})
-    log = env.folder("desktop") / "daemon.log"
+    log = env.folder("shared") / "daemon.log"
     text = ""
 
     def dropped() -> bool:

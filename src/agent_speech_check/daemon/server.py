@@ -33,6 +33,7 @@ from agent_speech_check.daemon.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
+    ExpectationFailed,
     LaunchFailed,
     NoMatch,
     OperationalError,
@@ -133,11 +134,12 @@ def take_panic_key(key: Hotkey, on_press: Callable[[], None]) -> winapi.GlobalHo
     return hotkey
 
 
-def start_app(command: str) -> None:
+def start_app(command: str, cwd: str | None = None) -> subprocess.Popen[bytes]:
     """Start the app under test, detached. Popen returns at once."""
     try:
-        subprocess.Popen(  # noqa: S603 - the user's own app, run as asked
+        return subprocess.Popen(  # noqa: S603 - the user's own app, run as asked
             command,
+            cwd=cwd,
             creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -343,13 +345,15 @@ class Daemon:
         losses_before = len(self.link.losses)
         # Orca's windows can't be seen from here.
         before = set(winapi.windows_titled("")) if self.relay is not None else None
+        process: subprocess.Popen[bytes] | None = None
         if isinstance(self.link, OrcaLink):
-            await self.link.launch(args.command)
+            cwd = args.cwd if self.target.ssh is None else None
+            await self.link.launch(args.command, cwd)
         else:
             # Input only where the agent may send it: in watch mode the user drives.
             if self.target.keys and not mouse.nudge():
                 log.info("launch: Windows may keep the app behind")
-            start_app(args.command)
+            process = start_app(args.command, args.cwd)
         # One deadline for the title and the quiet after it, so the CLI's
         # timeout (--timeout plus ipc.LAUNCH_START_MS) always covers both.
         deadline = time.monotonic() + args.timeout_ms / 1000
@@ -360,7 +364,10 @@ class Daemon:
         found = await self._wait_match(title, start, args.timeout_ms, losses_before)
         if found is None:
             windows = None if before is None else new_windows(before)
-            raise self._no_match(args.title or ".", args.timeout_ms, start, windows)
+            error = self._no_match(args.title or ".", args.timeout_ms, start, windows)
+            if isinstance(error, NoMatch) and process is not None and (code := process.poll()):
+                error = ExpectationFailed(f"{error.message}\nProcess exited with code {code}")
+            raise error
         remaining = max(0.0, deadline - time.monotonic())
         await self.speech.wait_quiet(ipc.DEFAULT_SETTLE_MS / 1000, remaining)
         return _new_speech(self.speech.since(start), start)
@@ -370,7 +377,7 @@ class Daemon:
             raise RuntimeError
         credentials = self.relay.credentials
         return nvda_config.RelayAddress(
-            self.relay.host, self.relay.port, credentials.channel, credentials.fingerprint
+            relay.HOST, self.relay.port, credentials.channel, credentials.fingerprint
         )
 
     def _check_nvda(self) -> None:

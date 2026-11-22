@@ -118,7 +118,6 @@ PREFS: tuple[Pref, ...] = (
     Pref("mode", GLOBAL, "choice", DEFAULT_MODE, choices=MODES),
     Pref("panic_key", GLOBAL, "hotkey", keys.PANIC_KEY),
     Pref("port", PER_MODE, "int", low=1, high=65535),
-    Pref("launch", PER_MODE, "bool"),
     Pref("os", PER_MODE, "choice", choices=OSES),
     Pref("ssh", PER_MODE, "destination"),
     Pref("nvda_dir", PER_MODE, "path"),

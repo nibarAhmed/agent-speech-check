@@ -50,8 +50,8 @@ CONNECT_TIMEOUT_S = 3.0
 MAX_GESTURES = 100
 MAX_TYPED = 2000
 DEFAULT_LAUNCH_TIMEOUT_MS = 30_000
-# How long starting the app may take before --timeout starts counting.
-LAUNCH_START_MS = 60_000
+# How long starting the app may take before --timeout starts counting (covers Orca's 15 s ack).
+LAUNCH_START_MS = 20_000
 
 
 def compile_regex(pattern: str) -> re.Pattern[str]:
@@ -162,6 +162,7 @@ class LaunchArgs:
     command: str
     title: str | None
     timeout_ms: int
+    cwd: str | None = None
 
     @property
     def regex(self) -> re.Pattern[str] | None:
@@ -173,6 +174,7 @@ class LaunchArgs:
             f.text("command", max_len=8000),
             f.opt_text("title", max_len=2000),
             _timeout(f),
+            f.opt_text("cwd", max_len=4000),
         )
         args.regex  # noqa: B018 - compiling is the check
         return args

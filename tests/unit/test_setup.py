@@ -278,18 +278,17 @@ def test_config_set_get_list_unset(
         "",
     )
     assert run(capsys, "config", "set", "mode", "desktop")[1] == "mode = desktop (global)\n"
-    assert run(capsys, "config", "set", "launch", "false")[1] == "launch = false (desktop mode)\n"
+    assert run(capsys, "config", "set", "port", "7001")[1] == "port = 7001 (desktop mode)\n"
     assert run(capsys, "config", "set", "port", "7000", "--mode", "shared")[1] == (
         "port = 7000 (shared mode)\n"
     )
     assert run(capsys, "config", "get", "settle_ms")[1] == "700\n"
     out = run(capsys, "config", "list")[1]
     assert "mode = desktop (global)\n" in out
-    assert "launch = false (desktop)\n" in out
+    assert "port = 7001 (desktop)\n" in out
     assert "settle_ms = 700 (global)\n" in out
     assert "nvda_dir = none (default)\n" in out
     assert run(capsys, "config", "get", "port", "--mode", "shared")[1] == "7000\n"
-    assert run(capsys, "config", "get", "launch", "--mode", "shared")[1] == "false\n"
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
@@ -314,10 +313,9 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", "keys", "true")
     assert code == 2
     assert 'unknown setting "keys"' in err
-    # asc launches NVDA only in desktop mode.
-    code, _, err = run(capsys, "config", "set", "launch", "false", "--mode", "watch")
+    code, _, err = run(capsys, "config", "set", "nvda_dir", "C:\\nvda", "--mode", "watch")
     assert code == 2
-    assert "[watch] launch: expected only in desktop mode" in err
+    assert "[watch] nvda_dir: expected only for an NVDA that asc launches" in err
     code, _, err = run(capsys, "config", "set", "os", "linux", "--mode", "desktop")
     assert code == 2
     assert "os: expected only in remote mode" in err

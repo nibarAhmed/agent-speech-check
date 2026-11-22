@@ -71,7 +71,7 @@ _next_port = itertools.count()
 
 
 def free_port() -> int:
-    worker = int(os.environ.get("PYTEST_XDIST_WORKER", "gw0").removeprefix("gw"))
+    worker = _worker()
     block = PORT_BASE + worker * PORTS_PER_WORKER
     for _ in range(PORTS_PER_WORKER):
         port = block + next(_next_port) % PORTS_PER_WORKER
@@ -82,6 +82,17 @@ def free_port() -> int:
                 continue
         return port
     pytest.fail(f"no free port in {block}-{block + PORTS_PER_WORKER - 1}")
+
+
+def _worker() -> int:
+    return int(os.environ.get("PYTEST_XDIST_WORKER", "gw0").removeprefix("gw"))
+
+
+def worker_panic_key(slot: int = 0) -> str:
+    """A panic hotkey unique to this xdist worker and slot, separate from the default
+    key and the Control+Shift+Alt+F21..F23 keys used by hotkey tests."""
+    modifiers = ("Control+Alt", "Shift+Alt")[slot]
+    return f"{modifiers}+F{13 + _worker() % 12}"
 
 
 def _never_invite(config: str) -> str:
@@ -144,7 +155,10 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     config = tmp_path / "agent-speech-check"
     config.mkdir()
     made = Env(tmp_path, port)
-    made.config(f"[watch]\nport = {port}\n[desktop]\nport = {port}\nlaunch = false\n")
+    made.config(
+        f"[defaults]\npanic_key = '{worker_panic_key()}'\n"
+        f"[watch]\nport = {port}\n[shared]\nport = {port}\n"
+    )
     yield made
     # Never leave a daemon behind, in any instance, even when a test failed half way.
     if run_asc("_stop_all").returncode != 0:

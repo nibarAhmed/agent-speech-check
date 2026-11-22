@@ -43,8 +43,8 @@ def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
 
 
 def test_second_press_waits_then_gives_up(env: Env) -> None:
-    assert run_asc("start", "--mode", "desktop").returncode == 0
-    fake = env.fake("desktop", {"Space": f.SILENCE})
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
+    fake = env.fake("watch", {"Space": f.SILENCE})
     try:
         slow = start_asc("press", "Space", "--settle", "3000")
         # Once NVDA has the key, the slow press holds the keyboard for its settle.
@@ -230,18 +230,18 @@ def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
 
 
 def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> None:
-    assert run_asc("start", "--mode", "desktop").returncode == 0
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     # Then one only an older asc could have left next to it, in its own folder.
     fake = FakeDaemon(b"")
     path = env.folder("watch") / "state.json"
-    path.parent.mkdir(parents=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     state = {"pid": 4, "port": fake.port, "token": "t", "started": time.time()}
     path.write_text(json.dumps(state), encoding="utf-8")
     result = run_asc("_stop_all")
     assert result.returncode == 3, result.stderr
-    assert result.stdout == "stopped: desktop\n"
+    assert result.stdout == "stopped: shared\n"
     assert "cannot end the asc daemon (pid 4)" in result.stderr
-    assert not (env.folder("desktop") / "state.json").exists()
+    assert not (env.folder("shared") / "state.json").exists()
     assert path.exists()
 
 
@@ -277,8 +277,8 @@ def test_keys_finds_your_own_nvda() -> None:
 
 
 def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
-    assert run_asc("start", "--mode", "desktop").returncode == 0
-    fake = env.fake("desktop", {"Tab": [f.speak("x")]})
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
+    fake = env.fake("watch", {"Tab": [f.speak("x")]})
     try:
         assert run_asc("press", "Tab").returncode == 0
         assert run_asc("stop").returncode == 0
@@ -293,7 +293,7 @@ def test_the_named_mutex_refuses_a_second_daemon() -> None:
     """One mutex for every mode: a daemon started some other way still can't run
     next to the first."""
     assert run_asc("start", "--mode", "watch").returncode == 0
-    target = Target("desktop", free_port(), launch=False)
+    target = Target("watch", free_port(), os="windows")
     second = run_asc("_daemon", target.to_json())
     assert second.returncode == 3
     # The mutex doesn't know the first daemon's mode.

@@ -184,7 +184,6 @@ class Relay:
         # passes it to `check`. A connection that never joined can't be told
         # apart from a stranger's, so it never lands here.
         self.losses: list[str | None] = []
-        self.host = HOST
         self.port = 0
 
     @property
@@ -201,7 +200,7 @@ class Relay:
             ssl_handshake_timeout=self.join_timeout_s,
             limit=protocol.MAX_LINE + 1,
         )
-        self.host, self.port = HOST, server.sockets[0].getsockname()[1]
+        self.port = server.sockets[0].getsockname()[1]
         return server
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -344,7 +343,7 @@ class Relay:
 
     def status_fields(self) -> dict[str, Any]:
         return {
-            "host": self.host,
+            "host": HOST,
             "port": self.port,
             "channel": self.credentials.channel,
             "fingerprint": self.credentials.fingerprint,
