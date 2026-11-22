@@ -94,7 +94,7 @@ def test_a_taken_port_on_the_other_machine(tmp_path: Path, monkeypatch: pytest.M
         remote = f"[remote]\nos = 'windows'\nssh = '{DESTINATION}'\nport = {port}\n"
         env.config(remote, instance=INSTANCE)
         started = run_asc("start", "--mode", "remote", "--instance", INSTANCE)
-    assert started.returncode == 4, started.stdout + started.stderr
+    assert started.returncode == 3, started.stdout + started.stderr
     assert f"port {port}" in started.stderr
     assert f"asc config set port PORT --mode remote --instance {INSTANCE}" in started.stderr
     assert run_asc("status", "--instance", INSTANCE).returncode == 3

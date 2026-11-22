@@ -11,13 +11,7 @@ import pytest
 from agent_speech_check import __version__
 from agent_speech_check.cli import COMMANDS, _show_status, build_parser, main, nvda_ini, run
 from agent_speech_check.config import prefs
-from agent_speech_check.errors import (
-    NvdaIniOnlyRemote,
-    RemoteNeedsMachine,
-    SshMissing,
-    WindowsOnlyCommand,
-    WindowsOnlyMode,
-)
+from agent_speech_check.errors import OperationalError, UsageError
 
 ROOT = Path(__file__).parents[2]
 CLI_DOC = ROOT / "docs" / "cli.md"
@@ -205,7 +199,7 @@ def test_unexpected_exception_is_internal_error(
     monkeypatch.delenv("ASC_DEBUG", raising=False)
     # A non-string argument makes argparse itself raise TypeError: a genuine
     # unexpected exception, without mocking any of our code.
-    assert main([123]) == 6  # type: ignore[list-item]
+    assert main([123]) == 4  # type: ignore[list-item]
     err = capsys.readouterr().err
     assert err.startswith("internal error: TypeError: ")
     assert "logs: " in err
@@ -216,7 +210,7 @@ def test_debug_shows_traceback(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ASC_DEBUG", "1")
-    assert main([123]) == 6  # type: ignore[list-item]
+    assert main([123]) == 4  # type: ignore[list-item]
     assert "Traceback" in capsys.readouterr().err
 
 
@@ -251,7 +245,7 @@ def test_internal_error_in_a_group_names_the_inner_error(
 ) -> None:
     # The daemon's err file is all a user sees, so the real cause must be in it.
     monkeypatch.delenv("ASC_DEBUG", raising=False)
-    assert main([_FailsInATaskGroup()]) == 6  # type: ignore[list-item]
+    assert main([_FailsInATaskGroup()]) == 4  # type: ignore[list-item]
     assert "internal error: ValueError: tray icon\n" in capsys.readouterr().err
 
 
@@ -268,9 +262,9 @@ def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
     server = remote["controlServer"]
     assert (server["host"], server["port"], server["key"]) == ("pc:26837", "26837", "key")
     assert remote["trustedCertificates"]["pc:26837"] == "f"
-    with pytest.raises(NvdaIniOnlyRemote):
+    with pytest.raises(OperationalError, match="remote mode only"):
         nvda_ini({**status, "mode": "watch"})
-    with pytest.raises(NvdaIniOnlyRemote, match="Orca"):
+    with pytest.raises(OperationalError, match="Orca"):
         nvda_ini({**status, "port": None, "reader": "orca"})
 
 
@@ -323,7 +317,7 @@ def test_printed_paths_are_real(
         assert main(["config", "path"]) == 0
         printed = capsys.readouterr().out.strip()
         assert printed == os.path.realpath(printed)
-        assert main([123]) == 6  # type: ignore[list-item]
+        assert main([123]) == 4  # type: ignore[list-item]
         logs = capsys.readouterr().err.split("logs: ")[1].strip()
         assert logs == os.path.realpath(logs)
     finally:
@@ -335,23 +329,31 @@ def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     for name in ("get-nvda", "firewall-setup"):
         assert COMMANDS[name].windows_only
-        with pytest.raises(WindowsOnlyCommand):
+        with pytest.raises(UsageError, match="needs Windows"):
             run([name])
 
 
 @pytest.mark.parametrize(
-    ("os_line", "error"),
-    [('os = "windows"', SshMissing), ('os = "linux"', SshMissing), ("", RemoteNeedsMachine)],
+    ("os_line", "error", "match"),
+    [
+        ('os = "windows"', OperationalError, "cannot run ssh"),
+        ('os = "linux"', OperationalError, "cannot run ssh"),
+        ("", UsageError, "remote mode needs os"),
+    ],
 )
 def test_keys_in_remote_mode_reads_the_other_machine(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, os_line: str, error: type[Exception]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    os_line: str,
+    error: type[Exception],
+    match: str,
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("PATH", str(tmp_path / "empty"))
     config = tmp_path / "agent-speech-check" / "config.toml"
     config.parent.mkdir()
     config.write_text(f'[remote]\n{os_line}\nssh = "me@box"\n', encoding="utf-8")
-    with pytest.raises(error):
+    with pytest.raises(error, match=match):
         run(["keys", "--mode", "remote"])
 
 
@@ -372,5 +374,5 @@ def test_keys_reads_orcas_help_on_linux(
     )
     assert run(["keys", "--mode", "desktop", "title"]) == 0
     assert capsys.readouterr().out == "Orca+T  Present the title\n"
-    with pytest.raises(WindowsOnlyMode):
+    with pytest.raises(UsageError, match="sandbox mode needs Windows"):
         run(["keys", "--mode", "sandbox", "title"])

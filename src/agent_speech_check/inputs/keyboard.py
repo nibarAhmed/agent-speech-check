@@ -16,6 +16,7 @@ import asyncio
 import contextlib
 import functools
 import re
+import sys
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ from typing import Any, Protocol
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon.speech_log import Since, SpeechLog
-from agent_speech_check.errors import AscError, KeysBusy, KeysRefused, ReaderNotConnected
+from agent_speech_check.errors import AscError, OperationalError, ReaderNotConnected
 from agent_speech_check.inputs.keys import Gesture, Key
 
 
@@ -101,14 +102,23 @@ class Keyboard:
         gesture; without it (asc type) only after the last.
         """
         if not self.target.keys:
-            raise KeysRefused
+            # On Windows your NVDA runs in watch mode, and desktop mode refuses to start beside it.
+            modes = "sandbox, or desktop" if sys.platform == "win32" else "desktop"
+            raise OperationalError(
+                "asc is in watch mode, which never sends keys",
+                hint=f"asc stop, then asc start --mode {modes}",
+            )
         if not self.link.connected:
             raise self.link.not_connected
         deadline = time.monotonic() + timeout_s
         try:
             await asyncio.wait_for(self._lock.acquire(), timeout_s)
         except TimeoutError:
-            raise KeysBusy(int(timeout_s * 1000)) from None
+            raise OperationalError(
+                f"another asc command kept the keyboard for the whole {int(timeout_s * 1000)} ms"
+                " timeout",
+                hint="retry, or raise --timeout",
+            ) from None
         try:
             start = self.speech.latest
             # Fail if NVDA was dropped while this press ran, even if it came back.

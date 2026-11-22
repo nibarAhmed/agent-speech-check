@@ -13,7 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from agent_speech_check.errors import BadInstance, FileUnusable
+from agent_speech_check.errors import FileUnusable, UsageError, show
 
 APP_DIR_NAME = "agent-speech-check"
 INSTANCE_VAR = "ASC_INSTANCE"
@@ -36,7 +36,10 @@ def base_root() -> Path:
 def check_instance(name: str) -> str:
     # It names a folder, so neither ..\ nor a Windows device name may get in.
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,31}", name) or _DEVICES.fullmatch(name):
-        raise BadInstance(name)
+        raise UsageError(
+            f"instance {show(name)}: expected up to 32 lowercase letters, digits and dashes",
+            hint="like --instance vm1; not a Windows device name like con or nul",
+        )
     return name
 
 

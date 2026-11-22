@@ -7,13 +7,7 @@ import pytest
 
 from agent_speech_check.config import edit, prefs
 from agent_speech_check.config.targets import Config, load, parse
-from agent_speech_check.errors import (
-    BadPreference,
-    BadSetting,
-    SetupNeeded,
-    UnknownPreference,
-    UsageError,
-)
+from agent_speech_check.errors import BadSetting, FileUnusable, UsageError
 from agent_speech_check.nvda.nvda_config import Setting, merge
 
 EXAMPLE: dict[str, Any] = {
@@ -103,20 +97,20 @@ def test_command_defaults_are_global_only() -> None:
     assert data["defaults"] == {"settle_ms": 600}
     assert _config(data).value("settle_ms") == (600, "global")
     assert _config(data).value("timeout_ms") == (5000, "default")
-    with pytest.raises(BadPreference, match="is global, so it takes no --mode"):
+    with pytest.raises(UsageError, match="is global, so it takes no --mode"):
         edit.owner(settings, prefs.find("settle_ms"), "sandbox")
 
 
 @pytest.mark.parametrize("name", ["panic_key", "mode"])
 def test_global_setting_takes_no_mode(name: str) -> None:
-    with pytest.raises(BadPreference, match="is global, so it takes no --mode"):
+    with pytest.raises(UsageError, match="is global, so it takes no --mode"):
         edit.owner(_config({}), prefs.find(name), "watch")
 
 
 def test_panic_key_is_kept_and_read_back_in_full() -> None:
     pref = prefs.find("panic_key")
     assert pref.parse(["ctrl+f11"]) == "Control+F11"
-    with pytest.raises(BadPreference, match='"panic_key": bad gesture "F11": a hotkey needs'):
+    with pytest.raises(UsageError, match='"panic_key": bad gesture "F11": a hotkey needs'):
         pref.parse(["F11"])
     # Written by hand, it is read back in full too.
     config = _config({"defaults": {"panic_key": "ctrl+f11"}})
@@ -129,23 +123,23 @@ def test_values_are_converted_by_type() -> None:
     assert pref.parse(["a", "C:\\b"]) == [str(Path("a").absolute()), "C:\\b"]
     assert prefs.find("nvda_dir").parse(["n"]) == str(Path("n").absolute())
     assert prefs.find("port").parse(["7"]) == 7
-    with pytest.raises(BadPreference, match="expected a whole number"):
+    with pytest.raises(UsageError, match="expected a whole number"):
         prefs.find("port").parse(["x"])
-    with pytest.raises(BadPreference, match="expected true or false"):
+    with pytest.raises(UsageError, match="expected true or false"):
         prefs.find("launch").parse(["yes"])
-    with pytest.raises(BadPreference, match="takes one value"):
+    with pytest.raises(UsageError, match="takes one value"):
         prefs.find("mode").parse(["watch", "desktop"])
 
 
 @pytest.mark.parametrize("name", ["share", "nvda_dir"])
 def test_an_empty_path_is_not_the_current_folder(name: str) -> None:
     """`Path("").absolute()` is the current folder: an empty value would share it."""
-    with pytest.raises(BadPreference, match="a path can't be empty"):
+    with pytest.raises(UsageError, match="a path can't be empty"):
         prefs.find(name).parse([""])
 
 
 def test_unknown_setting_suggests() -> None:
-    with pytest.raises(UnknownPreference, match='unknown setting "setle_ms"') as exc:
+    with pytest.raises(UsageError, match='unknown setting "setle_ms"') as exc:
         prefs.find("setle_ms")
     assert exc.value.hint == "did you mean settle_ms?"
 
@@ -220,10 +214,10 @@ def test_given_setting_replaces_a_kept_one() -> None:
     assert merge(kept, given) == (kept[1], given[0])
 
 
-def test_save_into_a_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
+def test_save_into_a_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
     (tmp_path / "asc").write_text("", encoding="utf-8")
     path = tmp_path / "asc" / "config.toml"
-    with pytest.raises(SetupNeeded) as exc:
+    with pytest.raises(FileUnusable) as exc:
         edit.save(path, EXAMPLE)
     assert str(tmp_path / "asc") in exc.value.message
 

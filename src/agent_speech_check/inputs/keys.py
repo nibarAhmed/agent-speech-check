@@ -13,7 +13,7 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText
+from agent_speech_check.errors import BadGesture, UnknownKey, UsageError, show
 from agent_speech_check.system import winapi
 
 
@@ -218,7 +218,11 @@ def _gestures(text: str, one: Callable[[str], Gesture | None], why: str) -> tupl
         else:
             gestures.append(gesture)
     if bad:
-        raise UntypableText(list(dict.fromkeys(bad)), why)
+        shown = " ".join(show(c) for c in dict.fromkeys(bad))
+        raise UsageError(
+            f"cannot type these characters {why}: {shown}",
+            hint="nothing was sent; use asc press for special keys",
+        )
     return tuple(gestures)
 
 

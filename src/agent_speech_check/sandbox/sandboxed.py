@@ -17,13 +17,7 @@ import shutil
 from pathlib import Path
 
 from agent_speech_check.config.targets import Target
-from agent_speech_check.errors import (
-    AscError,
-    LaunchFailed,
-    NvdaNotFound,
-    SandboxBroken,
-    SandboxFailed,
-)
+from agent_speech_check.errors import AscError, LaunchFailed, OperationalError, SandboxError
 from agent_speech_check.nvda import launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress
 from agent_speech_check.sandbox import wsb
@@ -56,8 +50,10 @@ class SandboxSession:
             # The one the CLI's precheck downloaded, or the cached one offline.
             installer = launcher.cached_installer()
             if installer is None:
-                looked = [f"the NVDA installer ({launcher.installers_dir()})"]
-                raise NvdaNotFound(looked, hint="run asc start again")
+                raise OperationalError(
+                    f"NVDA not found. Looked in: the NVDA installer ({launcher.installers_dir()})",
+                    hint="run asc start again",
+                )
             script = wsb.nvda_script(installer.name)
             mapped, source = installer.parent, None
         else:
@@ -80,7 +76,11 @@ class SandboxSession:
         log.info("sandbox %s started", self.sandbox_id)
         code = wsb.exec_as_user(self.sandbox_id, wsb.script_command())
         if code:
-            raise SandboxBroken("exec", f"the NVDA start script exited with {code}")
+            raise SandboxError(
+                "exec",
+                f"the NVDA start script exited with {code}",
+                hint="check that Windows Sandbox starts on its own",
+            )
 
     async def run(self) -> None:
         """Start the sandbox. Its window is kept in place until `stop`."""
@@ -98,7 +98,7 @@ class SandboxSession:
 
     async def launch(self, command: str) -> None:
         if self.sandbox_id is None:
-            raise SandboxFailed("exec", "the sandbox is not running yet")
+            raise SandboxError("exec", "the sandbox is not running yet")
         code = await asyncio.to_thread(
             wsb.exec_as_user, self.sandbox_id, wsb.launch_command(command)
         )
@@ -111,7 +111,7 @@ class SandboxSession:
         if self.sandbox_id is not None:
             try:
                 await asyncio.to_thread(wsb.stop, self.sandbox_id)
-            except wsb.FAILURES as error:
+            except SandboxError as error:
                 log.warning("sandbox stop: %s", error.message)
             self.sandbox_id = None
         # Only now: the client shows its window again as the sandbox stops.

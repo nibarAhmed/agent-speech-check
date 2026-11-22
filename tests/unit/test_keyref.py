@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.errors import FileUnusable, NvdaNotFound, OrcaHelpNotFound
+from agent_speech_check.errors import FileUnusable, OperationalError
 from agent_speech_check.inputs.keyref import BRAILLE_DISPLAYS, Command, search
 from agent_speech_check.nvda import keyref
 from agent_speech_check.orca import helper
@@ -75,11 +75,11 @@ def test_reference_falls_back_to_english(tmp_path: Path) -> None:
 
 
 def test_reference_not_found_says_where_it_looked(tmp_path: Path) -> None:
-    with pytest.raises(NvdaNotFound) as exc:
+    with pytest.raises(OperationalError) as exc:
         keyref.reference([("the running nvda.exe", tmp_path)], "en", "start your NVDA")
     assert f"Looked in: the running nvda.exe ({tmp_path})" in exc.value.message
     assert exc.value.hint == "start your NVDA"
-    assert exc.value.exit_code == 7
+    assert exc.value.exit_code == 3
 
 
 ORCA_PAGE = """<page xmlns="http://projectmallard.org/1.0/" type="topic" id="commands_widgets">
@@ -178,7 +178,7 @@ def test_orca_help_not_found_says_where_it_looked(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
-    with pytest.raises(OrcaHelpNotFound) as exc:
+    with pytest.raises(OperationalError) as exc:
         orca_keyref.commands("en", None)
     assert str(tmp_path / "help" / "C" / "orca") in exc.value.message
-    assert exc.value.exit_code == 7
+    assert exc.value.exit_code == 3

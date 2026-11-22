@@ -16,13 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agent_speech_check.daemon import ipc
-from agent_speech_check.errors import (
-    BadInFile,
-    BadPreference,
-    UnknownPreference,
-    UsageError,
-    bad_field,
-)
+from agent_speech_check.errors import UsageError, bad_field, show
 from agent_speech_check.inputs import keys
 from agent_speech_check.validate import Fields
 
@@ -89,36 +83,37 @@ class Pref:
         try:
             return keys.parse_hotkey(f.text(self.name, max_len=40)).text
         except UsageError as error:
-            field = f"{where} {self.name}"
-            raise BadInFile(field, error.message, error.hint) from None
+            raise UsageError(f"{where} {self.name}: {error.message}", hint=error.hint) from None
 
     def parse(self, values: list[str]) -> Value:
         """`asc config set` text into the value the file holds. The whole file
         is checked after, so this only converts."""
         if self.kind in ("path", "paths") and not all(v.strip() for v in values):
             # `Path("").absolute()` is the current folder, which nobody meant.
-            raise BadPreference(self.name, "a path can't be empty")
+            raise UsageError(f"setting {show(self.name)}: a path can't be empty")
         if self.is_list:
             return [str(Path(v).absolute()) if self.kind == "paths" else v for v in values]
         if len(values) != 1:
-            raise BadPreference(self.name, "takes one value")
+            raise UsageError(f"setting {show(self.name)}: takes one value")
         text = values[0]
         if self.kind == "bool":
             if text.lower() not in ("true", "false"):
-                raise BadPreference(self.name, "expected true or false")
+                raise UsageError(f"setting {show(self.name)}: expected true or false")
             return text.lower() == "true"
         if self.kind == "int":
             try:
                 return int(text)
             except ValueError:
-                raise BadPreference(self.name, "expected a whole number") from None
+                raise UsageError(f"setting {show(self.name)}: expected a whole number") from None
         if self.kind == "path":
             return str(Path(text).absolute())
         if self.kind == "hotkey":
             try:
                 text = keys.parse_hotkey(text).text
             except UsageError as error:
-                raise BadPreference(self.name, error.message, error.hint) from None
+                raise UsageError(
+                    f"setting {show(self.name)}: {error.message}", hint=error.hint
+                ) from None
         return text
 
 
@@ -157,5 +152,7 @@ def _destination(text: str, where: str) -> str:
 def find(name: str) -> Pref:
     pref = BY_NAME.get(name)
     if pref is None:
-        raise UnknownPreference(name, difflib.get_close_matches(name, BY_NAME, n=3))
+        suggestions = difflib.get_close_matches(name, BY_NAME, n=3)
+        hint = f"did you mean {', '.join(suggestions)}?" if suggestions else "asc config list"
+        raise UsageError(f"unknown setting {show(name)}", hint=hint)
     return pref

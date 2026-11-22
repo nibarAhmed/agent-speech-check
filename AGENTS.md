@@ -95,9 +95,11 @@ human's sign-off before breaking it.
 
 - Raise only `AscError` subclasses from `errors.py` for expected failures (bad input, daemon down, NVDA
   unreachable). Exit codes are decided there and nowhere else. Don't wrap bugs or broken invariants:
-  let them crash, and `cli.main` reports them as exit 6.
-- Pick an error's category by the caller's next step, which each category's docstring in
-  `errors.py` states, not by what broke.
+  let them crash, and `cli.main` reports them as exit 4.
+- Pick an error's category: `ExpectationFailed` (1) for a failed wait/match, `UsageError` (2) for bad
+  input, config or invocation, `OperationalError` (3) for runtime, daemon, setup, policy, I/O or
+  protocol failures. Raise the category directly unless code catches a concrete subclass or several
+  call sites share its formatting.
 - Catch broad exceptions only in `cli.main` and the daemon's request handler.
 - `AscError` classes never also subclass a built-in exception: the existing `except ValueError`,
   `except OSError` and similar handlers would then catch them by accident.

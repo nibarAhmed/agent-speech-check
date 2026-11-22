@@ -12,11 +12,7 @@ import pytest
 from agent_speech_check import cli
 from agent_speech_check.cli import COMMANDS, run
 from agent_speech_check.config import prompts
-from agent_speech_check.errors import (
-    LinuxOnlyCommand,
-    NotTarballInstall,
-    UninstallNeedsConfirmation,
-)
+from agent_speech_check.errors import OperationalError, UsageError
 from agent_speech_check.update import uninstall
 
 
@@ -36,7 +32,7 @@ def _make_install(tmp_path: Path, version: str = "0.6.0") -> tuple[Path, Path, P
 def test_uninstall_is_refused_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "win32")
     assert COMMANDS["uninstall"].linux_only
-    with pytest.raises(LinuxOnlyCommand) as exc:
+    with pytest.raises(UsageError, match="Linux installs") as exc:
         run(["uninstall"])
     assert exc.value.exit_code == 2
     assert "Settings > Apps" in (exc.value.hint or "")
@@ -45,9 +41,9 @@ def test_uninstall_is_refused_on_windows(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_uninstall_refuses_non_tarball_install(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(sys, "frozen", False, raising=False)
-    with pytest.raises(NotTarballInstall) as exc:
+    with pytest.raises(OperationalError, match="release tarball") as exc:
         run(["uninstall", "--yes"])
-    assert exc.value.exit_code == 4
+    assert exc.value.exit_code == 3
 
 
 def test_confirm_uninstall_prompts_and_handles_answers(tmp_path: Path) -> None:
@@ -146,7 +142,7 @@ def test_plan_resolves_links_and_orca_secret(tmp_path: Path) -> None:
     other.parent.mkdir(parents=True)
     other.write_bytes(b"exe")
     (tmp_path / "other" / "current").symlink_to(Path("versions", "0.6.0"))
-    with pytest.raises(NotTarballInstall):
+    with pytest.raises(OperationalError, match="release tarball"):
         uninstall.plan(other, argv0="asc", state=state, default_link=default_link)
 
 
@@ -190,7 +186,7 @@ def test_cmd_uninstall_requires_terminal_without_yes(
     monkeypatch.setattr(sys, "argv", [str(link), "uninstall"])
     monkeypatch.setattr(sys, "stdin", io.StringIO(""))
 
-    assert cli.main(["uninstall"]) == UninstallNeedsConfirmation.exit_code
+    assert cli.main(["uninstall"]) == UsageError.exit_code
     assert "pass --yes" in capsys.readouterr().err
     assert root.exists()
     assert link.is_symlink()

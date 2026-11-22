@@ -13,7 +13,7 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path
 
-from agent_speech_check.errors import NvdaNotFound, RemoteCommandFailed
+from agent_speech_check.errors import OperationalError
 from agent_speech_check.inputs.keyref import Command
 from agent_speech_check.system import powershell, processes, ssh
 
@@ -177,6 +177,11 @@ exit NOT_FOUND
 """.replace("UNINSTALL", _UNINSTALL).replace("NOT_FOUND", str(_NOT_FOUND))
 
 
+def _not_found(looked: list[str], hint: str) -> OperationalError:
+    where = "; ".join(looked) if looked else "nowhere"
+    return OperationalError(f"NVDA not found. Looked in: {where}", hint=hint)
+
+
 def remote_reference(destination: str, lang: str) -> str:
     """keyCommands.html from the NVDA on `destination`, found as `candidates` finds it here."""
     script = _REMOTE.replace("LANG_CODE", powershell.quote(lang))
@@ -185,8 +190,11 @@ def remote_reference(destination: str, lang: str) -> str:
         return out.decode("utf-8", errors="replace")
     if code == _NOT_FOUND:
         looked = out.decode("utf-8", errors="replace").splitlines()
-        raise NvdaNotFound(looked, f"start NVDA on {destination}")
-    raise RemoteCommandFailed(destination, "powershell", detail)
+        raise _not_found(looked, f"start NVDA on {destination}")
+    raise OperationalError(
+        f"powershell on {destination} failed: {detail}",
+        hint=f"verify that powershell works over ssh on {destination}",
+    )
 
 
 def reference(nvda_dirs: list[tuple[str, Path]], lang: str, hint: str) -> Path:
@@ -198,4 +206,4 @@ def reference(nvda_dirs: list[tuple[str, Path]], lang: str, hint: str) -> Path:
             if path.is_file():
                 return path
         looked.append(f"{label} ({folder})")
-    raise NvdaNotFound(looked, hint)
+    raise _not_found(looked, hint)

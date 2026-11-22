@@ -56,7 +56,7 @@ def _concrete() -> list[type[errors.AscError]]:
         and issubclass(cls, errors.AscError)
         and cls not in (errors.AscError, *errors.CATEGORIES)
     ]
-    assert len(found) > 30
+    assert found
     return found
 
 
@@ -69,36 +69,6 @@ def test_every_error_builds_a_message(cls: type[errors.AscError]) -> None:
     assert error.kind in {c.kind for c in errors.CATEGORIES}
     assert error.exit_code == next(c for c in errors.CATEGORIES if isinstance(error, c)).exit_code
     assert chr(0x2014) not in error.message + (error.hint or "")
-
-
-SETUP = (
-    errors.NvdaNotFound,
-    errors.NvdaTooOld,
-    errors.PortableFailed,
-    errors.PortableNotReplaced,
-    errors.InstallerInUse,
-    errors.NoDefaultSwitch,
-    errors.FirewallRuleMissing,
-    errors.FirewallFailed,
-    errors.SandboxNeedsPro,
-    errors.WsbMissing,
-)
-
-
-@pytest.mark.parametrize("cls", SETUP, ids=lambda c: c.__name__)
-def test_missing_setup_exits_7_not_3(cls: type[errors.AscError]) -> None:
-    # Exit 3 means retry or asc start; these need get-nvda, firewall-setup or a person.
-    assert cls.exit_code == 7
-
-
-def test_busy_keyboard_is_refused_not_a_failed_expectation() -> None:
-    # Exit 1 says the app spoke wrongly; a busy keyboard only means retry.
-    assert errors.KeysBusy.exit_code == errors.Refused.exit_code
-
-
-def test_failed_download_exits_3_so_agents_retry() -> None:
-    # Usually the network; a retry often fixes it, so it is not a setup gap.
-    assert errors.DownloadFailed.exit_code == errors.NotConnected.exit_code
 
 
 def test_no_match_after_launch_says_which_windows_opened() -> None:
@@ -122,24 +92,12 @@ def test_numbered_lines() -> None:
     assert dropped == '(5 earlier lines dropped)\n9 said: "late"'
 
 
-def test_an_unreadable_user_config_names_the_line_when_known() -> None:
-    assert errors.UserConfigUnreadable("nvda.ini", 3).message.endswith("nvda.ini line 3")
-    assert errors.UserConfigUnreadable("nvda.ini", None).message.endswith("config: nvda.ini")
-
-
-def test_an_installer_asc_could_not_end_is_named() -> None:
-    error = errors.InstallerTimedOut(0.5, [111, 222])
-    assert "could not end process 111, 222" in error.message
-    assert "ended it" not in error.message
-
-
 def test_several_unstoppable_daemons_are_named_in_the_plural() -> None:
     error = errors.DaemonUnstoppable([111, 222])
     assert error.message == "cannot end the asc daemons (pid 111, 222)"
     assert error.hint == "end them in Task Manager, then try again"
 
 
-def test_unstoppable_and_running_errors_say_kill_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unstoppable_error_says_kill_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     assert errors.DaemonUnstoppable([111]).hint == "end it with kill, then try again"
-    assert errors.AscStillRunning([111]).hint == "close it, or end it with kill, then try again"

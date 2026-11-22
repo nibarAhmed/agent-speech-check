@@ -24,7 +24,8 @@ from tomlkit.items import Array, Table
 
 from agent_speech_check.config.prefs import GLOBAL, MODES, PER_MODE, PREFS, Pref, Value
 from agent_speech_check.config.targets import Config, Target
-from agent_speech_check.errors import BadPreference, FileUnusable
+from agent_speech_check.errors import FileUnusable, UsageError
+from agent_speech_check.errors import show as show_value
 from agent_speech_check.system.paths import write_atomic
 
 HEADER = "asc settings. Change them with asc config set, or start over with asc setup."
@@ -85,7 +86,7 @@ def owner(config: Config, pref: Pref, mode: str | None) -> str | None:
     """The mode whose table holds `pref`, or None for the global part."""
     if pref.scope == GLOBAL:
         if mode is not None:
-            raise BadPreference(pref.name, "is global, so it takes no --mode")
+            raise UsageError(f"setting {show_value(pref.name)}: is global, so it takes no --mode")
         return None
     return mode or config.mode
 

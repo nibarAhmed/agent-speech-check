@@ -25,20 +25,11 @@ from agent_speech_check.daemon import ipc, server, session, state
 from agent_speech_check.errors import (
     EXIT_INTERRUPTED,
     AscError,
-    BadArguments,
     BadSetting,
     InternalError,
-    LinuxOnlyCommand,
-    NeedsTerminal,
-    NoCommand,
-    NoFirewallNeeded,
     NotRunning,
-    NvdaIniOnlyRemote,
-    UninstallNeedsConfirmation,
-    UnrecognizedArguments,
-    Updating,
+    OperationalError,
     UsageError,
-    WindowsOnlyCommand,
     bad_field,
     numbered_lines,
 )
@@ -253,19 +244,21 @@ def _config_args(parser: argparse.ArgumentParser) -> None:
 
 
 class _Parser(argparse.ArgumentParser):
-    """Bad arguments raise `BadArguments`, so they print like every other error,
+    """Bad arguments raise `UsageError`, so they print like every other error,
     without argparse's usage block. Subparsers are made of this class too, and
     each refuses its own leftovers, so the hint names the help that lists them."""
 
     def error(self, message: str) -> NoReturn:
-        raise BadArguments(message, self.prog)
+        raise UsageError(message, hint=f"{self.prog} --help")
 
     def parse_known_args(  # type: ignore[override]
         self, args: Sequence[str] | None = None, namespace: argparse.Namespace | None = None
     ) -> tuple[argparse.Namespace, list[str]]:
         parsed, extra = super().parse_known_args(args, namespace)
         if extra:
-            raise UnrecognizedArguments(extra, self.prog)
+            raise UsageError(
+                f"unrecognized arguments: {' '.join(extra)}", hint=f"{self.prog} --help"
+            )
         return parsed, extra
 
 
@@ -448,7 +441,12 @@ def cmd_stop(args: argparse.Namespace) -> int:
 def nvda_ini(status: dict[str, Any]) -> str:
     """The nvda.ini that connects a remote NVDA to this relay: desktop mode's base config."""
     if status["mode"] != "remote" or status["port"] is None:
-        raise NvdaIniOnlyRemote(status["mode"], status["reader"])
+        if status["reader"] == "orca":
+            raise OperationalError("--nvda-ini is for NVDA; Orca needs no nvda.ini")
+        raise OperationalError(
+            f"--nvda-ini is for remote mode only; asc runs in {status['mode']} mode",
+            hint="asc status shows how to connect NVDA",
+        )
     relay = nvda_config.RelayAddress(
         status["host"], status["port"], status["channel"], status["fingerprint"]
     )
@@ -583,7 +581,10 @@ def cmd_launch(args: argparse.Namespace) -> int:
 def cmd_firewall_setup(args: argparse.Namespace) -> int:
     target = _target(args)
     if not target.launches_sandbox:
-        raise NoFirewallNeeded(target.mode)
+        raise UsageError(
+            f"{target.mode} mode needs no firewall rule",
+            hint="only sandbox mode needs one: asc firewall-setup --mode sandbox",
+        )
     session.check_instance(target, "firewall-setup")
     wsb.require_available()
     if firewall.rule_ok(target.port):
@@ -636,7 +637,9 @@ def cmd_config(args: argparse.Namespace) -> int:
     action = args.action or "list"
     if action == "path":
         if args.mode is not None:
-            raise UnrecognizedArguments(["--mode", args.mode], "asc config path")
+            raise UsageError(
+                f"unrecognized arguments: --mode {args.mode}", hint="asc config path --help"
+            )
         # Not read, so it works on a file too broken to load.
         print(os.path.realpath(config_file()))
         return 0
@@ -658,7 +661,10 @@ def cmd_config(args: argparse.Namespace) -> int:
 
 def cmd_setup(args: argparse.Namespace) -> int:
     if not sys.stdin.isatty():
-        raise NeedsTerminal
+        raise UsageError(
+            "asc setup asks questions, so it needs a terminal",
+            hint="use asc config set to change one setting",
+        )
     try:
         return prompts.run_setup(input, replace_without_asking=args.yes)
     except (KeyboardInterrupt, EOFError):
@@ -671,7 +677,10 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     keep_data = args.keep_data
     if not args.yes:
         if not sys.stdin.isatty():
-            raise UninstallNeedsConfirmation
+            raise UsageError(
+                "asc uninstall asks to confirm, so it needs a terminal",
+                hint="pass --yes to uninstall without prompts",
+            )
         try:
             chosen = prompts.confirm_uninstall(input, planned, keep_data=keep_data)
         except (KeyboardInterrupt, EOFError):
@@ -708,7 +717,7 @@ minute for you to answer Yes (and trust the certificate the first time). NVDA
 then reconnects automatically until it restarts. Disable automatic invites with
 asc config set connect false and connect manually in NVDA (see asc status).
 On Linux, watch mode records your running Orca, which must have been started
-with asc's secret; if not, asc start exits 7 with the restart command.
+with asc's secret; if not, asc start fails with the restart command.
 
 remote mode: runs the screen reader on another machine (such as a VM) over ssh
 using key authentication. With os windows, start NVDA there yourself; asc opens
@@ -792,7 +801,7 @@ as numbered lines, or (nothing said after N). Pass the last printed line number
 (or N) as the next --since for wait or speech.
 With --expect, asc waits up to --timeout for a match before exiting 1.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
-Watch mode refuses keys (exit 4).
+Watch mode refuses keys.
 
 examples:
   asc press Tab
@@ -809,7 +818,7 @@ Type TEXT one character at a time using this computer's keyboard layout
 (with Orca, each character is sent directly). Every character is checked first;
 if any cannot be typed, nothing is sent (exit 2). Waits for one --settle quiet
 period after typing, then prints new speech like press.
-Watch mode refuses input (exit 4).
+Watch mode refuses input.
 
 examples:
   asc type "hello world"
@@ -843,7 +852,7 @@ Start CMD and wait until the screen reader says text matching --title (a regex),
 or any speech if --title is omitted. Prints what was said, numbered like press.
 Default timeout is 30000 ms. In sandbox mode, CMD runs inside Windows Sandbox,
 which has no Notepad or Edge: launch your own app from C:\\share\\<folder>.
-Refused in remote mode with os windows (exit 4): start the app there, then use
+Refused in remote mode with os windows: start the app there, then use
 asc wait.
 
 examples:
@@ -857,7 +866,7 @@ examples:
         """\
 Download NVDA from NV Access and extract a portable copy for desktop mode to
 %LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Defaults to the latest
-release (or the last cached installer when offline). Refuses with exit 4 while
+release (or the last cached installer when offline). Refuses while
 any NVDA is running, because running the installer would restart it.
 
 examples:
@@ -963,18 +972,24 @@ def run(argv: Sequence[str] | None) -> int:
         return 0
     # The hidden commands above stay open: the installer runs _stop_all.
     if updater.installing():
-        raise Updating
+        raise OperationalError("asc is installing an update", hint="try again in a minute")
     args = build_parser().parse_args(args_list)
     if args.instance is not None:
         # In the environment, so the daemon asc starts works on it too.
         os.environ[paths.INSTANCE_VAR] = paths.check_instance(args.instance)
     if args.command is None:
-        raise NoCommand
+        raise UsageError("no command given", hint="asc --help")
     command = COMMANDS[args.command]
     if command.windows_only and sys.platform != "win32":
-        raise WindowsOnlyCommand(args.command)
+        raise UsageError(
+            f"asc {args.command} needs Windows",
+            hint="on Linux, asc start runs Orca here, or remote mode reaches another machine",
+        )
     if command.linux_only and sys.platform != "linux":
-        raise LinuxOnlyCommand(args.command)
+        raise UsageError(
+            f"asc {args.command} is for Linux installs",
+            hint="on Windows, uninstall Agent Speech Check in Settings > Apps",
+        )
     return command.run(args)
 
 
@@ -1004,7 +1019,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return error.exit_code
     except KeyboardInterrupt:
         return EXIT_INTERRUPTED
-    except Exception as error:  # noqa: BLE001 - last resort: turn any bug into exit 6
+    except Exception as error:  # noqa: BLE001 - last resort: turn any bug into exit 4
         for cause in _causes(error):
             print(f"internal error: {type(cause).__name__}: {cause}", file=sys.stderr)
         # Real, not Store Python's redirected view, so other programs find it.

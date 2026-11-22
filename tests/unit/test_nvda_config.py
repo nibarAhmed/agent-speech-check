@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.errors import BadSetting, UserConfigUnreadable
+from agent_speech_check.errors import BadSetting, UsageError
 from agent_speech_check.nvda.nvda_config import (
     RelayAddress,
     Setting,
@@ -158,7 +158,7 @@ def test_a_multi_line_user_value_is_kept() -> None:
     ],
 )
 def test_parse_ini_refuses_what_it_cannot_read(text: str, line: int) -> None:
-    with pytest.raises(UserConfigUnreadable, match=f"nvda.ini line {line}") as exc:
+    with pytest.raises(UsageError, match=f"nvda.ini line {line}") as exc:
         parse_ini(text, "nvda.ini")
     assert exc.value.exit_code == 2
 
@@ -238,7 +238,7 @@ def test_write_without_a_user_config(tmp_path: Path) -> None:
 def test_user_ini_is_checked(tmp_path: Path) -> None:
     assert user_ini(tmp_path) is None
     (tmp_path / "nvda.ini").write_text("[a]\nbroken\n", encoding="utf-8")
-    with pytest.raises(UserConfigUnreadable, match="line 2"):
+    with pytest.raises(UsageError, match="line 2"):
         user_ini(tmp_path)
 
 

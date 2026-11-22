@@ -52,7 +52,7 @@ def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
 def test_type_refused_in_watch_mode() -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     refused = run_asc("type", "x")
-    assert refused.returncode == 4
+    assert refused.returncode == 3
 
 
 @pytest.mark.xdist_group("desktop")
@@ -70,7 +70,7 @@ def test_launch_waits_for_the_title(env: Env, nvda: FakeNvda) -> None:
 @pytest.mark.xdist_group("desktop")
 def test_launch_errors(nvda: FakeNvda) -> None:
     missing = run_asc("launch", "no-such-program-asc.exe")
-    assert missing.returncode == 2
+    assert missing.returncode == 3
     assert 'cannot start "no-such-program-asc.exe"' in missing.stderr
     app = f'"{sys.executable}" -c pass'
     silent = run_asc("launch", app, "--title", "Never", "--timeout", "300")
@@ -92,7 +92,7 @@ def test_keys_in_desktop_mode_reads_the_portable_copy(env: Env, tmp_path: Path) 
     assert run_asc("keys", "zzzz", "--mode", "desktop").stdout == "(no match)\n"
     env.config("[desktop]\nnvda_dir = 'C:/no/such/nvda'\n")
     missing = run_asc("keys", "x", "--mode", "desktop")
-    assert missing.returncode == 7
+    assert missing.returncode == 3
     assert "the portable NVDA" in missing.stderr
     assert "hint: check nvda_dir" in missing.stderr
 
@@ -120,16 +120,16 @@ def test_desktop_and_get_nvda_refuse_while_nvda_runs(env: Env, tmp_path: Path) -
     (tmp_path / "nvda.exe").write_bytes(b"")
     env.config(f"[desktop]\nnvda_dir = '{tmp_path.as_posix()}'\n")
     started = run_asc("start", "--mode", "desktop")
-    assert started.returncode == 4
+    assert started.returncode == 3
     assert "nvda.exe is already running" in started.stderr
     fetched = run_asc("get-nvda", "--installer", str(tmp_path / "nvda.exe"))
-    assert fetched.returncode == 4
+    assert fetched.returncode == 3
 
 
 def test_desktop_without_portable_nvda(env: Env, tmp_path: Path) -> None:
     env.config("")
     result = run_asc("start", "--mode", "desktop")
-    assert result.returncode == 7
+    assert result.returncode == 3
     assert "NVDA not found" in result.stderr
     assert "hint: asc get-nvda" in result.stderr
     assert str(tmp_path) in result.stderr
@@ -145,7 +145,7 @@ def test_sandbox_needs_the_firewall_rule(env: Env, monkeypatch: pytest.MonkeyPat
     # A port no rule covers, so this never starts a real sandbox.
     env.config(f"[sandbox]\nport = {env.port}\n")
     result = run_asc("start", "--mode", "sandbox")
-    assert result.returncode == 7
+    assert result.returncode == 3
     assert (
         f"no firewall rule lets NVDA in Windows Sandbox reach asc on port {env.port}"
         in result.stderr
@@ -172,7 +172,7 @@ def test_start_nvda_dir(env: Env, tmp_path: Path) -> None:
     broken = tmp_path / "broken"
     env.config(f"[desktop]\nnvda_dir = '{missing.as_posix()}'\n")
     desktop = run_asc("start", "--mode", "desktop")
-    assert desktop.returncode == 7
+    assert desktop.returncode == 3
     assert f"NVDA not found. Looked in: the portable NVDA ({missing})" in desktop.stderr
     assert "hint: check nvda_dir" in desktop.stderr
     (broken / "userConfig").mkdir(parents=True)

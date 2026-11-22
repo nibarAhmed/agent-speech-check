@@ -1,7 +1,7 @@
 import pytest
 
 from agent_speech_check.daemon import ipc
-from agent_speech_check.errors import BadGesture, UnknownKey, UntypableText, UsageError
+from agent_speech_check.errors import BadGesture, UnknownKey, UsageError
 from agent_speech_check.inputs.keys import (
     PANIC_KEY,
     Hotkey,
@@ -132,7 +132,7 @@ def test_text_gestures_newline_and_tab() -> None:
 
 def test_untypable_characters_listed_once() -> None:
     emoji = chr(0x1F600)
-    with pytest.raises(UntypableText) as exc:
+    with pytest.raises(UsageError, match="cannot type these characters") as exc:
         text_gestures(f"a{emoji}b{emoji}")
     assert exc.value.message.count(emoji) == 1
     assert exc.value.hint == "nothing was sent; use asc press for special keys"

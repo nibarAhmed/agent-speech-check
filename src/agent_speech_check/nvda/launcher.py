@@ -22,18 +22,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_speech_check.errors import (
-    DownloadFailed,
-    FileUnusable,
-    InstallerInUse,
-    InstallerTimedOut,
-    NvdaAlreadyRunning,
-    NvdaNotFound,
-    NvdaTooOld,
-    PortableFailed,
-    PortableNotReplaced,
-    ProgramWontStart,
-)
+from agent_speech_check.errors import DownloadFailed, FileUnusable, OperationalError
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
 from agent_speech_check.system import processes, tls, winapi
@@ -210,7 +199,10 @@ def running() -> bool:
 
 def refuse_if_running() -> None:
     if running():
-        raise NvdaAlreadyRunning
+        raise OperationalError(
+            "nvda.exe is already running; starting another NVDA would restart it",
+            hint="use watch or sandbox mode, which leave your NVDA alone",
+        )
 
 
 def portable_hint(folder: Path) -> str:
@@ -225,15 +217,28 @@ def check_version(folder: Path, version: tuple[int, ...] | None, hint: str | Non
     if version is not None and version < MIN_VERSION:
         found = ".".join(map(str, version[:2]))
         needed = ".".join(map(str, MIN_VERSION))
-        raise NvdaTooOld(str(folder), found, needed, hint or portable_hint(folder))
+        raise OperationalError(
+            f"the NVDA in {folder} is version {found}; asc needs {needed} or later",
+            hint=hint or portable_hint(folder),
+        )
 
 
 def require_exe(folder: Path) -> Path:
     exe = folder / "nvda.exe"
     if not exe.is_file():
-        raise NvdaNotFound([f"the portable NVDA ({folder})"], hint=portable_hint(folder))
+        raise OperationalError(
+            f"NVDA not found. Looked in: the portable NVDA ({folder})",
+            hint=portable_hint(folder),
+        )
     check_version(folder, winapi.file_version(exe))
     return exe
+
+
+def check_portable(nvda_dir: str | None, settings: tuple[Setting, ...]) -> None:
+    """The portable NVDA exists, is new enough, and its config reads and takes `settings`."""
+    folder = folder_for(nvda_dir)
+    require_exe(folder)
+    nvda_config.check(settings, nvda_config.user_ini(nvda_config.source_config(folder)))
 
 
 def download(version: str, sha1: str | None = None) -> Path:
@@ -248,7 +253,11 @@ def download(version: str, sha1: str | None = None) -> Path:
         # Held open, as by a running sandbox. Not DownloadFailed: the offline
         # fallback would then take this same file.
         except OSError as error:
-            raise InstallerInUse(str(installer), error.strerror or str(error)) from None
+            raise OperationalError(
+                f"the cached NVDA installer {installer} is corrupted and cannot be replaced: "
+                f"{error.strerror or error}",
+                hint="asc stop, then try again",
+            ) from None
     if not installer.exists():
         partial = installer.with_suffix(".part")
         url = installer_url(version)
@@ -284,6 +293,25 @@ def create_portable(installer: Path, dest: Path) -> Path:
     return run_installer(installer, dest)
 
 
+def _portable_not_replaced(dest: Path, error: OSError) -> OperationalError:
+    return OperationalError(
+        f"cannot replace the portable NVDA in {dest}: {error.strerror or error}",
+        hint="close any program using files in that folder, then run asc get-nvda",
+    )
+
+
+def _installer_timed_out(seconds: float, left: list[int]) -> OperationalError:
+    message = f"the NVDA installer did not finish within {seconds:g} s"
+    if left:
+        pids = ", ".join(map(str, left))
+        message += f", and asc could not end process {pids}"
+        hint = "end those in Task Manager, then asc get-nvda"
+    else:
+        message += ", so asc ended it"
+        hint = "check the installer, or let asc get-nvda download it again"
+    return OperationalError(message, hint=hint)
+
+
 def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIMEOUT_S) -> Path:
     """`create_portable` without the check that no NVDA runs. One deadline
     covers the installer and the wait for its copy. The new copy replaces
@@ -296,7 +324,7 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
             if stale.exists():
                 shutil.rmtree(stale)
         except OSError as error:  # a file in it is open
-            raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
+            raise _portable_not_replaced(dest, error) from None
     deadline = time.monotonic() + timeout_s
     process = _start(
         [str(installer), "--create-portable-silent", f"--portable-path={new}"],
@@ -310,9 +338,12 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
         left = processes.kill_tree(process.pid)
         if process.pid not in left:
             process.wait()  # it is gone, so this returns at once and records its exit
-        raise InstallerTimedOut(timeout_s, left) from None
+        raise _installer_timed_out(timeout_s, left) from None
     if not poll_until((new / "nvda.exe").is_file, max(0.0, deadline - time.monotonic()), 1):
-        raise PortableFailed(str(new))
+        raise OperationalError(
+            f"the NVDA installer did not create a portable copy in {new}",
+            hint="check the installer, or let asc get-nvda download it again",
+        )
     # Renames, so a crash between them leaves `old`, which the next run puts back.
     try:
         if dest.exists():
@@ -321,13 +352,13 @@ def run_installer(installer: Path, dest: Path, *, timeout_s: float = CREATE_TIME
     except OSError as error:  # a file in it is open
         if old.exists() and not dest.exists():
             old.rename(dest)
-        raise PortableNotReplaced(str(dest), error.strerror or str(error)) from None
+        raise _portable_not_replaced(dest, error) from None
     shutil.rmtree(old, ignore_errors=True)
     return dest / "nvda.exe"
 
 
 def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
-    """Start NVDA or its installer. A file Windows won't run is a setup problem, not a bug."""
+    """Start NVDA or its installer. A file Windows won't run is an operational error, not a bug."""
     try:
         return subprocess.Popen(args)  # noqa: S603 - NVDA, or the NVDA installer
     except OSError as error:
@@ -336,7 +367,7 @@ def _start(args: list[str], hint: str) -> subprocess.Popen[bytes]:
             raise FileUnusable.from_os(args[0], error) from None
         # Windows' text names the program as a literal %1.
         reason = (error.strerror or str(error)).replace("%1", "the program")
-        raise ProgramWontStart(args[0], reason, hint) from None
+        raise OperationalError(f"cannot start {args[0]}: {reason}", hint=hint) from None
 
 
 @dataclass

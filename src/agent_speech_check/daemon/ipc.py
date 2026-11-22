@@ -3,7 +3,7 @@
 Request:  {"v": IPC_VERSION, "token": "...", "cmd": "press", "args": {...}}
 Response: {"v": IPC_VERSION, "ok": true, "result": {...}}
        or {"v": IPC_VERSION, "ok": false,
-           "error": {"kind": "refused", "message": "...", "hint": "..."}}
+           "error": {"kind": "operational", "message": "...", "hint": "..."}}
 
 The CLI and the daemon parse requests with the same `parse_request`: the CLI for
 a fast, friendly error, the daemon because it is the authority. A wrong token
@@ -27,16 +27,13 @@ from agent_speech_check.daemon import state
 from agent_speech_check.errors import (
     IPC_VERSION,
     AscError,
-    BadRegex,
-    DaemonHungUp,
-    DaemonNoReply,
     DaemonUnreachable,
-    DaemonVersionMismatch,
     InternalError,
     NotRunning,
     UsageError,
     bad_field,
     from_kind,
+    show,
 )
 from agent_speech_check.inputs.keys import Gesture, parse_gesture
 from agent_speech_check.validate import Fields
@@ -62,7 +59,8 @@ def compile_regex(pattern: str) -> re.Pattern[str]:
     try:
         return re.compile(pattern)
     except re.error as error:
-        raise BadRegex(pattern, error.msg, error.pos) from None
+        at = f" at position {error.pos}" if error.pos is not None else ""
+        raise UsageError(f"bad regex {show(pattern)}: {error.msg}{at}") from None
 
 
 @dataclass(frozen=True)
@@ -228,6 +226,12 @@ def _exchange(port: int, payload: bytes, timeout_s: float) -> bytes:
         return b"".join(chunks)
 
 
+def _version_mismatch(theirs: object) -> DaemonUnreachable:
+    return DaemonUnreachable(
+        f"the running asc daemon speaks IPC version {show(theirs)}, not {IPC_VERSION}"
+    )
+
+
 def call(folder: Path, request: Request, timeout_s: float) -> dict[str, Any]:
     """Send one request to the daemon whose state file is in `folder`, and return its result."""
     current = state.read(folder)
@@ -244,11 +248,13 @@ def call(folder: Path, request: Request, timeout_s: float) -> dict[str, Any]:
         state.remove(folder)
         raise NotRunning from None
     except TimeoutError:
-        raise DaemonNoReply from None
+        raise DaemonUnreachable("cannot talk to the asc daemon: no reply in time") from None
     except OSError as error:
-        raise DaemonUnreachable(str(error)) from None
+        raise DaemonUnreachable(f"cannot talk to the asc daemon: {error}") from None
     if not data.strip():
-        raise DaemonHungUp
+        raise DaemonUnreachable(
+            "cannot talk to the asc daemon: it closed the connection without a reply"
+        )
     return _parse_response(data)
 
 
@@ -259,7 +265,7 @@ def _parse_response(data: bytes) -> dict[str, Any]:
         raise bad_field(InternalError, "daemon response", "JSON", data[:80]) from None
     f = Fields(raw, "daemon response", InternalError)
     if f.raw.get("v") != IPC_VERSION:
-        raise DaemonVersionMismatch(f.raw.get("v"))
+        raise _version_mismatch(f.raw.get("v"))
     if f.flag("ok"):
         result: dict[str, Any] = dict(
             Fields(f.raw.get("result"), "daemon result", InternalError).raw
@@ -316,7 +322,7 @@ async def serve_one(
 
 async def _answer(raw: dict[str, Any], handler: Handler) -> bytes:
     if raw.get("v") != IPC_VERSION:
-        return _error_reply(DaemonVersionMismatch(raw.get("v")))
+        return _error_reply(_version_mismatch(raw.get("v")))
     try:
         cmd = raw.get("cmd")
         request = parse_request(cmd if isinstance(cmd, str) else "", raw.get("args"))

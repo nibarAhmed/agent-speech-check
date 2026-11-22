@@ -4,10 +4,9 @@ Each edge (CLI arguments, IPC requests, wire messages, `config.toml`, the state
 file) parses raw input into frozen dataclasses through `Fields`, so every edge
 reports a bad field the same way: `<where> <field>: expected ..., got ...`.
 
-The caller picks the error class by the reader's next step: `UsageError` for
-user input, `ProtocolError` for wire data. For a file `asc` wrote itself, it
-depends on the fix: the state file is `NotConnected` (`asc start` replaces it),
-`relay.json` is `SetupNeeded` (only deleting it helps).
+The caller picks the error class: `UsageError` for user input and config,
+`ProtocolError` for wire data, `DaemonUnreachable` for the state file,
+`OperationalError` for files `asc` wrote itself (`relay.json`).
 """
 
 from __future__ import annotations

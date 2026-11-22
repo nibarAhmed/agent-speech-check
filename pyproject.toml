@@ -106,6 +106,8 @@ select = [
     "E", "F", "W", "I", "B", "BLE", "UP", "SIM", "C4", "PT", "RUF", "ASYNC",
     "PTH", "PL", "TRY", "ARG", "ERA", "S", "T20", "TID251",
 ]
+# Categories in errors.py are raised directly with their message and hint.
+ignore = ["TRY003"]
 
 # Tests and scripts wait for a condition, never a fixed time (AGENTS.md, Testing policy).
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -118,9 +120,9 @@ select = [
 "src/agent_speech_check/config/prompts.py" = ["T20"]
 # The product's own waits and keepalives sleep on purpose; the sleep ban is for tests.
 "src/**" = ["TID251"]
-"tests/**" = ["S101", "PLR2004", "TRY003"]
+"tests/**" = ["S101", "PLR2004"]
 # It runs alone on the Linux machine: stdlib only, so no AscError, and programs from PATH.
-"src/agent_speech_check/orca/helper.py" = ["S603", "S607", "TRY003"]
+"src/agent_speech_check/orca/helper.py" = ["S603", "S607"]
 # Dev scripts and hooks print and run tools on purpose.
 "scripts/**" = ["T20", "S603", "S607"]
 ".claude/**" = ["T20", "S603", "S607"]

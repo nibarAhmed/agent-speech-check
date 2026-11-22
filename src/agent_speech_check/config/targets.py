@@ -32,14 +32,7 @@ import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
 from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS, default_mode
-from agent_speech_check.errors import (
-    ConfigFileError,
-    FileUnusable,
-    RemoteNeedsMachine,
-    UsageError,
-    WindowsOnlyMode,
-    bad_field,
-)
+from agent_speech_check.errors import FileUnusable, UsageError, bad_field
 from agent_speech_check.inputs.keys import PANIC_KEY, Hotkey, parse_hotkey
 from agent_speech_check.nvda import nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
@@ -216,9 +209,20 @@ def check_runnable(target: Target) -> None:
     if target.mode == "remote":
         missing = [name for name in ("ssh", "os") if getattr(target, name) is None]
         if missing:
-            raise RemoteNeedsMachine(missing)
+            sets = ", then ".join(
+                f"asc config set {name} {'USER@HOST' if name == 'ssh' else 'windows|linux'}"
+                " --mode remote --instance VMNAME"
+                for name in missing
+            )
+            raise UsageError(
+                f"remote mode needs {' and '.join(missing)}: which machine, and what it runs",
+                hint=sets,
+            )
     elif target.reader == "orca" and target.mode not in ORCA_MODES:
-        raise WindowsOnlyMode(target.mode)
+        raise UsageError(
+            f"{target.mode} mode needs Windows",
+            hint="on Linux, desktop or watch mode, or remote mode to reach another machine",
+        )
 
 
 def defaults(mode: str, os: str | None = None, platform: str = sys.platform) -> Target:
@@ -242,7 +246,7 @@ def parse(text: str, where: str) -> dict[str, Any]:
     try:
         return tomlkit.parse(text).unwrap()
     except tomlkit.exceptions.ParseError as error:
-        raise ConfigFileError(where, str(error)) from None
+        raise UsageError(f"{where}: {error}") from None
 
 
 def _read(path: Path) -> dict[str, Any]:
@@ -257,7 +261,7 @@ def _read(path: Path) -> dict[str, Any]:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as error:
         line = data[: error.start].count(b"\n") + 1
-        raise ConfigFileError(str(path), f"not UTF-8 (line {line})") from None
+        raise UsageError(f"{path}: not UTF-8 (line {line})") from None
     return parse(text, str(path))
 
 

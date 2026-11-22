@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from agent_speech_check.errors import LineTooLong, MalformedLine, ProtocolError, ServerSentError
+from agent_speech_check.errors import ProtocolError, show
 from agent_speech_check.validate import Fields
 
 MAX_LINE = 1024 * 1024
@@ -95,7 +95,7 @@ def _tone(f: Fields) -> Tone:
 
 
 def _error(f: Fields) -> Message:
-    raise ServerSentError(f.opt_text("message") or "(no message)")
+    raise ProtocolError(f"NVDA reported an error: {show(f.opt_text('message') or '(no message)')}")
 
 
 _PARSERS: dict[str, Callable[[Fields], Message]] = {
@@ -114,11 +114,11 @@ _PARSERS: dict[str, Callable[[Fields], Message]] = {
 def parse_message(line: bytes) -> Message:
     """Parse one line received from NVDA, without its trailing newline."""
     if len(line) > MAX_LINE:
-        raise LineTooLong(MAX_LINE)
+        raise ProtocolError(f"NVDA sent a line longer than {MAX_LINE} bytes")
     try:
         raw = json.loads(line)
     except (ValueError, UnicodeDecodeError) as error:
-        raise MalformedLine(str(error)) from None
+        raise ProtocolError(f"NVDA sent a line that is not a JSON object: {error}") from None
     kind = Fields(raw, "NVDA message", ProtocolError).text("type", max_len=100)
     parser = _PARSERS.get(kind)
     if parser is None:

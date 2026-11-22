@@ -56,7 +56,7 @@ def test_watch_session(env: Env) -> None:
         assert "speech: 2 lines kept, latest 2\n" in status.stdout
 
         refused = run_asc("press", "Tab")
-        assert refused.returncode == 4
+        assert refused.returncode == 3
         assert "watch mode, which never sends keys" in refused.stderr
         assert not any(m.get("type") == "key" for m in fake.received)
 
@@ -129,7 +129,7 @@ def test_cert_and_key_stay_the_same(env: Env) -> None:
 def test_second_start_is_refused() -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     again = run_asc("start", "--mode", "watch")
-    assert again.returncode == 4
+    assert again.returncode == 3
     assert "asc is already running in watch mode" in again.stderr
     # Another agent may have started it, so the hint can't just say to stop it.
     assert again.stderr.endswith("hint: asc stop only if you started it\n")
@@ -149,16 +149,16 @@ def test_stale_state_file_is_removed(env: Env) -> None:
 def test_start_refuses_a_relay_port_in_use(env: Env) -> None:
     with socket.create_server(("127.0.0.1", env.port)):
         failed = run_asc("start", "--mode", "watch")
-    assert failed.returncode == 4
+    assert failed.returncode == 3
     assert f"port {env.port} is in use" in failed.stderr
     assert failed.stderr.endswith("hint: asc config set port PORT --mode watch (a free one)\n")
-    assert not (env.folder("watch") / "daemon.log").exists()
+    assert not (env.folder("watch") / "start_error.json").exists()
 
 
 def test_one_daemon_at_a_time(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     second = run_asc("start", "--mode", "desktop")
-    assert second.returncode == 4
+    assert second.returncode == 3
     assert "asc is already running in watch mode" in second.stderr
     assert "hint: asc stop" in second.stderr
     assert not (env.folder("desktop") / "state.json").exists()
@@ -185,14 +185,14 @@ def test_commands_find_the_daemon_without_a_mode() -> None:
 @pytest.mark.usefixtures("env")
 def test_shared_mode_needs_consent() -> None:
     result = run_asc("start", "--mode", "shared")
-    assert result.returncode == 4
+    assert result.returncode == 3
     assert "sends keys into your own Windows session" in result.stderr
     assert "--i-understand" in result.stderr
 
 
 @pytest.mark.xdist_group("desktop")
 @pytest.mark.usefixtures("env")
-def test_shared_mode_with_the_panic_key_taken_exits_4(env: Env) -> None:
+def test_shared_mode_with_the_panic_key_taken_fails(env: Env) -> None:
     # Its own panic key, which this test holds, so a real asc on this machine can't interfere.
     env.config(f"[defaults]\npanic_key = 'ctrl+shift+alt+f22'\n[shared]\nport = {env.port}\n")
     hotkey = parse_hotkey("ctrl+shift+alt+f22")
@@ -202,6 +202,6 @@ def test_shared_mode_with_the_panic_key_taken_exits_4(env: Env) -> None:
         result = run_asc("start", "--mode", "shared", "--i-understand")
     finally:
         holder.stop()
-    assert result.returncode == 4, result.stderr
+    assert result.returncode == 3, result.stderr
     assert "cannot register the panic hotkey Control+Shift+Alt+F22" in result.stderr
     assert "asc config set panic_key" in result.stderr

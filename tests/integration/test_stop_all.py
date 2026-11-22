@@ -15,7 +15,7 @@ import pytest
 from tests.integration.conftest import Env, free_port, run_asc, wait_until
 
 from agent_speech_check.daemon import session
-from agent_speech_check.errors import AscStillRunning
+from agent_speech_check.errors import OperationalError
 from agent_speech_check.system import processes
 
 
@@ -107,7 +107,7 @@ def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: 
 def test_stop_all_names_processes_that_stay(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 60)
     try:
-        with pytest.raises(AscStillRunning, match=rf"asc is still running \(pid {process.pid}\)"):
+        with pytest.raises(OperationalError, match=rf"asc is still running \(pid {process.pid}\)"):
             list(session.stop_all([env.root / "agent-speech-check"], [image], timeout_s=0.5))
         # Only waited on: never ended.
         assert process.poll() is None
