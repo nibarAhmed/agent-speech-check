@@ -29,13 +29,13 @@ body:
   - type: textarea
     id: expected
     attributes:
-      label: Expected
+      label: Expected behavior
     validations:
       required: true
   - type: textarea
     id: actual
     attributes:
-      label: Actual
+      label: Actual behavior
     validations:
       required: true
   - type: textarea
