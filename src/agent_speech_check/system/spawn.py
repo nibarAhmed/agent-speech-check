@@ -1,4 +1,4 @@
-"""Starting asc's own background processes (the daemon, the sandbox guard, the updater)."""
+"""Starting asc's own background processes (the daemon, the updater)."""
 
 from __future__ import annotations
 

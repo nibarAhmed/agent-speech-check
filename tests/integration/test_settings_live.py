@@ -15,8 +15,8 @@ def test_changes_while_running(env: Env) -> None:
     assert changed.returncode == 0, changed.stderr
     assert changed.stdout.endswith("applies at the next asc start\n")
     # Another mode's settings don't wait.
-    other = run_asc("config", "set", "share", str(env.root), "--mode", "sandbox")
-    assert other.stdout == f"share = {env.root} (sandbox mode)\n"
+    other = run_asc("config", "set", "port", "7000", "--mode", "remote")
+    assert other.stdout == "port = 7000 (remote mode)\n"
     # Command defaults are read by every command, so they apply at once.
     timing = run_asc("config", "set", "timeout_ms", "300")
     assert timing.stdout == "timeout_ms = 300 (global)\n"

@@ -7,7 +7,6 @@ import hashlib
 import sys
 import threading
 import types
-from abc import ABC, abstractmethod
 from collections.abc import Callable
 from ctypes import wintypes
 from pathlib import Path
@@ -98,14 +97,10 @@ def vk_key_scan(char: str) -> tuple[int, int] | None:
 
 # ---------------------------------------------------------------- windows
 
-SW_HIDE = 0
-SW_MINIMIZE = 6
-SW_RESTORE = 9
 _WNDENUMPROC = _FUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 _user32.EnumWindows.argtypes = [_WNDENUMPROC, wintypes.LPARAM]
 _user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
 _user32.IsWindowVisible.argtypes = [wintypes.HWND]
-_user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 
 
 def window_title(hwnd: int) -> str:
@@ -125,41 +120,6 @@ def windows_titled(prefix: str) -> list[int]:
 
     _user32.EnumWindows(_WNDENUMPROC(visit), 0)
     return found
-
-
-def minimize(hwnd: int) -> None:
-    """Minimize a window; Windows activates the window that was below it."""
-    _user32.ShowWindow(hwnd, SW_MINIMIZE)
-
-
-_user32.IsIconic.argtypes = [wintypes.HWND]
-
-
-def is_minimized(hwnd: int) -> bool:
-    return bool(_user32.IsIconic(hwnd))
-
-
-_user32.IsWindow.argtypes = [wintypes.HWND]
-_user32.SetForegroundWindow.argtypes = [wintypes.HWND]
-
-
-def hide(hwnd: int) -> None:
-    """Hide a window: no taskbar button, and it can't take focus."""
-    _user32.ShowWindow(hwnd, SW_HIDE)
-
-
-def restore(hwnd: int) -> None:
-    """Show a hidden or minimised window and try to bring it forward."""
-    if _user32.IsWindow(hwnd):
-        _user32.ShowWindow(hwnd, SW_RESTORE)
-        _user32.SetForegroundWindow(hwnd)
-
-
-_user32.GetForegroundWindow.restype = wintypes.HWND
-_user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, wintypes.LPVOID]
-_user32.GetWindowThreadProcessId.restype = wintypes.DWORD
-_user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
-_user32.BringWindowToTop.argtypes = [wintypes.HWND]
 
 
 INPUT_MOUSE = 0
@@ -196,36 +156,6 @@ def send_still_mouse() -> bool:
 def allow_foreground() -> bool:
     """Let any process take the foreground, if this one may. False if it may not."""
     return bool(_user32.AllowSetForegroundWindow(wintypes.DWORD(ASFW_ANY).value))
-
-
-def foreground() -> int:
-    return _user32.GetForegroundWindow() or 0
-
-
-def window_pid(hwnd: int) -> int:
-    pid = wintypes.DWORD()
-    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-    return pid.value
-
-
-def is_visible(hwnd: int) -> bool:
-    return bool(_user32.IsWindowVisible(hwnd))
-
-
-def focus(hwnd: int) -> None:
-    """Give `hwnd` the foreground. Windows only lets the foreground's own input
-    thread do that, so join it for the moment (the documented way)."""
-    if not _user32.IsWindow(hwnd):
-        return
-    current = _user32.GetWindowThreadProcessId(_user32.GetForegroundWindow(), None)
-    me = _kernel32.GetCurrentThreadId()
-    attached = bool(current) and current != me and _user32.AttachThreadInput(me, current, True)
-    try:
-        _user32.BringWindowToTop(hwnd)
-        _user32.SetForegroundWindow(hwnd)
-    finally:
-        if attached:
-            _user32.AttachThreadInput(me, current, False)
 
 
 # ---------------------------------------------------------------- job objects
@@ -393,55 +323,7 @@ _user32.PostThreadMessageW.argtypes = [
 _kernel32.GetCurrentThreadId.restype = wintypes.DWORD
 
 
-class _MessageThread(ABC):
-    """A thread with its own Windows message loop.
-
-    `_setup` runs first on the thread, and what it returns is what `start`
-    returns. If that is False, the thread ends there and `_setup` has undone
-    what it did. Otherwise each message goes to `_on_message` until `stop`, and
-    then `_teardown` runs.
-    """
-
-    def __init__(self, name: str) -> None:
-        self._thread_id = 0
-        self._ok = False
-        self._ready = threading.Event()
-        self._thread = threading.Thread(target=self._loop, name=name, daemon=True)
-
-    def start(self) -> bool:
-        self._thread.start()
-        self._ready.wait(5)
-        return self._ok
-
-    @abstractmethod
-    def _setup(self) -> bool: ...
-
-    @abstractmethod
-    def _teardown(self) -> None: ...
-
-    def _on_message(self, message: wintypes.MSG) -> None:
-        _user32.DispatchMessageW(ctypes.byref(message))
-
-    def _loop(self) -> None:
-        self._thread_id = int(_kernel32.GetCurrentThreadId())
-        self._ok = self._setup()
-        self._ready.set()
-        if not self._ok:
-            return
-        message = wintypes.MSG()
-        try:
-            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
-                self._on_message(message)
-        finally:
-            self._teardown()
-
-    def stop(self) -> None:
-        if self._thread_id:
-            _user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
-        self._thread.join(5)
-
-
-class GlobalHotkey(_MessageThread):
+class GlobalHotkey:
     """A system-wide hotkey on its own thread with a message loop.
 
     `start` returns False if another program already owns the combination.
@@ -449,210 +331,39 @@ class GlobalHotkey(_MessageThread):
     """
 
     def __init__(self, modifiers: int, vk: int, on_press: Callable[[], None]) -> None:
-        super().__init__("panic-hotkey")
         self._modifiers = modifiers | MOD_NOREPEAT
         self._vk = vk
         self._on_press = on_press
+        self._thread_id = 0
+        self._ok = False
+        self._ready = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name="panic-hotkey", daemon=True)
 
-    def _setup(self) -> bool:
-        return bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
+    def start(self) -> bool:
+        self._thread.start()
+        self._ready.wait(5)
+        return self._ok
 
-    def _on_message(self, message: wintypes.MSG) -> None:
-        if message.message == WM_HOTKEY:
-            self._on_press()
+    def _loop(self) -> None:
+        self._thread_id = int(_kernel32.GetCurrentThreadId())
+        self._ok = bool(_user32.RegisterHotKey(None, _HOTKEY_ID, self._modifiers, self._vk))
+        self._ready.set()
+        if not self._ok:
+            return
+        message = wintypes.MSG()
+        try:
+            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
+                if message.message == WM_HOTKEY:
+                    self._on_press()
+        finally:
+            _user32.UnregisterHotKey(None, _HOTKEY_ID)
 
-    def _teardown(self) -> None:
-        _user32.UnregisterHotKey(None, _HOTKEY_ID)
+    def stop(self) -> None:
+        if self._thread_id:
+            _user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+        self._thread.join(5)
 
     def post(self, message: int) -> None:
         """Post a message to the hotkey thread (WM_QUIT stops it)."""
         if self._thread_id:
             _user32.PostThreadMessageW(self._thread_id, message, 0, 0)
-
-
-# ---------------------------------------------------------------- tray icon
-
-WM_CONTEXTMENU = 0x007B
-WM_TRAY = 0x8000 + 1  # WM_APP + 1
-NIN_SELECT = 0x0400
-NIN_KEYSELECT = 0x0401
-_NIM_ADD, _NIM_DELETE, _NIM_SETVERSION = 0, 2, 4
-_NIF_MESSAGE, _NIF_ICON, _NIF_TIP, _NIF_SHOWTIP = 0x1, 0x2, 0x4, 0x80
-_NOTIFYICON_VERSION_4 = 4
-_IDI_APPLICATION = 32512
-_ERROR_CLASS_ALREADY_EXISTS = 1410
-_TRAY_CLASS = "AgentSpeechCheckTray"
-_TRAY_ID = 1
-
-_LRESULT = ctypes.c_ssize_t
-_WNDPROC = _FUNCTYPE(_LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
-
-
-class _WndClassEx(ctypes.Structure):
-    _fields_ = (
-        ("cbSize", wintypes.UINT),
-        ("style", wintypes.UINT),
-        ("lpfnWndProc", _WNDPROC),
-        ("cbClsExtra", ctypes.c_int),
-        ("cbWndExtra", ctypes.c_int),
-        ("hInstance", wintypes.HINSTANCE),
-        ("hIcon", wintypes.HICON),
-        ("hCursor", wintypes.HANDLE),
-        ("hbrBackground", wintypes.HBRUSH),
-        ("lpszMenuName", wintypes.LPCWSTR),
-        ("lpszClassName", wintypes.LPCWSTR),
-        ("hIconSm", wintypes.HICON),
-    )
-
-
-class _NotifyIconData(ctypes.Structure):
-    _fields_ = (
-        ("cbSize", wintypes.DWORD),
-        ("hWnd", wintypes.HWND),
-        ("uID", wintypes.UINT),
-        ("uFlags", wintypes.UINT),
-        ("uCallbackMessage", wintypes.UINT),
-        ("hIcon", wintypes.HICON),
-        ("szTip", wintypes.WCHAR * 128),
-        ("dwState", wintypes.DWORD),
-        ("dwStateMask", wintypes.DWORD),
-        ("szInfo", wintypes.WCHAR * 256),
-        ("uVersion", wintypes.UINT),
-        ("szInfoTitle", wintypes.WCHAR * 64),
-        ("dwInfoFlags", wintypes.DWORD),
-        ("guidItem", ctypes.c_byte * 16),
-        ("hBalloonIcon", wintypes.HICON),
-    )
-
-
-_shell32 = _dll("shell32")
-_shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.POINTER(_NotifyIconData)]
-_user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-_user32.DefWindowProcW.restype = _LRESULT
-_user32.RegisterClassExW.argtypes = [ctypes.POINTER(_WndClassEx)]
-_user32.RegisterClassExW.restype = wintypes.ATOM
-_user32.CreateWindowExW.argtypes = [
-    wintypes.DWORD,
-    wintypes.LPCWSTR,
-    wintypes.LPCWSTR,
-    wintypes.DWORD,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_int,
-    ctypes.c_int,
-    wintypes.HWND,
-    wintypes.HMENU,
-    wintypes.HINSTANCE,
-    wintypes.LPVOID,
-]
-_user32.CreateWindowExW.restype = wintypes.HWND
-_user32.DestroyWindow.argtypes = [wintypes.HWND]
-_user32.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPVOID]
-_user32.LoadIconW.restype = wintypes.HICON
-_user32.RegisterWindowMessageW.argtypes = [wintypes.LPCWSTR]
-_user32.RegisterWindowMessageW.restype = wintypes.UINT
-_user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
-_user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
-_kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
-_kernel32.GetModuleHandleW.restype = wintypes.HMODULE
-
-# A window class has one window procedure, so it finds the icon by window.
-_tray_icons: dict[int, TrayIcon] = {}
-_tray_class_lock = threading.Lock()
-
-
-def _tray_window_proc(hwnd: int, message: int, wparam: int, lparam: int) -> int:
-    icon = _tray_icons.get(hwnd or 0)
-    if icon is not None and icon.handle(message, lparam):
-        return 0
-    return int(_user32.DefWindowProcW(hwnd, message, wparam, lparam))
-
-
-_TRAY_PROC = _WNDPROC(_tray_window_proc)  # kept alive for Windows to call
-
-
-def _register_tray_class(instance: int) -> bool:
-    with _tray_class_lock:
-        window_class = _WndClassEx()
-        window_class.cbSize = ctypes.sizeof(_WndClassEx)
-        window_class.lpfnWndProc = _TRAY_PROC
-        window_class.hInstance = instance
-        window_class.lpszClassName = _TRAY_CLASS
-        if _user32.RegisterClassExW(ctypes.byref(window_class)):
-            return True
-        return _last_error() == _ERROR_CLASS_ALREADY_EXISTS
-
-
-class TrayIcon(_MessageThread):
-    """A notification area icon on its own thread with a message loop.
-
-    `start` returns False if the icon couldn't be added (no taskbar, say).
-    `on_select` runs on the tray thread when the icon is clicked, or chosen
-    with Enter or the context menu key.
-    """
-
-    def __init__(self, tooltip: str, on_select: Callable[[], None]) -> None:
-        super().__init__("tray-icon")
-        self._tooltip = tooltip[:127]
-        self._on_select = on_select
-        self._taskbar_created = 0
-        self.hwnd = 0
-
-    def _data(self) -> _NotifyIconData:
-        data = _NotifyIconData()
-        data.cbSize = ctypes.sizeof(_NotifyIconData)
-        data.hWnd = self.hwnd
-        data.uID = _TRAY_ID
-        data.uFlags = _NIF_MESSAGE | _NIF_ICON | _NIF_TIP | _NIF_SHOWTIP
-        data.uCallbackMessage = WM_TRAY
-        data.hIcon = _user32.LoadIconW(None, ctypes.c_void_p(_IDI_APPLICATION))
-        data.szTip = self._tooltip
-        data.uVersion = _NOTIFYICON_VERSION_4
-        return data
-
-    def _add(self) -> bool:
-        data = self._data()
-        if not _shell32.Shell_NotifyIconW(_NIM_ADD, ctypes.byref(data)):
-            return False
-        return bool(_shell32.Shell_NotifyIconW(_NIM_SETVERSION, ctypes.byref(data)))
-
-    def handle(self, message: int, lparam: int) -> bool:
-        """Runs on the tray thread. True if the message was ours."""
-        if message == WM_TRAY:
-            if (lparam & 0xFFFF) in (NIN_SELECT, NIN_KEYSELECT, WM_CONTEXTMENU):
-                self._on_select()
-            return True
-        if message == self._taskbar_created:
-            self._add()  # Explorer restarted and lost the icon
-            return True
-        return False
-
-    def _setup(self) -> bool:
-        """Make the icon's window, then the icon."""
-        self._taskbar_created = int(_user32.RegisterWindowMessageW("TaskbarCreated"))
-        instance = _kernel32.GetModuleHandleW(None)
-        if _register_tray_class(instance):
-            self.hwnd = (
-                _user32.CreateWindowExW(
-                    0, _TRAY_CLASS, "asc tray", 0, 0, 0, 0, 0, None, None, instance, None
-                )
-                or 0
-            )
-        if not self.hwnd:
-            return False
-        _tray_icons[self.hwnd] = self
-        if self._add():
-            return True
-        self._teardown()
-        return False
-
-    def _teardown(self) -> None:
-        # Removing an icon that was never added fails, which is fine.
-        _shell32.Shell_NotifyIconW(_NIM_DELETE, ctypes.byref(self._data()))
-        _user32.DestroyWindow(self.hwnd)
-        _tray_icons.pop(self.hwnd, None)
-
-    def post(self, lparam: int) -> None:
-        """Post a tray event to the icon's window, as Windows does on a click."""
-        if self.hwnd:
-            _user32.PostMessageW(self.hwnd, WM_TRAY, 0, lparam)

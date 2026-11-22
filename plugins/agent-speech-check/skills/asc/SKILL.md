@@ -22,7 +22,6 @@ stop and ask the user to switch to the mode this table suggests:
 | Hear the user's own screen reader while you act some other way (browser tools, tests, the user) | `watch` (never sends keys) |
 | Press keys yourself, and no NVDA runs on this machine | `desktop` (needs `asc get-nvda` once) |
 | Press keys yourself on Linux | `desktop` (the default there: its own Orca on a hidden display) |
-| Press keys yourself while the user's NVDA runs | `sandbox` (NVDA in Windows Sandbox, which has no browser; `asc start` takes about a minute) |
 | Press keys in the user's real session | `shared`, only when the user explicitly asks in this conversation; only then add `--i-understand` |
 | Press keys on a machine the user set up, over ssh | `remote` with `os windows` (NVDA, the user starts and connects it; `launch` is refused) or `os linux` (Orca) |
 
@@ -37,12 +36,9 @@ On Linux only desktop, watch and remote mode exist.
   Change one setting with `asc config set NAME VALUE [--mode M]`, and tell the user
   what you changed.
 - Never run `asc uninstall` unless the user explicitly asks to uninstall `asc`.
-- `asc firewall-setup` (sandbox mode) shows an admin prompt and adds a Windows Firewall rule.
-  Ask the user first, unless they already said to go ahead, then run it
-  yourself; they approve the prompt.
 - Shared and Windows desktop mode send keys to the user's desktop. Tell the user the
   panic key from `asc status` before you send any.
-- If the user names their own portable NVDA, set it for desktop or sandbox mode
+- If the user names their own portable NVDA, set it for desktop mode
   (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
 - Never change `launch` yourself. In desktop mode with `launch = false`, `asc`
   starts no NVDA (the user connects one manually), so there is no panic key even
@@ -137,9 +133,6 @@ mode it reads the other machine's: pass the same `--instance`.
 
 - If `asc launch` times out but lists a title under `New windows:`, the app
   started in the background. In watch mode, ask the user to switch to it.
-- Sandbox mode: your own app must live inside a folder configured in sandbox
-  mode's `share` (`asc config set share DIR --mode sandbox`), mapped inside the
-  sandbox as `C:\share\<name>`.
 - Remote mode with NVDA: on the remote machine, the user must enable Remote
   Access in NVDA settings and connect using the details from `asc status`. For a
   VM you manage yourself, save `asc status --nvda-ini` as UTF-8 `nvda.ini` in

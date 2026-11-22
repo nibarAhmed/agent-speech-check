@@ -3,7 +3,7 @@
 `asc setup`, `asc config` and the file loader all read this table, so a setting
 exists in one place. A setting's scope says where it may live:
 - `global`: top level (`mode`) or `[defaults]`
-- `per mode`: a table named after the mode, like `[sandbox]`
+- `per mode`: a table named after the mode, like `[desktop]`
 
 A command default in `[defaults]` gives way to its flag on the command line.
 """
@@ -23,7 +23,7 @@ from agent_speech_check.validate import Fields
 GLOBAL = "global"
 PER_MODE = "per mode"
 
-MODES = ("watch", "desktop", "sandbox", "shared", "remote")
+MODES = ("watch", "desktop", "shared", "remote")
 
 
 def default_mode(platform: str) -> str:
@@ -33,9 +33,6 @@ def default_mode(platform: str) -> str:
 
 DEFAULT_MODE = default_mode(sys.platform)
 
-# Where the sandbox window goes: hidden behind a tray icon, minimised on the
-# taskbar, or left alone.
-WINDOWS = ("tray", "taskbar", "show")
 LAYOUTS = ("desktop", "laptop")
 # What the screen reader's machine runs: NVDA on Windows, Orca on Linux.
 OSES = ("windows", "linux")
@@ -47,7 +44,7 @@ type Value = str | int | bool | list[str]
 class Pref:
     name: str
     scope: str
-    kind: str  # bool, int, choice, destination, hotkey, path, paths or settings
+    kind: str  # bool, int, choice, destination, hotkey, path or settings
     default: str | int | bool | None = None  # None: none, or it depends on the mode
     low: int = 0
     high: int = 0
@@ -55,11 +52,11 @@ class Pref:
 
     @property
     def is_list(self) -> bool:
-        return self.kind in ("paths", "settings")
+        return self.kind == "settings"
 
     def check(self, raw: object, where: str) -> Value:  # noqa: PLR0911 - one return per kind
         """A value from the file, checked on its own. Rules across settings
-        (window outside sandbox mode, say) are checked on the whole table."""
+        (ssh outside remote mode, say) are checked on the whole table."""
         f = Fields({self.name: raw}, where, UsageError)
         if self.kind == "bool":
             return f.flag(self.name)
@@ -69,14 +66,14 @@ class Pref:
             return f.choice(self.name, self.choices)
         if self.kind == "destination":
             return _destination(f.text(self.name, max_len=255), f"{where} {self.name}")
-        if self.kind in ("path", "paths"):
-            one = self.kind == "path"
-            paths = [f.text(self.name, max_len=1000)] if one else list(f.strings(self.name))
+        if self.kind == "path":
+            path = f.text(self.name, max_len=1000)
             # Relative to what? The daemon's folder or this file's would both surprise.
-            if not all(Path(path).is_absolute() for path in paths):
-                expected = "a full path, like C:\\nvda" if one else "full paths, like C:\\src\\app"
-                raise bad_field(UsageError, f"{where} {self.name}", expected, raw)
-            return paths[0] if one else paths
+            if not Path(path).is_absolute():
+                raise bad_field(
+                    UsageError, f"{where} {self.name}", "a full path, like C:\\nvda", raw
+                )
+            return path
         if self.is_list:
             return list(f.strings(self.name))
         # What is left is a hotkey.
@@ -88,11 +85,11 @@ class Pref:
     def parse(self, values: list[str]) -> Value:
         """`asc config set` text into the value the file holds. The whole file
         is checked after, so this only converts."""
-        if self.kind in ("path", "paths") and not all(v.strip() for v in values):
+        if self.kind == "path" and not all(v.strip() for v in values):
             # `Path("").absolute()` is the current folder, which nobody meant.
             raise UsageError(f"setting {show(self.name)}: a path can't be empty")
         if self.is_list:
-            return [str(Path(v).absolute()) if self.kind == "paths" else v for v in values]
+            return list(values)
         if len(values) != 1:
             raise UsageError(f"setting {show(self.name)}: takes one value")
         text = values[0]
@@ -125,8 +122,6 @@ PREFS: tuple[Pref, ...] = (
     Pref("os", PER_MODE, "choice", choices=OSES),
     Pref("ssh", PER_MODE, "destination"),
     Pref("nvda_dir", PER_MODE, "path"),
-    Pref("share", PER_MODE, "paths"),
-    Pref("window", PER_MODE, "choice", choices=WINDOWS),
     Pref("nvda_settings", PER_MODE, "settings"),
     Pref("settle_ms", GLOBAL, "int", ipc.DEFAULT_SETTLE_MS, *ipc.SETTLE_MS),
     Pref("timeout_ms", GLOBAL, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),

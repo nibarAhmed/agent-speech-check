@@ -14,8 +14,7 @@ human's sign-off before breaking it.
 
 - Never set `ASC_E2E_NVDA` on the host: those e2e tests start that NVDA, which replaces the
   user's running one, and nothing starts it again. Real-NVDA e2e tests run on a throwaway CI
-  runner (`.github/workflows/e2e.yml`). The sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made
-  for the host and leave it alone.
+  runner (`.github/workflows/e2e.yml`).
 - Never write the user's own NVDA configuration. `asc` writes only its own copies.
 - Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
   you must, but stop only a PID that `asc` or the test started. On a throwaway CI runner nothing
@@ -49,7 +48,7 @@ human's sign-off before breaking it.
 - No mocks of our own code. The one fake sits at the system boundary: `tests/fake_nvda.py`, which
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
   evidence from real NVDA.
-- Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
+- Code that drives the NVDA installer or a real NVDA is tested by e2e, not by new
   fakes.
 - CI (`e2e.yml`) runs the real-NVDA and real-Orca e2e suites on every PR, and accepts optional
   `pytest_args` and `nvda_version` inputs via `workflow_dispatch` for targeted runs on a branch
@@ -63,9 +62,8 @@ human's sign-off before breaking it.
   | The relay, the protocol, keys, speech, or Windows modes | CI (`e2e.yml`) |
   | Remote mode or ssh | `e2e_linux.py -k "tunnel or taken_port"` locally, plus CI (`e2e.yml`) for Windows |
   | Orca, or desktop or watch mode on Linux | `e2e_linux.py` (`-k watch` for watch mode) |
-  | Sandbox mode | `tests/e2e/test_sandbox_mode.py` on the host, as its docstring says |
-- Some tests touch machine-wide state (window titles, the foreground window, global hotkeys,
-  Windows Sandbox), so a real `asc` sandbox or daemon on this machine can make them fail. Check for
+- Some tests touch machine-wide state (window titles, the foreground window, global hotkeys),
+  so a real `asc` daemon on this machine can make them fail. Check for
   one before blaming your change. When a test clashes, give it its own names, titles and hotkeys
   instead of skipping it. Tests never use the default panic key, and each test that registers a
   hotkey uses its own (Control+Shift+Alt with F21, F22 or F23), because workers run in parallel.

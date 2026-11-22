@@ -19,7 +19,7 @@ from typing import Any, NoReturn
 
 from agent_speech_check import __version__
 from agent_speech_check.config import edit, prefs, prompts
-from agent_speech_check.config.prefs import MODES, WINDOWS
+from agent_speech_check.config.prefs import MODES
 from agent_speech_check.config.targets import Config, Target, check_runnable, load
 from agent_speech_check.daemon import ipc, server, session, state
 from agent_speech_check.errors import (
@@ -37,7 +37,6 @@ from agent_speech_check.inputs.keyref import search as search_commands
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.orca import keyref as orca_keyref
-from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths
 from agent_speech_check.system.paths import config_file, mode_dir, state_root
 from agent_speech_check.system.wait import poll_until
@@ -117,11 +116,6 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
         default=[],
         metavar="SECTION.KEY=VALUE",
         help="an nvda.ini setting for the NVDA asc launches (repeatable)",
-    )
-    parser.add_argument(
-        "--window",
-        choices=WINDOWS,
-        help="sandbox: its window in the tray (default), on the taskbar, or shown",
     )
     parser.add_argument(
         "--i-understand",
@@ -321,8 +315,6 @@ def _show_status(status: dict[str, Any]) -> None:
     print(f"speech: {status['lines']} lines kept, latest {status['latest']}")
     if status.get("panic_key"):
         print(f"panic key: {status['panic_key']} stops asc and releases keys")
-    if status.get("sandbox"):
-        print(f"sandbox: {status['sandbox']}")
     if status["last_error"]:
         print(f"last error: {status['last_error']}")
 
@@ -395,14 +387,14 @@ def _connect_own_reader(folder: Path, status: dict[str, Any]) -> dict[str, Any]:
 
 def cmd_start(args: argparse.Namespace) -> int:
     config = load(config_file())
-    target = _target(args, config).with_window(args.window)
+    target = _target(args, config)
     given = tuple(Setting.parse(text) for text in args.nvda_setting)
     if given and not target.launches_nvda:
         raise BadSetting(args.nvda_setting[0], "only an NVDA that asc launches takes settings")
     settings = nvda_config.merge(target.settings, given)
     nvda_config.check(settings)
     target = target.with_settings(settings).with_consent(args.i_understand)
-    if target.launches_portable and not launcher.running():
+    if target.launches_nvda and not launcher.running():
         _offer_update(target.nvda_dir)
     folder = mode_dir(target.mode)
     status = session.start(target, folder)
@@ -546,7 +538,7 @@ def cmd_type(args: argparse.Namespace) -> int:
 
 def _nvda_dirs(target: Target) -> tuple[list[tuple[str, Path]], str]:
     """Where to look for the mode's NVDA, and the hint if it isn't there."""
-    if target.launches_portable or (target.launches_sandbox and target.nvda_dir):
+    if target.launches_nvda:
         folder = launcher.folder_for(target.nvda_dir)
         return [("the portable NVDA", folder)], launcher.portable_hint(folder)
     return keyref.candidates(), "start your NVDA"
@@ -575,22 +567,6 @@ def cmd_launch(args: argparse.Namespace) -> int:
     _with_defaults(args, {"timeout": "launch_timeout_ms"})
     raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
     _show_reply(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS))
-    return 0
-
-
-def cmd_firewall_setup(args: argparse.Namespace) -> int:
-    target = _target(args)
-    if not target.launches_sandbox:
-        raise UsageError(
-            f"{target.mode} mode needs no firewall rule",
-            hint="only sandbox mode needs one: asc firewall-setup --mode sandbox",
-        )
-    session.check_instance(target, "firewall-setup")
-    wsb.require_available()
-    if firewall.rule_ok(target.port):
-        print(f"firewall rule already in place for port {target.port}")
-        return 0
-    prompts.add_firewall_rule(target.port)
     return 0
 
 
@@ -726,7 +702,7 @@ starts Orca there. Remote mode runs only in a named instance, one per machine.
 
 examples:
   asc start
-  asc start --mode sandbox
+  asc start --mode desktop
   asc start --mode remote --instance vm1""",
         cmd_start,
         _start_args,
@@ -832,8 +808,8 @@ examples:
 Search the screen reader's command reference for entries whose name, keys,
 description, or section contain all SEARCH words (no running asc needed).
 Prints one match per line: KEY  NAME: DESCRIPTION.
-Reads NVDA's Commands Quick Reference (from the portable copy in desktop mode
-or sandbox mode with nvda_dir, otherwise your running or installed NVDA) or
+Reads NVDA's Commands Quick Reference (from the portable copy in desktop mode,
+otherwise your running or installed NVDA) or
 Orca's help files in $XDG_DATA_DIRS. Remote mode reads from the remote machine.
 In browse mode, single letters jump to elements; add Shift to move backward.
 
@@ -850,13 +826,11 @@ examples:
         """\
 Start CMD and wait until the screen reader says text matching --title (a regex),
 or any speech if --title is omitted. Prints what was said, numbered like press.
-Default timeout is 30000 ms. In sandbox mode, CMD runs inside Windows Sandbox,
-which has no Notepad or Edge: launch your own app from C:\\share\\<folder>.
-Refused in remote mode with os windows: start the app there, then use
-asc wait.
+Default timeout is 30000 ms. Refused in remote mode with os windows: start the
+app there, then use asc wait.
 
 examples:
-  asc launch "C:\\share\\app\\run.cmd" --title "My App"
+  asc launch "notepad.exe" --title "Notepad"
   asc launch "py -m myapp" --title "My App" --timeout 60000""",
         cmd_launch,
         _launch_args,
@@ -893,7 +867,7 @@ examples:
     "config": Command(
         "show or change one setting",
         """Show or change settings in config.toml. With no ACTION, prints every setting
-(same as asc config list). Mode-specific settings (port, share, etc.) apply to
+(same as asc config list). Mode-specific settings (port, nvda_dir, etc.) apply to
 --mode, or to the configured default mode if --mode is omitted. Global settings
 and command defaults (settle_ms, timeout_ms, etc.) do not take --mode.
 Command-line flags override command defaults.
@@ -901,28 +875,13 @@ Command-line flags override command defaults.
 examples:
   asc config
   asc config list
-  asc config set mode sandbox                   asc start uses sandbox mode
-  asc config set share C:\\src\\app C:\\data --mode sandbox
+  asc config set mode desktop                   asc start uses desktop mode
+  asc config set nvda_dir C:\\nvda --mode desktop
   asc config set settle_ms 800
   asc config unset settle_ms""",
         cmd_config,
         _config_args,
         takes_mode=True,
-    ),
-    "firewall-setup": Command(
-        "allow NVDA in Windows Sandbox to reach asc (asks for admin once)",
-        """Create the Windows Firewall rule required by sandbox mode (prompts for admin
-rights). NVDA inside Windows Sandbox connects to asc on this computer's Hyper-V
-Default Switch address, which Windows Firewall blocks by default.
-The rule allows inbound TCP from local subnets only, on sandbox mode's port
-(default 16837), for this asc executable only. Re-run after updating Python or
-asc. Other modes need no firewall rule (exit 2).
-
-examples:
-  asc firewall-setup --mode sandbox""",
-        cmd_firewall_setup,
-        takes_mode=True,
-        windows_only=True,
     ),
     "uninstall": Command(
         "remove a Linux release install of asc",
@@ -953,10 +912,6 @@ def run(argv: Sequence[str] | None) -> int:
     if args_list[:1] == ["_daemon"] and len(args_list) == 2:  # noqa: PLR2004 - _daemon JSON
         # Hidden: how `asc start` runs the daemon.
         return server.run(args_list[1])
-    if args_list[:1] == ["_sandbox_guard"] and len(args_list) == 3:  # noqa: PLR2004 - pid, id
-        # Hidden: stops a sandbox once the process that started it is gone.
-        wsb.guard(int(args_list[1]), args_list[2])
-        return 0
     if args_list == ["_stop_all"]:
         # Hidden: how the installer stops every daemon before it replaces or
         # removes asc.exe. Only an installed asc.exe has other copies to wait for.

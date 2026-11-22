@@ -1,5 +1,5 @@
 """The questions `asc setup` asks at a terminal, the NVDA update offer, and the
-two actions they share with `asc get-nvda` and `asc firewall-setup`.
+download action it shares with `asc get-nvda`.
 
 What they ask and how answers are read is in `setup.py`; this module asks and
 says what happened. Only it and `cli.py` print.
@@ -20,7 +20,6 @@ from agent_speech_check.daemon import session
 from agent_speech_check.errors import AlreadyRunning, AscError, UsageError
 from agent_speech_check.inputs import keys
 from agent_speech_check.nvda import launcher
-from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths
 from agent_speech_check.update import uninstall
 
@@ -45,12 +44,6 @@ def _download(version: str | None, sha1: str | None) -> Path:
         return launcher.latest_installer(print)
     print(f"downloading {launcher.installer_url(version)}")
     return launcher.download(version, sha1)
-
-
-def add_firewall_rule(port: int) -> None:
-    print("asking Windows for admin rights to add one firewall rule")
-    firewall.create_rule(port)
-    print(f"firewall rule added: {firewall.SANDBOX_RULE}, TCP {port}, local subnets only")
 
 
 def say_update(release: launcher.Release, nvda_dir: str | None, ask: Ask | None) -> None:
@@ -138,54 +131,31 @@ def _get_nvda_now(ask: Ask) -> None:
     _offer(ask, question, make_portable, "asc get-nvda")
 
 
-def _firewall_now(ask: Ask, port: int) -> None:
-    if firewall.rule_ok(port):
-        return
-    _section("Sandbox mode needs one firewall rule, so NVDA there can reach asc.")
-    question = "Add it now? Windows asks for admin rights."
-    _offer(ask, question, lambda: add_firewall_rule(port), firewall.setup_command())
-
-
 def _ask_mode(ask: Ask, *, named: bool, platform: str) -> str:
     modes = setup.modes(named=named, platform=platform)
-    while True:
-        mode = _ask_choice(ask, "Which mode should asc use?", modes)
-        target = defaults(mode, platform=platform)
-        if mode == "sandbox":
-            try:
-                wsb.require_available()
-            except AscError as error:
-                print(f"{_sentence(error)} Pick another mode.")
-                continue
-        if target.launches_portable and launcher.running():
-            print("Note: desktop mode won't start while another NVDA runs.")
-        if mode == "shared":
-            print("Note: shared mode needs --i-understand at every asc start.")
-        if not setup.runs_here(mode, named=named):
-            print("Remote mode runs only in a named instance, one per VM:")
-            print("asc setup --instance VMNAME. Agents make their own.")
-        elif mode == "remote":
-            print("Note: asc reaches it with ssh and a key, never a password.")
-        if target.takes_panic_key:
-            print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
-        return mode
+    mode = _ask_choice(ask, "Which mode should asc use?", modes)
+    target = defaults(mode, platform=platform)
+    if target.launches_nvda and launcher.running():
+        print("Note: desktop mode won't start while another NVDA runs.")
+    if mode == "shared":
+        print("Note: shared mode needs --i-understand at every asc start.")
+    if not setup.runs_here(mode, named=named):
+        print("Remote mode runs only in a named instance, one per VM:")
+        print("asc setup --instance VMNAME. Agents make their own.")
+    elif mode == "remote":
+        print("Note: asc reaches it with ssh and a key, never a password.")
+    if target.takes_panic_key:
+        print(f"While it runs, {keys.PANIC_KEY} stops asc and releases keys.")
+    return mode
 
 
-def _ask_nvda_dir(ask: Ask, mode: str) -> str | None:
+def _ask_nvda_dir(ask: Ask, _mode: str) -> str | None:
     nvda_dir = None
     if _ask_choice(ask, "Which NVDA should asc run?", setup.NVDA_SOURCES) == "folder":
         nvda_dir = _ask_folder(ask, "Your portable NVDA folder: ", holding="nvda.exe")
-    if nvda_dir is None and mode == "desktop":
+    if nvda_dir is None:
         _get_nvda_now(ask)
     return nvda_dir
-
-
-def _ask_share(ask: Ask, _mode: str) -> tuple[str, ...]:
-    _section("Folders to share with the sandbox, one at a time.")
-    share: list[str] = []
-    while folder := _ask_folder(ask, "Folder, or Enter when done: "):
-        share.append(folder)
-    return tuple(share)
 
 
 def _ask_ssh(ask: Ask, _mode: str) -> str:
@@ -206,8 +176,6 @@ def _asking(question: str, choices: tuple[setup.Choice, ...]) -> Callable[[Ask, 
 _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
     field: {
         "nvda_dir": _ask_nvda_dir,
-        "share": _ask_share,
-        "window": _asking("How should the sandbox window appear?", setup.WINDOWS),
         "keys_layout": _asking("Which keyboard layout does your NVDA use?", setup.LAYOUTS),
         "os": _asking("What does the other machine run?", setup.OSES),
         "ssh": _ask_ssh,
@@ -226,8 +194,6 @@ def _answers(ask: Ask, platform: str) -> tuple[setup.Answers, tuple[str, ...]]:
     for field in setup.QUESTIONS[mode]:
         if setup.asks(field, mode, asked, platform):
             asked[field] = _ASKERS[field](ask, mode)
-    if defaults(mode).launches_sandbox:
-        _firewall_now(ask, defaults(mode).port)
     return setup.Answers(mode, **asked), tuple(asked)
 
 

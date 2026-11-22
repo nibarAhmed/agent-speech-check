@@ -11,18 +11,18 @@ from agent_speech_check.errors import BadSetting, FileUnusable, UsageError
 from agent_speech_check.nvda.nvda_config import Setting, merge
 
 EXAMPLE: dict[str, Any] = {
-    "sandbox": {
+    "desktop": {
         "nvda_settings": ["speech.symbolLevel=300"],
-        "share": ["C:\\src\\app"],
+        "nvda_dir": "C:\\nvda",
     },
     "watch": {"port": 7000},
     "defaults": {"settle_ms": 800, "timeout_ms": 8000},
-    "mode": "sandbox",
+    "mode": "desktop",
 }
 
 EXAMPLE_TEXT = """\
 # asc settings. Change them with asc config set, or start over with asc setup.
-mode = "sandbox"
+mode = "desktop"
 
 [defaults]
 settle_ms = 800
@@ -31,8 +31,8 @@ timeout_ms = 8000
 [watch]
 port = 7000
 
-[sandbox]
-share = ['C:\\src\\app']
+[desktop]
+nvda_dir = 'C:\\nvda'
 nvda_settings = ["speech.symbolLevel=300"]
 """
 
@@ -48,10 +48,10 @@ def test_render_reads_back() -> None:
 
 
 def test_path_with_a_quote_and_a_long_list_read_back() -> None:
-    share = [f"C:\\it's here\\{'x' * 40}{n}" for n in range(3)]
-    data = {"sandbox": {"share": share, "nvda_dir": "D:\\n v'da"}}
+    nvda_settings = [f"speech.option{'x' * 35}{n}=1" for n in range(3)]
+    data = {"desktop": {"nvda_settings": nvda_settings, "nvda_dir": "D:\\n v'da"}}
     text = edit.render(data)
-    assert "share = [\n" in text  # too long for one line: one item per line
+    assert "nvda_settings = [\n" in text  # too long for one line: one item per line
     assert parse(text, "x") == data
 
 
@@ -62,7 +62,7 @@ def test_save_checks_before_writing(tmp_path: Path) -> None:
     assert not path.exists()
     edit.save(path, EXAMPLE)
     assert path.read_bytes() == EXAMPLE_TEXT.encode()
-    assert load(path).modes["sandbox"].share == ("C:\\src\\app",)
+    assert load(path).modes["desktop"].nvda_dir == "C:\\nvda"
     assert not list(path.parent.glob("*.tmp"))
 
 
@@ -79,26 +79,26 @@ def test_mode_setting_goes_to_the_mode_settings_table() -> None:
     assert value is False
     assert data["desktop"] == {"port": 7000, "launch": False}
     assert settings.data["desktop"] == {"port": 7000}  # a copy was changed
-    assert edit.owner(settings, pref, "sandbox") == "sandbox"
+    assert edit.owner(settings, pref, "remote") == "remote"
 
 
 def test_any_mode_setting_makes_its_table() -> None:
     data, _ = edit.set_value(_config({}), prefs.find("port"), ["7000"], "shared")
     assert data == {"shared": {"port": 7000}}
     assert _config(data).resolve("shared").port == 7000
-    data, _ = edit.set_value(_config({}), prefs.find("mode"), ["sandbox"], None)
-    assert data == {"mode": "sandbox"}
+    data, _ = edit.set_value(_config({}), prefs.find("mode"), ["desktop"], None)
+    assert data == {"mode": "desktop"}
 
 
 def test_command_defaults_are_global_only() -> None:
     """Commands talk to whichever daemon runs, so no mode can hold their defaults."""
-    settings = _config({"sandbox": {"window": "show"}})
+    settings = _config({"desktop": {"launch": False}})
     data, _ = edit.set_value(settings, prefs.find("settle_ms"), ["600"], None)
     assert data["defaults"] == {"settle_ms": 600}
     assert _config(data).value("settle_ms") == (600, "global")
     assert _config(data).value("timeout_ms") == (5000, "default")
     with pytest.raises(UsageError, match="is global, so it takes no --mode"):
-        edit.owner(settings, prefs.find("settle_ms"), "sandbox")
+        edit.owner(settings, prefs.find("settle_ms"), "desktop")
 
 
 @pytest.mark.parametrize("name", ["panic_key", "mode"])
@@ -119,9 +119,8 @@ def test_panic_key_is_kept_and_read_back_in_full() -> None:
 
 
 def test_values_are_converted_by_type() -> None:
-    pref = prefs.find("share")
-    assert pref.parse(["a", "C:\\b"]) == [str(Path("a").absolute()), "C:\\b"]
     assert prefs.find("nvda_dir").parse(["n"]) == str(Path("n").absolute())
+    assert prefs.find("nvda_settings").parse(["a.b=1", "c.d=2"]) == ["a.b=1", "c.d=2"]
     assert prefs.find("port").parse(["7"]) == 7
     with pytest.raises(UsageError, match="expected a whole number"):
         prefs.find("port").parse(["x"])
@@ -131,11 +130,10 @@ def test_values_are_converted_by_type() -> None:
         prefs.find("mode").parse(["watch", "desktop"])
 
 
-@pytest.mark.parametrize("name", ["share", "nvda_dir"])
-def test_an_empty_path_is_not_the_current_folder(name: str) -> None:
-    """`Path("").absolute()` is the current folder: an empty value would share it."""
+def test_an_empty_path_is_not_the_current_folder() -> None:
+    """`Path("").absolute()` is the current folder: an empty value would point at it."""
     with pytest.raises(UsageError, match="a path can't be empty"):
-        prefs.find(name).parse([""])
+        prefs.find("nvda_dir").parse([""])
 
 
 def test_unknown_setting_suggests() -> None:
@@ -145,8 +143,8 @@ def test_unknown_setting_suggests() -> None:
 
 
 def test_clashes_are_refused_when_checked() -> None:
-    data, _ = edit.set_value(_config({}), prefs.find("window"), ["show"], "watch")
-    with pytest.raises(UsageError, match="window: expected only in sandbox mode"):
+    data, _ = edit.set_value(_config({}), prefs.find("launch"), ["false"], "watch")
+    with pytest.raises(UsageError, match="launch: expected only in desktop mode"):
         _config(data)
 
 
@@ -162,16 +160,17 @@ def test_unset() -> None:
 def test_entries_say_where_each_value_comes_from() -> None:
     settings = _config(EXAMPLE)
     rows = {name: (value, source) for name, value, source in edit.entries(settings, None)}
-    assert rows["mode"] == ("sandbox", "global")
-    assert rows["port"] == (16837, "default")
-    assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "sandbox")
+    assert rows["mode"] == ("desktop", "global")
+    assert rows["port"] == (0, "default")
+    assert rows["nvda_dir"] == ("C:\\nvda", "desktop")
+    assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "desktop")
     assert rows["settle_ms"] == (800, "global")
     assert rows["timeout_ms"] == (8000, "global")
     assert rows["keys_layout"] == ("desktop", "default")
     assert rows["os"] == (None, "default")  # remote mode's alone
     watch = {name: (value, source) for name, value, source in edit.entries(settings, "watch")}
     assert watch["port"] == (7000, "watch")
-    assert watch["mode"] == ("sandbox", "global")
+    assert watch["mode"] == ("desktop", "global")
     assert list(watch) == [p.name for p in prefs.PREFS]
 
 

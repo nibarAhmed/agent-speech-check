@@ -16,7 +16,7 @@ from tests import fake_nvda as f
 from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client, wait_until
 
 from agent_speech_check.config.prompts import run_setup
-from agent_speech_check.config.targets import SANDBOX_PORT, Target
+from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon import ipc, session, state
 from agent_speech_check.errors import (
     IPC_VERSION,
@@ -25,7 +25,6 @@ from agent_speech_check.errors import (
     NotRunning,
     OperationalError,
 )
-from agent_speech_check.sandbox import firewall
 from agent_speech_check.system import processes
 from agent_speech_check.update import updater
 
@@ -256,17 +255,6 @@ def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     assert not (folder / "start_error.json").exists()
 
 
-@pytest.mark.skipif(
-    not firewall.rule_ok(SANDBOX_PORT),
-    reason="needs the sandbox mode firewall rule on this machine",
-)
-@pytest.mark.usefixtures("env")
-def test_firewall_setup_is_a_no_op_when_done() -> None:
-    result = run_asc("firewall-setup", "--mode", "sandbox")
-    assert result.returncode == 0
-    assert result.stdout == f"firewall rule already in place for port {SANDBOX_PORT}\n"
-
-
 def test_start_replaces_a_stale_state_file(env: Env) -> None:
     folder = env.folder("watch")
     folder.mkdir(parents=True)
@@ -332,8 +320,8 @@ def test_too_many_gestures_send_nothing() -> None:
 
 
 def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
-    """A sandbox's NVDA vanishes without closing when its sandbox stops. The
-    daemon must still exit at once, not when the TLS close times out."""
+    """A peer that vanishes without closing must not hold up daemon shutdown
+    while waiting for the TLS close to time out."""
     assert run_asc("start", "--mode", "watch").returncode == 0
     pid = state.read(env.folder("watch")).pid
     channel = env.channel("watch")

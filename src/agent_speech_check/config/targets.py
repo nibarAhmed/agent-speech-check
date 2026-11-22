@@ -3,18 +3,18 @@
 `config.toml` sits in the state folder (`%LOCALAPPDATA%\\agent-speech-check`).
 `asc setup` and `asc config` write it; `prefs.py` lists every setting it holds:
 
-    mode = "sandbox"
+    mode = "desktop"
 
     [defaults]
     settle_ms = 600
 
-    [sandbox]
-    share = ['C:\\src\\app']
+    [desktop]
+    nvda_dir = 'C:\\nvda'
     nvda_settings = ["keyboard.speakTypedCharacters=False"]
 
 `mode` is what `asc start` uses without `--mode` (if not set: watch, or desktop on Linux). A mode
-without a table gets its defaults. `--nvda-setting` and `--window` are added at
-`asc start` and are not kept. The whole file is checked when it is read, so a
+without a table gets its defaults. `--nvda-setting` is added at
+`asc start` and is not kept. The whole file is checked when it is read, so a
 bad table fails every command, not only the ones that use it.
 """
 
@@ -31,7 +31,7 @@ import tomlkit
 import tomlkit.exceptions
 
 from agent_speech_check.config import prefs
-from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, WINDOWS, default_mode
+from agent_speech_check.config.prefs import DEFAULT_MODE, MODES, default_mode
 from agent_speech_check.errors import FileUnusable, UsageError, bad_field
 from agent_speech_check.inputs.keys import PANIC_KEY, Hotkey, parse_hotkey
 from agent_speech_check.nvda import nvda_config
@@ -39,8 +39,6 @@ from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.validate import Fields
 
 WATCH_PORT = 6837
-# Fixed, so the firewall rule `asc firewall-setup` makes keeps matching.
-SANDBOX_PORT = 16837
 REMOTE_PORT = 26837
 # The modes Orca runs on this Linux machine. Remote mode runs it on another.
 ORCA_MODES = ("desktop", "watch")
@@ -55,8 +53,6 @@ class Target:
     port: int  # 0: pick a free port
     launch: bool
     nvda_dir: str | None = None
-    share: tuple[str, ...] = ()
-    window: str | None = None  # sandbox mode; None: the default, tray
     ssh: str | None = None  # remote mode: the machine NVDA or Orca runs on
     # Where the screen reader runs: windows (NVDA) or linux (Orca). This machine, but
     # remote mode's other machine, None until the user names it.
@@ -89,8 +85,6 @@ class Target:
             f.number("port", low=0, high=65535),
             launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
-            share=f.opt_strings("share"),
-            window=f.opt_text("window", max_len=20),
             ssh=f.opt_text("ssh", max_len=255),
             os=f.opt_text("os", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
@@ -116,7 +110,7 @@ class Target:
         return self.mode == "remote"
 
     @property
-    def launches_portable(self) -> bool:
+    def launches_nvda(self) -> bool:
         """asc starts a portable NVDA on this computer (desktop mode)."""
         return self.mode == "desktop" and self.launch
 
@@ -124,12 +118,7 @@ class Target:
     def takes_panic_key(self) -> bool:
         """asc's keys land in this Windows session (shared mode, or desktop mode's
         own NVDA), so a panic hotkey must be able to stop it."""
-        return self.mode == "shared" or self.launches_portable
-
-    @property
-    def launches_sandbox(self) -> bool:
-        """asc starts NVDA inside Windows Sandbox (sandbox mode)."""
-        return self.mode == "sandbox"
+        return self.mode == "shared" or self.launches_nvda
 
     @property
     def reader(self) -> Reader:
@@ -142,28 +131,15 @@ class Target:
         return self.mode == "remote" and self.os == "windows"
 
     @property
-    def launches_nvda(self) -> bool:
-        return self.launches_portable or self.launches_sandbox
-
-    @property
     def launches_reader(self) -> bool:
         """asc starts the screen reader, so `asc start` waits until it joins."""
         return self.launches_nvda or self.reader == "orca"
-
-    @property
-    def sandbox_window(self) -> str:
-        return self.window or "tray"
 
     def with_settings(self, settings: tuple[Setting, ...]) -> Target:
         return replace(self, settings=settings)
 
     def with_consent(self, consent: bool) -> Target:
         return replace(self, consent=consent)
-
-    def with_window(self, window: str | None) -> Target:
-        if window is None:
-            return self
-        return _checked(replace(self, window=window), "--window")
 
 
 def _check_launch(target: Target, where: str, value: object) -> None:
@@ -193,13 +169,6 @@ def _checked(target: Target, where: str) -> Target:
             "only for an NVDA that asc launches",
             [setting.text for setting in target.settings],
         )
-    if target.window is not None:
-        if not target.launches_sandbox:
-            raise bad_field(UsageError, f"{where} window", "only in sandbox mode", target.window)
-        if target.window not in WINDOWS:
-            raise bad_field(
-                UsageError, f"{where} window", f"one of {', '.join(WINDOWS)}", target.window
-            )
     return target
 
 
@@ -232,7 +201,6 @@ def defaults(mode: str, os: str | None = None, platform: str = sys.platform) -> 
     ports = {
         "watch": WATCH_PORT,
         "shared": WATCH_PORT,
-        "sandbox": SANDBOX_PORT,
         "remote": REMOTE_PORT,
     }
     # Nothing connects to Orca.

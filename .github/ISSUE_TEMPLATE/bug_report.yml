@@ -37,7 +37,6 @@ body:
       options:
         - watch
         - desktop
-        - sandbox
         - shared
         - remote
         - not sure, or asc wasn't started

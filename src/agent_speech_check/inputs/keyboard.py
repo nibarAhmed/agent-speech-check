@@ -103,7 +103,7 @@ class Keyboard:
         """
         if not self.target.keys:
             # On Windows your NVDA runs in watch mode, and desktop mode refuses to start beside it.
-            modes = "sandbox, or desktop" if sys.platform == "win32" else "desktop"
+            modes = "shared, remote, or desktop" if sys.platform == "win32" else "desktop"
             raise OperationalError(
                 "asc is in watch mode, which never sends keys",
                 hint=f"asc stop, then asc start --mode {modes}",

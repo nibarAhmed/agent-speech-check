@@ -40,7 +40,7 @@ def _item(pref: Pref, value: Value) -> object:
     if isinstance(value, list):
         array: Array = tomlkit.array()
         for text in value:
-            array.append(_string(text, path=pref.kind == "paths"))
+            array.append(_string(text, path=False))
         if len(pref.name) + len(" = ") + len(array.as_string()) > _LINE:
             array.multiline(True)
         return array
@@ -131,8 +131,6 @@ def _target_value(target: Target, name: str) -> Value | None:
         return None  # the platform's, not a setting
     if name == "nvda_settings":
         return [setting.text for setting in target.settings]
-    if name == "share":
-        return list(target.share)
     value: Value | None = getattr(target, name)
     return value
 

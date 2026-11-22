@@ -86,7 +86,7 @@ def test_stop_all_with_nothing_running_does_nothing() -> None:
 
 
 def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[bytes]]:
-    """A process running its own copy of an exe, like a sandbox guard still running asc.exe."""
+    """A process running its own copy of an exe, like another asc.exe still running."""
     image = tmp_path / "stand-in.exe"
     shutil.copy(Path(shutil.which("ping") or "ping.exe"), image)
     process = subprocess.Popen(  # noqa: S603 - our copy of ping, fixed arguments

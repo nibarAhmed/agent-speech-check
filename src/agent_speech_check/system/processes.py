@@ -41,14 +41,6 @@ def others_running(*images: Path) -> list[int]:
     ]
 
 
-def wait_exit(pid: int) -> None:
-    """Block until a process exits, however it ends. Returns at once if it's gone."""
-    try:
-        psutil.Process(pid).wait()
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return
-
-
 def created_at(pid: int) -> float | None:
     """When a running process started, in Unix seconds. None if it's gone.
     Raises if it runs but won't say (access denied): that is not the same as gone."""

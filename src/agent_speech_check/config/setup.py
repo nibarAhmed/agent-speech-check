@@ -28,7 +28,7 @@ class Choice:
 
 
 def _choices(names: tuple[str, ...], about: dict[str, str], default: str) -> tuple[Choice, ...]:
-    """Names from `prefs`, so a new mode or window can't be missed here: a name
+    """Names from `prefs`, so a new mode or choice can't be missed here: a name
     without a description fails at import."""
     return tuple(Choice(name, about[name], name == default) for name in names)
 
@@ -42,7 +42,6 @@ def default_of(choices: tuple[Choice, ...]) -> str:
 _MODE_ABOUT = {
     "watch": "listen to your own NVDA while you use it; never sends keys",
     "desktop": "asc runs its own silent NVDA on this desktop",
-    "sandbox": "asc runs its own NVDA inside Windows Sandbox",
     "shared": "asc presses keys in your own NVDA, in your own session",
     "remote": "NVDA or Orca on another machine, like a VM, that asc reaches over ssh",
 }
@@ -71,15 +70,6 @@ NVDA_SOURCES = (
     Choice("asc", "the portable NVDA asc downloads and keeps", default=True),
     Choice("folder", "a portable NVDA folder of your own"),
 )
-WINDOWS = _choices(
-    prefs.WINDOWS,
-    {
-        "tray": "hidden, with a tray icon to show it",
-        "taskbar": "minimised on the taskbar",
-        "show": "left open",
-    },
-    default="tray",  # what targets.py uses when window isn't set
-)
 LAYOUTS = _choices(
     prefs.LAYOUTS,
     {"desktop": "NVDA's desktop keyboard layout", "laptop": "NVDA's laptop keyboard layout"},
@@ -91,7 +81,7 @@ OSES = _choices(
     default="windows",
 )
 # Fails at import unless each question has exactly one default.
-for _question in (NVDA_SOURCES, WINDOWS, LAYOUTS, OSES):
+for _question in (NVDA_SOURCES, LAYOUTS, OSES):
     default_of(_question)
 
 
@@ -149,8 +139,6 @@ def yes_no(answer: str, *, default: bool) -> bool | None:
 class Answers:
     mode: str
     nvda_dir: str | None = None
-    share: tuple[str, ...] = ()
-    window: str = default_of(WINDOWS)
     keys_layout: str = default_of(LAYOUTS)
     os: str | None = None
     ssh: str | None = None
@@ -165,8 +153,6 @@ def _every_answer(labels: dict[str, str]) -> dict[str, str]:
 LABELS = _every_answer(
     {
         "nvda_dir": "NVDA",
-        "share": "Shared folders",
-        "window": "Window",
         "keys_layout": "Keyboard layout",
         "os": "Other machine runs",
         "ssh": "Reached with ssh",
@@ -184,7 +170,6 @@ QUESTIONS = _per_mode(
     {
         "watch": ("keys_layout",),
         "desktop": ("nvda_dir",),
-        "sandbox": ("nvda_dir", "share", "window"),
         "shared": ("keys_layout",),
         "remote": ("os", "ssh", "keys_layout"),
     }
@@ -210,10 +195,6 @@ def to_data(answers: Answers) -> dict[str, Any]:
     table: dict[str, Any] = {}
     if answers.nvda_dir is not None:
         table["nvda_dir"] = answers.nvda_dir
-    if answers.share:
-        table["share"] = list(answers.share)
-    if answers.window != default_of(WINDOWS):
-        table["window"] = answers.window
     if answers.os is not None:
         table["os"] = answers.os
     if answers.ssh is not None:
@@ -231,17 +212,12 @@ def summary_lines(answers: Answers, fields: tuple[str, ...]) -> list[str]:
     Unlike `to_data`, defaults are shown too, so no answer seems lost."""
     rows = [("Mode:", answers.mode)]
     for field in fields:
-        first, *more = _shown(getattr(answers, field))
-        rows.append((f"{LABELS[field]}:", first))
-        rows.extend(("", value) for value in more)
+        rows.append((f"{LABELS[field]}:", _shown(getattr(answers, field))))
     return ["Your settings:", *_columns(rows)]
 
 
-def _shown(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
-    """An answer as the summary says it, one line per folder. No NVDA folder
-    means asc's own NVDA."""
+def _shown(value: str | None) -> str:
+    """An answer as the summary says it. No NVDA folder means asc's own NVDA."""
     if value is None:
-        return (default_of(NVDA_SOURCES),)
-    if isinstance(value, tuple):
-        return value or ("none",)
-    return (str(value),)
+        return default_of(NVDA_SOURCES)
+    return value

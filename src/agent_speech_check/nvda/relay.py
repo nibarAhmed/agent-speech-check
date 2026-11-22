@@ -1,7 +1,7 @@
 """The relay NVDA connects out to (see `docs/protocol.md`).
 
 `asc` is both the relay and the leader. NVDA, the follower, connects to
-127.0.0.1 (in sandbox mode, the host's Default Switch address) and joins the
+127.0.0.1 and joins the
 channel with the mode's key. Before it joins it makes two throwaway connections
 (a verified TLS attempt that fails, then a certificate fetch), so the relay
 accepts and forgets connections that fail or close early.
@@ -48,7 +48,7 @@ log = logging.getLogger(__name__)
 
 HOST = "127.0.0.1"
 JOIN_TIMEOUT_S = 10.0
-# A peer that is gone (killed, or its sandbox stopped) never answers the TLS close.
+# A peer that is gone (killed or disconnected) never answers the TLS close.
 CLOSE_TIMEOUT_S = 1.0
 KEEPALIVE_S = 120.0
 CERT_DAYS = 3650
@@ -191,18 +191,17 @@ class Relay:
     def connected(self) -> bool:
         return self._writer is not None
 
-    async def start(self, port: int, host: str = HOST) -> asyncio.Server:
-        """Listen on exactly one address: 127.0.0.1, or the Default Switch address
-        for sandbox mode. Never on all interfaces."""
+    async def start(self, port: int) -> asyncio.Server:
+        """Listen on 127.0.0.1 only, never on all interfaces."""
         server = await asyncio.start_server(
             self._handle,
-            host,
+            HOST,
             port,
             ssl=self._ssl,
             ssl_handshake_timeout=self.join_timeout_s,
             limit=protocol.MAX_LINE + 1,
         )
-        self.host, self.port = host, server.sockets[0].getsockname()[1]
+        self.host, self.port = HOST, server.sockets[0].getsockname()[1]
         return server
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
