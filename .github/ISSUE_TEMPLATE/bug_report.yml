@@ -1,35 +1,60 @@
 name: Bug report
-description: asc did something wrong or crashed.
+description: asc did something wrong, crashed or fails sometimes.
+title: "[Bug]: "
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: >
-        Leave out anything private. Screen reader speech can contain passwords, messages or email,
-        so check pasted output and logs first.
-  - type: textarea
-    id: what
+        One problem per issue. Feature requests belong in
+        [Discussions](https://github.com/nibarAhmed/agent-speech-check/discussions/categories/ideas).
+        Leave out anything private: screen reader speech can contain passwords, messages or
+        email, so check pasted output and logs first.
+  - type: checkboxes
+    id: checks
     attributes:
-      label: What happened
-      description: What you ran, what you expected and what you got.
-    validations:
-      required: true
+      label: Before submitting
+      options:
+        - label: I searched existing issues and found no duplicate.
+          required: true
+        - label: I removed anything private from what I pasted.
+          required: true
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
       description: The asc commands, in order, and the app they ran against.
-      placeholder: |
-        1. asc start --mode desktop
-        2. asc press tab --expect "OK button"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
     validations:
       required: true
   - type: textarea
     id: output
     attributes:
       label: Output
-      description: asc's output, including any error, hint and exit code.
+      description: asc's output, including any error, hint and exit code. The relevant part only.
       render: text
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: How bad is this in practice?
+      options:
+        - Blocks work completely
+        - Major degradation or frequent failure
+        - Minor bug or occasional failure
+    validations:
+      required: true
   - type: dropdown
     id: mode
     attributes:
@@ -53,21 +78,15 @@ body:
     id: nvda-version
     attributes:
       label: Screen reader version (NVDA or Orca)
-      placeholder: "NVDA 2026.2 or Orca 51.1"
   - type: input
     id: windows-version
     attributes:
       label: OS version
       description: On Windows, run `winver`. On Linux, include your distro and release.
-      placeholder: Windows 11 Pro 24H2 / Ubuntu 26.10
     validations:
       required: true
-  - type: dropdown
-    id: install
+  - type: textarea
+    id: workaround
     attributes:
-      label: Installed from
-      options:
-        - MSI installer (Windows)
-        - Release tarball (Linux)
-        - GitHub (uv tool install git+https://github.com/nibarAhmed/agent-speech-check)
-        - a clone, with uv run
+      label: Workaround
+      description: Anything you found that gets around it.
