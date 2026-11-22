@@ -15,17 +15,11 @@ def test_write_atomic_writes_text_with_unix_newlines(tmp_path: Path) -> None:
     assert path.read_bytes() == b"one\ntwo\n"
 
 
-def test_write_atomic_writes_bytes(tmp_path: Path) -> None:
+def test_write_atomic_replaces_an_old_file(tmp_path: Path) -> None:
     path = tmp_path / "a.pem"
+    path.write_text("old", encoding="utf-8")
     write_atomic(path, b"\x00\r\n\xff")
     assert path.read_bytes() == b"\x00\r\n\xff"
-
-
-def test_write_atomic_replaces_an_old_file(tmp_path: Path) -> None:
-    path = tmp_path / "a.txt"
-    path.write_text("old", encoding="utf-8")
-    write_atomic(path, "new")
-    assert path.read_text(encoding="utf-8") == "new"
 
 
 def test_a_failed_write_keeps_the_old_file_and_leaves_no_temporary(tmp_path: Path) -> None:

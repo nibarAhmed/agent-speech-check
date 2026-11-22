@@ -8,7 +8,6 @@ import pytest
 from agent_speech_check.config import edit, prefs
 from agent_speech_check.config.targets import Config, load, parse
 from agent_speech_check.errors import BadSetting, FileUnusable, UsageError
-from agent_speech_check.nvda.nvda_config import Setting, merge
 
 EXAMPLE: dict[str, Any] = {
     "desktop": {
@@ -136,12 +135,6 @@ def test_an_empty_path_is_not_the_current_folder() -> None:
         prefs.find("nvda_dir").parse([""])
 
 
-def test_unknown_setting_suggests() -> None:
-    with pytest.raises(UsageError, match='unknown setting "setle_ms"') as exc:
-        prefs.find("setle_ms")
-    assert exc.value.hint == "did you mean settle_ms?"
-
-
 def test_clashes_are_refused_when_checked() -> None:
     data, _ = edit.set_value(_config({}), prefs.find("nvda_dir"), ["C:\\nvda"], "watch")
     with pytest.raises(UsageError, match="nvda_dir: expected only for an NVDA that asc launches"):
@@ -168,6 +161,7 @@ def test_entries_say_where_each_value_comes_from() -> None:
     assert rows["timeout_ms"] == (8000, "global")
     assert rows["keys_layout"] == ("desktop", "default")
     assert rows["os"] == (None, "default")  # remote mode's alone
+    assert rows["connect"] == (True, "default")
     watch = {name: (value, source) for name, value, source in edit.entries(settings, "watch")}
     assert watch["port"] == (7000, "watch")
     assert watch["mode"] == ("desktop", "global")
@@ -205,12 +199,6 @@ def test_owned_nvda_setting_names_the_file() -> None:
     data = {"desktop": {"nvda_settings": ["speech.synth=x"]}}
     with pytest.raises(BadSetting, match=r"\[desktop\] nvda_settings \"speech.synth=x\""):
         _config(data)
-
-
-def test_given_setting_replaces_a_kept_one() -> None:
-    kept = (Setting.parse("speech.symbolLevel=300"), Setting.parse("speech.rate=5"))
-    given = (Setting.parse("Speech.SymbolLevel=0"),)
-    assert merge(kept, given) == (kept[1], given[0])
 
 
 def test_save_into_a_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:

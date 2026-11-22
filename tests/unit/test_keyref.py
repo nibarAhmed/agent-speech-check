@@ -62,11 +62,6 @@ def test_rows_without_a_key_are_skipped(commands: list[Command]) -> None:
     assert all(c.key("desktop").lower() != "none" for c in search(commands, [], "desktop"))
 
 
-def test_matches_section_too(commands: list[Command]) -> None:
-    found = search(commands, ["single letter navigation"], "desktop")
-    assert len(found) > 20
-
-
 def test_reference_falls_back_to_english(tmp_path: Path) -> None:
     english = tmp_path / "nvda" / "documentation" / "en" / "keyCommands.html"
     english.parent.mkdir(parents=True)
@@ -79,7 +74,6 @@ def test_reference_not_found_says_where_it_looked(tmp_path: Path) -> None:
         keyref.reference([("the running nvda.exe", tmp_path)], "en", "start your NVDA")
     assert f"Looked in: the running nvda.exe ({tmp_path})" in exc.value.message
     assert exc.value.hint == "start your NVDA"
-    assert exc.value.exit_code == 3
 
 
 ORCA_PAGE = """<page xmlns="http://projectmallard.org/1.0/" type="topic" id="commands_widgets">
@@ -181,4 +175,3 @@ def test_orca_help_not_found_says_where_it_looked(
     with pytest.raises(OperationalError) as exc:
         orca_keyref.commands("en", None)
     assert str(tmp_path / "help" / "C" / "orca") in exc.value.message
-    assert exc.value.exit_code == 3

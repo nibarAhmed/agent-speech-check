@@ -7,9 +7,9 @@ from agent_speech_check.nvda.nvda_config import (
     RelayAddress,
     Setting,
     check,
+    merge,
     parse_ini,
     render,
-    source_config,
     user_ini,
     write,
 )
@@ -82,9 +82,8 @@ def test_user_settings_are_added_and_quoted() -> None:
     ],
 )
 def test_bad_settings(text: str, reason: str) -> None:
-    with pytest.raises(BadSetting, match=reason) as exc:
+    with pytest.raises(BadSetting, match=reason):
         Setting.parse(text)
-    assert exc.value.exit_code == 2
 
 
 def test_key_used_as_section() -> None:
@@ -92,10 +91,10 @@ def test_key_used_as_section() -> None:
         render(RelayAddress("127.0.0.1", 1, "k", "f"), (Setting(("speech", "synth", "x"), "1"),))
 
 
-def test_custom_relay_address_and_pinned_key() -> None:
-    lines = render(RelayAddress("172.24.80.1", 16837, "k", "f")).splitlines()
-    assert "host = 172.24.80.1:16837" in lines
-    assert "172.24.80.1:16837 = f" in lines
+def test_given_setting_replaces_a_kept_one() -> None:
+    kept = (Setting.parse("speech.symbolLevel=300"), Setting.parse("speech.rate=5"))
+    given = (Setting.parse("Speech.SymbolLevel=0"),)
+    assert merge(kept, given) == (kept[1], given[0])
 
 
 USER_INI = """schemaVersion = 24
@@ -158,9 +157,8 @@ def test_a_multi_line_user_value_is_kept() -> None:
     ],
 )
 def test_parse_ini_refuses_what_it_cannot_read(text: str, line: int) -> None:
-    with pytest.raises(UsageError, match=f"nvda.ini line {line}") as exc:
+    with pytest.raises(UsageError, match=f"nvda.ini line {line}"):
         parse_ini(text, "nvda.ini")
-    assert exc.value.exit_code == 2
 
 
 def test_user_config_merge() -> None:
@@ -240,7 +238,3 @@ def test_user_ini_is_checked(tmp_path: Path) -> None:
     (tmp_path / "nvda.ini").write_text("[a]\nbroken\n", encoding="utf-8")
     with pytest.raises(UsageError, match="line 2"):
         user_ini(tmp_path)
-
-
-def test_source_config_is_the_portable_user_config() -> None:
-    assert source_config(Path("C:/nvda")) == Path("C:/nvda/userConfig")

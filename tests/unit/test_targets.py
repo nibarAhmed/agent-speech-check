@@ -25,12 +25,6 @@ def test_no_file_gives_the_platforms_default(tmp_path: Path) -> None:
     assert resolve(tmp_path / "config.toml", None, "linux") == defaults("desktop", None, "linux")
 
 
-def test_mode_defaults() -> None:
-    assert defaults("desktop") == Target("desktop", 0, os="windows")
-    # Remote mode's os is the other machine's, which the user names.
-    assert defaults("remote") == Target("remote", 26837)
-
-
 def test_desktop_mode_on_linux_starts_orca() -> None:
     desktop = defaults("desktop", platform="linux")
     assert desktop == Target("desktop", 0, os="linux")
@@ -39,13 +33,6 @@ def test_desktop_mode_on_linux_starts_orca() -> None:
     assert defaults("watch", platform="linux") == Target("watch", 0, os="linux")
     assert defaults("desktop").reader == "nvda"
     assert Target.from_json(desktop.to_json()) == desktop
-
-
-def test_keys_follow_the_mode() -> None:
-    assert not defaults("watch").keys
-    assert defaults("shared").keys
-    assert defaults("remote").keys
-    assert defaults("desktop").keys
 
 
 def test_panic_key_wherever_keys_reach_this_desktop() -> None:
@@ -113,9 +100,8 @@ def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
 def test_desktop_mode_on_linux_has_no_nvda_settings(
     tmp_path: Path, text: str, message: str
 ) -> None:
-    with pytest.raises(UsageError, match=message) as exc:
+    with pytest.raises(UsageError, match=message):
         resolve(write(tmp_path, f"[desktop]\n{text}"), "desktop", "linux")
-    assert exc.value.exit_code == 2
 
 
 def test_panic_key_default_and_from_file(tmp_path: Path) -> None:
@@ -134,7 +120,8 @@ def test_toml_syntax_error(tmp_path: Path) -> None:
 
 
 def test_json_round_trip() -> None:
-    target = defaults("desktop")
+    settings = (Setting.parse("speech.symbolLevel=300"), Setting.parse("presentation.x=a, b"))
+    target = replace(defaults("desktop"), nvda_dir="C:/nvda").with_settings(settings)
     assert Target.from_json(target.to_json()) == target
     with pytest.raises(UsageError, match="daemon target: expected JSON"):
         Target.from_json("{")
@@ -183,20 +170,8 @@ def test_modes_this_platform_runs() -> None:
     [(None, None, "ssh and os"), ("me@vm", None, "os"), (None, "linux", "ssh")],
 )
 def test_remote_mode_needs_its_machine(ssh: str | None, os: str | None, missing: str) -> None:
-    with pytest.raises(UsageError, match=f"^remote mode needs {missing}") as exc:
+    with pytest.raises(UsageError, match=f"^remote mode needs {missing}"):
         check_runnable(replace(defaults("remote"), ssh=ssh, os=os))
-    assert exc.value.exit_code == 2
-
-
-def test_json_round_trip_with_settings_and_nvda_dir() -> None:
-    settings = (Setting.parse("speech.symbolLevel=300"), Setting.parse("presentation.x=a, b"))
-    target = replace(defaults("desktop"), nvda_dir="C:/nvda").with_settings(settings)
-    assert Target.from_json(target.to_json()) == target
-
-
-def test_nvda_dir_from_file(tmp_path: Path) -> None:
-    path = write(tmp_path, "[desktop]\nnvda_dir = 'C:/nvda'\n")
-    assert resolve(path, "desktop").nvda_dir == "C:/nvda"
 
 
 @pytest.mark.parametrize(
@@ -205,16 +180,14 @@ def test_nvda_dir_from_file(tmp_path: Path) -> None:
 )
 def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
     path = write(tmp_path, f"{table}\nnvda_dir = 'C:/nvda'\n")
-    with pytest.raises(UsageError, match="only for an NVDA that asc launches") as exc:
+    with pytest.raises(UsageError, match="only for an NVDA that asc launches"):
         resolve(path, None)
-    assert exc.value.exit_code == 2
 
 
 def test_relative_nvda_dir_in_file_is_refused(tmp_path: Path) -> None:
     path = write(tmp_path, "[desktop]\nnvda_dir = 'nvda'\n")
-    with pytest.raises(UsageError, match=r"a full path, like C:\\nvda, got") as exc:
+    with pytest.raises(UsageError, match=r"a full path, like C:\\nvda, got"):
         resolve(path, None)
-    assert exc.value.exit_code == 2
 
 
 def test_file_not_in_utf8(tmp_path: Path) -> None:

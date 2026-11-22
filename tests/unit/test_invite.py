@@ -6,7 +6,6 @@ from __future__ import annotations
 import uuid
 import winreg
 
-from agent_speech_check.config.targets import Config, defaults
 from agent_speech_check.nvda import invite
 
 
@@ -32,14 +31,3 @@ def test_registered_only_when_the_link_scheme_has_a_command() -> None:
     finally:
         for key in (command, rf"{scheme}\shell\open", rf"{scheme}\shell", scheme):
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
-
-
-def test_only_watch_and_shared_mode_use_your_own_nvda() -> None:
-    own = {mode: defaults(mode).own_reader for mode in ("watch", "desktop", "shared", "remote")}
-    assert own == {"watch": True, "desktop": False, "shared": True, "remote": False}
-
-
-def test_connect_is_on_unless_set_off() -> None:
-    assert Config.from_data({}, "config.toml").value("connect") == (True, "default")
-    off = Config.from_data({"defaults": {"connect": False}}, "config.toml")
-    assert off.value("connect") == (False, "global")

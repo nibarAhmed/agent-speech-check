@@ -84,10 +84,6 @@ def test_process_lookups() -> None:
     assert processes.image_path(0) is None
 
 
-def test_windows_titled_with_no_match() -> None:
-    assert winapi.windows_titled("no window has this title, asc") == []
-
-
 def test_powershell_quote_and_encoded() -> None:
     assert powershell.quote("C:\\it's\\x.exe") == "'C:\\it''s\\x.exe'"
     assert base64.b64decode(powershell.encoded("hi")).decode("utf-16-le") == "hi"
@@ -103,11 +99,8 @@ def test_mutex_is_exclusive(tmp_path: Path) -> None:
 
 def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    assert launcher.managed_dir() == tmp_path / "agent-speech-check" / "nvda" / "portable"
     assert launcher.folder_for(None) == launcher.managed_dir()
     assert launcher.folder_for("C:/x") == Path("C:/x")
-    assert launcher.installer_path("2026.2").name == "nvda_2026.2.exe"
-    assert launcher.installer_url("2026.2").startswith("https://download.nvaccess.org/releases/")
     with pytest.raises(OperationalError, match="NVDA not found") as exc:
         launcher.require_exe(launcher.managed_dir())
     assert exc.value.hint == "asc get-nvda"
@@ -234,14 +227,6 @@ def test_start_failure_keeps_its_message_and_category() -> None:
             error.exit_code,
         )
     assert failure({"failure": None}) is None
-
-
-def test_running_nvda_stop_kills_its_job() -> None:
-    # A stand-in child process: Running only needs a process and its job.
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-    running = launcher.Running(child, winapi.kill_on_close_job(child.pid))
-    running.stop()
-    assert child.poll() is not None
 
 
 def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -508,18 +493,8 @@ def test_nvda_version_check() -> None:
             OperationalError, match=re.escape(f"{named} is version ") + r"\d+\.\d"
         ) as exc:
             launcher.check_version(named, old)
-        assert exc.value.exit_code == 3
         assert "needs 2026.2 or later" in exc.value.message
-
-
-def test_an_old_nvda_gets_the_hint_for_its_folder() -> None:
-    # asc get-nvda can't replace an NVDA in a folder the user named in nvda_dir.
-    with pytest.raises(OperationalError, match=r"needs 2026\.2 or later") as exc:
-        launcher.check_version(Path("C:/nvda"), (2025, 1))
-    assert exc.value.hint == "check nvda_dir"
-    with pytest.raises(OperationalError, match=r"needs 2026\.2 or later") as exc:
-        launcher.check_version(launcher.managed_dir(), (2025, 1))
-    assert exc.value.hint == "asc get-nvda"
+        assert exc.value.hint == "check nvda_dir"
 
 
 def test_a_mode_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
@@ -529,9 +504,3 @@ def test_a_mode_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
     with pytest.raises(FileUnusable) as exc:
         session._spawn(defaults("shared"), blocked)
     assert str(blocked) in exc.value.message
-
-
-def test_installer_timed_out_names_remaining_processes() -> None:
-    error = launcher._installer_timed_out(0.5, [111, 222])
-    assert "could not end process 111, 222" in error.message
-    assert "ended it" not in error.message

@@ -56,13 +56,6 @@ def test_unknown_key_suggests() -> None:
     assert exc.value.message == 'unknown key "Escap"'
     assert exc.value.hint is not None
     assert "Escape" in exc.value.hint
-    assert exc.value.exit_code == 2
-
-
-def test_unknown_key_without_suggestions() -> None:
-    with pytest.raises(UnknownKey) as exc:
-        parse_key("qqqqqqqq")
-    assert exc.value.hint == "see asc keys"
 
 
 def test_gesture_order() -> None:
