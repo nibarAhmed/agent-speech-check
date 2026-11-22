@@ -254,7 +254,7 @@ _BY_KIND = {category.kind: category for category in CATEGORIES}
 
 EXIT_INTERRUPTED = 130
 
-IPC_VERSION = 4
+IPC_VERSION = 1
 
 
 def from_kind(kind: str, message: str, hint: str | None = None) -> AscError:

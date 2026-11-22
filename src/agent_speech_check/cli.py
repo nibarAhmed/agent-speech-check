@@ -42,27 +42,32 @@ from agent_speech_check.system.paths import config_file, mode_dir, state_root
 from agent_speech_check.system.wait import poll_until
 from agent_speech_check.update import uninstall, updater
 
-DESCRIPTION = """\
-Agent Speech Check: use a screen reader (NVDA, or Orca on Linux) the way a
-blind user does. Press keys, read what it says as text, and check it.
+DESCRIPTION = (
+    "Agent Speech Check: test apps with a real screen reader (NVDA on Windows,\n"
+    "Orca on Linux). Press keys, read what it says as text, and check it."
+)
 
-typical use:
-  asc setup                    choose your settings (once)
-  asc start                    start recording in your configured mode
-  asc status                   check connection status and how to connect
-  asc mark                     print the latest line number, N
-  asc wait --since N "OK"      wait until matching speech is said after line N (regex)
-  asc speech --since N         print what was said after line N
+EPILOG = """\
+examples:
+  asc setup
+  asc start
+  asc mark                         # prints mark: N
+  asc wait --since N "OK"
+  asc press Tab --expect "Submit"
   asc stop
 
-Speech is kept in memory only. Run asc COMMAND --help for details.
---instance NAME (or ASC_INSTANCE) runs an isolated asc instance with its own
-config and daemon alongside the default one (useful for one per agent or VM).
-"""
+Speech is kept in memory only. Run 'asc COMMAND --help' for command details.
+Exit codes: 0 ok, 1 no match/timeout, 2 usage/config, 3 operational, 4 internal.
+Docs: https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#exit-codes"""
 
-EPILOG = (
-    "exit codes: https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md#exit-codes"
-)
+
+class _HelpFormatter(argparse.RawDescriptionHelpFormatter):
+    """List subcommands directly under their section header without a redundant metavar line."""
+
+    def _format_action(self, action: argparse.Action) -> str:
+        if isinstance(action, argparse._SubParsersAction):
+            return self._join_parts([self._format_action(sub) for sub in action._get_subactions()])
+        return super()._format_action(action)
 
 
 @dataclass(frozen=True)
@@ -74,6 +79,7 @@ class Command:
     details: str
     run: Callable[[argparse.Namespace], int]
     add_args: Callable[[argparse.ArgumentParser], None] | None = None
+    examples: str = ""
     # True for a command that works on one mode's settings.
     takes_mode: bool = False
     windows_only: bool = False
@@ -82,7 +88,10 @@ class Command:
 
 def _add_instance(parser: argparse.ArgumentParser, default: str | None) -> None:
     parser.add_argument(
-        "--instance", metavar="NAME", default=default, help="default: ASC_INSTANCE, else none"
+        "--instance",
+        metavar="NAME",
+        default=default,
+        help="run an isolated instance with its own config and daemon (default: ASC_INSTANCE)",
     )
 
 
@@ -91,21 +100,29 @@ def _add_mode(parser: argparse.ArgumentParser, default: object = None) -> None:
         "--mode",
         choices=MODES,
         default=default,
-        help="default: the mode setting, else watch (desktop on Linux)",
+        help="mode to use (default: mode setting, else watch on Windows, desktop on Linux)",
     )
 
 
 def _default(name: str) -> str:
-    return f"default: the {name} setting, {edit.show(prefs.BY_NAME[name].default)} unless set"
+    return f"default: {name} setting, {edit.show(prefs.BY_NAME[name].default)}"
 
 
 def _timeout(parser: argparse.ArgumentParser, name: str = "timeout_ms") -> None:
-    parser.add_argument("--timeout", type=int, metavar="MS", help=_default(name))
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        metavar="MS",
+        help=f"maximum wait time in ms ({_default(name)})",
+    )
 
 
 def _settle(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "--settle", type=int, metavar="MS", help=f"quiet period ({_default('settle_ms')})"
+        "--settle",
+        type=int,
+        metavar="MS",
+        help=f"quiet period after input in ms ({_default('settle_ms')})",
     )
 
 
@@ -120,7 +137,7 @@ def _start_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--i-understand",
         action="store_true",
-        help="shared mode: yes, send keys into my own session",
+        help="shared mode: confirm sending keys into your own Windows session",
     )
 
 
@@ -129,27 +146,37 @@ def _status_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--nvda-ini",
         action="store_true",
-        help="remote mode (Windows): print an nvda.ini for unattended NVDA setup",
+        help=(
+            "remote mode (Windows): print an unattended nvda.ini "
+            "(save as UTF-8 in that NVDA's config folder while NVDA is closed)"
+        ),
     )
     group.add_argument(
         "--all",
         action="store_true",
-        help="list every configured or running instance",
+        help="list every configured or running instance (exits 0 even when nothing runs)",
     )
 
 
-def _since(parser: argparse.ArgumentParser, text: str = "lines after N") -> None:
+def _since(
+    parser: argparse.ArgumentParser, text: str = "read lines spoken after line N (required)"
+) -> None:
     parser.add_argument("--since", type=int, metavar="N", required=True, help=text)
 
 
 def _wait_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("regex", metavar="REGEX")
+    parser.add_argument("regex", metavar="REGEX", help="Python regex to match against spoken lines")
     _timeout(parser)
-    _since(parser, "lines after N: this step's mark, or old speech can match")
+    _since(parser, "match lines spoken after line N; use asc mark first (required)")
 
 
 def _press_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("gestures", nargs="+", metavar="KEY")
+    parser.add_argument(
+        "gestures",
+        nargs="+",
+        metavar="KEY",
+        help="key gesture(s) joined with +, like Tab or NVDA+Tab",
+    )
     parser.add_argument(
         "--expect", metavar="REGEX", help="wait up to --timeout for a match, else exit 1"
     )
@@ -158,19 +185,25 @@ def _press_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _stop_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--all", action="store_true", help="every instance's daemon")
+    parser.add_argument(
+        "--all", action="store_true", help="stop every instance's daemon and skip the update check"
+    )
 
 
 def _type_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("text", metavar="TEXT")
+    parser.add_argument("text", metavar="TEXT", help="text to type one character at a time")
     _settle(parser)
     _timeout(parser)
 
 
 def _keys_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("words", nargs="*", metavar="SEARCH")
     parser.add_argument(
-        "--layout", choices=prefs.BY_NAME["keys_layout"].choices, help=_default("keys_layout")
+        "words", nargs="*", metavar="SEARCH", help="words that must all appear in matching entries"
+    )
+    parser.add_argument(
+        "--layout",
+        choices=prefs.BY_NAME["keys_layout"].choices,
+        help=f"keyboard layout ({_default('keys_layout')})",
     )
     parser.add_argument(
         "--lang", default="en", help="reference language, falling back to en (default: en)"
@@ -179,12 +212,12 @@ def _keys_args(parser: argparse.ArgumentParser) -> None:
         "--braille",
         action=argparse.BooleanOptionalAction,
         default=False,
-        help="include braille displays (default: off)",
+        help="include braille display commands (default: off)",
     )
 
 
 def _launch_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("app", metavar="CMD")
+    parser.add_argument("app", metavar="CMD", help="command line to start")
     parser.add_argument("--title", metavar="REGEX", help="wait until the screen reader says this")
     _timeout(parser, "launch_timeout_ms")
 
@@ -193,13 +226,19 @@ def _get_nvda_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--version",
         dest="nvda_version",
-        help="the NVDA version (default: the latest)",
+        help="NVDA version to download, like 2026.2 (default: latest)",
     )
-    parser.add_argument("--installer", metavar="FILE", help="use this installer, no download")
+    parser.add_argument(
+        "--installer",
+        metavar="FILE",
+        help="local NVDA installer file to use instead of downloading",
+    )
 
 
 def _setup_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--yes", action="store_true", help="replace settings without asking")
+    parser.add_argument(
+        "--yes", action="store_true", help="replace existing settings without asking"
+    )
 
 
 def _uninstall_args(parser: argparse.ArgumentParser) -> None:
@@ -225,14 +264,24 @@ CONFIG_HELP = {
 
 
 def _config_args(parser: argparse.ArgumentParser) -> None:
-    actions = parser.add_subparsers(dest="action", metavar="ACTION")
+    actions = parser.add_subparsers(title="actions", dest="action", metavar="ACTION")
     for action, summary in CONFIG_HELP.items():
-        sub = actions.add_parser(action, help=summary, description=summary)
+        description = summary[:1].upper() + summary[1:] + "."
+        sub = actions.add_parser(
+            action, help=summary, description=description, formatter_class=_HelpFormatter
+        )
         _add_instance(sub, argparse.SUPPRESS)
         if action in ("get", "set", "unset"):
-            sub.add_argument("name", metavar="NAME")
+            sub.add_argument(
+                "name", metavar="NAME", help="setting name (run 'asc config list' to see all)"
+            )
         if action == "set":
-            sub.add_argument("values", nargs="+", metavar="VALUE")
+            sub.add_argument(
+                "values",
+                nargs="+",
+                metavar="VALUE",
+                help="new value (repeat for list settings like nvda_settings)",
+            )
         if action != "path":
             _add_mode(sub, argparse.SUPPRESS)
 
@@ -261,17 +310,18 @@ def build_parser() -> argparse.ArgumentParser:
         prog="asc",
         description=DESCRIPTION,
         epilog=EPILOG,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
+        formatter_class=_HelpFormatter,
     )
-    parser.add_argument("--version", action="version", version=f"asc {__version__}")
+    parser.add_argument("-V", "--version", action="version", version=f"asc {__version__}")
     _add_instance(parser, None)
-    commands = parser.add_subparsers(dest="command", metavar="COMMAND")
+    commands = parser.add_subparsers(title="commands", dest="command", metavar="COMMAND")
     for name, command in COMMANDS.items():
         sub = commands.add_parser(
             name,
             help=command.summary,
             description=command.details,
-            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog=command.examples or None,
+            formatter_class=_HelpFormatter,
         )
         # Suppressed, so a subcommand without it keeps the one given before it.
         _add_instance(sub, argparse.SUPPRESS)
@@ -685,88 +735,80 @@ COMMANDS: dict[str, Command] = {
     "start": Command(
         "start recording",
         """\
-Start the background daemon using --mode or the configured default mode (watch
-on Windows, desktop on Linux) with that mode's settings from config.toml (see
-asc config). One daemon runs per instance and serves all other commands.
+Start the background daemon in --mode or the configured default mode (watch on
+Windows, desktop on Linux) using its settings from config.toml (see asc config).
+One daemon runs per instance and serves all other commands.
 
-desktop mode: asc starts its own portable NVDA on this desktop. On Linux it
-starts Orca on a hidden virtual display instead.
-
-watch mode: records speech from your own screen reader without sending keys.
-On Windows, asc start invites your running NVDA to connect and waits up to a
-minute for you to answer Yes (and trust the certificate the first time). NVDA
-then reconnects automatically until it restarts. Disable automatic invites with
-asc config set connect false and connect manually in NVDA (see asc status).
-On Linux, watch mode records your running Orca, which must have been started
-with asc's secret; if not, asc start fails with the restart command.
-
-remote mode: runs the screen reader on another machine (such as a VM) over ssh
-using key authentication. With os windows, start NVDA there yourself; asc opens
-an ssh tunnel to 127.0.0.1 on that machine (see asc status). With os linux, asc
-starts Orca there. Remote mode runs only in a named instance, one per machine.
-
+modes:
+  watch    record your own running screen reader without sending keys
+           (Windows: invites NVDA and waits up to 1 min for approval; disable
+           with asc config set connect false. Linux: Orca must start with
+           asc's secret, or asc start prints the restart command.)
+  desktop  start asc's own screen reader (portable NVDA on Windows, hidden
+           Orca on Linux)
+  shared   send keys through your own running NVDA on Windows (requires
+           --i-understand every time)
+  remote   reach NVDA or Orca on another machine over ssh (requires --instance;
+           os windows tunnels to 127.0.0.1 for an NVDA you start there, os
+           linux starts Orca there)""",
+        cmd_start,
+        _start_args,
+        examples="""\
 examples:
   asc start
   asc start --mode desktop
   asc start --mode remote --instance vm1""",
-        cmd_start,
-        _start_args,
         takes_mode=True,
     ),
     "stop": Command(
         "stop recording and forget the speech",
         "Stop this instance's daemon (regardless of mode) and release any held keys.\n"
-        "Unresponsive daemons are terminated. --all stops every instance and skips\n"
-        "the background update check (run it before uninstalling asc).",
+        "Unresponsive daemons are terminated.",
         cmd_stop,
         _stop_args,
+        examples="""\
+examples:
+  asc stop
+  asc stop --all""",
     ),
     "status": Command(
-        "show whether asc is recording and the screen reader is connected",
+        "show recording and screen reader connection status",
         """\
 Show the active mode, whether NVDA or Orca is connected, how to connect NVDA,
-and the browse/focus mode (unknown until the screen reader first switches).
-
---all: list every configured or running instance (default and named), with its
-mode and whether it is running. Exits 0 even when nothing runs.
-
---nvda-ini (remote mode with os windows): instead of status, print a
-ready-to-use nvda.ini that connects NVDA unattended (Remote Access enabled,
-certificate trusted, silent synth, no startup prompts). Save it as UTF-8
-nvda.ini in that NVDA's config folder while NVDA is closed.
-
+and the browse/focus mode (unknown until the screen reader first switches).""",
+        cmd_status,
+        _status_args,
+        examples="""\
 examples:
   asc status
   asc status --all
   asc status --nvda-ini --instance vm1""",
-        cmd_status,
-        _status_args,
     ),
     "speech": Command(
         "print what the screen reader said after a line",
         """\
 Print what the screen reader said after line N, one numbered line per utterance,
-plus mode changes. Take N from asc mark, or from the last line you read.
-
+plus mode changes. Take N from asc mark, or from the last line you read.""",
+        cmd_speech,
+        _since,
+        examples="""\
 examples:
   asc speech --since 0       everything still kept
   asc speech --since 41      lines after 41""",
-        cmd_speech,
-        _since,
     ),
     "wait": Command(
-        "wait until the screen reader says something matching REGEX",
+        "wait until speech matches REGEX",
         """\
 Wait until an utterance after line N matches REGEX (Python regex, searched
 anywhere in the line; use (?i) to ignore case), then print it with its line
 number (use that number as the next --since). Exits 1 with what was said if
-nothing matches before the timeout.
-
+nothing matches before the timeout.""",
+        cmd_wait,
+        _wait_args,
+        examples="""\
 examples:
   asc wait --since 40 "OK button"
   asc wait --since 40 "(?i)saved" --timeout 10000""",
-        cmd_wait,
-        _wait_args,
     ),
     "mark": Command(
         "print the latest line number",
@@ -782,15 +824,15 @@ as numbered lines, or (nothing said after N). Pass the last printed line number
 (or N) as the next --since for wait or speech.
 With --expect, asc waits up to --timeout for a match before exiting 1.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
-Watch mode refuses keys.
-
+Watch mode refuses keys.""",
+        cmd_press,
+        _press_args,
+        examples="""\
 examples:
   asc press Tab
   asc press NVDA+Tab
   asc press H H --expect "level 2"
   asc press Control+Home NVDA+Down""",
-        cmd_press,
-        _press_args,
     ),
     "type": Command(
         "type text and print what was said",
@@ -799,31 +841,31 @@ Type TEXT one character at a time using this computer's keyboard layout
 (with Orca, each character is sent directly). Every character is checked first;
 if any cannot be typed, nothing is sent (exit 2). Waits for one --settle quiet
 period after typing, then prints new speech like press.
-Watch mode refuses input.
-
+Watch mode refuses input.""",
+        cmd_type,
+        _type_args,
+        examples="""\
 examples:
   asc type "hello world"
   asc type "x@example.com" --settle 800""",
-        cmd_type,
-        _type_args,
     ),
     "keys": Command(
-        "look up screen reader commands in its own reference",
+        "look up screen reader commands in its reference",
         """\
 Search the screen reader's command reference for entries whose name, keys,
 description, or section contain all SEARCH words (no running asc needed).
 Prints one match per line: KEY  NAME: DESCRIPTION.
 Reads NVDA's Commands Quick Reference (from the portable copy in desktop mode,
-otherwise your running or installed NVDA) or
-Orca's help files in $XDG_DATA_DIRS. Remote mode reads from the remote machine.
-In browse mode, single letters jump to elements; add Shift to move backward.
-
+otherwise your running or installed NVDA) or Orca's help files in
+$XDG_DATA_DIRS. Remote mode reads from the remote machine.
+In browse mode, single letters jump to elements; add Shift to move backward.""",
+        cmd_keys,
+        _keys_args,
+        examples="""\
 examples:
   asc keys heading
   asc keys report title
   asc keys --layout laptop current line""",
-        cmd_keys,
-        _keys_args,
         takes_mode=True,
     ),
     "launch": Command(
@@ -831,80 +873,82 @@ examples:
         """\
 Start CMD and wait until the screen reader says text matching --title (a regex),
 or any speech if --title is omitted. Prints what was said, numbered like press.
-Default timeout is 30000 ms. Refused in remote mode with os windows: start the
-app there, then use asc wait.
-
+Refused in remote mode with os windows: start the app there, then use asc wait.""",
+        cmd_launch,
+        _launch_args,
+        examples="""\
 examples:
   asc launch "notepad.exe" --title "Notepad"
   asc launch "py -m myapp" --title "My App" --timeout 60000""",
-        cmd_launch,
-        _launch_args,
     ),
     "get-nvda": Command(
-        "make the portable NVDA that desktop mode launches",
+        "download a portable NVDA for desktop mode (Windows)",
         """\
 Download NVDA from NV Access and extract a portable copy for desktop mode to
 %LOCALAPPDATA%\\agent-speech-check\\nvda\\portable. Defaults to the latest
-release (or the last cached installer when offline). Refuses while
-any NVDA is running, because running the installer would restart it.
-
+release (or the last cached installer when offline). Refuses while any NVDA is
+running, because running the installer would restart it.""",
+        cmd_get_nvda,
+        _get_nvda_args,
+        examples="""\
 examples:
   asc get-nvda
   asc get-nvda --version 2026.2
   asc get-nvda --installer nvda_2026.2.exe""",
-        cmd_get_nvda,
-        _get_nvda_args,
         windows_only=True,
     ),
     "setup": Command(
-        "choose your settings, by answering questions",
-        """Ask a few questions and save the answers in config.toml: your mode and its
+        "configure settings interactively",
+        """\
+Ask a few questions and save the answers in config.toml: your mode and its
 settings. Running it again replaces all your settings. Requires a terminal;
 scripts and agents should use asc config instead. Press Enter to keep a default,
-or Ctrl+C to stop without saving.
-
+or Ctrl+C to stop without saving.""",
+        cmd_setup,
+        _setup_args,
+        examples="""\
 examples:
   asc setup
   asc setup --yes          replace existing settings without asking""",
-        cmd_setup,
-        _setup_args,
     ),
     "config": Command(
-        "show or change one setting",
-        """Show or change settings in config.toml. With no ACTION, prints every setting
-(same as asc config list). Mode-specific settings (port, nvda_dir, etc.) apply to
---mode, or to the configured default mode if --mode is omitted. Global settings
-and command defaults (settle_ms, timeout_ms, etc.) do not take --mode.
-Command-line flags override command defaults.
-
+        "show or change settings in config.toml",
+        """\
+Show or change settings in config.toml. With no ACTION, prints every setting
+(same as asc config list). Mode-specific settings (port, nvda_dir, etc.) apply
+to --mode, or to the configured default mode if --mode is omitted. Global
+settings and command defaults (settle_ms, timeout_ms, etc.) do not take --mode.
+Command-line flags override command defaults.""",
+        cmd_config,
+        _config_args,
+        examples="""\
 examples:
   asc config
   asc config list
-  asc config set mode desktop                   asc start uses desktop mode
+  asc config set mode desktop
   asc config set nvda_dir C:\\nvda --mode desktop
   asc config set settle_ms 800
   asc config unset settle_ms""",
-        cmd_config,
-        _config_args,
         takes_mode=True,
     ),
     "uninstall": Command(
         "remove a Linux release install of asc",
-        """Remove an asc installation unpacked from a Linux release tarball (the files
+        """\
+Remove an asc installation unpacked from a Linux release tarball (the files
 under ~/.local/share/agent-speech-check and the asc symlink pointing into it).
 Stops every running daemon and background update check first.
 
 Asks whether to keep settings and data in ~/.local/state/agent-speech-check
 (or $XDG_STATE_HOME/agent-speech-check). Pass --keep-data to keep them without
 asking, or --yes to delete everything without prompts. On Windows, uninstall
-Agent Speech Check from Settings > Apps instead.
-
+Agent Speech Check from Settings > Apps instead.""",
+        cmd_uninstall,
+        _uninstall_args,
+        examples="""\
 examples:
   asc uninstall
   asc uninstall --keep-data
   asc uninstall --yes""",
-        cmd_uninstall,
-        _uninstall_args,
         linux_only=True,
     ),
 }
