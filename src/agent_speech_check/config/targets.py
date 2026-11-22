@@ -51,7 +51,6 @@ type Reader = Literal["nvda", "orca"]
 class Target:
     mode: str
     port: int  # 0: pick a free port
-    launch: bool
     nvda_dir: str | None = None
     ssh: str | None = None  # remote mode: the machine NVDA or Orca runs on
     # Where the screen reader runs: windows (NVDA) or linux (Orca). This machine, but
@@ -83,7 +82,6 @@ class Target:
         target = Target(
             f.choice("mode", MODES),
             f.number("port", low=0, high=65535),
-            launch=f.flag("launch"),
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             ssh=f.opt_text("ssh", max_len=255),
             os=f.opt_text("os", max_len=20),
@@ -111,13 +109,13 @@ class Target:
 
     @property
     def launches_nvda(self) -> bool:
-        """asc starts a portable NVDA on this computer (desktop mode)."""
-        return self.mode == "desktop" and self.launch
+        """asc starts a portable NVDA on this computer (Windows desktop mode)."""
+        return self.mode == "desktop" and self.reader == "nvda"
 
     @property
     def takes_panic_key(self) -> bool:
-        """asc's keys land in this Windows session (shared mode, or desktop mode's
-        own NVDA), so a panic hotkey must be able to stop it."""
+        """asc's keys land in this Windows session (shared mode, or Windows desktop mode),
+        so a panic hotkey must be able to stop it."""
         return self.mode == "shared" or self.launches_nvda
 
     @property
@@ -142,14 +140,7 @@ class Target:
         return replace(self, consent=consent)
 
 
-def _check_launch(target: Target, where: str, value: object) -> None:
-    if target.mode != "desktop" or target.reader == "orca":
-        raise bad_field(UsageError, f"{where} launch", "only in desktop mode on Windows", value)
-
-
 def _checked(target: Target, where: str) -> Target:
-    if target.launch:
-        _check_launch(target, where, target.launch)
     if target.ssh is not None:
         if target.mode != "remote":
             raise bad_field(UsageError, f"{where} ssh", "only in remote mode", target.ssh)
@@ -205,7 +196,7 @@ def defaults(mode: str, os: str | None = None, platform: str = sys.platform) -> 
     }
     # Nothing connects to Orca.
     port = 0 if os == "linux" else ports.get(mode, 0)
-    return Target(mode, port, launch=mode == "desktop" and os == "windows", os=os)
+    return Target(mode, port, os=os)
 
 
 def parse(text: str, where: str) -> dict[str, Any]:
@@ -250,9 +241,6 @@ def _from_table(mode: str, raw: object, file: str, platform: str) -> Target:
         if key in _TARGET_FIELDS
     }
     target = replace(defaults(mode, values.get("os"), platform), **kept, settings=settings)
-    # Also refuses `launch = false`, which `_checked` can't tell from no launch at all.
-    if "launch" in values:
-        _check_launch(target, where, values["launch"])
     return _checked(target, where)
 
 

@@ -103,11 +103,17 @@ class Keyboard:
         """
         if not self.target.keys:
             # On Windows your NVDA runs in watch mode, and desktop mode refuses to start beside it.
-            modes = "shared, remote, or desktop" if sys.platform == "win32" else "desktop"
-            raise OperationalError(
-                "asc is in watch mode, which never sends keys",
-                hint=f"asc stop, then asc start --mode {modes}",
-            )
+            if sys.platform == "win32":
+                hint = (
+                    "asc stop, then asc start --mode shared --i-understand "
+                    "(or --mode remote --instance NAME)"
+                )
+            else:
+                hint = (
+                    "asc stop, then asc start --mode desktop (without your Orca) "
+                    "or --mode remote --instance NAME"
+                )
+            raise OperationalError("asc is in watch mode, which never sends keys", hint=hint)
         if not self.link.connected:
             raise self.link.not_connected
         deadline = time.monotonic() + timeout_s

@@ -205,13 +205,6 @@ registers a [panic key](#panic-key).
     continues starting.
   - A custom NVDA in `nvda_dir` is never auto-updated; the notice appends
     `(nvda_dir is older)`.
-- **Connecting manually (`launch = false`):** `asc` does not start NVDA and
-  skips the checks above (including checking for a running `nvda.exe`). You
-  start NVDA yourself on this machine and connect it to `asc` (it must be local
-  because the relay listens only on `127.0.0.1`). Setting `nvda_dir` with
-  `launch = false` exits 2. Note that if you connect your own NVDA this way,
-  keys reach your desktop with no panic key and no `--i-understand` prompt;
-  use [shared mode](#shared-mode) instead when driving your own NVDA.
 
 On Linux, `asc` starts Orca on a private, hidden X display (Xvfb with openbox
 as the window manager), so keys never reach your desktop and no panic key is
@@ -240,7 +233,7 @@ needed. No audio device is required: `asc` records what Orca would speak.
   force-killed, its direct processes still exit, though detached background
   processes may survive; the next `asc start` cleans up any leftover
   `/tmp/asc-orca-*` folders.
-- `port`, `launch`, `nvda_dir` and NVDA-specific settings exit 2 on Linux:
+- `port`, `nvda_dir` and NVDA-specific settings exit 2 on Linux:
   nothing listens on a network port and no NVDA runs.
 
 ### Remote mode
@@ -317,7 +310,7 @@ keys.
 
 ### Panic key
 
-In shared mode and Windows desktop mode (when `asc` launches NVDA), keys go to
+In shared mode and Windows desktop mode, keys go to
 your real Windows session. While running, the global panic hotkey
 **Control+Shift+Alt+F12** releases any held keys and stops `asc` immediately
 (and stops `asc`'s NVDA in desktop mode).
@@ -329,8 +322,7 @@ your real Windows session. While running, the global panic hotkey
   never sends keys to your desktop without an active panic key.
 - `asc status` prints the active panic key.
 - Modes that cannot send keys to your local desktop have no panic key: remote
-  mode and Linux desktop mode. Windows desktop mode with
-  `launch = false` also has none (see [Desktop mode](#desktop-mode)).
+  mode, watch mode, and Linux desktop mode.
 
 ## Configuration
 
@@ -417,7 +409,6 @@ context.
 | Setting | Default | Meaning |
 |---|---|---|
 | `port` | watch and shared 6837, remote 26837, desktop a free one | relay port; in remote mode, the one NVDA connects to on its machine (Orca has none) |
-| `launch` | true | desktop on Windows only: false means `asc` starts no NVDA; you start one on this computer and connect it |
 | `os` | none | remote only: what the other machine runs, `windows` (NVDA) or `linux` (Orca) |
 | `ssh` | none | remote only: that machine, as `ssh` takes it (`me@vm`, `ssh://me@vm:2222`, or a `Host` from your ssh config) |
 | `nvda_dir` | `asc get-nvda`'s | desktop: your portable NVDA, a full path |
@@ -425,7 +416,6 @@ context.
 
 Settings used in the wrong mode are refused with exit 2:
 
-- `launch`: Windows desktop mode only.
 - `os` and `ssh`: remote mode only.
 - `port`: NVDA modes only (refused for Orca).
 - `nvda_dir` and `nvda_settings`: modes where `asc` launches NVDA only.
@@ -733,9 +723,11 @@ the app on that machine and use `asc wait`.
 
 - On timeout it exits 1 with what was said, numbered. In local Windows modes
   (not Orca), the error ends with `New windows:` listing any windows
-  that opened during the wait (or `(none)`).
+  that opened during the wait (or `(none)`), and notes the exit code if the
+  launched process exited non-zero.
 - A command that can't start exits 3. The screen reader disconnecting meanwhile
   is handled as in `wait`.
+- Local commands run in your current working directory.
 - `launch` brings the new window forward so NVDA hears it, except in watch
   mode, where it may stay behind.
 - With Orca `CMD` runs on Orca's display (see [Desktop mode](#desktop-mode)),
@@ -842,7 +834,7 @@ Shows or changes the settings in `config.toml` (see
   the entire list. Paths are normalized to full paths. Booleans are `true` or
   `false`.
 - The entire config is validated before writing, so invalid combinations (such
-  as setting `launch` in watch mode) exit 2 without changing the file. Unknown
+  as setting `nvda_dir` in watch mode) exit 2 without changing the file. Unknown
   setting names exit 2 and suggest close matches.
 - Changes to a running mode's settings (or `panic_key`) take effect on the next
   `asc start` (and `asc config` prints a notice). Command defaults take effect

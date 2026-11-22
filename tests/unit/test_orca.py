@@ -207,7 +207,7 @@ def test_a_helper_that_stops_answering_is_a_lost_link(monkeypatch: pytest.Monkey
     async def scenario() -> OrcaLink:
         speech = SpeechLog()
         orca = OrcaLink(None, speech)
-        keyboard = Keyboard(Target("desktop", 0, launch=False, os="linux"), orca, speech)
+        keyboard = Keyboard(Target("desktop", 0, os="linux"), orca, speech)
         process = await asyncio.create_subprocess_exec(
             sys.executable, "-c", hangs, stdin=subprocess.PIPE
         )
@@ -235,7 +235,7 @@ def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     asyncio.run(orca.run())
     assert isinstance(orca.failure, OperationalError)
     assert "cannot run ssh" in orca.failure.message
-    keyboard = Keyboard(Target("remote", 0, launch=False, ssh="me@vm", os="linux"), orca, speech)
+    keyboard = Keyboard(Target("remote", 0, ssh="me@vm", os="linux"), orca, speech)
     with pytest.raises(OrcaNotConnected):
         asyncio.run(keyboard.press((parse_gesture("Tab"),), 0, 1))
     with pytest.raises(OrcaNotConnected):

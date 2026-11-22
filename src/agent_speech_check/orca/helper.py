@@ -378,7 +378,8 @@ class Session:
                 action = "keydown" if message.get("down") else "keyup"
                 self._xdotool(action, str(message["key"]))
             elif "launch" in message:
-                self._launch(str(message["launch"]))
+                cwd = message.get("cwd")
+                self._launch(str(message["launch"]), cwd if isinstance(cwd, str) else None)
         except (OSError, ValueError, subprocess.SubprocessError) as problem:
             error = str(problem) or type(problem).__name__
         if ident is not None:
@@ -398,7 +399,7 @@ class Session:
             timeout=XDOTOOL_TIMEOUT_S,
         )
 
-    def _launch(self, command: str) -> None:
+    def _launch(self, command: str, cwd: str | None = None) -> None:
         args = shlex.split(command)
         if not args:
             raise ValueError("no command")
@@ -406,13 +407,14 @@ class Session:
             # On the user's desktop, theirs from now on: it outlives asc, as on Windows.
             subprocess.Popen(
                 args,
+                cwd=cwd,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
             return
-        app = self.start(args)
+        app = self.start(args, cwd=cwd)
         self.children.remove(app)
         self.apps.append(app)
 

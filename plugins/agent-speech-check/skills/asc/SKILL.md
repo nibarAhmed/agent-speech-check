@@ -40,10 +40,6 @@ On Linux only desktop, watch and remote mode exist.
   panic key from `asc status` before you send any.
 - If the user names their own portable NVDA, set it for desktop mode
   (`asc config set nvda_dir DIR --mode desktop`); then `asc get-nvda` isn't needed.
-- Never change `launch` yourself. In desktop mode with `launch = false`, `asc`
-  starts no NVDA (the user connects one manually), so there is no panic key even
-  though keys may reach the user's desktop. Send keys only if the user explicitly
-  asked.
 - Use remote mode when it is already configured or when the user asks to test on
   another machine. Run `asc status --all` first to see any already-configured or
   running instances. Because remote mode runs in its own named instance, setting it

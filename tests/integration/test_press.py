@@ -1,6 +1,6 @@
 """Keys end to end, and every fault fake_nvda can script. No key may stay held.
 
-Desktop mode has `launch = false` here: NVDA (here the fake)
+Shared mode is used here with a per-worker panic key: NVDA (here the fake)
 connects by itself, so keys are allowed without launching a real NVDA.
 """
 
@@ -19,12 +19,11 @@ from agent_speech_check.daemon.speech_log import CAP
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:
-    started = run_asc("start", "--mode", "desktop")
+    started = run_asc("start", "--mode", "shared", "--i-understand")
     assert started.returncode == 0, started.stderr
-    assert "mode: desktop (keys allowed)" in started.stdout
-    # launch = false: the test starts NVDA (the fake, which takes no real keys).
-    assert "panic key" not in started.stdout
-    fake = env.fake("desktop")
+    assert "mode: shared (keys allowed)" in started.stdout
+    assert "panic key:" in started.stdout
+    fake = env.fake("watch")
     yield fake
     fake.close()
 
@@ -159,7 +158,7 @@ def test_bad_input_sends_nothing(nvda: FakeNvda) -> None:
 
 @pytest.mark.usefixtures("env")
 def test_press_without_nvda() -> None:
-    assert run_asc("start", "--mode", "desktop").returncode == 0
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     result = run_asc("press", "Tab")
     assert result.returncode == 3
     assert "NVDA is not connected" in result.stderr

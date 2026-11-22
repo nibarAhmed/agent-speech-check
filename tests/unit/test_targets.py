@@ -21,22 +21,22 @@ def write(tmp_path: Path, text: str) -> Path:
 
 def test_no_file_gives_the_platforms_default(tmp_path: Path) -> None:
     target = resolve(tmp_path / "config.toml", None)
-    assert target == Target("watch", 6837, launch=False, os="windows")
+    assert target == Target("watch", 6837, os="windows")
     assert resolve(tmp_path / "config.toml", None, "linux") == defaults("desktop", None, "linux")
 
 
 def test_mode_defaults() -> None:
-    assert defaults("desktop") == Target("desktop", 0, launch=True, os="windows")
+    assert defaults("desktop") == Target("desktop", 0, os="windows")
     # Remote mode's os is the other machine's, which the user names.
-    assert defaults("remote") == Target("remote", 26837, launch=False)
+    assert defaults("remote") == Target("remote", 26837)
 
 
 def test_desktop_mode_on_linux_starts_orca() -> None:
     desktop = defaults("desktop", platform="linux")
-    assert desktop == Target("desktop", 0, launch=False, os="linux")
+    assert desktop == Target("desktop", 0, os="linux")
     assert (desktop.reader, desktop.launches_reader, desktop.launches_nvda) == ("orca", True, False)
     # Watch mode on Linux joins the user's own Orca, which nothing connects to.
-    assert defaults("watch", platform="linux") == Target("watch", 0, launch=False, os="linux")
+    assert defaults("watch", platform="linux") == Target("watch", 0, os="linux")
     assert defaults("desktop").reader == "nvda"
     assert Target.from_json(desktop.to_json()) == desktop
 
@@ -45,15 +45,13 @@ def test_keys_follow_the_mode() -> None:
     assert not defaults("watch").keys
     assert defaults("shared").keys
     assert defaults("remote").keys
-    assert replace(defaults("desktop"), launch=False).keys
+    assert defaults("desktop").keys
 
 
 def test_panic_key_wherever_keys_reach_this_desktop() -> None:
     assert defaults("shared").takes_panic_key
     assert defaults("desktop").takes_panic_key
-    # Remote keys go to the other machine and watch sends none. launch = false
-    # has none either: whoever starts that NVDA takes the risk (docs/cli.md).
-    assert not replace(defaults("desktop"), launch=False).takes_panic_key
+    # Remote keys go to the other machine and watch sends none.
     assert not defaults("remote").takes_panic_key
     # Orca's keys go to a private X display, never this desktop.
     assert not defaults("desktop", platform="linux").takes_panic_key
@@ -61,9 +59,9 @@ def test_panic_key_wherever_keys_reach_this_desktop() -> None:
 
 
 def test_mode_setting_and_its_table(tmp_path: Path) -> None:
-    path = write(tmp_path, 'mode = "desktop"\n[desktop]\nport = 16837\nlaunch = false\n')
+    path = write(tmp_path, 'mode = "desktop"\n[desktop]\nport = 16837\n')
     target = resolve(path, None)
-    assert target == Target("desktop", 16837, launch=False, os="windows")
+    assert target == Target("desktop", 16837, os="windows")
     assert resolve(path, "desktop") == target
     # Another mode, from --mode: its own table, or its defaults.
     assert resolve(path, "shared") == defaults("shared")
@@ -75,8 +73,7 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
         ('mode = "wach"\n', "mode: expected one of watch, desktop, shared, remote"),
         ('mode = "sandbox"\n', "mode: expected one of watch, desktop, shared, remote"),
         ("[sandbox]\nport = 16837\n", "expected only known keys, got sandbox"),
-        ("[watch]\nlaunch = false\n", r"\[watch\] launch: expected only in desktop mode"),
-        ("[remote]\nlaunch = true\n", r"\[remote\] launch: expected only in desktop mode"),
+        ("[desktop]\nlaunch = false\n", "expected only known keys, got launch"),
         ("[watch]\nhost = '172.20.0.1'\n", "expected only known keys, got host"),
         ("[desktop]\nmode = 'desktop'\n", "expected only known keys, got mode"),
         ("[desktop]\nkeys = true\n", "expected only known keys, got keys"),
@@ -109,7 +106,6 @@ def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
     ("text", "message"),
     [
         ("port = 7000\n", r"\[desktop\] port: expected only where NVDA connects"),
-        ("launch = false\n", r"\[desktop\] launch: expected only in desktop mode on Windows"),
         ("nvda_dir = 'C:/nvda'\n", "nvda_dir: expected only for an NVDA that asc launches"),
         ("nvda_settings = ['speech.symbolLevel=1']\n", "nvda_settings: expected only for an NVDA"),
     ],
@@ -143,11 +139,11 @@ def test_json_round_trip() -> None:
     with pytest.raises(UsageError, match="daemon target: expected JSON"):
         Target.from_json("{")
     with pytest.raises(UsageError, match="expected only known keys, got keys"):
-        Target.from_json('{"mode":"watch","port":1,"keys":true,"launch":false,"settings":[]}')
+        Target.from_json('{"mode":"watch","port":1,"keys":true,"settings":[]}')
     with pytest.raises(UsageError, match="expected only known keys, got name"):
-        Target.from_json('{"name":"x","mode":"watch","port":1,"launch":false,"settings":[]}')
+        Target.from_json('{"name":"x","mode":"watch","port":1,"settings":[]}')
     with pytest.raises(UsageError, match="settings: expected a list of strings"):
-        Target.from_json('{"mode":"desktop","port":1,"launch":true,"settings":[1]}')
+        Target.from_json('{"mode":"desktop","port":1,"settings":[1]}')
 
 
 def test_remote_from_file_and_json(tmp_path: Path) -> None:
@@ -205,7 +201,7 @@ def test_nvda_dir_from_file(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "table",
-    ["[watch]", "[shared]", "[desktop]\nlaunch = false", "[remote]"],
+    ["[watch]", "[shared]", "[remote]"],
 )
 def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
     path = write(tmp_path, f"{table}\nnvda_dir = 'C:/nvda'\n")

@@ -565,7 +565,12 @@ def cmd_keys(args: argparse.Namespace) -> int:
 
 def cmd_launch(args: argparse.Namespace) -> int:
     _with_defaults(args, {"timeout": "launch_timeout_ms"})
-    raw = {"command": args.app, "title": args.title, "timeout_ms": args.timeout}
+    raw = {
+        "command": args.app,
+        "title": args.title,
+        "timeout_ms": args.timeout,
+        "cwd": str(Path.cwd()),
+    }
     _show_reply(_call("launch", raw, args.timeout + ipc.LAUNCH_START_MS))
     return 0
 

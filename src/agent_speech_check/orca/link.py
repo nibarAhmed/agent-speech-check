@@ -392,8 +392,11 @@ class OrcaLink:
             reason = f"xdotool could not press {name}: {error}"
             raise ProtocolError(reason)
 
-    async def launch(self, command: str) -> None:
-        error = await self._ask({"launch": command})
+    async def launch(self, command: str, cwd: str | None = None) -> None:
+        request: dict[str, Any] = {"launch": command}
+        if cwd is not None:
+            request["cwd"] = cwd
+        error = await self._ask(request)
         if error is not None:
             raise LaunchFailed(command, error)
 

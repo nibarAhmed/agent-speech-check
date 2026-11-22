@@ -12,8 +12,9 @@ import time
 from pathlib import Path
 
 import pytest
-from tests.integration.conftest import Env, free_port, run_asc, wait_until
+from tests.integration.conftest import Env, free_port, run_asc, start_asc, wait_until
 
+from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon import session
 from agent_speech_check.errors import OperationalError
 from agent_speech_check.system import processes
@@ -52,11 +53,15 @@ def _listening(port: int) -> bool:
 
 
 @pytest.mark.parametrize("command", [["_stop_all"], ["stop", "--all"]])
-def test_stop_all_stops_every_daemon(env: Env, command: list[str]) -> None:
+def test_stop_all_stops_every_daemon(
+    env: Env, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     # And a named instance's.
-    env.config(f"[desktop]\nport = {free_port()}\nlaunch = false\n", instance="vm1")
-    assert run_asc("start", "--mode", "desktop", "--instance", "vm1").returncode == 0
+    monkeypatch.setenv("ASC_INSTANCE", "vm1")
+    vm1_daemon = start_asc("_daemon", Target("watch", free_port(), os="windows").to_json())
+    monkeypatch.delenv("ASC_INSTANCE")
+    assert wait_until(lambda: session.is_running(env.folder("watch", "vm1")))
     # One that doesn't answer, as an older asc's daemon wouldn't.
     pids = [_pid(env, "watch"), _silent_daemon(env, "old-target")]
     # And a file no daemon of this asc wrote.
@@ -69,14 +74,19 @@ def test_stop_all_stops_every_daemon(env: Env, command: list[str]) -> None:
     stale = {"pid": 1, "port": free_port(), "token": "old", "started": 0}
     (dead / "state.json").write_text(json.dumps(stale), encoding="utf-8")
 
-    result = run_asc(*command)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == (
-        "stopped: old-target\nstopped: watch\nstopped: instances/vm1/desktop\n"
-    )
-    # Run from source it has no asc.exe to wait for, so it may return a moment early.
-    assert wait_until(lambda: [processes.image_path(pid) for pid in pids] == [None, None])
-    assert list(env.root.glob("agent-speech-check/**/state.json")) == []
+    try:
+        result = run_asc(*command)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == (
+            "stopped: old-target\nstopped: watch\nstopped: instances/vm1/watch\n"
+        )
+        # Run from source it has no asc.exe to wait for, so it may return a moment early.
+        assert wait_until(lambda: [processes.image_path(pid) for pid in pids] == [None, None])
+        assert list(env.root.glob("agent-speech-check/**/state.json")) == []
+    finally:
+        if vm1_daemon.poll() is None:
+            vm1_daemon.kill()
+        vm1_daemon.wait(timeout=15)
 
 
 @pytest.mark.usefixtures("env")

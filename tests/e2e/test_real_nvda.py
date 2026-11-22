@@ -77,17 +77,17 @@ def start_nvda(request: pytest.FixtureRequest, tmp_path: Path, ini: str) -> subp
 def real_nvda(
     request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[None]:
-    """A started `launch = false` desktop mode with a real NVDA joined to it."""
+    """A started shared-mode daemon with a real NVDA joined to it."""
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     port = free_port()
     root = tmp_path / "agent-speech-check"
     root.mkdir()
     (root / "config.toml").write_text(
-        f'mode = "desktop"\n[desktop]\nport = {port}\nlaunch = false\n', encoding="utf-8"
+        f"[defaults]\nconnect = false\n[shared]\nport = {port}\n", encoding="utf-8"
     )
-    started = run_asc("start")
+    started = run_asc("start", "--mode", "shared", "--i-understand")
     assert started.returncode == 0, started.stderr
-    folder = root / "desktop"
+    folder = root / "watch"
     channel = json.loads((folder / "relay.json").read_text(encoding="utf-8"))["channel"]
     ini = render(RelayAddress("127.0.0.1", port, channel, fingerprint(folder / "relay_cert.pem")))
     process = start_nvda(request, tmp_path, ini)
