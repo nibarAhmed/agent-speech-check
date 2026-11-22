@@ -13,13 +13,13 @@ promises below. The rest of this file is defaults: if one fights the task, say s
 human's sign-off before breaking it.
 
 - Never set `ASC_E2E_NVDA` on the host: those e2e tests start that NVDA, which replaces the
-  user's running one, and nothing starts it again. Use `scripts/e2e_sandbox.py`. The
-  sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made for the host and leave it alone. The
-  one exception is a throwaway CI runner, where `.github/workflows/e2e.yml` sets it.
+  user's running one, and nothing starts it again. Real-NVDA e2e tests run on a throwaway CI
+  runner (`.github/workflows/e2e.yml`). The sandbox-mode tests (`ASC_E2E_SANDBOX=1`) are made
+  for the host and leave it alone.
 - Never write the user's own NVDA configuration. `asc` writes only its own copies.
 - Never stop a process by name (`taskkill /im`, `psutil.process_iter`). Find processes by name if
-  you must, but stop only a PID that `asc` or the test started. Inside Windows Sandbox or on a
-  throwaway CI runner nothing is the user's, so stopping by name is fine there.
+  you must, but stop only a PID that `asc` or the test started. On a throwaway CI runner nothing
+  is the user's, so stopping by name is fine there.
 - Never copy or import NVDA source (GPL). Implement from `docs/protocol.md`.
 - Never push to `main`: it's protected. Work on a branch, and open a PR only when asked.
 
@@ -28,7 +28,6 @@ human's sign-off before breaking it.
 - `uv sync`
 - `uv run poe check` (everything: spelling, format, lint, types, dead code, deps, tests)
 - `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
-- `uv run python scripts/e2e_sandbox.py` (e2e against a real NVDA in Windows Sandbox)
 - `uv run python scripts/e2e_linux.py` (e2e against a real Orca in a Linux container, with Docker)
 
 ## Testing policy
@@ -52,17 +51,17 @@ human's sign-off before breaking it.
   evidence from real NVDA.
 - Code that drives Windows Sandbox, the NVDA installer or a real NVDA is tested by e2e, not by new
   fakes.
-- CI (`e2e.yml`) runs every e2e test on every PR but sandbox mode's: GitHub's runners have no
-  Windows Sandbox. Locally, run only the e2e tests related to your change, as its proof, and say
-  in the handoff which ran: the rest is left to CI. Both scripts pass pytest arguments on (`-k`).
-  A change that touches none of these runs none.
+- CI (`e2e.yml`) runs the real-NVDA and real-Orca e2e suites on every PR, and accepts optional
+  `pytest_args` and `nvda_version` inputs via `workflow_dispatch` for targeted runs on a branch
+  (`gh workflow run e2e.yml --ref <branch> -f pytest_args="..."`). Locally, run `e2e_linux.py`
+  (passing pytest arguments on, like `-k`) when your change touches Linux/Orca or ssh, and say in
+  the handoff which ran: real-NVDA e2e is left to CI. A change that touches none of these runs
+  none locally.
 
   | The change touches | Run |
   |---|---|
-  | The relay, the protocol, keys or speech | `e2e_sandbox.py -k joins_speaks_and_releases` |
-  | Desktop mode on Windows or the NVDA config | `e2e_sandbox.py -k "desktop_mode or mode_sounds"` |
-  | Watch mode on Windows | `e2e_sandbox.py -k watch_start` |
-  | Remote mode or ssh | `-k "tunnel or taken_port"`, with both scripts |
+  | The relay, the protocol, keys, speech, or Windows modes | CI (`e2e.yml`) |
+  | Remote mode or ssh | `e2e_linux.py -k "tunnel or taken_port"` locally, plus CI (`e2e.yml`) for Windows |
   | Orca, or desktop or watch mode on Linux | `e2e_linux.py` (`-k watch` for watch mode) |
   | Sandbox mode | `tests/e2e/test_sandbox_mode.py` on the host, as its docstring says |
 - Some tests touch machine-wide state (window titles, the foreground window, global hotkeys,

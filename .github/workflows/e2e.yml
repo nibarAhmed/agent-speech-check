@@ -1,7 +1,7 @@
 name: e2e
 
 # The real-NVDA tests, on a hosted runner: a throwaway VM with no one's NVDA to
-# replace, so the tests start a portable NVDA here, as they do in Windows Sandbox.
+# replace, so the tests start a portable NVDA here.
 # The real-Orca tests, in a throwaway Linux container, on each Linux release build.
 on:
   # Every PR, docs too: a required check skipped by a path filter never reports.
@@ -11,6 +11,17 @@ on:
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
+    inputs:
+      pytest_args:
+        description: "Optional pytest arguments for the NVDA job (for example: -k watch_start)"
+        required: false
+        default: ""
+        type: string
+      nvda_version:
+        description: "Optional NVDA version to test instead of the latest (for example: 2025.1)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -33,10 +44,22 @@ jobs:
         run: uv sync --locked
       - name: Create a portable NVDA
         shell: pwsh
+        env:
+          NVDA_VERSION: ${{ inputs.nvda_version }}
         run: |
           $nvda = "$env:RUNNER_TEMP\nvda"
           $out = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\e2e-out"
-          $installer = uv run python -c "from agent_speech_check.nvda import launcher as l; print(l.latest_installer())"
+          $installer = @'
+          import os, re, sys
+          from agent_speech_check.nvda import launcher as l
+          version = os.environ.get("NVDA_VERSION", "").strip()
+          if version:
+              if not re.fullmatch(l.VERSION_PATTERN, version):
+                  sys.exit(f"not an NVDA version: {version}")
+              print(l.download(version))
+          else:
+              print(l.latest_installer())
+          '@ | uv run python -
           if ($LASTEXITCODE -ne 0) { throw "download exit $LASTEXITCODE" }
           uv run python -c "import sys; from pathlib import Path; from agent_speech_check.nvda import launcher; launcher.create_portable(Path(sys.argv[1]), Path(sys.argv[2]))" $installer $nvda
           if ($LASTEXITCODE -ne 0) { throw "portable exit $LASTEXITCODE" }
@@ -44,8 +67,7 @@ jobs:
           "ASC_E2E_NVDA=$nvda" >> $env:GITHUB_ENV
           "ASC_E2E_OUT=$out" >> $env:GITHUB_ENV
           "ASC_E2E_INSTALLER=$installer" >> $env:GITHUB_ENV
-      # Remote mode's other machine is this one, as in the Orca job: the same sshd setup the
-      # sandbox runs (scripts/windows_sshd.py).
+      # Remote mode's other machine is this one, as in the Orca job (scripts/windows_sshd.py).
       - name: Let the runner ssh to localhost with a key
         shell: pwsh
         run: |
@@ -57,7 +79,16 @@ jobs:
       # A step timeout, under the job's, so a hang still fails here and uploads the log.
       - name: e2e tests
         timeout-minutes: 20
-        run: uv run pytest -m e2e tests/e2e -v -p no:cacheprovider
+        shell: pwsh
+        env:
+          PYTEST_ARGS: ${{ inputs.pytest_args }}
+        run: |
+          @'
+          import os, shlex, subprocess, sys
+          args = shlex.split(os.environ.get("PYTEST_ARGS", ""))
+          cmd = [sys.executable, "-m", "pytest", "-m", "e2e", "tests/e2e", "-v", "-p", "no:cacheprovider", *args]
+          sys.exit(subprocess.run(cmd, stdin=subprocess.DEVNULL).returncode)
+          '@ | uv run python -
       - if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

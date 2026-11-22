@@ -8,11 +8,10 @@ Contributions come in under the project's MIT license. There's no CLA.
 2. Set it up as [Development](README.md#development) in the README explains.
 3. `uv run poe check` must pass before you open a pull request. While you work,
    `uv run poe fast` is the quicker loop.
-4. CI runs the end-to-end tests. If your change affects how `asc` talks to NVDA or Orca, run the
-   matching local e2e tests listed in [AGENTS.md](AGENTS.md#testing-policy):
-   - Real NVDA (needs Windows Sandbox on Windows 11 24H2+ Pro, Enterprise, or Education):
-     `uv run python scripts/e2e_sandbox.py -k <tests>`
-   - Real Orca (needs Docker): `uv run python scripts/e2e_linux.py -k <tests>`
+4. CI (`e2e.yml`) runs the real-NVDA and real-Orca end-to-end tests on every pull request (and on
+   demand via `workflow_dispatch`). If your change affects Orca or ssh, also run the matching local
+   e2e tests listed in [AGENTS.md](AGENTS.md#testing-policy):
+   - Real Orca / ssh (needs Docker): `uv run python scripts/e2e_linux.py -k <tests>`
 
    If you cannot run them locally, say so in the pull request.
 5. Build the installer only when you change `installer/` or debug CI's `installer` check, which
@@ -34,7 +33,7 @@ Contributions come in under the project's MIT license. There's no CLA.
   the skill). Cleanup, refactors and a second fix go in their own pull requests.
 - CI must pass. The `e2e` check passes when the real-NVDA tests, the Linux builds and the
   real-Orca tests pass on throwaway runners. GitHub's runners have no Windows Sandbox, so run
-  the sandbox tests yourself when they apply (Setup, step 4).
+  the sandbox-mode tests yourself when they apply (`tests/e2e/test_sandbox_mode.py`).
 - Your branch must be up to date with `main`. When `main` moves, use "Update branch" and let CI
   run again.
 - Resolve every review thread before merging.
