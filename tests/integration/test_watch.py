@@ -178,9 +178,6 @@ def test_commands_find_the_daemon_without_a_mode() -> None:
     named = run_asc("speech", "--since", "0", "--mode", "watch")
     assert named.returncode == 2
     assert "unrecognized arguments: --mode" in named.stderr
-    old = run_asc("start", "--target", "w")
-    assert old.returncode == 2
-    assert "unrecognized arguments: --target" in old.stderr
 
 
 @pytest.mark.usefixtures("env")

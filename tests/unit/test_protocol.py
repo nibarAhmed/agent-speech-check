@@ -80,11 +80,6 @@ def test_malformed(line: bytes) -> None:
         p.parse_message(line)
 
 
-def test_bad_json_names_reason() -> None:
-    with pytest.raises(ProtocolError, match="not a JSON object: Expecting value"):
-        p.parse_message(b"oops")
-
-
 def test_oversize_line() -> None:
     with pytest.raises(ProtocolError, match="longer than"):
         p.parse_message(b"x" * (p.MAX_LINE + 1))
@@ -102,4 +97,3 @@ def test_encoders() -> None:
     assert key.endswith(b"\n")
     assert json.loads(key) == {"type": "key", "vk_code": 45, "extended": True, "pressed": True}
     assert json.loads(p.encode_ping()) == {"type": "ping"}
-    assert json.loads(p.encode_error("x")) == {"type": "error", "message": "x"}

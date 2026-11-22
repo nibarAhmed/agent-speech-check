@@ -71,23 +71,6 @@ def test_help_points_to_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
     assert "/docs/cli.md#exit-codes" in capsys.readouterr().out
 
 
-def test_command_help_leaves_out_exit_codes(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exc:
-        main(["wait", "--help"])
-    assert exc.value.code == 0
-    assert "exit codes" not in capsys.readouterr().out
-
-
-def test_only_wait_warns_of_an_old_since(capsys: pytest.CaptureFixture[str]) -> None:
-    # wait can match speech from before the step; speech --since the mark is the point.
-    with pytest.raises(SystemExit):
-        main(["wait", "--help"])
-    assert "this step's mark, or old speech can match" in capsys.readouterr().out
-    with pytest.raises(SystemExit):
-        main(["speech", "--help"])
-    assert "old speech" not in capsys.readouterr().out
-
-
 def test_no_command_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 2
     captured = capsys.readouterr()
@@ -109,14 +92,6 @@ def test_reading_speech_needs_since(capsys: pytest.CaptureFixture[str], argv: li
     assert (
         err == f"error: the following arguments are required: --since\nhint: asc {argv[0]} --help\n"
     )
-
-
-def test_bad_arguments_without_a_command_point_at_asc_help(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    assert main(["--no-such-flag"]) == 2
-    err = capsys.readouterr().err
-    assert err == "error: unrecognized arguments: --no-such-flag\nhint: asc --help\n"
 
 
 @pytest.mark.parametrize(

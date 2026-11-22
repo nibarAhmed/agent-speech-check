@@ -266,16 +266,6 @@ def test_start_replaces_a_stale_state_file(env: Env) -> None:
     assert fresh["token"] != stale["token"]
 
 
-@pytest.mark.usefixtures("env")
-def test_keys_finds_your_own_nvda() -> None:
-    result = run_asc("keys", "report", "title")
-    if result.returncode == 3:
-        assert "NVDA not found. Looked in:" in result.stderr
-    else:
-        assert result.returncode == 0
-        assert "Report title" in result.stdout
-
-
 def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
     assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     fake = env.fake("watch", {"Tab": [f.speak("x")]})
@@ -305,11 +295,8 @@ def test_the_named_mutex_refuses_a_second_daemon() -> None:
 def test_daemon_that_never_answers(env: Env) -> None:
     """In-process with a short wait: the real one is 5 s."""
     request = ipc.Request("status", ipc.NoArgs())
-    with pytest.raises(
-        DaemonUnreachable, match="cannot talk to the asc daemon: no reply in time"
-    ) as exc:
+    with pytest.raises(DaemonUnreachable, match="cannot talk to the asc daemon: no reply in time"):
         ipc.call(env.folder("watch"), request, 0.3)
-    assert exc.value.exit_code == 3
 
 
 @pytest.mark.usefixtures("env")

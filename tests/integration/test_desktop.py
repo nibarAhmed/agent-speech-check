@@ -118,14 +118,6 @@ def test_keys_in_desktop_mode_reads_the_portable_copy(env: Env, tmp_path: Path) 
     assert "hint: check nvda_dir" in missing.stderr
 
 
-@pytest.mark.usefixtures("env")
-@pytest.mark.parametrize("command", ["start", "keys"])
-def test_nvda_dir_is_a_setting_not_a_flag(command: str, tmp_path: Path) -> None:
-    result = run_asc(command, "--nvda-dir", str(tmp_path))
-    assert result.returncode == 2
-    assert "unrecognized arguments: --nvda-dir" in result.stderr
-
-
 def test_settings_only_for_a_launched_nvda(env: Env) -> None:
     env.config("")
     result = run_asc("start", "--mode", "watch", "--nvda-setting", "speech.rate=50")

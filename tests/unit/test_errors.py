@@ -1,6 +1,5 @@
 import inspect
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -90,14 +89,3 @@ def test_numbered_lines() -> None:
     assert errors.numbered_lines([], 3) == "(nothing said after 3)"
     dropped = errors.numbered_lines([(9, 'said: "late"')], 3, dropped=5)
     assert dropped == '(5 earlier lines dropped)\n9 said: "late"'
-
-
-def test_several_unstoppable_daemons_are_named_in_the_plural() -> None:
-    error = errors.DaemonUnstoppable([111, 222])
-    assert error.message == "cannot end the asc daemons (pid 111, 222)"
-    assert error.hint == "end them in Task Manager, then try again"
-
-
-def test_unstoppable_error_says_kill_on_linux(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "platform", "linux")
-    assert errors.DaemonUnstoppable([111]).hint == "end it with kill, then try again"

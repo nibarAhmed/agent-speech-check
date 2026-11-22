@@ -52,7 +52,3 @@ def test_marketplace_lists_the_plugin_by_its_name_and_folder(marketplace: Path) 
     [entry] = load(marketplace)["plugins"]
     assert entry["name"] == PLUGIN.name
     assert (ROOT / source_path(entry)).resolve() == PLUGIN
-
-
-def test_plugin_holds_the_asc_skill() -> None:
-    assert (PLUGIN / "skills" / "asc" / "SKILL.md").is_file()

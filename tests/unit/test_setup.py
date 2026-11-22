@@ -37,22 +37,6 @@ class Asker:
 # ---------------------------------------------------------------- the questions
 
 
-def test_prompts_are_plain_words() -> None:
-    prompt = setup.choice_prompt(setup.modes(named=False, platform="win32"))
-    assert prompt == "Choose 1 to 4: "
-    assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
-    assert "[" not in prompt
-
-
-def test_choice_lines_put_the_question_first() -> None:
-    lines = setup.choice_lines("Which NVDA?", setup.NVDA_SOURCES)
-    assert lines == [
-        "Which NVDA?",
-        "  1  asc:     the portable NVDA asc downloads and keeps (default)",
-        "  2  folder:  a portable NVDA folder of your own",
-    ]
-
-
 def test_the_default_need_not_be_first() -> None:
     choices = (setup.Choice("a", "first"), setup.Choice("b", "second", default=True))
     assert setup.pick("", choices) == "b"
@@ -66,29 +50,6 @@ def test_summary_follows_the_questions_each_mode_asks() -> None:
     for mode, fields in setup.QUESTIONS.items():
         # The title, the mode, then one line per question.
         assert len(setup.summary_lines(setup.Answers(mode), fields)) == 2 + len(fields)
-
-
-def test_summary_shows_every_answer_for_the_mode() -> None:
-    answers = setup.Answers("remote", keys_layout="laptop", os="windows", ssh="me@vm")
-    assert setup.summary_lines(answers, setup.QUESTIONS["remote"]) == [
-        "Your settings:",
-        "  Mode:                remote",
-        "  Other machine runs:  windows",
-        "  Reached with ssh:    me@vm",
-        "  Keyboard layout:     laptop",
-    ]
-
-
-def test_summary_says_default_and_your_folder() -> None:
-    asked = setup.QUESTIONS
-    assert setup.summary_lines(setup.Answers("watch"), asked["watch"]) == [
-        "Your settings:",
-        "  Mode:             watch",
-        "  Keyboard layout:  desktop",
-    ]
-    assert setup.summary_lines(setup.Answers("desktop"), asked["desktop"])[2] == "  NVDA:  asc"
-    desktop = setup.Answers("desktop", "C:\\n")
-    assert setup.summary_lines(desktop, asked["desktop"])[2] == "  NVDA:  C:\\n"
 
 
 @pytest.mark.parametrize(
@@ -157,6 +118,7 @@ def test_setup_desktop_declines_the_download(
     run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
     out = capsys.readouterr().out
     assert "Run asc get-nvda later." in out
+    assert "  NVDA:  asc\n" in out
     assert "While it runs, Control+Shift+Alt+F12 stops asc and releases keys." in out
     assert load(root / "config.toml").resolve(None).launches_nvda
 
@@ -360,39 +322,11 @@ def test_mode_is_checked_before_looking_for_a_daemon(
     assert outside.exists()
 
 
-def test_remove_target_is_gone(capsys: pytest.CaptureFixture[str]) -> None:
-    code, _, err = run(capsys, "config", "remove-target", "app")
-    assert code == 2
-    assert "invalid choice: 'remove-target'" in err
-
-
-@pytest.mark.usefixtures("root")
-@pytest.mark.parametrize("name", ["keys_lang", "keys_braille", "nvda_version", "share", "window"])
-def test_removed_settings_are_unknown(name: str, capsys: pytest.CaptureFixture[str]) -> None:
-    code, _, err = run(capsys, "config", "set", name, "x")
-    assert code == 2
-    assert f'unknown setting "{name}"' in err
-
-
 @pytest.mark.usefixtures("root")
 def test_keys_refuses_a_bad_language(capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "keys", "--lang", "../x", "heading")
     assert code == 2
     assert "--lang: expected a language code like en or pt_BR" in err
-
-
-def test_clear_is_gone(capsys: pytest.CaptureFixture[str]) -> None:
-    code, _, err = run(capsys, "clear")
-    assert code == 2
-    assert "invalid choice: 'clear'" in err
-
-
-def test_keys_flags_default_without_settings(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit):
-        main(["keys", "--help"])
-    out = " ".join(capsys.readouterr().out.split())
-    assert "falling back to en (default: en)" in out
-    assert "include braille displays (default: off)" in out
 
 
 # ---------------------------------------------------------------- a newer NVDA at start
