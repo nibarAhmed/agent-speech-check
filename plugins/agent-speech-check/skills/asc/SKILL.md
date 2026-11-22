@@ -59,7 +59,7 @@ On Linux only desktop, watch and remote mode exist.
      `asc config set ssh USER@HOST --mode remote --instance NAME` and
      `asc config set os windows --mode remote --instance NAME` (`linux` for Orca).
   2. `asc start --instance NAME`. Because `ssh` runs non-interactively (no
-     password prompts), if it exits 7 with an SSH error, ask the user to run
+     password prompts), if it fails with an SSH setup error, ask the user to run
      `ssh USER@HOST` once to confirm host trust and key login. For other errors,
      follow the printed hint and retry.
   3. With NVDA, tell the user what `asc status --instance NAME` prints so the
@@ -152,10 +152,10 @@ mode it reads the other machine's: pass the same `--instance`.
 - Desktop mode starts its own Orca on a hidden display, so its keys never reach
   anyone's desktop. Use `asc launch CMD` to start an app on that display.
 - Requires Orca 51 or later (`orca --version`), plus Xvfb, openbox, xdotool,
-  dbus-daemon, gdbus, and python3. If `asc start` exits 7 naming a missing tool
+  dbus-daemon, gdbus, and python3. If `asc start` fails naming a missing tool
   or old Orca, ask the user to install or upgrade it.
-- To hear the user's own Orca, use watch mode. If `asc start --mode watch` exits
-  7 with a restart command, ask the user to run it in their desktop session (it
+- To hear the user's own Orca, use watch mode. If `asc start --mode watch` fails
+  with a restart command, ask the user to run it in their desktop session (it
   restarts their Orca with `asc`'s recording secret), then run `asc start` again.
   Never run that command yourself: it restarts the screen reader they rely on.
 
@@ -164,9 +164,6 @@ mode it reads the other machine's: pass the same `--instance`.
 | Code | Meaning | Next step |
 |---|---|---|
 | 1 | `wait`, `--expect` or `launch` didn't match | read what the screen reader did say |
-| 2 | usage | fix the arguments or setting |
-| 3 | not connected or not running | follow the hint: `asc start` if not running, else `asc status` says how to connect |
-| 4 | refused or busy | read the message |
-| 5 | protocol error | report it |
-| 6 | bug in asc | report it; the message says where the log is |
-| 7 | setup needed | follow the hint (tell the user if it needs them); retrying alone won't help |
+| 2 | usage or configuration | fix the arguments or setting |
+| 3 | operational failure | read the error and hint (start, retry, or ask the user for setup) |
+| 4 | bug in asc | report it; the message says where the log is |

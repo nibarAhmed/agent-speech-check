@@ -28,19 +28,9 @@ from agent_speech_check.daemon.session import failure
 from agent_speech_check.errors import (
     DownloadFailed,
     FileUnusable,
-    InstallerInUse,
-    InstallerTimedOut,
-    NoDefaultSwitch,
-    NvdaAlreadyRunning,
-    NvdaNotFound,
-    NvdaTooOld,
-    OrcaBusy,
-    PortableNotReplaced,
-    ProgramWontStart,
-    SandboxBroken,
-    SandboxFailed,
-    SandboxNeedsPro,
-    WsbMissing,
+    OperationalError,
+    SandboxError,
+    UsageError,
 )
 from agent_speech_check.nvda import launcher
 from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
@@ -135,10 +125,10 @@ def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert launcher.folder_for("C:/x") == Path("C:/x")
     assert launcher.installer_path("2026.2").name == "nvda_2026.2.exe"
     assert launcher.installer_url("2026.2").startswith("https://download.nvaccess.org/releases/")
-    with pytest.raises(NvdaNotFound) as exc:
+    with pytest.raises(OperationalError, match="NVDA not found") as exc:
         launcher.require_exe(launcher.managed_dir())
     assert exc.value.hint == "asc get-nvda"
-    with pytest.raises(NvdaNotFound) as exc:
+    with pytest.raises(OperationalError, match="NVDA not found") as exc:
         launcher.require_exe(tmp_path)
     assert exc.value.hint == "check nvda_dir"
     (tmp_path / "nvda.exe").write_bytes(b"")
@@ -149,11 +139,11 @@ def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
     (tmp_path / "nvda.exe").write_bytes(b"")
     if not processes.process_ids("nvda.exe"):
         pytest.skip("needs an NVDA running on this machine")
-    with pytest.raises(NvdaAlreadyRunning):
+    with pytest.raises(OperationalError, match=r"nvda\.exe is already running"):
         launcher.refuse_if_running()
-    with pytest.raises(NvdaAlreadyRunning):
+    with pytest.raises(OperationalError, match=r"nvda\.exe is already running"):
         launcher.create_portable(tmp_path / "installer.exe", tmp_path / "portable")
-    with pytest.raises(NvdaAlreadyRunning):
+    with pytest.raises(OperationalError, match=r"nvda\.exe is already running"):
         launcher.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
 
 
@@ -164,16 +154,16 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
     old = tmp_path / "portable" / "nvda.exe"
     old.parent.mkdir()
     old.write_bytes(b"the copy that works")
-    with pytest.raises(InstallerTimedOut, match=r"within 0.5 s, so asc ended it"):
+    with pytest.raises(OperationalError, match=r"within 0.5 s, so asc ended it"):
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
     # A failed update leaves the old copy to start with.
     assert old.read_bytes() == b"the copy that works"
 
 
-def test_an_installer_that_is_not_a_program_needs_setup(tmp_path: Path) -> None:
+def test_an_installer_that_is_not_a_program_fails(tmp_path: Path) -> None:
     installer = tmp_path / "nvda_2026.2.exe"
     installer.write_text("not a program", encoding="utf-8")
-    with pytest.raises(ProgramWontStart) as exc:
+    with pytest.raises(OperationalError, match="cannot start ") as exc:
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=30)
     assert str(installer) in exc.value.message
     assert "%1" not in exc.value.message
@@ -211,7 +201,7 @@ def test_a_copy_left_mid_swap_is_put_back(tmp_path: Path) -> None:
     left = tmp_path / "portable.old" / "nvda.exe"
     left.parent.mkdir()
     left.write_bytes(b"the copy that works")
-    with pytest.raises(InstallerTimedOut):
+    with pytest.raises(OperationalError, match=r"did not finish within 0\.5 s"):
         launcher.run_installer(installer, tmp_path / "portable", timeout_s=0.5)
     assert (tmp_path / "portable" / "nvda.exe").read_bytes() == b"the copy that works"
 
@@ -225,7 +215,7 @@ def test_a_copy_in_use_is_not_replaced(tmp_path: Path) -> None:
     with (dest / "nvda.exe").open("wb") as held:
         held.write(b"old")
         held.flush()
-        with pytest.raises(PortableNotReplaced, match="cannot replace the portable NVDA"):
+        with pytest.raises(OperationalError, match="cannot replace the portable NVDA"):
             launcher.run_installer(installer, dest, timeout_s=30)
     assert (dest / "nvda.exe").read_bytes() == b"old"
 
@@ -241,7 +231,7 @@ def test_a_leftover_copy_in_use_is_reported(tmp_path: Path) -> None:
     stale.parent.mkdir()
     with (
         stale.open("wb"),
-        pytest.raises(PortableNotReplaced, match="cannot replace the portable NVDA"),
+        pytest.raises(OperationalError, match="cannot replace the portable NVDA"),
     ):
         launcher.run_installer(installer, dest, timeout_s=30)
     assert (dest / "nvda.exe").read_bytes() == b"old"
@@ -251,7 +241,7 @@ def test_firewall_reads_are_harmless() -> None:
     assert Path(firewall.daemon_program()).is_file()
     try:
         address = firewall.default_switch_address()
-    except NoDefaultSwitch:
+    except OperationalError:
         return
     assert firewall.parse_address(address) == address
     # A port no rule names.
@@ -262,7 +252,7 @@ def test_sandbox_availability() -> None:
     assert wsb.edition_id()
     try:
         wsb.require_available()
-    except (SandboxNeedsPro, WsbMissing):
+    except OperationalError:
         return
     assert isinstance(wsb.running(), list)
 
@@ -301,7 +291,7 @@ def test_sandbox_session_without_an_installer(
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     (tmp_path / "agent-speech-check" / "nvda").mkdir(parents=True)
     session = SandboxSession(tmp_path / "t", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
-    with pytest.raises(NvdaNotFound, match="the NVDA installer"):
+    with pytest.raises(OperationalError, match="the NVDA installer"):
         session._prepare()
 
 
@@ -343,7 +333,11 @@ def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_start_failure_keeps_its_message_and_category() -> None:
     """The daemon reports why its sandbox or Orca failed; `asc start` raises that, unwrapped."""
-    for error in (SandboxFailed("start", "file not found"), SandboxNeedsPro(), OrcaBusy("x")):
+    for error in (
+        SandboxError("start", "file not found"),
+        OperationalError("busy", hint="close it"),
+        UsageError("bad", hint="fix it"),
+    ):
         got = failure({"failure": ipc.error_detail(error)})
         assert got is not None
         assert (got.message, got.hint, got.exit_code) == (
@@ -356,7 +350,7 @@ def test_start_failure_keeps_its_message_and_category() -> None:
 
 def test_sandbox_session_before_start() -> None:
     session = SandboxSession(Path("x"), defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
-    with pytest.raises(SandboxFailed, match="not running yet"):
+    with pytest.raises(SandboxError, match="not running yet"):
         asyncio.run(session.launch("x"))
     asyncio.run(session.stop())  # nothing started, nothing to stop
     assert session.sandbox_id is None
@@ -365,16 +359,15 @@ def test_sandbox_session_before_start() -> None:
 def test_wsb_errors_for_an_unknown_sandbox() -> None:
     try:
         wsb.require_available()
-    except (SandboxNeedsPro, WsbMissing):
+    except OperationalError:
         pytest.skip("needs Windows Sandbox")
     unknown = "00000000-0000-0000-0000-000000000000"
-    # wsb's own errors have an unknown cause, so retrying won't help: exit 7.
-    with pytest.raises(SandboxBroken, match="wsb exec failed") as broken:
+    with pytest.raises(SandboxError, match="wsb exec failed") as broken:
         wsb.exec_as_user(unknown, "cmd /c exit 0")
-    assert broken.value.exit_code == 7
-    with pytest.raises(SandboxBroken, match="wsb stop failed"):
+    assert broken.value.exit_code == 3
+    with pytest.raises(SandboxError, match="wsb stop failed"):
         wsb.stop(unknown)
-    with pytest.raises(SandboxBroken, match="wsb ip failed"):
+    with pytest.raises(SandboxError, match="wsb ip failed"):
         wsb.ip_address(unknown)
     assert wsb.wait_gone(0) in (True, False)
 
@@ -389,7 +382,7 @@ def test_wait_exit_returns_once_the_process_ends() -> None:
 def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:
     try:
         wsb.require_available()
-    except (SandboxNeedsPro, WsbMissing):
+    except OperationalError:
         pytest.skip("needs Windows Sandbox")
     owner = subprocess.Popen([sys.executable, "-c", "pass"])
     owner.wait(10)
@@ -448,8 +441,9 @@ def test_a_held_damaged_installer_is_not_a_failed_download(
     with held.open("wb") as file:
         file.write(b"not the listed file")
         file.flush()
-        with pytest.raises(InstallerInUse, match=r"nvda_2026\.2\.exe"):
+        with pytest.raises(OperationalError, match=r"nvda_2026\.2\.exe") as exc:
             launcher.download("2026.2", SHA1)
+        assert not isinstance(exc.value, DownloadFailed)
 
 
 def test_a_new_installer_replaces_the_old_ones(
@@ -576,7 +570,7 @@ def test_offline_a_cached_installer_too_old_is_refused(
     cached.parent.mkdir(parents=True)
     # Any file with a version resource older than MIN_VERSION will do.
     shutil.copy(Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll", cached)
-    with pytest.raises(NvdaTooOld) as exc:
+    with pytest.raises(OperationalError, match=r"needs 2026\.2 or later") as exc:
         launcher.latest_installer()
     assert exc.value.hint == "connect to the network, or asc get-nvda"
 
@@ -669,18 +663,20 @@ def test_nvda_version_check() -> None:
     launcher.check_version(named, (2027, 1))
     # 2025.1 has Remote Access but forwards no speech without an audio device.
     for old in ((2024, 4), (2025, 1), (2026, 1)):
-        with pytest.raises(NvdaTooOld, match=re.escape(f"{named} is version ") + r"\d+\.\d") as exc:
+        with pytest.raises(
+            OperationalError, match=re.escape(f"{named} is version ") + r"\d+\.\d"
+        ) as exc:
             launcher.check_version(named, old)
-        assert exc.value.exit_code == 7
+        assert exc.value.exit_code == 3
         assert "needs 2026.2 or later" in exc.value.message
 
 
 def test_an_old_nvda_gets_the_hint_for_its_folder() -> None:
     # asc get-nvda can't replace an NVDA in a folder the user named in nvda_dir.
-    with pytest.raises(NvdaTooOld) as exc:
+    with pytest.raises(OperationalError, match=r"needs 2026\.2 or later") as exc:
         launcher.check_version(Path("C:/nvda"), (2025, 1))
     assert exc.value.hint == "check nvda_dir"
-    with pytest.raises(NvdaTooOld) as exc:
+    with pytest.raises(OperationalError, match=r"needs 2026\.2 or later") as exc:
         launcher.check_version(launcher.managed_dir(), (2025, 1))
     assert exc.value.hint == "asc get-nvda"
 
@@ -755,10 +751,16 @@ def test_sandbox_window_puts_a_real_window_away() -> None:
             user32.DestroyWindow(hwnd)
 
 
-def test_a_mode_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
+def test_a_mode_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
     # Shared mode's relay files live in watch mode's folder, so its own is made at the spawn.
     blocked = tmp_path / "shared"
     blocked.write_text("a file where the folder should be", encoding="utf-8")
     with pytest.raises(FileUnusable) as exc:
         session._spawn(defaults("shared"), blocked)
     assert str(blocked) in exc.value.message
+
+
+def test_installer_timed_out_names_remaining_processes() -> None:
+    error = launcher._installer_timed_out(0.5, [111, 222])
+    assert "could not end process 111, 222" in error.message
+    assert "ended it" not in error.message

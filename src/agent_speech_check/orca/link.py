@@ -27,13 +27,9 @@ from agent_speech_check.errors import (
     AscError,
     FileUnusable,
     LaunchFailed,
-    OrcaBusy,
-    OrcaHelpNotFound,
+    OperationalError,
     OrcaNotConnected,
-    OrcaNotWatchable,
-    OrcaSetupNeeded,
     ProtocolError,
-    RemoteCommandFailed,
     SshMissing,
     bad_field,
 )
@@ -68,13 +64,20 @@ def payload(start: dict[str, str]) -> bytes:
     return b"%d\n" % len(_HELPER) + _HELPER + json.dumps(start).encode() + b"\n"
 
 
+_ORCA_SETUP_HINT = (
+    "install Orca 51+, Xvfb, openbox, xdotool, dbus-daemon, gdbus, and python3 on that machine"
+)
+
+
 def help_pages(destination: str | None, lang: str) -> dict[str, str]:
     """Orca's command pages by path, from its help here or on `destination`."""
     if destination is None:
         try:
             return helper.help_pages(lang)
         except helper.Failed as failed:
-            raise OrcaHelpNotFound(failed.reason) from None
+            raise OperationalError(
+                failed.reason, hint="install Orca, or make its help readable"
+            ) from None
     remote = shlex.join(helper_command(None))
     _, out, detail = ssh.run(destination, remote, payload({"help": lang}))
     message = parse_message(out.splitlines()[-1]) if out.strip() else None
@@ -82,7 +85,10 @@ def help_pages(destination: str | None, lang: str) -> dict[str, str]:
         return message.pages
     if isinstance(message, Failed):
         raise message.error
-    raise RemoteCommandFailed(destination, "python3", detail)
+    raise OperationalError(
+        f"python3 on {destination} failed: {detail}",
+        hint=f"verify that python3 works over ssh on {destination}",
+    )
 
 
 def watch_secret_file() -> Path:
@@ -163,11 +169,19 @@ def parse_message(line: bytes) -> Message | None:
         reason = f.text("reason", max_len=2000)
         failure: AscError
         if kind == "help":
-            failure = OrcaHelpNotFound(reason)
+            failure = OperationalError(reason, hint="install Orca, or make its help readable")
         elif kind == "watch":
-            failure = OrcaNotWatchable(reason, restart_command(watch_secret_file()))
+            failure = OperationalError(
+                f"asc can't hear your Orca: {reason}",
+                hint=f"restart Orca for asc: {restart_command(watch_secret_file())}",
+            )
+        elif kind == "setup":
+            failure = OperationalError(f"Orca can't start: {reason}", hint=_ORCA_SETUP_HINT)
         else:
-            failure = OrcaSetupNeeded(reason) if kind == "setup" else OrcaBusy(reason)
+            failure = OperationalError(
+                f"Orca can't start: {reason}",
+                hint="close that Orca, or run asc as another user",
+            )
         return Failed(failure)
     if f.has("help"):
         pages = Fields(raw["help"], f"{where} help", ProtocolError)
@@ -252,7 +266,9 @@ class OrcaLink:
             self._fail(
                 SshMissing(detail)
                 if self.destination
-                else OrcaSetupNeeded(f"cannot run python: {detail}")
+                else OperationalError(
+                    f"Orca can't start: cannot run python: {detail}", hint=_ORCA_SETUP_HINT
+                )
             )
             return
         stdin, stdout, stderr = _pipes(process)
@@ -332,7 +348,10 @@ class OrcaLink:
         if self.destination is not None and code == ssh.FAILED:
             return ssh.failed(self.destination, self._stderr, code)
         detail = self._stderr[-1] if self._stderr else f"exit code {code}"
-        return OrcaSetupNeeded(f"its helper exited with code {code}: {detail}")
+        return OperationalError(
+            f"Orca can't start: its helper exited with code {code}: {detail}",
+            hint=_ORCA_SETUP_HINT,
+        )
 
     async def _keep_stderr(self, stderr: asyncio.StreamReader) -> None:
         async for line in ssh.stderr_lines(stderr):

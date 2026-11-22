@@ -19,7 +19,7 @@ import ipaddress
 import os
 import sys
 
-from agent_speech_check.errors import FirewallFailed, NoDefaultSwitch, PowerShellTimedOut
+from agent_speech_check.errors import OperationalError, PowerShellTimedOut, show
 from agent_speech_check.system import paths, processes
 from agent_speech_check.system.powershell import encoded, quote, run
 
@@ -86,13 +86,23 @@ def daemon_program() -> str:
 def default_switch_address() -> str:
     address = parse_address(run(address_script()))
     if address is None:
-        raise NoDefaultSwitch(INTERFACE)
+        raise OperationalError(
+            f"no IPv4 address on {show(INTERFACE)}, so the sandbox can't reach asc",
+            hint="start any Windows Sandbox or Hyper-V VM once, which creates the Default Switch",
+        )
     return address
 
 
 def rule_ok(port: int) -> bool:
     script = check_script(SANDBOX_RULE, port, daemon_program())
     return run(script).strip() == "ok"
+
+
+def _rule_failed() -> OperationalError:
+    return OperationalError(
+        f"the firewall rule {show(SANDBOX_RULE)} was not created",
+        hint="approve the admin prompt, or run asc firewall-setup again",
+    )
 
 
 def create_rule(port: int) -> None:
@@ -106,6 +116,6 @@ def create_rule(port: int) -> None:
         # It waits for the UAC prompt, so give a person time to answer it.
         run(outer, timeout_s=UAC_TIMEOUT_S)
     except PowerShellTimedOut:
-        raise FirewallFailed(SANDBOX_RULE) from None
+        raise _rule_failed() from None
     if not rule_ok(port):
-        raise FirewallFailed(SANDBOX_RULE)
+        raise _rule_failed()

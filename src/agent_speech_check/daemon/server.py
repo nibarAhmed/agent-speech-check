@@ -9,6 +9,8 @@ error and exits rather than keep running half dead.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import errno
 import functools
 import json
 import logging
@@ -31,12 +33,12 @@ from agent_speech_check.daemon.speech_log import Entry, Since, SpeechLog
 from agent_speech_check.errors import (
     AlreadyRunning,
     AscError,
-    LaunchElsewhere,
     LaunchFailed,
     NoMatch,
-    PanicKeyTaken,
+    OperationalError,
+    PortInUse,
     SharedNeedsConsent,
-    SinceAhead,
+    UsageError,
     numbered_lines,
 )
 from agent_speech_check.inputs import mouse
@@ -47,8 +49,8 @@ from agent_speech_check.nvda.relay import Relay
 from agent_speech_check.orca.link import OrcaLink, watch_secret
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.system import winapi
-from agent_speech_check.system.paths import mode_dir, relay_dir, state_root
+from agent_speech_check.system import paths, winapi
+from agent_speech_check.system.paths import mode_dir, relay_dir, state_root, write_atomic
 from agent_speech_check.system.ssh import Tunnel
 
 if sys.platform != "win32":
@@ -57,7 +59,15 @@ if sys.platform != "win32":
 log = logging.getLogger(__name__)
 
 LOG_FILE = "daemon.log"
+START_ERROR_FILE = "start_error.json"
 STOP_DELAY_S = 0.05
+
+# Windows says WSAEACCES for a port another socket holds exclusively; Linux's EACCES
+# is a privileged port instead.
+if sys.platform == "win32":
+    _IN_USE = (errno.WSAEADDRINUSE, errno.WSAEACCES)
+else:
+    _IN_USE = (errno.EADDRINUSE,)
 
 
 class LogFormatter(logging.Formatter):
@@ -117,13 +127,12 @@ def take_panic_key(key: Hotkey, on_press: Callable[[], None]) -> winapi.GlobalHo
     stop it at once: the panic hotkey releases held keys and stops asc."""
     hotkey = winapi.GlobalHotkey(key.modifiers, key.vk, on_press)
     if not hotkey.start():
-        raise PanicKeyTaken(key.text)
+        raise OperationalError(
+            f"cannot register the panic hotkey {key.text}: another program owns it",
+            hint="asc never sends keys to this desktop without one; close that program, "
+            "or pick another key with asc config set panic_key",
+        )
     return hotkey
-
-
-def check_panic_key(key: Hotkey) -> None:
-    """Refuse to start up front if another program owns the panic hotkey."""
-    take_panic_key(key, lambda: None).stop()
 
 
 def relay_host(target: Target) -> str:
@@ -199,6 +208,7 @@ class Daemon:
         self.nvda: launcher.Running | None = None
         self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
+        self.started = False
         # Commands in progress, in no set order. Status shows them, so a client can tell a
         # command has begun: each one takes its starting point before its first await.
         self.running: list[str] = []
@@ -236,7 +246,10 @@ class Daemon:
     def _check_since(self, since: int) -> None:
         """A line not said yet can only be a number from an earlier session."""
         if since > self.speech.latest:
-            raise SinceAhead(since, self.speech.latest)
+            raise UsageError(
+                f"--since {since} is after the latest line, {self.speech.latest}",
+                hint="asc mark (line numbers restart with each asc start)",
+            )
 
     async def _speech(self, args: ipc.SpeechArgs) -> dict[str, Any]:
         self._check_since(args.since)
@@ -329,7 +342,10 @@ class Daemon:
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if self.target.tunnel:
-            raise LaunchElsewhere
+            raise OperationalError(
+                "remote mode can't start apps on Windows: NVDA runs on another machine",
+                hint="start the app there, then asc wait for its speech",
+            )
         if not self.link.connected:
             raise self.link.not_connected
         start = self.speech.latest
@@ -370,6 +386,10 @@ class Daemon:
             self.relay.host, self.relay.port, credentials.channel, credentials.fingerprint
         )
 
+    def _check_nvda(self) -> None:
+        launcher.check_portable(self.target.nvda_dir, self.target.settings)
+        launcher.refuse_if_running()
+
     def _start_nvda(self) -> None:
         if self.target.launches_portable:
             self.nvda = launcher.launch(
@@ -398,35 +418,47 @@ class Daemon:
     async def _start_relay(self, relay: Relay) -> asyncio.Server:
         host = await asyncio.to_thread(relay_host, self.target)
         # A tunnel's port is on the other machine; here any free one does.
-        server = await relay.start(0 if self.target.tunnel else self.target.port, host)
+        try:
+            server = await relay.start(0 if self.target.tunnel else self.target.port, host)
+        except OSError as error:
+            if self.target.port and not self.target.tunnel and error.errno in _IN_USE:
+                command = (
+                    f"asc config set port PORT --mode {self.target.mode}{paths.instance_flag()}"
+                )
+                raise PortInUse(self.target.port, command) from None
+            raise
         log.info("relay on %s", relay.port)
         if self.target.tunnel and self.target.ssh is not None:
             self.tunnel = Tunnel(self.target.ssh, self.target.port, relay.port)
         return server
 
     async def run(self) -> None:
-        self._start_panic_key()
-        relay_server = None
-        if self.relay is not None:
-            relay_server = await self._start_relay(self.relay)
-        token = secrets.token_urlsafe(32)
-        ipc_server = await asyncio.start_server(
-            functools.partial(ipc.serve_one, token, self.handle),
-            "127.0.0.1",
-            0,
-            limit=ipc.MAX_REQUEST,
-        )
-        port = ipc_server.sockets[0].getsockname()[1]
-        log.info("IPC on %d", port)
-        # Outside the group: it ends after the relay, so key releases still reach NVDA.
-        tunnel = None
-        if self.tunnel is not None:
-            tunnel = asyncio.create_task(self.tunnel.run())
-            tunnel.add_done_callback(self._stop_if_crashed)
+        relay_server: asyncio.Server | None = None
+        ipc_server: asyncio.Server | None = None
+        tunnel: asyncio.Task[None] | None = None
         try:
+            if self.relay is not None:
+                relay_server = await self._start_relay(self.relay)
+            if self.target.launches_portable:
+                await asyncio.to_thread(self._check_nvda)
+            self._start_panic_key()
+            token = secrets.token_urlsafe(32)
+            ipc_server = await asyncio.start_server(
+                functools.partial(ipc.serve_one, token, self.handle),
+                "127.0.0.1",
+                0,
+                limit=ipc.MAX_REQUEST,
+            )
+            port = ipc_server.sockets[0].getsockname()[1]
+            log.info("IPC on %d", port)
+            # Outside the group: it ends after the relay, so key releases still reach NVDA.
+            if self.tunnel is not None:
+                tunnel = asyncio.create_task(self.tunnel.run())
+                tunnel.add_done_callback(self._stop_if_crashed)
             # Off the loop: copying the user's config (add-ons too) can take a while.
             await asyncio.to_thread(self._start_nvda)
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
+            self.started = True
             async with asyncio.TaskGroup() as group:
                 follow = group.create_task(self.link.run())
                 if self.target.launches_sandbox:
@@ -435,26 +467,36 @@ class Daemon:
                 await self.stopping.wait()
                 follow.cancel()
         finally:
-            self.keyboard.release_all()
-            # Before NVDA goes, so it can still answer the close.
-            await self.link.stop()
-            if self.nvda is not None:
-                self.nvda.stop()
-            if self.sandbox is not None:
-                await self.sandbox.stop()
-            if relay_server is not None:
-                relay_server.close()
+            await self._cleanup(relay_server, ipc_server, tunnel)
+
+    async def _cleanup(
+        self,
+        relay_server: asyncio.Server | None,
+        ipc_server: asyncio.Server | None,
+        tunnel: asyncio.Task[None] | None,
+    ) -> None:
+        self.keyboard.release_all()
+        # Before NVDA goes, so it can still answer the close.
+        await self.link.stop()
+        if self.nvda is not None:
+            self.nvda.stop()
+        if self.sandbox is not None:
+            await self.sandbox.stop()
+        if relay_server is not None:
+            relay_server.close()
+        if ipc_server is not None:
             ipc_server.close()
+        if self.started:
             state.remove(self.folder)
-            if self.panic is not None:
-                self.panic.stop()
-            if tunnel is not None:
-                tunnel.cancel()
-                # Last, so a crash it raises skips no cleanup. wait() lets our own cancel through.
-                await asyncio.wait([tunnel])
-                if not tunnel.cancelled():
-                    tunnel.result()
-            log.info("stopped")
+        if self.panic is not None:
+            self.panic.stop()
+        if tunnel is not None:
+            tunnel.cancel()
+            # Last, so a crash it raises skips no cleanup. wait() lets our own cancel through.
+            await asyncio.wait([tunnel])
+            if not tunnel.cancelled():
+                tunnel.result()
+        log.info("stopped")
 
     def _stop_if_crashed(self, task: asyncio.Task[None]) -> None:
         """A crash ends the daemon, as one in the task group does."""
@@ -466,8 +508,7 @@ def _on_break(loop: asyncio.AbstractEventLoop, daemon: Daemon) -> None:
     loop.call_soon_threadsafe(daemon.stopping.set)
 
 
-async def _main(target: Target, folder: Path) -> None:
-    daemon = Daemon(target, folder)
+async def _main(daemon: Daemon) -> None:
     loop = asyncio.get_running_loop()
     if sys.platform == "win32":
         signal.signal(signal.SIGBREAK, lambda *_: _on_break(loop, daemon))
@@ -497,12 +538,19 @@ def run(target_json: str) -> int:
     folder = mode_dir(target.mode)
     folder.mkdir(parents=True, exist_ok=True)
     _setup_logging(folder)
-    lock = _only_daemon(state_root())
-    if lock is None:
-        raise AlreadyRunning
-    log.info("starting %s mode", target.mode)
+    daemon: Daemon | None = None
     try:
-        asyncio.run(_main(target, folder))
+        lock = _only_daemon(state_root())
+        if lock is None:
+            raise AlreadyRunning
+        log.info("starting %s mode", target.mode)
+        daemon = Daemon(target, folder)
+        asyncio.run(_main(daemon))
+    except AscError as error:
+        if daemon is None or not daemon.started:
+            with contextlib.suppress(AscError):
+                write_atomic(folder / START_ERROR_FILE, json.dumps(ipc.error_detail(error)))
+        raise
     except OSError as error:
         log.error("could not start: %s", error)  # noqa: TRY400 - the reason is enough
         raise

@@ -10,16 +10,7 @@ import pytest
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon.speech_log import SpeechLog
-from agent_speech_check.errors import (
-    OrcaBusy,
-    OrcaHelpNotFound,
-    OrcaNotConnected,
-    OrcaNotWatchable,
-    OrcaSetupNeeded,
-    ProtocolError,
-    SshMissing,
-    UntypableText,
-)
+from agent_speech_check.errors import OperationalError, OrcaNotConnected, ProtocolError, UsageError
 from agent_speech_check.inputs.keyboard import Keyboard
 from agent_speech_check.inputs.keys import KEYS, parse_gesture, typed_gestures
 from agent_speech_check.orca import helper, link
@@ -64,7 +55,7 @@ def test_typed_text_needs_no_keyboard_layout() -> None:
 
 
 def test_control_characters_are_not_typed() -> None:
-    with pytest.raises(UntypableText):
+    with pytest.raises(UsageError, match="cannot type these characters"):
         typed_gestures("a\x07b")
 
 
@@ -98,18 +89,21 @@ def test_payload_is_what_the_bootstrap_reads() -> None:
         (b'{"done": 4, "error": "no such file"}', Done(4, "no such file")),
         # A failed launch names its command, up to ipc's 8000 characters.
         (b'{"done": 5, "error": "' + b"x" * 9000 + b'"}', Done(5, "x" * 2000)),
-        (b'{"failed": "setup", "reason": "missing xdotool"}', OrcaSetupNeeded),
-        (b'{"failed": "busy", "reason": "Orca runs"}', OrcaBusy),
-        (b'{"failed": "watch", "reason": "no secret"}', OrcaNotWatchable),
-        (b'{"failed": "help", "reason": "not found"}', OrcaHelpNotFound),
+        (b'{"failed": "setup", "reason": "missing xdotool"}', ("missing xdotool", "install Orca")),
+        (b'{"failed": "busy", "reason": "Orca runs"}', ("Orca runs", "close that Orca")),
+        (b'{"failed": "watch", "reason": "no secret"}', ("no secret", "restart Orca")),
+        (b'{"failed": "help", "reason": "not found"}', ("not found", "help readable")),
         (b'{"help": {"/a/commands_a.page": ""}}', Help({"/a/commands_a.page": ""})),
     ],
 )
 def test_helper_messages(line: bytes, message: object) -> None:
     got = parse_message(line)
-    if isinstance(message, type):
+    if isinstance(message, tuple):
+        text, hint = message
         assert isinstance(got, Failed)
-        assert isinstance(got.error, message)
+        assert isinstance(got.error, OperationalError)
+        assert text in got.error.message
+        assert hint in (got.error.hint or "")
     else:
         assert got == message
 
@@ -239,7 +233,8 @@ def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     speech = SpeechLog()
     orca = OrcaLink("me@vm", speech)
     asyncio.run(orca.run())
-    assert isinstance(orca.failure, SshMissing)
+    assert isinstance(orca.failure, OperationalError)
+    assert "cannot run ssh" in orca.failure.message
     keyboard = Keyboard(Target("remote", 0, launch=False, ssh="me@vm", os="linux"), orca, speech)
     with pytest.raises(OrcaNotConnected):
         asyncio.run(keyboard.press((parse_gesture("Tab"),), 0, 1))

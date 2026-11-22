@@ -35,14 +35,9 @@ from agent_speech_check.daemon.speech_log import SpeechLog
 from agent_speech_check.errors import (
     AscError,
     FileUnusable,
-    JoinRefused,
-    LineTooLong,
-    NoJoin,
     NvdaNotConnected,
+    OperationalError,
     ProtocolError,
-    RelayCertBroken,
-    RelayFileBroken,
-    RelayKeyBroken,
 )
 from agent_speech_check.inputs.keys import Gesture, Key, text_gestures
 from agent_speech_check.nvda import protocol
@@ -98,12 +93,17 @@ def _new_cert(cert_path: Path, key_path: Path) -> None:
     write_atomic(cert_path, cert.public_bytes(serialization.Encoding.PEM))
 
 
+_RELAY_FILE_HINT = "delete the file so asc can recreate it, then reconnect NVDA with the new key"
+
+
 def fingerprint(cert_path: Path) -> str:
     """Lowercase hex SHA-256 of the DER cert, the form NVDA's trustedCertificates uses."""
     try:
         cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
     except ValueError:
-        raise RelayCertBroken(str(cert_path)) from None
+        raise OperationalError(
+            f"{cert_path} is not a PEM certificate", hint=_RELAY_FILE_HINT
+        ) from None
     return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
@@ -114,7 +114,9 @@ def server_context(cert_path: Path, key_path: Path) -> ssl.SSLContext:
         # A password callback, so an encrypted key fails instead of OpenSSL asking on the console.
         context.load_cert_chain(cert_path, key_path, password=lambda: b"")
     except ssl.SSLError:
-        raise RelayKeyBroken(str(key_path)) from None
+        raise OperationalError(
+            f"{key_path} is not the private key of the relay certificate", hint=_RELAY_FILE_HINT
+        ) from None
     return context
 
 
@@ -138,7 +140,10 @@ def _load_or_create(folder: Path) -> Credentials:
             raw = json.loads(info.read_text(encoding="utf-8"))
         except ValueError:
             raw = None
-        channel = Fields(raw, str(info), RelayFileBroken).text("channel", max_len=200)
+        try:
+            channel = Fields(raw, str(info), OperationalError).text("channel", max_len=200)
+        except OperationalError as error:
+            raise OperationalError(error.message, hint=_RELAY_FILE_HINT) from None
     if channel is None:
         channel = secrets.token_urlsafe(12)
         write_atomic(info, json.dumps({"channel": channel}))
@@ -207,7 +212,9 @@ class Relay:
             if joined:
                 await self._follow(reader, writer)
         except TimeoutError:
-            self._failed(NoJoin(self.join_timeout_s))
+            self._failed(
+                ProtocolError(f"the connection sent no join within {self.join_timeout_s:g} s")
+            )
         except ProtocolError as error:
             reason = error
             self._failed(error)
@@ -259,7 +266,9 @@ class Relay:
                     return protocol.parse_message(error.partial)
                 return None
             except asyncio.LimitOverrunError:
-                raise LineTooLong(protocol.MAX_LINE) from None
+                raise ProtocolError(
+                    f"NVDA sent a line longer than {protocol.MAX_LINE} bytes"
+                ) from None
             if line.strip():
                 return protocol.parse_message(line.rstrip(b"\r\n"))
 
@@ -272,7 +281,7 @@ class Relay:
             if isinstance(message, protocol.Join):
                 break
         if message.channel != self.credentials.channel or message.connection_type != "slave":
-            self._failed(JoinRefused())
+            self._failed(ProtocolError("refused a join with the wrong channel key or role"))
             writer.write(protocol.encode_error("incorrect_password"))
             await writer.drain()
             return False

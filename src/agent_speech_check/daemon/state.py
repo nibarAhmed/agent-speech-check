@@ -10,7 +10,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from agent_speech_check.errors import NotConnected, NotRunning
+from agent_speech_check.errors import DaemonUnreachable, NotRunning
 from agent_speech_check.system.paths import write_atomic
 from agent_speech_check.validate import Fields
 
@@ -38,7 +38,7 @@ def read(folder: Path) -> State:
         # Not written by a live daemon (writes are atomic): stale.
         remove(folder)
         raise NotRunning from None
-    f = Fields(raw, str(path), NotConnected, ("pid", "port", "token", "started"))
+    f = Fields(raw, str(path), DaemonUnreachable, ("pid", "port", "token", "started"))
     return State(
         f.number("pid", low=1, high=2**32),
         f.number("port", low=1, high=65535),

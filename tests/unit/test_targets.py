@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from agent_speech_check.config.targets import Target, check_runnable, defaults, load
-from agent_speech_check.errors import ConfigFileError, SetupNeeded, UsageError
+from agent_speech_check.errors import FileUnusable, UsageError
 from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
 
@@ -136,7 +136,7 @@ def test_panic_key_default_and_from_file(tmp_path: Path) -> None:
 
 
 def test_toml_syntax_error(tmp_path: Path) -> None:
-    with pytest.raises(ConfigFileError, match=r"config.toml: "):
+    with pytest.raises(UsageError, match=r"config.toml: "):
         resolve(write(tmp_path, "[watch\n"), None)
 
 
@@ -280,14 +280,14 @@ def test_with_window() -> None:
 def test_file_not_in_utf8(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.write_bytes(b'mode = "watch" # caf\xe9\n')
-    with pytest.raises(ConfigFileError, match=r"config.toml: "):
+    with pytest.raises(UsageError, match=r"config.toml: "):
         resolve(path, None)
 
 
-def test_file_the_disk_refuses_needs_setup(tmp_path: Path) -> None:
+def test_file_the_disk_refuses_fails(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
     path.mkdir()
-    with pytest.raises(SetupNeeded, match=r"^cannot use .*config\.toml: "):
+    with pytest.raises(FileUnusable, match=r"^cannot use .*config\.toml: "):
         load(path)
 
 

@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_speech_check.errors import FileUnusable, NotTarballInstall
+from agent_speech_check.errors import FileUnusable, OperationalError
 from agent_speech_check.system import paths
 from agent_speech_check.update import updater
 
@@ -67,7 +67,10 @@ def plan(
     installed = updater.installed_exe() if exe is None else exe.resolve()
     root = None if installed is None else updater.install_root(installed)
     if installed is None or root is None:
-        raise NotTarballInstall
+        raise OperationalError(
+            "asc was not installed from a Linux release tarball",
+            hint="remove it with the tool that installed it",
+        )
     state_dir = paths.base_root() if state is None else state
     links = find_links(root, sys.argv[0] if argv0 is None else argv0, default_link)
     return Plan(

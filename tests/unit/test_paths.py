@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from agent_speech_check.errors import BadInstance, SetupNeeded
+from agent_speech_check.errors import FileUnusable, UsageError
 from agent_speech_check.system import paths
 from agent_speech_check.system.paths import write_atomic
 
@@ -38,19 +38,19 @@ def test_a_failed_write_keeps_the_old_file_and_leaves_no_temporary(tmp_path: Pat
     assert [p.name for p in tmp_path.iterdir()] == ["a.txt"]
 
 
-def test_a_target_the_disk_refuses_needs_setup_and_names_the_target(tmp_path: Path) -> None:
+def test_a_target_the_disk_refuses_names_the_target(tmp_path: Path) -> None:
     path = tmp_path / "a.txt"
     path.mkdir()
-    with pytest.raises(SetupNeeded) as exc:
+    with pytest.raises(FileUnusable) as exc:
         write_atomic(path, "new")
     assert exc.value.message.startswith(f"cannot use {path}: ")
     assert ".tmp" not in exc.value.message
     assert [p.name for p in tmp_path.iterdir()] == ["a.txt"]
 
 
-def test_a_missing_folder_needs_setup_and_names_the_target(tmp_path: Path) -> None:
+def test_a_missing_folder_names_the_target(tmp_path: Path) -> None:
     path = tmp_path / "gone" / "a.txt"
-    with pytest.raises(SetupNeeded) as exc:
+    with pytest.raises(FileUnusable) as exc:
         write_atomic(path, "new")
     assert exc.value.message.startswith(f"cannot use {path}: ")
 
@@ -75,5 +75,5 @@ def test_instance_names(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     "name", ["-a", "VM1", "a_b", "..", r"a\b", "a/b", "x" * 33, "con", "nul", "com1", "lpt9"]
 )
 def test_bad_instance_names(name: str) -> None:
-    with pytest.raises(BadInstance):
+    with pytest.raises(UsageError, match="instance "):
         paths.check_instance(name)

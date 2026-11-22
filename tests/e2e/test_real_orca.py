@@ -97,7 +97,7 @@ def test_orca_reads_a_form(
         tab = run_asc("press", "Tab", "--expect", "(?i)save button")
         assert tab.returncode == 0, tab.stdout + tab.stderr
         ini = run_asc("status", "--nvda-ini")
-        assert (ini.returncode, "Orca" in ini.stderr) == (4, True), ini.stderr
+        assert (ini.returncode, "Orca" in ini.stderr) == (3, True), ini.stderr
     finally:
         stopped = run_asc("stop")
     assert stopped.returncode == 0, stopped.stderr
@@ -231,7 +231,7 @@ def test_watch_hears_your_own_orca(tmp_path: Path, desktop: list[psutil.Process]
     app = tmp_path / "form.py"
     app.write_text(WATCH_FORM, encoding="utf-8")
     refused = run_asc("start", "--mode", "watch")
-    assert refused.returncode == 7, refused.stdout + refused.stderr
+    assert refused.returncode == 3, refused.stdout + refused.stderr
     (line,) = re.findall(r"restart Orca for asc: (.+)", refused.stderr)
     assert "orca --replace" in line
     # As the user runs it, at their desktop.

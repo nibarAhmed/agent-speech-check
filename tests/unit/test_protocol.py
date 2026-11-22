@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from agent_speech_check.errors import LineTooLong, MalformedLine, ProtocolError, ServerSentError
+from agent_speech_check.errors import ProtocolError
 from agent_speech_check.nvda import protocol as p
 
 
@@ -65,9 +65,9 @@ def test_unknown_type_is_not_an_error() -> None:
 
 
 def test_server_error_message() -> None:
-    with pytest.raises(ServerSentError, match='NVDA reported an error: "incorrect_password"'):
+    with pytest.raises(ProtocolError, match='NVDA reported an error: "incorrect_password"'):
         p.parse_message(b'{"type":"error","message":"incorrect_password"}')
-    with pytest.raises(ServerSentError, match="no message"):
+    with pytest.raises(ProtocolError, match="no message"):
         p.parse_message(b'{"type":"error"}')
 
 
@@ -81,12 +81,12 @@ def test_malformed(line: bytes) -> None:
 
 
 def test_bad_json_names_reason() -> None:
-    with pytest.raises(MalformedLine, match="not a JSON object: Expecting value"):
+    with pytest.raises(ProtocolError, match="not a JSON object: Expecting value"):
         p.parse_message(b"oops")
 
 
 def test_oversize_line() -> None:
-    with pytest.raises(LineTooLong):
+    with pytest.raises(ProtocolError, match="longer than"):
         p.parse_message(b"x" * (p.MAX_LINE + 1))
 
 

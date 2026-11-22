@@ -26,10 +26,10 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
         assert run_asc("press", "Tab").stdout == '1 said: "first"\n'
         # The flag goes after the command too, and ASC_INSTANCE does the same.
         assert run_asc("press", "Tab", "--instance", "vm1").stdout == '1 said: "second"\n'
-        # A third on vm1's port is refused before its daemon starts.
+        # A third on vm1's port fails with a clear port-in-use error.
         env.config(f"[desktop]\nport = {port}\nlaunch = false\n", instance="vm2")
         clash = run_asc("start", "--mode", "desktop", "--instance", "vm2")
-        assert clash.returncode == 4, clash.stderr
+        assert clash.returncode == 3, clash.stderr
         assert "--mode desktop --instance vm2 (a free one)" in clash.stderr
         monkeypatch.setenv("ASC_INSTANCE", "vm1")
         stopped = run_asc("stop")
@@ -52,11 +52,11 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
 
 def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
     result = run_asc("start", "--mode", "shared", "--i-understand", "--instance", "vm1")
-    assert result.returncode == 4
+    assert result.returncode == 2
     assert "only the default instance may join" in result.stderr
     env.config(UNREACHABLE)
     result = run_asc("start", "--mode", "remote")
-    assert result.returncode == 4, result.stderr
+    assert result.returncode == 2, result.stderr
     assert "remote mode runs only in a named instance, one per VM" in result.stderr
     assert result.stderr.endswith(
         "hint: asc start --mode remote --instance VMNAME (asc status --all lists instances)\n"

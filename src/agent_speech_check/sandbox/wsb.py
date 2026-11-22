@@ -32,13 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from agent_speech_check.errors import (
-    NotConnected,
-    SandboxBroken,
-    SandboxFailed,
-    SandboxNeedsPro,
-    WsbMissing,
-)
+from agent_speech_check.errors import OperationalError, SandboxError
 from agent_speech_check.system import powershell, processes, spawn, winapi
 from agent_speech_check.system.wait import poll_until
 from agent_speech_check.validate import Fields
@@ -87,12 +81,15 @@ def config_xml(mapped: list[Mapped], *, networking: bool, logon: str | None = No
 # ---------------------------------------------------------------- parsing `wsb --raw`
 
 
+_BROKEN_HINT = "check that Windows Sandbox starts on its own"
+
+
 def _json(text: str, what: str) -> Fields:
     try:
         raw = json.loads(text)
     except ValueError:
-        raise SandboxBroken(what, text.strip()[:200]) from None
-    return Fields(raw, f"wsb {what} output", NotConnected)
+        raise SandboxError(what, text.strip()[:200], hint=_BROKEN_HINT) from None
+    return Fields(raw, f"wsb {what} output", OperationalError)
 
 
 def parse_start(text: str) -> str:
@@ -102,7 +99,7 @@ def parse_start(text: str) -> str:
 def parse_ip(text: str) -> str | None:
     networks = _json(text, "ip").items("Networks")
     for network in networks:
-        address = Fields(network, "wsb ip network", NotConnected).opt_text(
+        address = Fields(network, "wsb ip network", OperationalError).opt_text(
             "IpV4Address", max_len=50
         )
         if address:
@@ -116,7 +113,9 @@ def parse_exec(text: str) -> int:
 
 def parse_list(text: str) -> list[str]:
     environments = _json(text, "list").items("WindowsSandboxEnvironments")
-    return [Fields(e, "wsb list entry", NotConnected).text("Id", max_len=100) for e in environments]
+    return [
+        Fields(e, "wsb list entry", OperationalError).text("Id", max_len=100) for e in environments
+    ]
 
 
 def window_step(window: str, *, shown: bool, minimized: bool) -> tuple[str | None, bool]:
@@ -299,13 +298,16 @@ def edition_id() -> str:
 
 def require_available() -> None:
     if is_home_edition(edition_id()):
-        raise SandboxNeedsPro
+        raise OperationalError(
+            "sandbox mode is unavailable: Windows Sandbox needs Windows Pro, "
+            "Enterprise or Education",
+            hint="use watch or desktop mode",
+        )
     if shutil.which("wsb") is None:
-        raise WsbMissing
-
-
-# Every error a wsb call raises.
-FAILURES = (SandboxFailed, SandboxBroken)
+        raise OperationalError(
+            "sandbox mode is unavailable: the wsb command is missing",
+            hint="turn on the Windows Sandbox feature, then sign out and in",
+        )
 
 
 def wsb(*args: str, what: str) -> str:
@@ -319,9 +321,9 @@ def wsb(*args: str, what: str) -> str:
             timeout=WSB_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        raise SandboxFailed(what, f"no answer within {WSB_TIMEOUT_S} s") from None
+        raise SandboxError(what, f"no answer within {WSB_TIMEOUT_S} s") from None
     if result.returncode:
-        raise SandboxBroken(what, (result.stderr or result.stdout).strip()[:300])
+        raise SandboxError(what, (result.stderr or result.stdout).strip()[:300], hint=_BROKEN_HINT)
     return result.stdout
 
 
@@ -343,7 +345,7 @@ def exec_as_user(sandbox_id: str, command: str) -> int:
 def _has_session(sandbox_id: str) -> bool:
     try:
         return exec_as_user(sandbox_id, "cmd /c exit 0") == 0
-    except FAILURES:
+    except SandboxError:
         return False
 
 
@@ -464,14 +466,14 @@ class SandboxWindow:
 
 def _wait_session(sandbox_id: str) -> None:
     if not poll_until(lambda: _has_session(sandbox_id), SESSION_TIMEOUT_S, POLL_S):
-        raise SandboxFailed("connect", f"no user session after {SESSION_TIMEOUT_S} s")
+        raise SandboxError("connect", f"no user session after {SESSION_TIMEOUT_S} s")
 
 
 def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:
     """Start a sandbox with a logged-in user, guarded so it goes with this
     process (`guard_err` takes the guard's errors). Call it while `window` keeps."""
     if not wait_gone(60):
-        raise SandboxFailed("start", "the previous sandbox is still shutting down")
+        raise SandboxError("start", "the previous sandbox is still shutting down")
     sandbox_id = parse_start(wsb("start", "--config", config, what="start"))
     try:
         window.remember_focus()
@@ -481,7 +483,7 @@ def start_connected(config: str, window: SandboxWindow, guard_err: Path) -> str:
     except BaseException:
         # The caller never learns this id, and this process lives on, so its
         # guard won't stop the sandbox: stop it here.
-        with contextlib.suppress(*FAILURES):
+        with contextlib.suppress(SandboxError):
             stop(sandbox_id)
         raise
     return sandbox_id

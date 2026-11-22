@@ -15,14 +15,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
-from agent_speech_check.errors import (
-    AscError,
-    PortInUse,
-    SetupNeeded,
-    SshFailed,
-    SshMissing,
-    SshSetupNeeded,
-)
+from agent_speech_check.errors import AscError, OperationalError, PortInUse, SshMissing
 from agent_speech_check.system import paths, winapi
 
 log = logging.getLogger(__name__)
@@ -63,12 +56,20 @@ def tunnel_command(destination: str, port: int, local_port: int) -> list[str]:
     return command(destination, "-v", "-N", "-o", "ExitOnForwardFailure=yes", "-R", forward)
 
 
-def failed(destination: str, lines: Sequence[str], code: int) -> AscError:
+def is_setup_error(lines: Sequence[str]) -> bool:
+    """True when ssh's stderr names an error only the user can fix."""
+    return any(sign in line for line in lines for sign in _SETUP)
+
+
+def failed(destination: str, lines: Sequence[str], code: int) -> OperationalError:
     """Why ssh exited with `code`, from its last lines of stderr."""
     detail = last_said(lines, code)
-    if any(sign in line for line in lines for sign in _SETUP):
-        return SshSetupNeeded(destination, detail)
-    return SshFailed(destination, detail)
+    if is_setup_error(lines):
+        return OperationalError(
+            f"ssh {destination} failed: {detail}",
+            hint=f"run 'ssh {destination}' manually once: asc needs key auth, not a password",
+        )
+    return OperationalError(f"ssh {destination} failed: {detail}")
 
 
 def last_said(lines: Sequence[str], code: int) -> str:
@@ -94,7 +95,9 @@ def run(destination: str, remote: str, data: bytes = b"") -> tuple[int, bytes, s
     except OSError as error:
         raise SshMissing(error.strerror or str(error)) from None
     except subprocess.TimeoutExpired:
-        raise SshFailed(destination, f"no answer in {RUN_TIMEOUT_S:.0f} s") from None
+        raise OperationalError(
+            f"ssh {destination} failed: no answer in {RUN_TIMEOUT_S:.0f} s"
+        ) from None
     stderr = done.stderr.decode(errors="replace").splitlines()[-STDERR_LINES:]
     lines = [_clip(line) for line in stderr]
     if done.returncode == FAILED:
@@ -145,20 +148,25 @@ class Tunnel:
         delay = RETRY_FIRST_S
         ever_up = False
         while True:
-            came_up, error = await self._once()
+            came_up, retryable, error = await self._once()
             ever_up = ever_up or came_up
             self.up = False
             self.last_error = error.message
-            if not ever_up or isinstance(error, SetupNeeded):
+            if not ever_up or not retryable:
                 self.failure = error
-                log.warning("ssh tunnel failed: %s", type(error).__name__)
+                reason = (
+                    type(error).__name__
+                    if type(error) is not OperationalError
+                    else ("setup" if not retryable else "ssh")
+                )
+                log.warning("ssh tunnel failed: %s", reason)
                 return
             delay = RETRY_FIRST_S if came_up else min(delay * 2, RETRY_MAX_S)
-            log.info("ssh tunnel lost (%s), again in %g s", type(error).__name__, delay)
+            log.info("ssh tunnel lost, again in %g s", delay)
             await asyncio.sleep(delay)
 
-    async def _once(self) -> tuple[bool, AscError]:
-        """One ssh, start to exit: whether it came up, and why it ended."""
+    async def _once(self) -> tuple[bool, bool, AscError]:
+        """One ssh, start to exit: whether it came up, whether to retry, and why it ended."""
         try:
             process = await asyncio.create_subprocess_exec(
                 *tunnel_command(self.destination, self.port, self.local_port),
@@ -168,7 +176,7 @@ class Tunnel:
                 **_dies_with_asc(),
             )
         except OSError as error:
-            return False, SshMissing(error.strerror or str(error))
+            return False, False, SshMissing(error.strerror or str(error))
         job = None
         try:
             if sys.platform == "win32":
@@ -179,7 +187,8 @@ class Tunnel:
                     with contextlib.suppress(ProcessLookupError):
                         process.kill()
             came_up, lines = await self._follow(process)
-            return came_up, self.error(await process.wait(), lines)
+            code = await process.wait()
+            return came_up, not is_setup_error(lines), self.error(code, lines)
         finally:
             if process.returncode is None:
                 with contextlib.suppress(ProcessLookupError):
@@ -203,7 +212,7 @@ class Tunnel:
                 log.info("ssh tunnel up")
         return came_up, lines
 
-    def error(self, code: int, lines: Sequence[str]) -> AscError:
+    def error(self, code: int, lines: Sequence[str]) -> OperationalError:
         if code == FAILED and any(_FORWARD_FAILED in line for line in lines):
             fix = f"asc config set port PORT --mode remote{paths.instance_flag()}"
             return PortInUse(self.port, fix)

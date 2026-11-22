@@ -30,7 +30,7 @@ from pathlib import Path
 
 import configobj
 
-from agent_speech_check.errors import BadSetting, UserConfigUnreadable
+from agent_speech_check.errors import BadSetting, UsageError
 
 # configobj reads `a, b` as a list.
 type Section = dict[str, "str | list[str] | Section"]
@@ -147,20 +147,28 @@ _OWNED_KEYS = frozenset(
 # ---------------------------------------------------------------- the user's own config
 
 
+def _unreadable(where: str, line: int | None) -> UsageError:
+    at = "" if line is None else f" line {line}"
+    return UsageError(
+        f"cannot read your NVDA config: {where}{at}",
+        hint="fix that line, or point nvda_dir at an NVDA with a fresh config",
+    )
+
+
 def parse_ini(text: str, where: str) -> Section:
     """Read ini text the way NVDA reads `nvda.ini`, refusing what asc couldn't write back."""
     lines = text.splitlines()
     try:
         config = configobj.ConfigObj(lines, interpolation=False, raise_errors=True)
     except configobj.ConfigObjError as error:
-        raise UserConfigUnreadable(where, error.line_number) from None
+        raise _unreadable(where, error.line_number) from None
     try:
         config.write()
     except configobj.ConfigObjError:
         # A value holding both ''' and """ can't be quoted. Only a one-line
         # unquoted value can hold both, so its line is the one that does.
         both = (n for n, line in enumerate(lines, 1) if "'''" in line and '"""' in line)
-        raise UserConfigUnreadable(where, next(both, None)) from None
+        raise _unreadable(where, next(both, None)) from None
     section: Section = config.dict()
     return section
 
@@ -180,7 +188,7 @@ def user_ini(source: Path) -> Section | None:
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError as error:
-        raise UserConfigUnreadable(str(path), data[: error.start].count(b"\n") + 1) from None
+        raise _unreadable(str(path), data[: error.start].count(b"\n") + 1) from None
     return parse_ini(text, str(path))
 
 

@@ -119,11 +119,11 @@ def test_unknown_type_is_ignored(nvda: FakeNvda) -> None:
         (f.SERVER_ERROR, 'NVDA reported an error: "boom"'),
     ],
 )
-def test_protocol_faults_exit_5_and_recover(nvda: FakeNvda, fault: str, message: str) -> None:
+def test_protocol_faults_exit_3_and_recover(nvda: FakeNvda, fault: str, message: str) -> None:
     nvda.replies["Up"] = fault
     joins = nvda.joins
     result = run_asc("press", "Up")
-    assert result.returncode == 5, result.stdout + result.stderr
+    assert result.returncode == 3, result.stdout + result.stderr
     assert message in result.stderr
     wait_rejoined(nvda, joins)
     assert nvda.held == set()

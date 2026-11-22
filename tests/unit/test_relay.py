@@ -12,12 +12,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 
 from agent_speech_check.daemon.speech_log import SpeechLog
-from agent_speech_check.errors import (
-    ProtocolError,
-    RelayFileBroken,
-    ServerSentError,
-    SetupNeeded,
-)
+from agent_speech_check.errors import FileUnusable, OperationalError, ProtocolError
 from agent_speech_check.nvda import relay
 
 
@@ -55,7 +50,7 @@ def _depth(tb: TracebackType | None) -> int:
 
 def test_a_kept_protocol_error_does_not_grow_each_time_it_is_raised(tmp_path: Path) -> None:
     r = relay.Relay(relay.load_or_create(tmp_path), SpeechLog())
-    r._lost(ServerSentError("boom"))
+    r._lost(ProtocolError('NVDA reported an error: "boom"'))
     depths = []
     for _ in range(3):
         with pytest.raises(ProtocolError, match="NVDA reported an error") as caught:
@@ -69,42 +64,44 @@ def test_a_broken_relay_file_needs_deleting_not_new_arguments(tmp_path: Path, co
     # asc wrote relay.json itself, so no argument fixes it; deleting it does.
     relay.load_or_create(tmp_path)
     (tmp_path / "relay.json").write_text(content, encoding="utf-8")
-    with pytest.raises(SetupNeeded) as exc:
+    with pytest.raises(OperationalError) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay.json") in exc.value.message
     assert exc.value.hint is not None
     assert "delete" in exc.value.hint
 
 
-def test_a_relay_file_that_cannot_be_read_needs_setup(tmp_path: Path) -> None:
+def test_a_relay_file_that_cannot_be_read_fails(tmp_path: Path) -> None:
     (tmp_path / "relay.json").mkdir()
-    with pytest.raises(SetupNeeded) as exc:
+    with pytest.raises(FileUnusable) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay.json") in exc.value.message
     assert exc.value.hint is not None
     assert "permissions" in exc.value.hint
 
 
-def test_a_relay_folder_that_cannot_be_made_needs_setup(tmp_path: Path) -> None:
+def test_a_relay_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
     folder = tmp_path / "target"
     folder.write_text("", encoding="utf-8")
-    with pytest.raises(SetupNeeded) as exc:
+    with pytest.raises(FileUnusable) as exc:
         relay.load_or_create(folder)
     assert str(folder) in exc.value.message
 
 
 def test_a_relay_file_that_is_not_utf8_needs_deleting(tmp_path: Path) -> None:
     (tmp_path / "relay.json").write_bytes(b'{"channel": "\xff"}')
-    with pytest.raises(RelayFileBroken):
+    with pytest.raises(OperationalError) as exc:
         relay.load_or_create(tmp_path)
+    assert "delete" in (exc.value.hint or "")
 
 
 def test_a_broken_relay_cert_needs_deleting(tmp_path: Path) -> None:
     relay.load_or_create(tmp_path)
     (tmp_path / "relay_cert.pem").write_text("not a cert", encoding="utf-8")
-    with pytest.raises(RelayFileBroken) as exc:
+    with pytest.raises(OperationalError) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay_cert.pem") in exc.value.message
+    assert "delete" in (exc.value.hint or "")
 
 
 @pytest.mark.asyncio
@@ -126,9 +123,10 @@ async def test_a_flood_of_blank_lines_before_the_join_is_skipped(tmp_path: Path)
 def test_a_broken_relay_key_needs_deleting(tmp_path: Path) -> None:
     relay.load_or_create(tmp_path)
     (tmp_path / "relay_key.pem").write_text("not a key", encoding="utf-8")
-    with pytest.raises(RelayFileBroken) as exc:
+    with pytest.raises(OperationalError) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay_key.pem") in exc.value.message
+    assert "delete" in (exc.value.hint or "")
 
 
 def test_a_relay_key_from_another_cert_needs_deleting(tmp_path: Path) -> None:
@@ -136,9 +134,10 @@ def test_a_relay_key_from_another_cert_needs_deleting(tmp_path: Path) -> None:
     other = tmp_path / "other"
     relay.load_or_create(other)
     shutil.copy(other / "relay_key.pem", tmp_path / "relay_key.pem")
-    with pytest.raises(RelayFileBroken) as exc:
+    with pytest.raises(OperationalError) as exc:
         relay.load_or_create(tmp_path)
     assert str(tmp_path / "relay_key.pem") in exc.value.message
+    assert "delete" in (exc.value.hint or "")
 
 
 def test_an_encrypted_relay_key_needs_deleting(tmp_path: Path) -> None:
@@ -151,6 +150,7 @@ def test_an_encrypted_relay_key_needs_deleting(tmp_path: Path) -> None:
             serialization.BestAvailableEncryption(b"secret"),
         )
     )
-    with pytest.raises(RelayFileBroken) as exc:
+    with pytest.raises(OperationalError) as exc:
         relay.load_or_create(tmp_path)
     assert str(creds.key) in exc.value.message
+    assert "delete" in (exc.value.hint or "")

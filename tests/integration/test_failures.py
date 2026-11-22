@@ -58,7 +58,7 @@ def test_a_protocol_fault_from_nvda_fails_wait_and_launch(
     env.wait_running("desktop", command[0])
     nvda.send_raw(b"{not json\n")
     _, err = running.communicate(timeout=30)
-    assert running.returncode == 5, err
+    assert running.returncode == 3, err
     assert "NVDA sent a line that is not a JSON object" in err
 
 

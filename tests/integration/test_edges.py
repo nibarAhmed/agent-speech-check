@@ -21,9 +21,9 @@ from agent_speech_check.daemon import ipc, session, state
 from agent_speech_check.errors import (
     IPC_VERSION,
     AlreadyRunning,
-    DaemonNoReply,
+    DaemonUnreachable,
     NotRunning,
-    Updating,
+    OperationalError,
 )
 from agent_speech_check.sandbox import firewall
 from agent_speech_check.system import processes
@@ -51,7 +51,7 @@ def test_second_press_waits_then_gives_up(env: Env) -> None:
         # Once NVDA has the key, the slow press holds the keyboard for its settle.
         assert wait_until(lambda: bool(fake.gestures)), "the slow press never reached NVDA"
         busy = run_asc("press", "Tab", "--timeout", "300")
-        assert busy.returncode == 4
+        assert busy.returncode == 3
         assert "another asc command kept the keyboard" in busy.stderr
         assert slow.wait(30) == 0
         assert fake.gestures == ["Space"]
@@ -98,7 +98,7 @@ def daemon_reply(env: Env, request: pytest.FixtureRequest) -> Iterator[None]:
 @pytest.mark.usefixtures("daemon_reply")
 def test_garbage_from_daemon_is_internal_error() -> None:
     result = run_asc("status")
-    assert result.returncode == 6
+    assert result.returncode == 4
     assert "daemon response: expected JSON" in result.stderr
 
 
@@ -125,7 +125,7 @@ def test_config_set_looks_for_the_daemon_before_saving(env: Env) -> None:
     path = env.root / "agent-speech-check" / "config.toml"
     before = path.read_text(encoding="utf-8")
     result = run_asc("config", "set", "port", "7000", "--mode", "watch")
-    assert result.returncode == 6
+    assert result.returncode == 4
     assert path.read_text(encoding="utf-8") == before
 
 
@@ -172,8 +172,7 @@ def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     with pytest.raises(AlreadyRunning):
         run_setup(lambda _: "", replace_without_asking=True)
     started = run_asc("start", "--mode", "watch")
-    # Refused, not "not connected": retrying start can't help, stopping can.
-    assert started.returncode == 4, started.stderr
+    assert started.returncode == 3, started.stderr
     assert "asc is running but doesn't answer" in started.stderr
     assert "hint: asc stop, then asc start" in started.stderr
     assert path.exists()
@@ -226,7 +225,7 @@ def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
     current = json.loads(path.read_text(encoding="utf-8"))
     path.write_text(json.dumps({**current, "pid": 4, "started": time.time()}), encoding="utf-8")
     result = run_asc("stop")
-    assert result.returncode == 4, result.stderr
+    assert result.returncode == 3, result.stderr
     assert "cannot end the asc daemon (pid 4)" in result.stderr
     assert path.exists()
 
@@ -240,7 +239,7 @@ def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> N
     state = {"pid": 4, "port": fake.port, "token": "t", "started": time.time()}
     path.write_text(json.dumps(state), encoding="utf-8")
     result = run_asc("_stop_all")
-    assert result.returncode == 4, result.stderr
+    assert result.returncode == 3, result.stderr
     assert result.stdout == "stopped: desktop\n"
     assert "cannot end the asc daemon (pid 4)" in result.stderr
     assert not (env.folder("desktop") / "state.json").exists()
@@ -252,8 +251,9 @@ def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     folder.mkdir(parents=True)
     (folder / "relay.json").write_text("{half", encoding="utf-8")
     result = run_asc("start", "--mode", "watch")
-    assert result.returncode == 7
+    assert result.returncode == 3
     assert "relay.json: expected an object" in result.stderr
+    assert not (folder / "start_error.json").exists()
 
 
 @pytest.mark.skipif(
@@ -281,7 +281,7 @@ def test_start_replaces_a_stale_state_file(env: Env) -> None:
 @pytest.mark.usefixtures("env")
 def test_keys_finds_your_own_nvda() -> None:
     result = run_asc("keys", "report", "title")
-    if result.returncode == 7:
+    if result.returncode == 3:
         assert "NVDA not found. Looked in:" in result.stderr
     else:
         assert result.returncode == 0
@@ -307,7 +307,7 @@ def test_the_named_mutex_refuses_a_second_daemon() -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     target = Target("desktop", free_port(), launch=False)
     second = run_asc("_daemon", target.to_json())
-    assert second.returncode == 4
+    assert second.returncode == 3
     # The mutex doesn't know the first daemon's mode.
     assert "error: asc is already running\n" in second.stderr
 
@@ -318,7 +318,7 @@ def test_daemon_that_never_answers(env: Env) -> None:
     """In-process with a short wait: the real one is 5 s."""
     request = ipc.Request("status", ipc.NoArgs())
     with pytest.raises(
-        DaemonNoReply, match="cannot talk to the asc daemon: no reply in time"
+        DaemonUnreachable, match="cannot talk to the asc daemon: no reply in time"
     ) as exc:
         ipc.call(env.folder("watch"), request, 0.3)
     assert exc.value.exit_code == 3
@@ -366,7 +366,7 @@ def test_commands_refuse_while_an_update_installs() -> None:
         updater.mark(updater.marker(), installer.pid)
         updater.mark(updater.checking(), check.pid)
         busy = run_asc("status")
-        assert busy.returncode == Updating.exit_code
+        assert busy.returncode == OperationalError.exit_code
         assert "installing an update" in busy.stderr
         # The installer's own step to stop every daemon still runs, and ends
         # an update check that would otherwise outlive the install.
