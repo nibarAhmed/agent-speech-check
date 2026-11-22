@@ -92,7 +92,7 @@ def test_key_used_as_section() -> None:
         render(RelayAddress("127.0.0.1", 1, "k", "f"), (Setting(("speech", "synth", "x"), "1"),))
 
 
-def test_sandbox_relay_address_and_pinned_key() -> None:
+def test_custom_relay_address_and_pinned_key() -> None:
     lines = render(RelayAddress("172.24.80.1", 16837, "k", "f")).splitlines()
     assert "host = 172.24.80.1:16837" in lines
     assert "172.24.80.1:16837 = f" in lines

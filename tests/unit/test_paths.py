@@ -58,7 +58,7 @@ def test_a_missing_folder_names_the_target(tmp_path: Path) -> None:
 def test_shared_mode_uses_watch_modes_relay_files() -> None:
     # Your own NVDA joins both, so it trusts one certificate and knows one key.
     assert paths.relay_dir("shared") == paths.relay_dir("watch") == paths.mode_dir("watch")
-    for mode in ("desktop", "sandbox"):
+    for mode in ("desktop", "remote"):
         assert paths.relay_dir(mode) == paths.mode_dir(mode)
 
 

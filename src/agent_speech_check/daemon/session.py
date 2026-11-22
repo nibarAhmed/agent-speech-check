@@ -24,20 +24,17 @@ from agent_speech_check.errors import (
     SharedNeedsConsent,
     UsageError,
 )
-from agent_speech_check.nvda import launcher
-from agent_speech_check.sandbox import firewall, wsb
 from agent_speech_check.system import paths, processes, spawn
 from agent_speech_check.system.wait import poll_until
 
 START_TIMEOUT_S = 15.0
-# Past the daemon's own worst case: 10 s for NVDA, then its window threads.
+# Past the daemon's own worst case: 10 s for NVDA, plus shutdown.
 STOP_TIMEOUT_S = 30.0
 POLL_S = 0.1
 ERR_FILE = "daemon.err"
 TAIL_LINES = 10
 STATUS_TIMEOUT_S = 5.0
-# A sandbox boots and makes its portable NVDA first, which takes a while.
-CONNECT_TIMEOUT_S = {"watch": 60.0, "desktop": 60.0, "sandbox": 300.0, "remote": 60.0}
+CONNECT_TIMEOUT_S = 60.0
 
 
 def status(folder: Path) -> dict[str, Any]:
@@ -98,7 +95,7 @@ def running_status(root: Path) -> tuple[dict[str, Any] | None, str | None]:
 
 def _end(folder: Path) -> None:
     """End a daemon that can't be asked to stop. Its NVDA goes with it (a
-    kill-on-close job) and so does its sandbox (the guard)."""
+    kill-on-close job)."""
     try:
         current = state.read(folder)
     except (NotRunning, DaemonUnreachable):
@@ -138,29 +135,6 @@ def _spawn(target: Target, folder: Path) -> subprocess.Popen[bytes]:
         return spawn.detached(spawn.asc_command("_daemon", target.to_json()), err, folder)
 
 
-def _check_firewall(target: Target) -> None:
-    if not firewall.rule_ok(target.port):
-        raise OperationalError(
-            f"no firewall rule lets NVDA in Windows Sandbox reach asc on port {target.port}",
-            hint=f"{firewall.setup_command()} (asks for admin rights once)",
-        )
-
-
-def _check_sandbox(target: Target) -> None:
-    if target.nvda_dir:
-        launcher.check_portable(target.nvda_dir, target.settings)
-    wsb.require_available()
-    _check_firewall(target)
-    if wsb.running():
-        raise OperationalError(
-            "a Windows Sandbox is already running, and Windows allows only one",
-            hint="close it, or asc stop if asc started it",
-        )
-    if target.nvda_dir is None:
-        # Only a file download; the installer runs inside the sandbox.
-        launcher.latest_installer()
-
-
 def check_instance(target: Target, command: str) -> None:
     """Refuse a mode this kind of instance doesn't run."""
     named = paths.instance() is not None
@@ -185,12 +159,10 @@ def precheck(target: Target) -> None:
     check_instance(target, "start")
     if target.mode == "shared" and not target.consent:
         raise SharedNeedsConsent
-    if target.launches_sandbox:
-        _check_sandbox(target)
 
 
 def failure(current: dict[str, Any]) -> AscError | None:
-    """Why the daemon's sandbox or Orca failed, as it was raised there, or None."""
+    """Why the daemon's Orca or tunnel failed, as it was raised there, or None."""
     raw = current.get("failure")
     return None if raw is None else ipc.error_from(raw, "failure")
 
@@ -198,7 +170,7 @@ def failure(current: dict[str, Any]) -> AscError | None:
 def _wait_ready(target: Target, folder: Path) -> dict[str, Any]:
     """Wait until the screen reader asc starts has joined, or the tunnel NVDA joins
     through is up."""
-    timeout_s = CONNECT_TIMEOUT_S[target.mode]
+    timeout_s = CONNECT_TIMEOUT_S
     deadline = time.monotonic() + timeout_s
     while True:
         current = status(folder)
@@ -297,7 +269,7 @@ def stop_all(
 
     Tries them all before raising for any it couldn't end. Then waits for the
     other processes running `images`: a stopped daemon still runs for a moment
-    after its state file goes, and a sandbox guard outlives its daemon. It never
+    after its state file goes. It never
     ends them, as they may be a person's own asc commands.
     """
     stuck: list[int] = []

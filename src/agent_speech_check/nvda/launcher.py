@@ -42,7 +42,7 @@ MIN_VERSION = (2026, 2)
 NOT_A_PROGRAM = (193, 216)
 # Per blocking read, not for the whole file: a stalled connection fails.
 DOWNLOAD_TIMEOUT_S = 60
-# The lookup runs before desktop and sandbox starts, so offline it gives up soon.
+# The lookup runs before desktop starts, so offline it gives up soon.
 LOOKUP_TIMEOUT_S = 5
 # The update check answers a few short lines.
 LOOKUP_MAX_BYTES = 4096
@@ -61,7 +61,7 @@ def folder_for(nvda_dir: str | None) -> Path:
 
 
 def installers_dir() -> Path:
-    """Where `asc get-nvda` and sandbox mode keep the downloaded installer."""
+    """Where `asc get-nvda` keeps the downloaded installer."""
     return base_root() / "nvda"
 
 
@@ -201,7 +201,7 @@ def refuse_if_running() -> None:
     if running():
         raise OperationalError(
             "nvda.exe is already running; starting another NVDA would restart it",
-            hint="use watch or sandbox mode, which leave your NVDA alone",
+            hint="use watch or remote mode, which leave your NVDA alone",
         )
 
 
@@ -250,7 +250,7 @@ def download(version: str, sha1: str | None = None) -> Path:
     if installer.exists() and sha1 is not None and not sha1_matches(installer, sha1):
         try:
             installer.unlink()
-        # Held open, as by a running sandbox. Not DownloadFailed: the offline
+        # Held open, so it can't be deleted. Not DownloadFailed: the offline
         # fallback would then take this same file.
         except OSError as error:
             raise OperationalError(
@@ -275,7 +275,7 @@ def download(version: str, sha1: str | None = None) -> Path:
             partial.unlink()
             raise DownloadFailed(url, "its SHA-1 is not the one NV Access lists")
         partial.replace(installer)
-    # Also when it was kept: sandbox mode takes the highest version it finds.
+    # Keep only the latest installer in the cache.
     drop_other_installers(installer)
     return installer
 

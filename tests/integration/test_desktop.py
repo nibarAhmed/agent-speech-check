@@ -7,7 +7,6 @@ never touched and a clean CI machine never launches one.
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from collections.abc import Iterator
@@ -105,12 +104,12 @@ def test_nvda_dir_is_a_setting_not_a_flag(command: str, tmp_path: Path) -> None:
     assert "unrecognized arguments: --nvda-dir" in result.stderr
 
 
-@pytest.mark.usefixtures("env")
-def test_settings_only_for_a_launched_nvda() -> None:
+def test_settings_only_for_a_launched_nvda(env: Env) -> None:
+    env.config("")
     result = run_asc("start", "--mode", "watch", "--nvda-setting", "speech.rate=50")
     assert result.returncode == 2
     assert "only an NVDA that asc launches takes settings" in result.stderr
-    bad = run_asc("start", "--mode", "sandbox", "--nvda-setting", "remote.k=1")
+    bad = run_asc("start", "--mode", "desktop", "--nvda-setting", "remote.k=1")
     assert bad.returncode == 2
     assert "asc sets this itself" in bad.stderr
 
@@ -135,34 +134,9 @@ def test_desktop_without_portable_nvda(env: Env, tmp_path: Path) -> None:
     assert str(tmp_path) in result.stderr
 
 
-def test_sandbox_needs_the_firewall_rule(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    # The wsb check only looks for the command, so an empty one stands in on machines
-    # without Windows Sandbox. It's never run: the firewall check fails first.
-    bin_dir = env.root / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "wsb.exe").write_bytes(b"")
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
-    # A port no rule covers, so this never starts a real sandbox.
-    env.config(f"[sandbox]\nport = {env.port}\n")
-    result = run_asc("start", "--mode", "sandbox")
-    assert result.returncode == 3
-    assert (
-        f"no firewall rule lets NVDA in Windows Sandbox reach asc on port {env.port}"
-        in result.stderr
-    )
-    assert "hint: asc firewall-setup --mode sandbox (asks" in result.stderr
-
-
-@pytest.mark.usefixtures("env")
-def test_keys_in_sandbox_mode_reads_your_own_nvda() -> None:
-    # Sandbox mode makes its portable NVDA inside the sandbox, never on the host.
-    found = run_asc("keys", "x", "--mode", "sandbox")
-    assert "the portable NVDA" not in found.stderr
-
-
-@pytest.mark.usefixtures("env")
-def test_settings_are_checked_together_before_anything_starts() -> None:
-    result = run_asc("start", "--mode", "sandbox", "--nvda-setting", "speech.synth.rate=1")
+def test_settings_are_checked_together_before_anything_starts(env: Env) -> None:
+    env.config("")
+    result = run_asc("start", "--mode", "desktop", "--nvda-setting", "speech.synth.rate=1")
     assert result.returncode == 2, result.stderr
     assert "synth is a key, not a section" in result.stderr
 

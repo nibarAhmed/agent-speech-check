@@ -229,16 +229,6 @@ class DownloadFailed(OperationalError):
         )
 
 
-class PowerShellTimedOut(OperationalError):
-    def __init__(self, seconds: float) -> None:
-        super().__init__(f"PowerShell gave no answer within {seconds:g} s", hint="try again")
-
-
-class SandboxError(OperationalError):
-    def __init__(self, what: str, detail: str, hint: str | None = None) -> None:
-        super().__init__(f"wsb {what} failed: {detail or 'no detail'}", hint=hint)
-
-
 class FileUnusable(OperationalError):
     """The disk refused a file or its folder (locked, a folder, a full disk)."""
 

@@ -1,6 +1,6 @@
 # NVDA Remote Access protocol as used by `asc`
 
-This is an implementation reference for the subset of NVDA Remote Access used by `asc`. There is no official protocol specification; the details below are based on observation and limited source inspection, not a complete or version-independent contract. `asc` does not copy or import NVDA code. How `asc` runs NVDA around it (Windows Sandbox, focus, versions) is in [findings.md](findings.md).
+This is an implementation reference for the subset of NVDA Remote Access used by `asc`. There is no official protocol specification; the details below are based on observation and limited source inspection, not a complete or version-independent contract. `asc` does not copy or import NVDA code. How `asc` runs NVDA around it (focus, versions) is in [findings.md](findings.md).
 
 ## Evidence and test baseline
 
@@ -197,18 +197,18 @@ enabled = True
 autoconnect = True
 selfHosted = False
 connectionMode = 0
-host = 127.0.0.1:16837
-port = 16837
+host = 127.0.0.1:26837
+port = 26837
 key = <random key>
 [[trustedCertificates]]
-"127.0.0.1:16837" = <lowercase hex SHA-256 of the relay cert, DER>
+"127.0.0.1:26837" = <lowercase hex SHA-256 of the relay cert, DER>
 ```
 - `enabled = True` is required. Without it, Remote Access doesn't start at all
   (from reading NVDA's source; not observed).
 - `host` carries the port. The `trustedCertificates` key is `host:port`, or just
   `host` when the port is 6837.
 - `asc` writes the file with configobj, which leaves that key unquoted
-  (`127.0.0.1:16837 = ...`). configobj reads the key the same with or without
+  (`127.0.0.1:26837 = ...`). configobj reads the key the same with or without
   the quotes.
 
 Other settings, so NVDA starts unattended and silent:
@@ -231,9 +231,8 @@ NVDA took these without complaint and upgraded the file to `schemaVersion` 24.
 ## Security considerations
 
 - Whoever reaches the relay and knows the channel key can send keys to NVDA.
-  So the relay listens on 127.0.0.1 (remote mode's NVDA reaches it through an
-  ssh tunnel), or for sandbox mode on the host's Hyper-V Default Switch
-  address, never on all interfaces, and the key is random.
+  So the relay listens on 127.0.0.1 only (remote mode's NVDA reaches it through
+  an ssh tunnel), never on all interfaces, and the key is random.
 - Watch and shared mode use one key and certificate, so an NVDA that joined
   watch mode can also be sent keys once the user starts shared mode. NVDA's
   question is the same for both ("allow this computer to be controlled"), so

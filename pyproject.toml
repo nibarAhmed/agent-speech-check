@@ -152,8 +152,7 @@ ignore_names = [
     # Read only to check NVDA's message (protocol.py).
     "hz", "paused",
     # ctypes struct fields, read by Windows (winapi.py).
-    "LimitFlags", "cbSize", "lpfnWndProc", "hInstance", "lpszClassName", "hWnd", "uID", "uFlags",
-    "uCallbackMessage", "hIcon", "szTip", "uVersion",
+    "LimitFlags",
     # Tests post the messages Windows would send (winapi.py).
     "post",
 ]

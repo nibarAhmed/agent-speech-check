@@ -18,7 +18,7 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 - Results go to stdout and errors to stderr. An error prints
   `error: <message>` and, when there is one, `hint: <what to do>`. Bad
   arguments do too, with the command's `--help` as the hint, and exit 2.
-- `asc start`, `asc keys`, `asc config` and `asc firewall-setup` take `--mode`
+- `asc start`, `asc keys` and `asc config` take `--mode`
   (see [Choosing a mode](#choosing-a-mode)). `stop`, `status`, `speech`,
   `wait`, `mark`, `press`, `type` and `launch` talk to the running daemon for
   this [instance](#instances), regardless of its mode.
@@ -46,7 +46,6 @@ asc [--help] [--version] [--instance NAME] COMMAND [OPTIONS] [ARGS]
 | Setup | [`get-nvda`](#asc-get-nvda) | make the portable NVDA that desktop mode launches |
 | | [`setup`](#asc-setup) | choose your settings, by answering questions |
 | | [`config`](#asc-config) | show or change one setting |
-| | [`firewall-setup`](#asc-firewall-setup) | allow NVDA in Windows Sandbox to reach `asc` (asks for admin once) |
 | | [`uninstall`](#asc-uninstall) | remove a Linux release install of asc |
 
 ## Exit codes
@@ -80,9 +79,7 @@ uninstalling `asc`. Upgrades always keep `%LOCALAPPDATA%\agent-speech-check`.
 Uninstalling deletes that folder unless you opt to keep it: uninstalling from
 Control Panel or Settings shows a "Keep my settings and data" checkbox, and a
 silent uninstall preserves it only when passed `KEEPDATA=1`
-(`msiexec /x FILE.msi /qn KEEPDATA=1`). The firewall rule added by
-`asc firewall-setup` is not removed on uninstall; remove it manually as
-[that command](#asc-firewall-setup) describes.
+(`msiexec /x FILE.msi /qn KEEPDATA=1`).
 
 On Linux, `asc uninstall` removes a tarball install: it stops every instance
 and background update check, removes `~/.local/share/agent-speech-check` and
@@ -119,9 +116,9 @@ An `asc` installed by the MSI, or unpacked from the Linux tarball as the
 
 ## Modes
 
-The `mode` setting (or `asc start --mode`) picks one of five. On Linux only
+The `mode` setting (or `asc start --mode`) picks one of four. On Linux only
 desktop (Orca on a hidden display, the default), watch and remote mode run;
-sandbox and shared mode exit 2.
+shared mode exits 2.
 
 ### Watch mode
 
@@ -195,7 +192,7 @@ registers a [panic key](#panic-key).
   [findings.md](findings.md#nvda-20251)). Older NVDA versions are refused; an
   unreadable `nvda.ini` exits 2 and reports the offending line.
 - Refuses to start while any `nvda.exe` is running, because starting a
-  second NVDA restarts the running one. Use watch or sandbox mode alongside
+  second NVDA restarts the running one. Use watch or remote mode alongside
   your own NVDA.
 - Fails if the portable NVDA is missing or too old, hinting `asc get-nvda`
   (or to check `nvda_dir` if you configured a custom folder).
@@ -245,37 +242,6 @@ needed. No audio device is required: `asc` records what Orca would speak.
   `/tmp/asc-orca-*` folders.
 - `port`, `launch`, `nvda_dir` and NVDA-specific settings exit 2 on Linux:
   nothing listens on a network port and no NVDA runs.
-
-### Sandbox mode
-
-`asc` runs NVDA inside Windows Sandbox, keeping keys completely isolated from
-your desktop while your own NVDA keeps running undisturbed.
-
-- Requires Windows Pro, Enterprise, or Education and a one-time
-  `asc firewall-setup --mode sandbox` (hints that command until run).
-- Windows allows only one sandbox at a time (`asc start` refuses if one is
-  already running).
-- `asc start` downloads the latest NVDA installer if a newer version is
-  available than the cached installer (file download only, verified against NV
-  Access's SHA-1; offline it uses the cached installer). It then starts the
-  sandbox, mutes Windows Audio inside, extracts a portable NVDA inside, and
-  returns once NVDA connects (about a minute). `asc stop` shuts down the
-  sandbox, and so does the daemon exiting for any reason (even if force-killed).
-- With `nvda_dir`, the sandbox uses your own portable NVDA instead: the folder
-  is mapped read-only, copied to `C:\nvda` inside the sandbox, and started with
-  a copy of your config (just like desktop mode). Nothing is downloaded, and
-  your host NVDA can keep running. Fails with a hint to check `nvda_dir` if
-  that NVDA is missing or too old.
-- By default the sandbox window is hidden in the system tray, with an "asc
-  sandbox" tray icon to show or hide it. `--window taskbar` (or
-  `window = "taskbar"`) keeps it minimised on the taskbar, and `--window show`
-  leaves it open (note that a visible sandbox window can steal focus and
-  capture your typing). Do not close the window: NVDA runs inside it.
-- The relay listens only on the host's Hyper-V Default Switch address (looked
-  up on each start), on port 16837 unless overridden by sandbox mode's `port`.
-- Folders listed in sandbox mode's `share` are mapped read-only into the
-  sandbox at `C:\share\<folder name>` so `asc launch` can start your app from
-  there.
 
 ### Remote mode
 
@@ -362,8 +328,8 @@ your real Windows session. While running, the global panic hotkey
 - If another application already owns the hotkey, `asc start` refuses: `asc`
   never sends keys to your desktop without an active panic key.
 - `asc status` prints the active panic key.
-- Modes that cannot send keys to your local desktop have no panic key: sandbox
-  mode, remote mode, and Linux desktop mode. Windows desktop mode with
+- Modes that cannot send keys to your local desktop have no panic key: remote
+  mode and Linux desktop mode. Windows desktop mode with
   `launch = false` also has none (see [Desktop mode](#desktop-mode)).
 
 ## Configuration
@@ -375,14 +341,14 @@ hand are not kept.
 
 ```toml
 # asc settings. Change them with asc config set, or start over with asc setup.
-mode = "sandbox"
+mode = "desktop"
 
 [defaults]
 settle_ms = 800
 timeout_ms = 8000
 
-[sandbox]
-share = ['C:\src\app']
+[desktop]
+nvda_dir = 'C:\nvda'
 nvda_settings = ["keyboard.speakTypedCharacters=False"]
 ```
 
@@ -395,7 +361,7 @@ broken setting belongs to a mode you are not currently using.
 
 `asc start` uses `--mode`, or the `mode` setting, or watch (desktop on Linux).
 Each mode keeps its own settings in a table named after it (`[watch]`,
-`[desktop]`, `[sandbox]`, `[shared]`, `[remote]`) and its own folder. A mode without a table uses the
+`[desktop]`, `[shared]`, `[remote]`) and its own folder. A mode without a table uses the
 defaults below.
 
 One daemon runs per [instance](#instances). `asc start` refuses while one runs
@@ -445,23 +411,20 @@ built-in default.
 
 ### Mode settings
 
-In the mode's table, like `[sandbox]`. [Modes](#modes) explains each one in
+In the mode's table, like `[desktop]`. [Modes](#modes) explains each one in
 context.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `port` | watch and shared 6837, sandbox 16837, remote 26837, desktop a free one | relay port; in remote mode, the one NVDA connects to on its machine (Orca has none) |
+| `port` | watch and shared 6837, remote 26837, desktop a free one | relay port; in remote mode, the one NVDA connects to on its machine (Orca has none) |
 | `launch` | true | desktop on Windows only: false means `asc` starts no NVDA; you start one on this computer and connect it |
 | `os` | none | remote only: what the other machine runs, `windows` (NVDA) or `linux` (Orca) |
 | `ssh` | none | remote only: that machine, as `ssh` takes it (`me@vm`, `ssh://me@vm:2222`, or a `Host` from your ssh config) |
-| `nvda_dir` | `asc get-nvda`'s | desktop or sandbox: your portable NVDA, a full path |
-| `share` | none | sandbox: folders mapped read-only to `C:\share\<name>`, full paths |
-| `window` | tray | sandbox: its window in the tray, taskbar or show |
+| `nvda_dir` | `asc get-nvda`'s | desktop: your portable NVDA, a full path |
 | `nvda_settings` | none | `section.key=value` settings for an NVDA that `asc` launches, as `--nvda-setting` takes |
 
 Settings used in the wrong mode are refused with exit 2:
 
-- `window` and `share`: sandbox mode only.
 - `launch`: Windows desktop mode only.
 - `os` and `ssh`: remote mode only.
 - `port`: NVDA modes only (refused for Orca).
@@ -474,8 +437,8 @@ Settings used in the wrong mode are refused with exit 2:
 ### `asc start`
 
 ```
-asc start [--mode {watch,desktop,sandbox,shared,remote}]
-          [--nvda-setting SECTION.KEY=VALUE] [--window {tray,taskbar,show}]
+asc start [--mode {watch,desktop,shared,remote}]
+          [--nvda-setting SECTION.KEY=VALUE]
           [--i-understand]
 ```
 
@@ -486,7 +449,6 @@ checks depends on the mode: see [Modes](#modes).
 |---|---|---|
 | `--mode MODE` | the `mode` setting | the mode to start, with its settings |
 | `--nvda-setting SECTION.KEY=VALUE` | the mode's `nvda_settings` | an `nvda.ini` setting for the NVDA `asc` launches (repeatable) |
-| `--window {tray,taskbar,show}` | sandbox mode's `window`, or tray | sandbox only: its window, for this start only |
 | `--i-understand` | off | shared mode: yes, send keys into my own session |
 
 - `--nvda-setting` merges with the mode's `nvda_settings`, overriding any
@@ -503,7 +465,7 @@ checks depends on the mode: see [Modes](#modes).
 
 ```shell
 asc start
-asc start --mode sandbox
+asc start --mode desktop
 asc start --mode remote --instance vm1
 asc start --nvda-setting keyboard.speakTypedCharacters=False
 ```
@@ -523,8 +485,8 @@ instance). Exits 3 if nothing runs.
   uninstalling `asc`).
 - An unresponsive daemon (for example, from an older `asc` version or a hung
   process) still counts as running, so `asc start` and `asc setup` refuse to
-  proceed. `asc stop` terminates its process (along with its managed NVDA or
-  sandbox), though held keys cannot be released if the daemon is unresponsive.
+  proceed. `asc stop` terminates its process (along with its managed NVDA),
+  though held keys cannot be released if the daemon is unresponsive.
   If a daemon accepts a stop request but has not exited after 30 s, `asc stop`
   terminates it the same way.
 - If the OS refuses to terminate the process, `asc stop` fails and leaves the
@@ -707,7 +669,7 @@ asc type "x@example.com" --settle 800
 ### `asc keys`
 
 ```
-asc keys [--mode {watch,desktop,sandbox,shared,remote}] [--layout {desktop,laptop}] [--lang LANG]
+asc keys [--mode {watch,desktop,shared,remote}] [--layout {desktop,laptop}] [--lang LANG]
          [--braille | --no-braille] [SEARCH ...]
 ```
 
@@ -735,8 +697,8 @@ H and Shift+H  Next and previous heading
 | `--lang LANG` | en | reference language, like `de` or `pt_BR`, falling back to `en` |
 | `--braille`, `--no-braille` | off | include NVDA's rows for braille displays |
 
-- For NVDA it reads `documentation\<lang>\keyCommands.html` from the mode's
-  portable NVDA (desktop, or sandbox with `nvda_dir`), else from your own NVDA
+- For NVDA it reads `documentation\<lang>\keyCommands.html` from desktop
+  mode's portable NVDA, else from your own NVDA
   (the running `nvda.exe`, then the uninstall registry entry).
 - For Orca it reads Orca's help, `help/<lang>/orca/commands_*.page` in each
   of `$XDG_DATA_DIRS` (`/usr/local/share:/usr/share` when unset), falling
@@ -770,22 +732,17 @@ the app on that machine and use `asc wait`.
 | `--timeout MS` | `launch_timeout_ms`, 30000 | how long to wait, at most 600000 |
 
 - On timeout it exits 1 with what was said, numbered. In local Windows modes
-  (not sandbox or Orca), the error ends with `New windows:` listing any windows
+  (not Orca), the error ends with `New windows:` listing any windows
   that opened during the wait (or `(none)`).
 - A command that can't start exits 3. The screen reader disconnecting meanwhile
   is handled as in `wait`.
-- In sandbox mode `CMD` runs inside the sandbox,
-  which has no Edge and no Notepad. Your own app must come from a path under
-  `C:\share\`; programs the sandbox already has, like `mshta.exe`, need no
-  shared folder. A `.cmd` or `.bat` runs in a hidden console, so NVDA hears
-  the app it starts, not the console.
 - `launch` brings the new window forward so NVDA hears it, except in watch
   mode, where it may stay behind.
 - With Orca `CMD` runs on Orca's display (see [Desktop mode](#desktop-mode)),
   or in watch mode on your desktop.
 
 ```shell
-asc launch "C:\share\app\run.cmd" --title "My App"
+asc launch "notepad.exe" --title "Notepad"
 asc launch "py -m myapp" --title "My App" --timeout 60000
 ```
 
@@ -829,15 +786,13 @@ asc setup [--yes]
 Asks a few questions and saves the answers in `config.toml`:
 
 1. The mode: on Linux, watch, desktop or remote.
-2. Desktop and sandbox mode: which NVDA (not asked for Orca).
-3. Sandbox mode: the shared folders and the window.
-4. Remote mode: what the other machine runs, and its ssh destination.
-5. Watch, shared and remote mode: your NVDA's keyboard layout (not asked for
+2. Desktop mode: which NVDA (not asked for Orca).
+3. Remote mode: what the other machine runs, and its ssh destination.
+4. Watch, shared and remote mode: your NVDA's keyboard layout (not asked for
    Orca).
 
-When they are missing, it offers to download NVDA for desktop mode and to add
-the firewall rule sandbox mode needs. Timings are not asked; change them with
-`asc config set` when needed.
+When it is missing, it offers to download NVDA for desktop mode. Timings are not
+asked; change them with `asc config set` when needed.
 
 | Option | Default | Meaning |
 |---|---|---|
@@ -852,8 +807,8 @@ the firewall rule sandbox mode needs. Timings are not asked; change them with
 - Without a terminal it exits 2 at once, so a script never waits on it. Use
   `asc config` there.
 - It refuses while `asc` runs.
-- In a named [instance](#instances) it offers only desktop, sandbox and remote
-  mode (remote by default; on Linux, desktop and remote).
+- In a named [instance](#instances) it offers only desktop and remote
+  mode (remote by default).
 - In the default instance, remote saves only `mode = "remote"` and says to run
   `asc setup --instance VMNAME`: remote mode runs only in a named instance.
 
@@ -883,11 +838,11 @@ Shows or changes the settings in `config.toml` (see
   `panic_key`) and command defaults do not accept `--mode` (exit 2);
   `panic_key` and command defaults are stored in `[defaults]`.
 - Unsetting a mode's last setting removes its table.
-- List settings (`share`, `nvda_settings`) accept multiple values and replace
+- List settings (`nvda_settings`) accept multiple values and replace
   the entire list. Paths are normalized to full paths. Booleans are `true` or
   `false`.
 - The entire config is validated before writing, so invalid combinations (such
-  as setting `window` in watch mode) exit 2 without changing the file. Unknown
+  as setting `launch` in watch mode) exit 2 without changing the file. Unknown
   setting names exit 2 and suggest close matches.
 - Changes to a running mode's settings (or `panic_key`) take effect on the next
   `asc start` (and `asc config` prints a notice). Command defaults take effect
@@ -895,39 +850,9 @@ Shows or changes the settings in `config.toml` (see
 
 ```shell
 asc config list
-asc config set mode sandbox
-asc config set share C:\src\app C:\data --mode sandbox
+asc config set mode desktop
+asc config set nvda_dir C:\nvda --mode desktop
 asc config unset settle_ms
-```
-
-### `asc firewall-setup`
-
-```
-asc firewall-setup [--mode sandbox]
-```
-
-Creates the Windows Firewall rule sandbox mode needs, after a Windows admin
-prompt. NVDA in Windows Sandbox connects to `asc` on this computer's Hyper-V
-Default Switch address, which Windows Firewall blocks until a rule allows it.
-The rule, `agent-speech-check sandbox relay`, is inbound TCP, only from this
-computer's local subnets, only sandbox mode's relay port (16837 unless its
-`port` says another), only for the program that runs `asc`. It does not name
-the Default Switch, because Windows replaces that switch between sandboxes;
-the relay itself listens only on its address.
-
-| Option | Default | Meaning |
-|---|---|---|
-| `--mode MODE` | the `mode` setting | sandbox; other modes need no rule (exit 2) |
-
-- If the rule is already in place it says so and changes nothing.
-- On Linux it exits 2.
-- Run it again after updating Python or `asc`, since the rule names the
-  program.
-- Remove it from an admin terminal with
-  `netsh advfirewall firewall delete rule name="agent-speech-check sandbox relay"`.
-
-```shell
-asc firewall-setup --mode sandbox
 ```
 
 ### `asc uninstall`

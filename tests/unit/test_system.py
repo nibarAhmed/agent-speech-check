@@ -1,13 +1,11 @@
 """The thin Windows shells, called for real where that is harmless.
 
-Nothing here starts NVDA or a sandbox, or changes the firewall. Calls that
-depend on the machine (Hyper-V, wsb) accept either documented outcome.
+Nothing here starts NVDA.
 """
 
 from __future__ import annotations
 
-import asyncio
-import ctypes
+import base64
 import os
 import re
 import shutil
@@ -16,7 +14,6 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import replace
 from pathlib import Path
 
 import psutil
@@ -29,14 +26,11 @@ from agent_speech_check.errors import (
     DownloadFailed,
     FileUnusable,
     OperationalError,
-    SandboxError,
     UsageError,
 )
 from agent_speech_check.nvda import launcher
-from agent_speech_check.nvda.nvda_config import RelayAddress, Setting
-from agent_speech_check.sandbox import firewall, wsb
-from agent_speech_check.sandbox.sandboxed import SandboxSession
-from agent_speech_check.system import processes, wait, winapi
+from agent_speech_check.nvda.nvda_config import RelayAddress
+from agent_speech_check.system import powershell, processes, wait, winapi
 
 
 def test_kill_on_close_job_kills_the_child() -> None:
@@ -90,24 +84,13 @@ def test_process_lookups() -> None:
     assert processes.image_path(0) is None
 
 
-# Tests keep windows by this title, never the real one: a sandbox that another
-# asc has open must not be moved by a test, nor make it skip.
-TEST_WINDOW_TITLE = "asc test sandbox window"
-
-
-@pytest.mark.xdist_group("desktop")
-def test_window_helpers_without_a_sandbox() -> None:
+def test_windows_titled_with_no_match() -> None:
     assert winapi.windows_titled("no window has this title, asc") == []
-    assert wsb.SandboxWindow("tray").title == wsb.WINDOW_TITLE
-    for window in ("tray", "taskbar", "show"):
-        keeper = wsb.SandboxWindow(window, title=TEST_WINDOW_TITLE)
-        keeper.toggle()
-        keeper.keep()  # nothing to do, and it must not fail
-        assert keeper.shown
-        keeper.remember_focus()
-        with keeper:  # the keeping thread starts, runs and stops
-            time.sleep(wsb.KEEP_WINDOW_EVERY_S * 3)  # noqa: TID251 (the thread runs a few ticks)
-        assert keeper.shown
+
+
+def test_powershell_quote_and_encoded() -> None:
+    assert powershell.quote("C:\\it's\\x.exe") == "'C:\\it''s\\x.exe'"
+    assert base64.b64decode(powershell.encoded("hi")).decode("utf-16-le") == "hi"
 
 
 def test_mutex_is_exclusive(tmp_path: Path) -> None:
@@ -237,104 +220,9 @@ def test_a_leftover_copy_in_use_is_reported(tmp_path: Path) -> None:
     assert (dest / "nvda.exe").read_bytes() == b"old"
 
 
-def test_firewall_reads_are_harmless() -> None:
-    assert Path(firewall.daemon_program()).is_file()
-    try:
-        address = firewall.default_switch_address()
-    except OperationalError:
-        return
-    assert firewall.parse_address(address) == address
-    # A port no rule names.
-    assert firewall.rule_ok(1) is False
-
-
-def test_sandbox_availability() -> None:
-    assert wsb.edition_id()
-    try:
-        wsb.require_available()
-    except OperationalError:
-        return
-    assert isinstance(wsb.running(), list)
-
-
-def test_sandbox_session_prepares_its_folders(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    installer = launcher.installer_path("2026.2")
-    installer.parent.mkdir(parents=True)
-    installer.write_bytes(b"")  # what the precheck downloaded
-    target = replace(
-        defaults("sandbox"),
-        share=("C:/src/app",),
-        settings=(Setting.parse("speech.symbolLevel=300"),),
-    )
-    session = SandboxSession(
-        tmp_path / "target", target, RelayAddress("172.24.80.1", 16837, "key", "fp")
-    )
-    config = session._prepare()
-    folder = tmp_path / "target" / "sandbox"
-    script = (folder / "in" / wsb.SCRIPT).read_text(encoding="utf-8")
-    assert "nvda_2026.2.exe" in script
-    assert (folder / "in" / wsb.LAUNCH_SCRIPT).read_text(encoding="utf-8") == wsb.LAUNCH_PS1
-    ini = (folder / "config" / "nvda.ini").read_text(encoding="utf-8")
-    assert "host = 172.24.80.1:16837" in ini
-    assert "symbolLevel = 300" in ini
-    assert "<Networking>Enable</Networking>" in config
-    assert str(folder / "config") in config
-    assert session.state == "starting"
-
-
-def test_sandbox_session_without_an_installer(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    (tmp_path / "agent-speech-check" / "nvda").mkdir(parents=True)
-    session = SandboxSession(tmp_path / "t", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
-    with pytest.raises(OperationalError, match="the NVDA installer"):
-        session._prepare()
-
-
-def test_sandbox_session_with_your_portable(tmp_path: Path) -> None:
-    portable = tmp_path / "portable"
-    (portable / "userConfig" / "addons" / "a").mkdir(parents=True)
-    (portable / "userConfig" / "nvda.ini").write_text("[speech]\nrate = 40\n", encoding="utf-8")
-    target = replace(defaults("sandbox"), nvda_dir=str(portable))
-    session = SandboxSession(tmp_path / "target", target, RelayAddress("h", 1, "k", "f"))
-    config = session._prepare()
-    folder = tmp_path / "target" / "sandbox"
-    assert "robocopy" in (folder / "in" / wsb.SCRIPT).read_text(encoding="utf-8")
-    assert f"<HostFolder>{portable}</HostFolder>" in config
-    assert (folder / "config" / "addons" / "a").is_dir()
-    ini = (folder / "config" / "nvda.ini").read_text(encoding="utf-8").splitlines()
-    assert "rate = 40" in ini
-    assert "synth = silence" in ini
-
-
-def test_sandbox_session_maps_real_folders(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Store Python redirects writes under %LOCALAPPDATA% to its package's
-    LocalCache, and wsb, outside the package, can't see the redirected path.
-    Without Store Python the paths are already real and this passes trivially."""
-    root = Path(os.environ["LOCALAPPDATA"]) / f"asc-test-{os.getpid()}"
-    monkeypatch.setenv("LOCALAPPDATA", str(root))
-    try:
-        state = root / "agent-speech-check"
-        installer = launcher.installer_path("2026.2")
-        installer.parent.mkdir(parents=True)
-        installer.write_bytes(b"")
-        session = SandboxSession(state / "x", defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
-        config = session._prepare()
-        hosts = [part.split("</HostFolder>")[0] for part in config.split("<HostFolder>")[1:]]
-        assert len(hosts) == 3
-        assert all(host == os.path.realpath(host) for host in hosts)
-    finally:
-        shutil.rmtree(os.path.realpath(root), ignore_errors=True)
-
-
 def test_start_failure_keeps_its_message_and_category() -> None:
-    """The daemon reports why its sandbox or Orca failed; `asc start` raises that, unwrapped."""
+    """The daemon reports why Orca or the tunnel failed; `asc start` raises that, unwrapped."""
     for error in (
-        SandboxError("start", "file not found"),
         OperationalError("busy", hint="close it"),
         UsageError("bad", hint="fix it"),
     ):
@@ -346,52 +234,6 @@ def test_start_failure_keeps_its_message_and_category() -> None:
             error.exit_code,
         )
     assert failure({"failure": None}) is None
-
-
-def test_sandbox_session_before_start() -> None:
-    session = SandboxSession(Path("x"), defaults("sandbox"), RelayAddress("h", 1, "k", "f"))
-    with pytest.raises(SandboxError, match="not running yet"):
-        asyncio.run(session.launch("x"))
-    asyncio.run(session.stop())  # nothing started, nothing to stop
-    assert session.sandbox_id is None
-
-
-def test_wsb_errors_for_an_unknown_sandbox() -> None:
-    try:
-        wsb.require_available()
-    except OperationalError:
-        pytest.skip("needs Windows Sandbox")
-    unknown = "00000000-0000-0000-0000-000000000000"
-    with pytest.raises(SandboxError, match="wsb exec failed") as broken:
-        wsb.exec_as_user(unknown, "cmd /c exit 0")
-    assert broken.value.exit_code == 3
-    with pytest.raises(SandboxError, match="wsb stop failed"):
-        wsb.stop(unknown)
-    with pytest.raises(SandboxError, match="wsb ip failed"):
-        wsb.ip_address(unknown)
-    assert wsb.wait_gone(0) in (True, False)
-
-
-def test_wait_exit_returns_once_the_process_ends() -> None:
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.5)"])
-    processes.wait_exit(child.pid)
-    assert child.poll() is not None
-    processes.wait_exit(child.pid)  # already gone: returns at once
-
-
-def test_sandbox_guard_leaves_a_sandbox_that_is_gone(tmp_path: Path) -> None:
-    try:
-        wsb.require_available()
-    except OperationalError:
-        pytest.skip("needs Windows Sandbox")
-    owner = subprocess.Popen([sys.executable, "-c", "pass"])
-    owner.wait(10)
-    unknown = "00000000-0000-0000-0000-000000000000"
-    wsb.guard(owner.pid, unknown)  # no `wsb stop` of an unknown id, so no error
-    err = tmp_path / "guard.err"
-    guard = wsb.start_guard(owner.pid, unknown, err)
-    assert guard.wait(60) == 0, err.read_text(encoding="utf-8")
-    assert err.read_bytes() == b""
 
 
 def test_running_nvda_stop_kills_its_job() -> None:
@@ -411,7 +253,6 @@ def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.Monkey
     stale.write_bytes(b"")
     assert launcher.download("2026.2") == installer
     assert installer.read_bytes() == b"already here"
-    # Else sandbox mode, which takes the highest cached version, would take it.
     assert not stale.exists()
     sha1 = "629d8889d129c48627f6629b2d0e640a9bb12541"  # of b"already here"
     assert launcher.download("2026.2", sha1) == installer
@@ -433,8 +274,8 @@ def test_a_damaged_cached_installer_is_downloaded_again(
 def test_a_held_damaged_installer_is_not_a_failed_download(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Held open, as a sandbox running it would, so it can't be deleted. Not a
-    # DownloadFailed, which the offline fallback catches and would return it.
+    # Held open, so it can't be deleted. Not a DownloadFailed, which the offline
+    # fallback catches and would return it.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     held = launcher.installer_path("2026.2")
     held.parent.mkdir(parents=True)
@@ -679,76 +520,6 @@ def test_an_old_nvda_gets_the_hint_for_its_folder() -> None:
     with pytest.raises(OperationalError, match=r"needs 2026\.2 or later") as exc:
         launcher.check_version(launcher.managed_dir(), (2025, 1))
     assert exc.value.hint == "asc get-nvda"
-
-
-@pytest.mark.xdist_group("desktop")
-def test_tray_icon_selects_and_goes_away() -> None:
-    selected = threading.Event()
-    icon = winapi.TrayIcon("asc test icon", selected.set)
-    assert icon.start()
-    try:
-        # The window class is registered once per process; a second icon works too.
-        second = winapi.TrayIcon("asc test icon 2", lambda: None)
-        assert second.start()
-        second.stop()
-        icon.post(winapi.NIN_KEYSELECT)
-        assert selected.wait(5)
-    finally:
-        icon.stop()
-    selected.clear()
-    icon.post(winapi.NIN_SELECT)  # gone: nothing to post to, nothing runs
-    assert not selected.wait(0.2)
-
-
-@pytest.mark.xdist_group("desktop")
-def test_sandbox_session_tray_icon_only_in_tray_mode(tmp_path: Path) -> None:
-    relay = RelayAddress("h", 1, "k", "f")
-    tray = SandboxSession(tmp_path, defaults("sandbox"), relay)
-    tray.window.start()
-    assert tray.window._icon is not None
-    assert tray.window.window == "tray"
-    asyncio.run(tray.stop())  # no sandbox started; the icon and the thread still go
-    assert tray.window._icon is None
-    assert not tray.window._thread.is_alive()
-    for window in ("taskbar", "show"):
-        other = SandboxSession(tmp_path, replace(defaults("sandbox"), window=window), relay)
-        other.window.start()
-        assert other.window._icon is None
-        other.window.stop()
-
-
-def _plain_window(title: str) -> int:
-    """A real top-level window, shown without taking focus."""
-    user32 = ctypes.WinDLL("user32")
-    user32.CreateWindowExW.restype = ctypes.c_void_p
-    user32.CreateWindowExW.argtypes = [ctypes.c_uint32, ctypes.c_wchar_p, ctypes.c_wchar_p]
-    user32.CreateWindowExW.argtypes += [ctypes.c_uint32] + [ctypes.c_int] * 4
-    user32.CreateWindowExW.argtypes += [ctypes.c_void_p] * 4
-    overlapped_window, show_no_activate = 0x00CF0000, 4
-    hwnd = user32.CreateWindowExW(
-        0, "STATIC", title, overlapped_window, 0, 0, 200, 100, None, None, None, None
-    )
-    user32.ShowWindow.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    user32.ShowWindow(hwnd, show_no_activate)
-    return int(hwnd)
-
-
-@pytest.mark.xdist_group("desktop")
-def test_sandbox_window_puts_a_real_window_away() -> None:
-    user32 = ctypes.WinDLL("user32")
-    user32.DestroyWindow.argtypes = [ctypes.c_void_p]
-    for window, hidden in (("taskbar", False), ("tray", True)):
-        hwnd = _plain_window(f"{TEST_WINDOW_TITLE} (asc test)")
-        try:
-            assert hwnd in winapi.windows_titled(TEST_WINDOW_TITLE)
-            keeper = wsb.SandboxWindow(window, title=TEST_WINDOW_TITLE)
-            keeper.remember_focus()  # someone else's window: focus stays there
-            keeper.keep()
-            assert winapi.is_visible(hwnd) is not hidden
-            assert winapi.is_minimized(hwnd)
-            assert winapi.window_pid(hwnd) == os.getpid()
-        finally:
-            user32.DestroyWindow(hwnd)
 
 
 def test_a_mode_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:

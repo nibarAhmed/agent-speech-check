@@ -27,7 +27,6 @@ def test_no_file_gives_the_platforms_default(tmp_path: Path) -> None:
 
 def test_mode_defaults() -> None:
     assert defaults("desktop") == Target("desktop", 0, launch=True, os="windows")
-    assert defaults("sandbox") == Target("sandbox", 16837, launch=False, os="windows")
     # Remote mode's os is the other machine's, which the user names.
     assert defaults("remote") == Target("remote", 26837, launch=False)
 
@@ -45,7 +44,6 @@ def test_desktop_mode_on_linux_starts_orca() -> None:
 def test_keys_follow_the_mode() -> None:
     assert not defaults("watch").keys
     assert defaults("shared").keys
-    assert defaults("sandbox").keys
     assert defaults("remote").keys
     assert replace(defaults("desktop"), launch=False).keys
 
@@ -53,10 +51,9 @@ def test_keys_follow_the_mode() -> None:
 def test_panic_key_wherever_keys_reach_this_desktop() -> None:
     assert defaults("shared").takes_panic_key
     assert defaults("desktop").takes_panic_key
-    # The sandbox's keys stay in the sandbox and watch sends none. launch = false
+    # Remote keys go to the other machine and watch sends none. launch = false
     # has none either: whoever starts that NVDA takes the risk (docs/cli.md).
     assert not replace(defaults("desktop"), launch=False).takes_panic_key
-    assert not defaults("sandbox").takes_panic_key
     assert not defaults("remote").takes_panic_key
     # Orca's keys go to a private X display, never this desktop.
     assert not defaults("desktop", platform="linux").takes_panic_key
@@ -69,22 +66,22 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
     assert target == Target("desktop", 16837, launch=False, os="windows")
     assert resolve(path, "desktop") == target
     # Another mode, from --mode: its own table, or its defaults.
-    assert resolve(path, "sandbox") == defaults("sandbox")
+    assert resolve(path, "shared") == defaults("shared")
 
 
 @pytest.mark.parametrize(
     ("text", "message"),
     [
-        ('mode = "wach"\n', "mode: expected one of watch, desktop, sandbox, shared, remote"),
-        # asc always launches NVDA in sandbox mode, and never elsewhere.
-        ("[sandbox]\nlaunch = false\n", r"\[sandbox\] launch: expected only in desktop mode"),
+        ('mode = "wach"\n', "mode: expected one of watch, desktop, shared, remote"),
+        ('mode = "sandbox"\n', "mode: expected one of watch, desktop, shared, remote"),
+        ("[sandbox]\nport = 16837\n", "expected only known keys, got sandbox"),
+        ("[watch]\nlaunch = false\n", r"\[watch\] launch: expected only in desktop mode"),
         ("[remote]\nlaunch = true\n", r"\[remote\] launch: expected only in desktop mode"),
-        ("[sandbox]\nhost = '172.20.0.1'\n", "expected only known keys, got host"),
+        ("[watch]\nhost = '172.20.0.1'\n", "expected only known keys, got host"),
         ("[desktop]\nmode = 'desktop'\n", "expected only known keys, got mode"),
         ("[desktop]\nkeys = true\n", "expected only known keys, got keys"),
         ("[watch]\nport = 0\n", "port: expected a whole number from 1"),
         ("[watch]\nprot = 1\n", "expected only known keys, got prot"),
-        ("[sandbox]\nshare = ['site']\n", "share: expected full paths"),
         ("[vm]\nport = 1\n", "expected only known keys, got vm"),
         ('default_target = "x"\n', "expected only known keys, got default_target"),
         (
@@ -92,9 +89,9 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
             r'\[defaults\] panic_key: bad gesture "F12": a hotkey needs Control, Alt or Windows',
         ),
         ('[shared]\npanic_key = "Alt+F1"\n', "got panic_key"),
-        ("[sandbox]\nsettle_ms = 900\n", "got settle_ms"),
+        ("[desktop]\nsettle_ms = 900\n", "got settle_ms"),
         ("[watch]\nssh = 'me@vm'\n", "ssh: expected only in remote mode"),
-        ("[sandbox]\nos = 'windows'\n", "os: expected only in remote mode"),
+        ("[desktop]\nos = 'windows'\n", "os: expected only in remote mode"),
         ("[remote]\nos = 'macos'\n", "os: expected one of windows, linux"),
         ("[orca]\nport = 7000\n", "expected only known keys, got orca"),
         # Nothing listens for Orca: the helper talks over its own stdio.
@@ -181,8 +178,6 @@ def test_modes_this_platform_runs() -> None:
     check_runnable(defaults("watch", platform="linux"))
     # From either platform, since the relay and ssh work from Linux too.
     check_runnable(replace(defaults("remote"), os="windows", ssh="me@vm"))
-    with pytest.raises(UsageError, match="sandbox mode needs Windows"):
-        check_runnable(defaults("sandbox", platform="linux"))
     with pytest.raises(UsageError, match="shared mode needs Windows"):
         check_runnable(defaults("shared", platform="linux"))
 
@@ -208,15 +203,6 @@ def test_nvda_dir_from_file(tmp_path: Path) -> None:
     assert resolve(path, "desktop").nvda_dir == "C:/nvda"
 
 
-def test_share_list(tmp_path: Path) -> None:
-    path = write(tmp_path, "[sandbox]\nshare = ['C:/app', 'D:/data']\n")
-    target = resolve(path, "sandbox")
-    assert target.share == ("C:/app", "D:/data")
-    assert Target.from_json(target.to_json()) == target
-    with pytest.raises(UsageError, match="share: expected a list of strings"):
-        resolve(write(tmp_path, "[sandbox]\nshare = [1]\n"), "sandbox")
-
-
 @pytest.mark.parametrize(
     "table",
     ["[watch]", "[shared]", "[desktop]\nlaunch = false", "[remote]"],
@@ -228,53 +214,11 @@ def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
     assert exc.value.exit_code == 2
 
 
-def test_nvda_dir_for_sandbox(tmp_path: Path) -> None:
-    path = write(tmp_path, "[sandbox]\nnvda_dir = 'C:/nvda'\n")
-    assert resolve(path, "sandbox").nvda_dir == "C:/nvda"
-
-
 def test_relative_nvda_dir_in_file_is_refused(tmp_path: Path) -> None:
     path = write(tmp_path, "[desktop]\nnvda_dir = 'nvda'\n")
     with pytest.raises(UsageError, match=r"a full path, like C:\\nvda, got") as exc:
         resolve(path, None)
     assert exc.value.exit_code == 2
-
-
-def test_window_defaults_to_tray_in_sandbox_mode(tmp_path: Path) -> None:
-    target = resolve(tmp_path / "none.toml", "sandbox")
-    assert target.window is None
-    assert target.sandbox_window == "tray"
-
-
-@pytest.mark.parametrize("window", ["tray", "taskbar", "show"])
-def test_window_from_file(tmp_path: Path, window: str) -> None:
-    path = write(tmp_path, f"[sandbox]\nwindow = '{window}'\n")
-    target = resolve(path, "sandbox")
-    assert target.sandbox_window == window
-    assert Target.from_json(target.to_json()) == target
-
-
-def test_bad_window(tmp_path: Path) -> None:
-    path = write(tmp_path, "[sandbox]\nwindow = 'hidden'\n")
-    with pytest.raises(UsageError, match="window: expected one of tray, taskbar, show") as exc:
-        resolve(path, None)
-    assert exc.value.exit_code == 2
-
-
-@pytest.mark.parametrize("table", ["[watch]", "[desktop]", "[remote]"])
-def test_window_only_for_a_sandbox_asc_launches(tmp_path: Path, table: str) -> None:
-    path = write(tmp_path, f"{table}\nwindow = 'tray'\n")
-    with pytest.raises(UsageError, match="window: expected only in sandbox mode") as exc:
-        resolve(path, None)
-    assert exc.value.exit_code == 2
-
-
-def test_with_window() -> None:
-    target = defaults("sandbox")
-    assert target.with_window(None) is target
-    assert target.with_window("taskbar").sandbox_window == "taskbar"
-    with pytest.raises(UsageError, match="--window window: expected only in sandbox mode"):
-        defaults("desktop").with_window("show")
 
 
 def test_file_not_in_utf8(tmp_path: Path) -> None:

@@ -11,9 +11,7 @@ from agent_speech_check.cli import main
 from agent_speech_check.config import prefs, setup
 from agent_speech_check.config.prompts import run_setup, say_update
 from agent_speech_check.config.targets import load
-from agent_speech_check.errors import AscError
 from agent_speech_check.nvda.launcher import Release
-from agent_speech_check.sandbox import wsb
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 
@@ -41,7 +39,7 @@ class Asker:
 
 def test_prompts_are_plain_words() -> None:
     prompt = setup.choice_prompt(setup.modes(named=False, platform="win32"))
-    assert prompt == "Choose 1 to 5: "
+    assert prompt == "Choose 1 to 4: "
     assert setup.yes_no_prompt("Save?", default=False) == "Save? y or n, default n: "
     assert "[" not in prompt
 
@@ -71,28 +69,26 @@ def test_summary_follows_the_questions_each_mode_asks() -> None:
 
 
 def test_summary_shows_every_answer_for_the_mode() -> None:
-    answers = setup.Answers("sandbox", None, ("C:\\a", "C:\\b"), "show")
-    assert setup.summary_lines(answers, setup.QUESTIONS["sandbox"]) == [
+    answers = setup.Answers("remote", keys_layout="laptop", os="windows", ssh="me@vm")
+    assert setup.summary_lines(answers, setup.QUESTIONS["remote"]) == [
         "Your settings:",
-        "  Mode:            sandbox",
-        "  NVDA:            asc",
-        "  Shared folders:  C:\\a",
-        "                   C:\\b",
-        "  Window:          show",
+        "  Mode:                remote",
+        "  Other machine runs:  windows",
+        "  Reached with ssh:    me@vm",
+        "  Keyboard layout:     laptop",
     ]
 
 
-def test_summary_says_none_and_your_folder() -> None:
+def test_summary_says_default_and_your_folder() -> None:
     asked = setup.QUESTIONS
     assert setup.summary_lines(setup.Answers("watch"), asked["watch"]) == [
         "Your settings:",
         "  Mode:             watch",
         "  Keyboard layout:  desktop",
     ]
+    assert setup.summary_lines(setup.Answers("desktop"), asked["desktop"])[2] == "  NVDA:  asc"
     desktop = setup.Answers("desktop", "C:\\n")
     assert setup.summary_lines(desktop, asked["desktop"])[2] == "  NVDA:  C:\\n"
-    sandbox = setup.summary_lines(setup.Answers("sandbox"), asked["sandbox"])
-    assert sandbox[3] == "  Shared folders:  none"
 
 
 @pytest.mark.parametrize(
@@ -100,9 +96,9 @@ def test_summary_says_none_and_your_folder() -> None:
     [
         ("", "watch"),
         ("2", "desktop"),
-        (" Sandbox ", "sandbox"),
-        ("5", "remote"),
-        ("6", None),
+        (" Shared ", "shared"),
+        ("4", "remote"),
+        ("5", None),
         ("x", None),
     ],
 )
@@ -119,10 +115,10 @@ def test_yes_no(answer: str, result: bool | None) -> None:
 
 def test_to_data_keeps_only_choices() -> None:
     assert setup.to_data(setup.Answers("watch")) == {"mode": "watch"}
-    answers = setup.Answers("sandbox", "C:\\n", ("C:\\a",), "show", "laptop")
+    answers = setup.Answers("desktop", "C:\\n", "laptop")
     assert setup.to_data(answers) == {
-        "mode": "sandbox",
-        "sandbox": {"nvda_dir": "C:\\n", "share": ["C:\\a"], "window": "show"},
+        "mode": "desktop",
+        "desktop": {"nvda_dir": "C:\\n"},
         "defaults": {"keys_layout": "laptop"},
     }
 
@@ -162,7 +158,7 @@ def test_setup_desktop_declines_the_download(
     out = capsys.readouterr().out
     assert "Run asc get-nvda later." in out
     assert "While it runs, Control+Shift+Alt+F12 stops asc and releases keys." in out
-    assert load(root / "config.toml").resolve(None).launches_portable
+    assert load(root / "config.toml").resolve(None).launches_nvda
 
 
 def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -183,10 +179,9 @@ def test_setup_remote_asks_where_ssh_goes(
     ask = Asker("watch", "", "", "-oProxyCommand=x", "me@vm", "", "y")
     run_setup(ask, replace_without_asking=False)
     out = capsys.readouterr().out
-    assert "Answer 1 to 3, or a name." in out
+    assert "Answer 1 to 2, or a name." in out
     assert "an ssh destination, like me@vm" in out
     assert "  Other machine runs:  windows\n  Reached with ssh:    me@vm\n" in out
-    assert "firewall" not in out
     target = load(root / "instances" / "vm2" / "config.toml").resolve(None)
     assert (target.os, target.ssh, target.tunnel) == ("windows", "me@vm", True)
     # Orca reads there, so no NVDA keyboard layout is asked.
@@ -202,9 +197,8 @@ def test_setup_remote_in_the_default_instance_keeps_only_the_mode(
     out = capsys.readouterr().out
     assert "Remote mode runs only in a named instance, one per VM:" in out
     assert "asc setup --instance VMNAME" in out
-    # No port, layout or firewall rule: this instance won't run remote mode.
+    # No port or layout: this instance won't run remote mode.
     assert "Your settings:\n  Mode:  remote\n" in out
-    assert "firewall" not in out
     saved = (root / "config.toml").read_text(encoding="utf-8")
     assert 'mode = "remote"' in saved
     assert "[" not in saved
@@ -231,18 +225,6 @@ def test_setup_on_linux_offers_what_orca_runs(
     assert ask.prompts[0] == "Choose 1 to 2: "
     target = load(root / "instances" / "vm3" / "config.toml", platform="linux").resolve(None)
     assert (target.mode, target.os, target.ssh) == ("remote", "linux", "me@vm")
-
-
-def test_setup_without_sandbox_says_how_to_get_it(
-    root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("PATH", "")
-    with pytest.raises(AscError) as unavailable:
-        wsb.require_available()
-    run_setup(Asker("sandbox", "", "", "y"), replace_without_asking=False)
-    out = capsys.readouterr().out
-    assert f"({unavailable.value.hint}). Pick another mode." in out
-    assert load(root / "config.toml").resolve(None).mode == "watch"
 
 
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -297,8 +279,8 @@ def test_config_set_get_list_unset(
     )
     assert run(capsys, "config", "set", "mode", "desktop")[1] == "mode = desktop (global)\n"
     assert run(capsys, "config", "set", "launch", "false")[1] == "launch = false (desktop mode)\n"
-    assert run(capsys, "config", "set", "port", "7000", "--mode", "sandbox")[1] == (
-        "port = 7000 (sandbox mode)\n"
+    assert run(capsys, "config", "set", "port", "7000", "--mode", "shared")[1] == (
+        "port = 7000 (shared mode)\n"
     )
     assert run(capsys, "config", "get", "settle_ms")[1] == "700\n"
     out = run(capsys, "config", "list")[1]
@@ -306,12 +288,12 @@ def test_config_set_get_list_unset(
     assert "launch = false (desktop)\n" in out
     assert "settle_ms = 700 (global)\n" in out
     assert "nvda_dir = none (default)\n" in out
-    assert run(capsys, "config", "get", "port", "--mode", "sandbox")[1] == "7000\n"
-    assert run(capsys, "config", "get", "launch", "--mode", "sandbox")[1] == "false\n"
+    assert run(capsys, "config", "get", "port", "--mode", "shared")[1] == "7000\n"
+    assert run(capsys, "config", "get", "launch", "--mode", "shared")[1] == "false\n"
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
-    assert load(root / "config.toml").resolve("sandbox").port == 7000
+    assert load(root / "config.toml").resolve("shared").port == 7000
     # As the hints write it: --instance after the action, too.
     monkeypatch.delenv("ASC_INSTANCE", raising=False)
     assert (
@@ -332,15 +314,11 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", "keys", "true")
     assert code == 2
     assert 'unknown setting "keys"' in err
-    # No mode set means watch mode, which has no sandbox window.
-    code, _, err = run(capsys, "config", "set", "window", "show")
+    # asc launches NVDA only in desktop mode.
+    code, _, err = run(capsys, "config", "set", "launch", "false", "--mode", "watch")
     assert code == 2
-    assert "window: expected only in sandbox mode" in err
-    # asc launches no NVDA in remote mode, and always one in sandbox mode.
-    code, _, err = run(capsys, "config", "set", "launch", "false", "--mode", "sandbox")
-    assert code == 2
-    assert "[sandbox] launch: expected only in desktop mode" in err
-    code, _, err = run(capsys, "config", "set", "os", "linux", "--mode", "sandbox")
+    assert "[watch] launch: expected only in desktop mode" in err
+    code, _, err = run(capsys, "config", "set", "os", "linux", "--mode", "desktop")
     assert code == 2
     assert "os: expected only in remote mode" in err
     assert not (root / "config.toml").exists()
@@ -391,7 +369,7 @@ def test_remove_target_is_gone(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.usefixtures("root")
-@pytest.mark.parametrize("name", ["keys_lang", "keys_braille", "nvda_version"])
+@pytest.mark.parametrize("name", ["keys_lang", "keys_braille", "nvda_version", "share", "window"])
 def test_removed_settings_are_unknown(name: str, capsys: pytest.CaptureFixture[str]) -> None:
     code, _, err = run(capsys, "config", "set", name, "x")
     assert code == 2

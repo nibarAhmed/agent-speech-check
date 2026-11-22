@@ -21,13 +21,11 @@ asc stop
 
 - Windows 11, or Linux with Orca 51 or later (see [Install](#install)).
 - On Windows, NVDA 2026.2 or later ([why](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md#nvda-20251)).
-- Sandbox mode also needs Windows 11 24H2 or later (Pro, Enterprise or Education) with Windows Sandbox turned on.
 
 ## Choose a mode
 
 | Mode | When to use it |
 |---|---|
-| `sandbox` | You want NVDA isolated from your desktop. It runs inside Windows Sandbox while your own NVDA keeps running undisturbed. |
 | `desktop` | You want the simplest setup, or you are running in CI. On Windows, `asc` starts its own portable NVDA and sends keys to your desktop (it refuses to start if another NVDA is already running). On Linux, `asc` starts its own Orca on a hidden virtual display (requires Orca 51+, Xvfb, openbox, xdotool, dbus-daemon, gdbus, and python3). |
 | `watch` | You want to record speech from your own running screen reader without letting `asc` press keys. On Windows, NVDA prompts you to allow the connection (answer Yes). On Linux, restart your Orca once with the command `asc start` prints. |
 | `shared` | You want `asc` to press keys in the NVDA you already run, inside your real Windows session. Requires `--i-understand` on every `asc start`. |
@@ -94,7 +92,7 @@ Speech can include passwords and private messages, and `asc` can press keys. [SE
 
 - [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
 - [NVDA Remote Access protocol](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
-- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows Sandbox, Windows' focus rules, NVDA versions, Orca and ssh behaved in experiments.
+- [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows' focus rules, NVDA versions, Orca and ssh behaved in experiments.
 
 ## License
 

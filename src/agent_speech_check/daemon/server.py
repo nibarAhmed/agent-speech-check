@@ -47,8 +47,6 @@ from agent_speech_check.inputs.keys import Hotkey
 from agent_speech_check.nvda import launcher, nvda_config, relay
 from agent_speech_check.nvda.relay import Relay
 from agent_speech_check.orca.link import OrcaLink, watch_secret
-from agent_speech_check.sandbox import firewall
-from agent_speech_check.sandbox.sandboxed import SandboxSession
 from agent_speech_check.system import paths, winapi
 from agent_speech_check.system.paths import mode_dir, relay_dir, state_root, write_atomic
 from agent_speech_check.system.ssh import Tunnel
@@ -135,11 +133,6 @@ def take_panic_key(key: Hotkey, on_press: Callable[[], None]) -> winapi.GlobalHo
     return hotkey
 
 
-def relay_host(target: Target) -> str:
-    """A sandbox reaches the host only on the Default Switch."""
-    return firewall.default_switch_address() if target.launches_sandbox else relay.HOST
-
-
 def start_app(command: str) -> None:
     """Start the app under test, detached. Popen returns at once."""
     try:
@@ -206,7 +199,6 @@ class Daemon:
         self.keyboard = Keyboard(target, self.link, self.speech)
         self.stopping = asyncio.Event()
         self.nvda: launcher.Running | None = None
-        self.sandbox: SandboxSession | None = None
         self.panic: winapi.GlobalHotkey | None = None
         self.started = False
         # Commands in progress, in no set order. Status shows them, so a client can tell a
@@ -269,7 +261,6 @@ class Daemon:
             "lines": len(self.speech),
             "latest": self.speech.latest,
             "last_error": self.link.last_error,
-            "sandbox": None if self.sandbox is None else self.sandbox.state,
             "failure": self._failure(),
             "panic_key": None if self.panic is None else self.target.panic_key.text,
             "running": list(self.running),
@@ -284,8 +275,8 @@ class Daemon:
         return address
 
     def _failure(self) -> dict[str, Any] | None:
-        """Why the sandbox, Orca or the tunnel never got going, for `asc start` to raise."""
-        owners = (self.sandbox, self.link, self.tunnel)
+        """Why Orca or the tunnel never got going, for `asc start` to raise."""
+        owners = (self.link, self.tunnel)
         failures = (owner.failure for owner in owners if owner is not None)
         failure = next((f for f in failures if f is not None), None)
         return None if failure is None else ipc.error_detail(failure)
@@ -349,14 +340,10 @@ class Daemon:
         if not self.link.connected:
             raise self.link.not_connected
         start = self.speech.latest
-        # Before the launch, which can take seconds in a sandbox.
         losses_before = len(self.link.losses)
-        # The sandbox's and Orca's windows can't be seen from here.
-        seen = self.sandbox is None and self.relay is not None
-        before = set(winapi.windows_titled("")) if seen else None
-        if self.sandbox is not None:
-            await self.sandbox.launch(args.command)
-        elif isinstance(self.link, OrcaLink):
+        # Orca's windows can't be seen from here.
+        before = set(winapi.windows_titled("")) if self.relay is not None else None
+        if isinstance(self.link, OrcaLink):
             await self.link.launch(args.command)
         else:
             # Input only where the agent may send it: in watch mode the user drives.
@@ -391,7 +378,7 @@ class Daemon:
         launcher.refuse_if_running()
 
     def _start_nvda(self) -> None:
-        if self.target.launches_portable:
+        if self.target.launches_nvda:
             self.nvda = launcher.launch(
                 launcher.folder_for(self.target.nvda_dir),
                 self.folder / "nvda_config",
@@ -416,10 +403,9 @@ class Daemon:
         self.stopping.set()
 
     async def _start_relay(self, relay: Relay) -> asyncio.Server:
-        host = await asyncio.to_thread(relay_host, self.target)
         # A tunnel's port is on the other machine; here any free one does.
         try:
-            server = await relay.start(0 if self.target.tunnel else self.target.port, host)
+            server = await relay.start(0 if self.target.tunnel else self.target.port)
         except OSError as error:
             if self.target.port and not self.target.tunnel and error.errno in _IN_USE:
                 command = (
@@ -439,7 +425,7 @@ class Daemon:
         try:
             if self.relay is not None:
                 relay_server = await self._start_relay(self.relay)
-            if self.target.launches_portable:
+            if self.target.launches_nvda:
                 await asyncio.to_thread(self._check_nvda)
             self._start_panic_key()
             token = secrets.token_urlsafe(32)
@@ -461,9 +447,6 @@ class Daemon:
             self.started = True
             async with asyncio.TaskGroup() as group:
                 follow = group.create_task(self.link.run())
-                if self.target.launches_sandbox:
-                    self.sandbox = SandboxSession(self.folder, self.target, self._relay_info())
-                    group.create_task(self.sandbox.run())
                 await self.stopping.wait()
                 follow.cancel()
         finally:
@@ -480,8 +463,6 @@ class Daemon:
         await self.link.stop()
         if self.nvda is not None:
             self.nvda.stop()
-        if self.sandbox is not None:
-            await self.sandbox.stop()
         if relay_server is not None:
             relay_server.close()
         if ipc_server is not None:

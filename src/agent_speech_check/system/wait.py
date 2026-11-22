@@ -1,4 +1,4 @@
-"""Waiting for something outside asc: a file, a process, a sandbox session."""
+"""Waiting for something outside asc: a file, a process, a connection."""
 
 from __future__ import annotations
 

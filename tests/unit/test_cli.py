@@ -327,10 +327,9 @@ def test_printed_paths_are_real(
 def test_windows_only_commands_on_linux(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    for name in ("get-nvda", "firewall-setup"):
-        assert COMMANDS[name].windows_only
-        with pytest.raises(UsageError, match="needs Windows"):
-            run([name])
+    assert COMMANDS["get-nvda"].windows_only
+    with pytest.raises(UsageError, match="needs Windows"):
+        run(["get-nvda"])
 
 
 @pytest.mark.parametrize(
@@ -374,5 +373,5 @@ def test_keys_reads_orcas_help_on_linux(
     )
     assert run(["keys", "--mode", "desktop", "title"]) == 0
     assert capsys.readouterr().out == "Orca+T  Present the title\n"
-    with pytest.raises(UsageError, match="sandbox mode needs Windows"):
-        run(["keys", "--mode", "sandbox", "title"])
+    with pytest.raises(UsageError, match="shared mode needs Windows"):
+        run(["keys", "--mode", "shared", "title"])
