@@ -80,7 +80,7 @@ lint = "ruff check ."
 types = "mypy"
 # What `types` checks, as Linux sees it (mypy skips the other platform's sys.platform branches),
 # but the tests that drive Windows APIs: they run only there.
-types-linux = "mypy --platform linux --exclude 'tests/(unit/test_(invite|mouse|system)|e2e/test_real_nvda)[.]py$'"
+types-linux = "mypy --platform linux --exclude 'tests/(unit/test_(invite|system)|e2e/test_real_nvda)[.]py$'"
 dead = "vulture"
 deps = "deptry src"
 test = "pytest -m 'not e2e' -n auto --maxprocesses 12 --dist loadgroup"
