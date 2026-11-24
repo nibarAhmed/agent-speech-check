@@ -28,6 +28,26 @@ human's sign-off before breaking it.
 - `uv run poe check` (everything: spelling, format, lint, types, dead code, deps, tests)
 - `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
 - `uv run python scripts/e2e_linux.py` (e2e against a real Orca in a Linux container, with Docker)
+- `uv run pytest tests/unit/test_relay.py -k NAME` (one test). `tests/unit` is in-process,
+  `tests/integration` runs real `asc` and daemon processes against `tests/fake_nvda.py`, and
+  `tests/e2e` (marker `e2e`) needs a real NVDA or Orca.
+
+## How it fits together
+
+1. `cli.py` validates the command, then sends it to the instance's daemon: JSON lines over
+   127.0.0.1 with a token (`daemon/ipc.py`). `asc start` spawns that daemon
+   (`daemon/session.py`), which writes a state file once it listens.
+2. The daemon (`daemon/server.py`) owns one mode's run: the in-memory speech log, the `Keyboard`,
+   waits, and a `Link` to the screen reader (`inputs/keyboard.py`).
+3. On Windows the link is `nvda/relay.py`: `asc` hosts the NVDA Remote Access relay and is the
+   leader, and NVDA connects out to it as the follower (`docs/protocol.md` says why). Desktop mode
+   launches its own portable NVDA with its own config copy; watch and shared mode ask the
+   running NVDA to connect.
+4. On Linux the link is `orca/link.py`: it pipes `orca/helper.py` (stdlib only) into `python3`
+   locally or over ssh, which runs Orca and talks JSON lines back. Remote mode reaches Windows
+   NVDA through an ssh tunnel (`system/ssh.py`).
+5. `config/targets.py` turns `config.toml` into a frozen `Target`, the one thing the daemon
+   starts from.
 
 ## Testing policy
 
@@ -124,7 +144,8 @@ human's sign-off before breaking it.
   parentheses or a new sentence.
 - CLI output and help are plain and short, because agents pay per token.
 - When a documented decision or finding changes, rewrite or remove the old text. Don't append
-  another account of the new behavior, and don't document what the code already shows.
+  another account of the new behavior, and don't document what the code already shows
+  (constants, timeouts, field lists): anything that can drift will drift.
 
 ## Etiquette
 
