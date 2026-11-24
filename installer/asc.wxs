@@ -25,6 +25,9 @@
          up missing. "a" installs every file whatever its version. The folder holds only
          asc's own files, so nothing shared is overwritten. -->
     <Property Id="REINSTALLMODE" Value="amus" />
+    <!-- Never reboot Windows when a file is momentarily in use during a silent
+         install, upgrade or uninstall: return exit code 3010 instead. -->
+    <Property Id="REBOOT" Value="ReallySuppress" />
     <!-- perUserOrMachine is only there for the Program Files redirect above. PATH is set for
          the installing user alone, so a per-machine install would leave everyone else
          without asc: refuse it. -->
@@ -153,7 +156,7 @@
           <RegistryValue Name="InstallLocation" Type="string" Value="[INSTALLFOLDER]" />
           <RegistryValue Name="DisplayIcon" Type="string" Value="[INSTALLFOLDER]asc.exe" />
           <RegistryValue Name="UninstallString" Type="string" Value="MsiExec.exe /I[ProductCode]" />
-          <RegistryValue Name="QuietUninstallString" Type="string" Value="MsiExec.exe /X[ProductCode] /qn" />
+          <RegistryValue Name="QuietUninstallString" Type="string" Value="MsiExec.exe /X[ProductCode] /qn /norestart" />
           <RegistryValue Name="NoModify" Type="integer" Value="1" />
           <RegistryValue Name="NoRepair" Type="integer" Value="1" />
         </RegistryKey>

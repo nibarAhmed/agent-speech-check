@@ -97,7 +97,13 @@ jobs:
               }
               throw "$exe $arguments timed out after 120 s"
             }
-            if ($p.ExitCode -ne $expected) { throw "$exe $arguments exit $($p.ExitCode), expected $expected" }
+            if ($p.ExitCode -ne $expected) {
+              if (Test-Path $log) {
+                Write-Host "--- tail of $log ---"
+                Get-Content $log -Tail 60 | Write-Host
+              }
+              throw "$exe $arguments exit $($p.ExitCode), expected $expected"
+            }
           }
           function Msiexec($arguments, $expected = 0) { Run msiexec "$arguments /qn /norestart" $expected }
           # A watch-mode daemon from the installed asc, and its pid.
@@ -146,7 +152,7 @@ jobs:
           if ($own.SystemComponent -ne 1) { throw "the MSI's own entry is not hidden" }
           $entry = Get-ItemProperty "$arp\agent-speech-check"
           if ($entry.UninstallString -ne "MsiExec.exe /I$productCode") { throw "UninstallString is $($entry.UninstallString)" }
-          if ($entry.QuietUninstallString -ne "MsiExec.exe /X$productCode /qn") { throw "QuietUninstallString is $($entry.QuietUninstallString)" }
+          if ($entry.QuietUninstallString -ne "MsiExec.exe /X$productCode /qn /norestart") { throw "QuietUninstallString is $($entry.QuietUninstallString)" }
           foreach ($flag in '--help', '--version') {
             & "$dir\asc.exe" $flag
             if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
