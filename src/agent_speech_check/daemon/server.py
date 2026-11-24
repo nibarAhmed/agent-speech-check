@@ -194,7 +194,7 @@ class Daemon:
         self.link: Link
         if target.reader == "orca":
             watch = watch_secret() if target.mode == "watch" else None
-            self.link = OrcaLink(target.ssh, self.speech, watch)
+            self.link = OrcaLink(target.ssh, self.speech, watch, target.restart_orca)
         else:
             credentials = relay.load_or_create(relay_dir(target.mode))
             self.link = self.relay = Relay(credentials, self.speech)
@@ -264,6 +264,8 @@ class Daemon:
             "latest": self.speech.latest,
             "last_error": self.link.last_error,
             "failure": self._failure(),
+            "restart_needed": isinstance(self.link, OrcaLink) and self.link.restart_needed,
+            "restarted": isinstance(self.link, OrcaLink) and self.link.restarted,
             "panic_key": None if self.panic is None else self.target.panic_key.text,
             "running": list(self.running),
         }

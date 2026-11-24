@@ -6,15 +6,15 @@ it uses only the standard library and runs on any Python 3.9 or later. It
 writes no file but a temporary folder, removed when it ends.
 
 Over stdin and stdout, one JSON object per line. In:
-- first `{}`, or `{"watch": "SECRET"}`: the secret the user's Orca was started with
+- first `{}`, or `{"watch": "SECRET", "restart": "ask"|"always"|"never"}`: watch mode
 - or first `{"help": "fr"}`: `asc keys`, answered by `{"help": {PATH: PAGE}}` or `failed`
 - `{"key": "Insert", "down": true, "id": 1}`: an X keysym through xdotool; `id` asks for `done`
 - `{"launch": "gedit --new-window", "id": 2}`: start an app on the display
 Out:
-- `{"ready": "51.1"}`: Orca runs and its speech comes next
+- `{"ready": "51.1"}` (with `"restarted": true` if watch mode restarted Orca): speech comes next
 - `{"record": {...}}`: one line of Orca's speech recording
 - `{"done": 1}`, or `{"done": 2, "error": "..."}`
-- `{"failed": "setup", "busy", "watch" or "help", "reason": "..."}`, then it exits
+- `{"failed": "setup", "busy", "watch", "restart", "no_orca" or "help", "reason": "..."}`
 
 Stdin closing, SIGTERM or SIGHUP ends it, and everything it started with it.
 """
@@ -37,6 +37,7 @@ import sys
 import tempfile
 import threading
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import IO, Any
 
@@ -93,6 +94,14 @@ def remove_stale(temp: Path, uid: int, proc: Path = Path("/proc")) -> None:
             continue
         if pid.isdigit() and not (proc / pid).exists():
             shutil.rmtree(folder, ignore_errors=True)
+
+
+def can_restart(env: Mapping[str, str]) -> bool:
+    """Replacing Orca without a desktop display risks leaving the user without speech."""
+    return (
+        bool(env.get("DISPLAY") or env.get("WAYLAND_DISPLAY"))
+        and shutil.which("orca", path=env.get("PATH")) is not None
+    )
 
 
 class Failed(Exception):
@@ -181,10 +190,12 @@ class Records:
 
 
 class Session:
-    def __init__(self, out: Output, watch: str | None) -> None:
+    def __init__(self, out: Output, watch: str | None, *, restart: str = "never") -> None:
         self.out = out
-        # The secret the user's own Orca runs with, in watch mode: then nothing is started.
+        # The secret the user's own Orca runs with, in watch mode.
         self.watch = watch
+        self.restart = restart
+        self.restarted = False
         self.recording = False
         remove_stale(Path(tempfile.gettempdir()), os.getuid())
         self.folder = Path(tempfile.mkdtemp(prefix="asc-orca-"))
@@ -244,19 +255,65 @@ class Session:
         return version
 
     def _join(self, secret: str) -> str:
-        """Record the user's own Orca, on this session's D-Bus, and start nothing."""
+        """Record the user's own Orca, on this session's D-Bus. Restarts it only if asked."""
         if shutil.which("gdbus") is None:
             raise Failed("setup", "missing programs: gdbus")
         if not others_running(os.getuid()):
-            raise Failed("watch", "no Orca runs for this user")
+            raise Failed("no_orca", "no Orca runs for this user")
         found = self._gdbus("/org/gnome/Orca1/Service", f"{SERVICE}.GetVersion")
         if found is None:
             reason = "Orca doesn't answer: is it 51 or later, and asc in your desktop session?"
             raise Failed("setup", reason)
         version = _new_enough(found)
-        if not self._record(secret):
+        fifo = self._open_recorder()
+        if self._set_log(secret, str(fifo)):
+            self.recording = True
+            return version
+        if self.restart == "never" or not can_restart(self.env):
             raise Failed("watch", "it wasn't started with asc's secret")
+        if self.restart != "always":
+            raise Failed("restart", "it wasn't started with asc's secret")
+        self._restart_orca(secret)
+        if not self._set_log(secret, str(fifo)):
+            raise Failed("watch", "restarted Orca refused to record its speech")
+        self.recording = True
+        self.restarted = True
         return version
+
+    def _restart_orca(self, secret: str) -> None:
+        old_owner = self._service_owner()
+        if old_owner is None:
+            raise Failed("no_orca", "no Orca runs for this user")
+        env = {**self.env, "ORCA_TEST_RPC_SECRET": secret}
+        try:
+            # Detached and without PDEATHSIG: the user's Orca must outlive asc.
+            replaced = subprocess.Popen(
+                ["orca", "--replace"],
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as error:
+            raise Failed("watch", f"cannot restart Orca: {error}") from None
+        deadline = time.monotonic() + READY_TIMEOUT_S
+        while True:
+            code = replaced.poll()
+            if code is not None:
+                raise Failed("watch", f"restarted Orca exited with code {code}")
+            left = max(2.0, deadline - time.monotonic())
+            owner = self._service_owner(timeout=left)
+            if owner is not None and owner != old_owner:
+                left = max(2.0, deadline - time.monotonic())
+                if (
+                    self._gdbus("/org/gnome/Orca1/Service", f"{SERVICE}.GetVersion", timeout=left)
+                    is not None
+                ):
+                    return
+            if time.monotonic() > deadline:
+                raise Failed("watch", f"restarted Orca did not answer within {READY_TIMEOUT_S:g} s")
+            time.sleep(0.1)
 
     def _display(self) -> None:
         read, write = os.pipe()
@@ -310,9 +367,11 @@ class Session:
         self.env.pop("WAYLAND_DISPLAY", None)
         self.env.setdefault("LANG", "C.UTF-8")
 
-    def _gdbus(self, path: str, method: str, *args: str, timeout: float = 30) -> str | None:
+    def _dbus_call(
+        self, dest: str, path: str, method: str, *args: str, timeout: float = 30
+    ) -> str | None:
         """What the method returned, as gdbus prints it, or None if it failed."""
-        command = ["gdbus", "call", "--session", "--dest", SERVICE, "--object-path", path]
+        command = ["gdbus", "call", "--session", "--dest", dest, "--object-path", path]
         try:
             result = subprocess.run(
                 [*command, "--method", method, *args],
@@ -326,6 +385,19 @@ class Session:
         except subprocess.TimeoutExpired:
             raise Failed("setup", "Orca did not answer on D-Bus") from None
         return result.stdout if result.returncode == 0 else None
+
+    def _gdbus(self, path: str, method: str, *args: str, timeout: float = 30) -> str | None:
+        return self._dbus_call(SERVICE, path, method, *args, timeout=timeout)
+
+    def _service_owner(self, timeout: float = 30) -> str | None:
+        out = self._dbus_call(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus.GetNameOwner",
+            SERVICE,
+            timeout=timeout,
+        )
+        return None if out is None else out.strip()
 
     def _wait_orca(self) -> None:
         deadline = time.monotonic() + READY_TIMEOUT_S
@@ -343,14 +415,18 @@ class Session:
                 raise Failed("setup", f"Orca did not answer within {READY_TIMEOUT_S:g} s")
             time.sleep(0.1)
 
-    def _record(self, secret: str) -> bool:
-        """Whether Orca took the secret and now writes its speech to us."""
+    def _open_recorder(self) -> Path:
         fifo = self.folder / "speech"
         os.mkfifo(fifo, 0o600)
         records = Records()
         # The reader first: Orca's open for writing waits until one exists.
         threading.Thread(target=_drain, args=(fifo, records), daemon=True).start()
         threading.Thread(target=self._forward, args=(records,), daemon=True).start()
+        return fifo
+
+    def _record(self, secret: str) -> bool:
+        """Whether Orca took the secret and now writes its speech to us."""
+        fifo = self._open_recorder()
         self.recording = self._set_log(secret, str(fifo))
         return self.recording
 
@@ -483,13 +559,19 @@ def main() -> None:
         except Failed as failed:
             out.send({"failed": failed.kind, "reason": failed.reason})
         return
-    session = Session(out, first.get("watch"))
+    restart = first.get("restart")
+    policy = restart if isinstance(restart, str) else "never"
+    session = Session(out, first.get("watch"), restart=policy)
     try:
         try:
-            out.send({"ready": session.setup()})
+            version = session.setup()
         except Failed as failed:
             out.send({"failed": failed.kind, "reason": failed.reason})
             return
+        ready: dict[str, Any] = {"ready": version}
+        if session.restarted:
+            ready["restarted"] = True
+        out.send(ready)
         for line in sys.stdin.buffer:
             try:
                 message = json.loads(line)

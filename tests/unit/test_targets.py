@@ -30,7 +30,9 @@ def test_desktop_mode_on_linux_starts_orca() -> None:
     assert desktop == Target("desktop", 0, os="linux")
     assert (desktop.reader, desktop.launches_reader, desktop.launches_nvda) == ("orca", True, False)
     # Watch mode on Linux joins the user's own Orca, which nothing connects to.
-    assert defaults("watch", platform="linux") == Target("watch", 0, os="linux")
+    watch = defaults("watch", platform="linux")
+    assert watch == Target("watch", 0, os="linux", restart_orca="ask")
+    assert Target.from_json(watch.with_restart_orca("always").to_json()).restart_orca == "always"
     assert defaults("desktop").reader == "nvda"
     assert Target.from_json(desktop.to_json()) == desktop
 
@@ -102,6 +104,22 @@ def test_desktop_mode_on_linux_has_no_nvda_settings(
 ) -> None:
     with pytest.raises(UsageError, match=message):
         resolve(write(tmp_path, f"[desktop]\n{text}"), "desktop", "linux")
+
+
+def test_restart_orca_is_only_for_linux_watch_mode(tmp_path: Path) -> None:
+    for policy in ("ask", "always", "never"):
+        path = write(tmp_path, f'[watch]\nrestart_orca = "{policy}"\n')
+        assert resolve(path, "watch", "linux").restart_orca == policy
+    with pytest.raises(UsageError, match="expected one of ask, always, never"):
+        resolve(write(tmp_path, '[watch]\nrestart_orca = "sometimes"\n'), "watch", "linux")
+    with pytest.raises(UsageError, match="only in watch mode on Linux"):
+        resolve(write(tmp_path, '[watch]\nrestart_orca = "always"\n'), "watch", "win32")
+    with pytest.raises(UsageError, match="only in watch mode on Linux"):
+        resolve(write(tmp_path, '[desktop]\nrestart_orca = "always"\n'), "desktop", "linux")
+    with pytest.raises(UsageError, match="only in watch mode on Linux"):
+        resolve(
+            write(tmp_path, '[remote]\nos = "linux"\nrestart_orca = "always"\n'), "remote", "linux"
+        )
 
 
 def test_panic_key_default_and_from_file(tmp_path: Path) -> None:

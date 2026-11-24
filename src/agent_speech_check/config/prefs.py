@@ -36,6 +36,8 @@ DEFAULT_MODE = default_mode(sys.platform)
 LAYOUTS = ("desktop", "laptop")
 # What the screen reader's machine runs: NVDA on Windows, Orca on Linux.
 OSES = ("windows", "linux")
+# Linux watch mode: whether asc may restart a running Orca that lacks asc's secret.
+RESTART_ORCA = ("ask", "always", "never")
 
 type Value = str | int | bool | list[str]
 
@@ -122,6 +124,7 @@ PREFS: tuple[Pref, ...] = (
     Pref("ssh", PER_MODE, "destination"),
     Pref("nvda_dir", PER_MODE, "path"),
     Pref("nvda_settings", PER_MODE, "settings"),
+    Pref("restart_orca", PER_MODE, "choice", choices=RESTART_ORCA),
     Pref("settle_ms", GLOBAL, "int", ipc.DEFAULT_SETTLE_MS, *ipc.SETTLE_MS),
     Pref("timeout_ms", GLOBAL, "int", ipc.DEFAULT_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),
     Pref("launch_timeout_ms", GLOBAL, "int", ipc.DEFAULT_LAUNCH_TIMEOUT_MS, 1, ipc.MAX_TIMEOUT_MS),

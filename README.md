@@ -27,7 +27,7 @@ asc stop
 | Mode | When to use it |
 |---|---|
 | `desktop` | You want the simplest setup, or you are running in CI. On Windows, `asc` starts its own portable NVDA and sends keys to your desktop (it refuses to start if another NVDA is already running). On Linux, `asc` starts its own Orca on a hidden virtual display (requires Orca 51+, Xvfb, openbox, xdotool, dbus-daemon, gdbus, and python3). |
-| `watch` | You want to record speech from your own running screen reader without letting `asc` press keys. On Windows, NVDA prompts you to allow the connection (answer Yes). On Linux, restart your Orca once with the command `asc start` prints. |
+| `watch` | You want to record speech from your own running screen reader without letting `asc` press keys. On Windows, NVDA prompts you to allow the connection (answer Yes). On Linux, `asc start` asks in a terminal before restarting Orca once with its recording secret (configurable via `restart_orca`). |
 | `shared` | You want `asc` to press keys in the NVDA you already run, inside your real Windows session. Requires `--i-understand` on every `asc start`. |
 | `remote` | The screen reader runs on another machine (such as a VM) reached over ssh. With `os = "windows"`, you start NVDA on that machine and it connects back through an ssh tunnel; with `os = "linux"`, `asc` starts Orca there. Uses one named instance per machine (`asc setup --instance NAME` or `asc config set ... --instance NAME`). |
 

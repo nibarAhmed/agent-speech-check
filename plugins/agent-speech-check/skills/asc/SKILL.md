@@ -144,9 +144,11 @@ mode it reads the other machine's: pass the same `--instance`.
   dbus-daemon, gdbus, and python3. If `asc start` fails naming a missing tool
   or old Orca, ask the user to install or upgrade it.
 - To hear the user's own Orca, use watch mode. If `asc start --mode watch` fails
-  with a restart command, ask the user to run it in their desktop session (it
-  restarts their Orca with `asc`'s recording secret), then run `asc start` again.
-  Never run that command yourself: it restarts the screen reader they rely on.
+  because Orca lacks `asc`'s recording secret, ask the user to run
+  `asc start --mode watch` in a terminal once (or the restart command if `asc`
+  printed one), then continue. Never restart Orca yourself, and never set
+  `restart_orca` to `always` unless the user explicitly asks: it restarts the
+  screen reader they rely on.
 
 ## Exit codes
 

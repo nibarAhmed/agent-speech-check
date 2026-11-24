@@ -80,8 +80,17 @@ OSES = _choices(
     {"windows": "NVDA, already running there", "linux": "Orca, which asc starts there"},
     default="windows",
 )
+RESTART_ORCA = _choices(
+    prefs.RESTART_ORCA,
+    {
+        "ask": "ask in a terminal before restarting your Orca",
+        "always": "restart your Orca automatically when needed, even for agents",
+        "never": "never restart Orca; print the command for you to run",
+    },
+    default="ask",
+)
 # Fails at import unless each question has exactly one default.
-for _question in (NVDA_SOURCES, LAYOUTS, OSES):
+for _question in (NVDA_SOURCES, LAYOUTS, OSES, RESTART_ORCA):
     default_of(_question)
 
 
@@ -142,6 +151,7 @@ class Answers:
     keys_layout: str = default_of(LAYOUTS)
     os: str | None = None
     ssh: str | None = None
+    restart_orca: str = default_of(RESTART_ORCA)
 
 
 def _every_answer(labels: dict[str, str]) -> dict[str, str]:
@@ -156,6 +166,7 @@ LABELS = _every_answer(
         "keys_layout": "Keyboard layout",
         "os": "Other machine runs",
         "ssh": "Reached with ssh",
+        "restart_orca": "Restart Orca",
     }
 )
 
@@ -168,7 +179,7 @@ def _per_mode(questions: dict[str, tuple[str, ...]]) -> dict[str, tuple[str, ...
 # The answers each mode asks for, in order, where it runs (see `runs_here` and `asks`).
 QUESTIONS = _per_mode(
     {
-        "watch": ("keys_layout",),
+        "watch": ("keys_layout", "restart_orca"),
         "desktop": ("nvda_dir",),
         "shared": ("keys_layout",),
         "remote": ("os", "ssh", "keys_layout"),
@@ -184,9 +195,13 @@ def runs_here(mode: str, *, named: bool) -> bool:
 
 def asks(field: str, mode: str, answered: dict[str, Any], platform: str = sys.platform) -> bool:
     """Whether a question of `QUESTIONS` is asked, after the answers before it. NVDA's
-    folder and layout aren't asked when Orca reads."""
-    nvda_only = field in ("nvda_dir", "keys_layout")
-    return not (nvda_only and defaults(mode, answered.get("os"), platform).reader == "orca")
+    folder and layout aren't asked when Orca reads; `restart_orca` is only for Orca."""
+    orca = defaults(mode, answered.get("os"), platform).reader == "orca"
+    if field in ("nvda_dir", "keys_layout"):
+        return not orca
+    if field == "restart_orca":
+        return orca
+    return True
 
 
 def to_data(answers: Answers) -> dict[str, Any]:
@@ -199,6 +214,8 @@ def to_data(answers: Answers) -> dict[str, Any]:
         table["os"] = answers.os
     if answers.ssh is not None:
         table["ssh"] = answers.ssh
+    if answers.restart_orca != default_of(RESTART_ORCA):
+        table["restart_orca"] = answers.restart_orca
     data: dict[str, Any] = {"mode": answers.mode}
     if table:
         data[answers.mode] = table

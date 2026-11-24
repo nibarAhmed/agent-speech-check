@@ -15,6 +15,7 @@ A change is made to a copy of the data, checked by reading it back into a
 from __future__ import annotations
 
 import copy
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -68,9 +69,9 @@ def render(data: Mapping[str, Any]) -> str:
     return tomlkit.dumps(doc)
 
 
-def save(path: Path, data: dict[str, Any]) -> Config:
+def save(path: Path, data: dict[str, Any], platform: str | None = None) -> Config:
     """Check `data`, then write it as `path` in one step."""
-    config = Config.from_data(data, path.name)
+    config = Config.from_data(data, path.name, platform or sys.platform)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as error:

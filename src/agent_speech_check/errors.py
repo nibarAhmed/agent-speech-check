@@ -217,6 +217,10 @@ class OrcaNotConnected(ReaderNotConnected):
     next_step = "asc status says why; asc stop, then asc start"
 
 
+class OrcaNeedsRestart(OperationalError):
+    """Watch mode's Orca runs without asc's secret and can be restarted here."""
+
+
 class ProtocolError(OperationalError):
     """NVDA or Orca's helper sent something `asc` can't accept."""
 
