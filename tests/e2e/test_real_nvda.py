@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 from tests.integration.conftest import free_port, run_asc, start_asc
 
+from agent_speech_check.inputs import mouse
 from agent_speech_check.nvda import invite, relay
 from agent_speech_check.nvda.nvda_config import RelayAddress, render
 from agent_speech_check.nvda.relay import fingerprint
@@ -331,3 +332,16 @@ def test_watch_start_gets_a_running_nvda_to_join(
         run_asc("stop")
         process.kill()
         process.wait(30)
+
+
+def pointer() -> tuple[int, int]:
+    point = wintypes.POINT()
+    assert ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+    return point.x, point.y
+
+
+def test_nudge_wins_the_foreground_without_moving_the_pointer() -> None:
+    """Needs an unattended desktop rather than NVDA: user input or UIPI fails it locally."""
+    before = pointer()
+    assert mouse.nudge()
+    assert pointer() == before
