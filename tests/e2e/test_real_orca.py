@@ -17,7 +17,7 @@ from pathlib import Path
 
 import psutil
 import pytest
-from tests.integration.conftest import run_asc, wait_until
+from tests.integration.conftest import asc_command, run_asc, wait_until
 
 pytestmark = [
     pytest.mark.e2e,
@@ -249,7 +249,7 @@ def run_asc_tty(reply: str, *args: str, timeout: float = 60) -> tuple[int, str]:
 
     master, slave = pty.openpty()
     proc = subprocess.Popen(  # noqa: S603 - asc itself
-        [sys.executable, "-m", "agent_speech_check", *args],
+        asc_command(*args),
         stdin=slave,
         stdout=slave,
         stderr=slave,

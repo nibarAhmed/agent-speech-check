@@ -39,8 +39,6 @@ def asc_command(*args: str) -> list[str]:
 def detached(
     command: list[str], err: IO[bytes] | int, cwd: Path | None = None
 ) -> subprocess.Popen[bytes]:
-    env = clean_env()
-
     def popen(flags: int) -> subprocess.Popen[bytes]:
         return subprocess.Popen(  # noqa: S603 - our own executable and arguments
             command,
@@ -50,7 +48,6 @@ def detached(
             stdout=subprocess.DEVNULL,
             stderr=err,
             cwd=cwd,
-            env=env,
             close_fds=True,
         )
 
