@@ -7,7 +7,7 @@ description: Check what a screen reader (NVDA on Windows, Orca on Linux) actuall
 
 `asc` records every utterance of the screen reader, NVDA on Windows or Orca on
 Linux, as numbered lines. If `asc` isn't on PATH, ask the user to install it (the
-MSI on Windows, the tarball on Linux, as the README says) from
+MSI on Windows, `install.sh` on Linux, as the README says) from
 https://github.com/nibarAhmed/agent-speech-check/releases/latest. `asc --help` and
 `asc <command> --help` are short and exact; trust them over this file.
 

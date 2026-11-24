@@ -37,7 +37,13 @@ The [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/d
 
 On Windows, run `agent-speech-check-VERSION.msi` from the [latest release](https://github.com/nibarAhmed/agent-speech-check/releases/latest), then open a new terminal so it picks up the new `PATH`. To uninstall, use Settings > Apps.
 
-On Linux (64-bit x86 or Arm, glibc 2.28 or later), `asc` requires **Orca 51 or later** (check with `orca --version`). Older releases, such as Orca 50 in Ubuntu 26.04 LTS, lack the D-Bus service `asc` uses to record speech, so `asc start` refuses them. Unpack the release into `~/.local/share` and symlink `asc` into `~/.local/bin` (which most distros include on `PATH`). Running the same commands again reinstalls `asc`:
+On Linux (64-bit x86 or Arm, glibc 2.28 or later), `asc` requires **Orca 51 or later** (check with `orca --version`). Older releases, such as Orca 50 in Ubuntu 26.04 LTS, lack the D-Bus service `asc` uses to record speech, so `asc start` refuses them. Install into `~/.local/share/agent-speech-check` and link `asc` into `~/.local/bin` (running it again upgrades or reinstalls `asc`):
+
+```shell
+curl -fsSL https://github.com/nibarAhmed/agent-speech-check/releases/latest/download/install.sh | sh
+```
+
+Or unpack the release tarball manually (checksums are in `SHA256SUMS` on the release):
 
 ```shell
 mkdir -p ~/.local/share ~/.local/bin

@@ -1,7 +1,8 @@
 name: Release
 
-# Pushing a tag like v1.2.3 releases that commit: the MSI and Linux tarballs go on a GitHub
-# Release. The winget manifests stay on the workflow run, for the winget-pkgs submission. The tag must equal the version in pyproject.toml, so bump that first
+# Pushing a tag like v1.2.3 releases that commit: the MSI, Linux tarballs, install.sh, and
+# SHA256SUMS go on a GitHub Release. The winget manifests stay on the workflow run, for the
+# winget-pkgs submission. The tag must equal the version in pyproject.toml, so bump that first
 # (CONTRIBUTING.md, Releasing).
 on:
   push:
@@ -72,10 +73,17 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: assets
           merge-multiple: true
+      - name: Prepare installer and checksums
+        run: |
+          cp installer/install.sh assets/install.sh
+          (cd assets && sha256sum -- *.msi *.tar.gz install.sh | LC_ALL=C sort -k2) > assets/SHA256SUMS
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -85,9 +93,9 @@ jobs:
         # draft, which a re-run finishes. A published release is already complete.
         run: |
           if ! draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2> /dev/null); then
-            gh release create "$TAG" assets/*.msi assets/*.tar.gz --verify-tag --title "$TAG" --generate-notes
+            gh release create "$TAG" assets/*.msi assets/*.tar.gz assets/install.sh assets/SHA256SUMS --verify-tag --title "$TAG" --generate-notes
           elif [ "$draft" = true ]; then
-            gh release upload "$TAG" assets/*.msi assets/*.tar.gz --clobber
+            gh release upload "$TAG" assets/*.msi assets/*.tar.gz assets/install.sh assets/SHA256SUMS --clobber
             gh release edit "$TAG" --draft=false
           else
             echo "$TAG is already released"

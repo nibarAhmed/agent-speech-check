@@ -37,24 +37,47 @@ jobs:
         run: uv run pytest tests/unit/test_update.py tests/unit/test_uninstall.py tests/unit/test_build_installer.py -v -p no:cacheprovider
       - name: Build the tarball
         run: uv run python -m scripts.build_linux
-      # As the README installs it, into an empty home.
-      - name: Install, run and uninstall it
+      # As the README installs it, into an empty home, plus bad-checksum rejection and upgrade.
+      - name: Install, upgrade, run and uninstall it
         env:
           MACHINE: ${{ matrix.machine }}
         run: |
           version=$(uv version --short)
+          asset="agent-speech-check-linux-$MACHINE.tar.gz"
+          release="$RUNNER_TEMP/release"
+          mkdir -p "$release"
+          cp "dist/$asset" "$release/$asset"
           export HOME="$RUNNER_TEMP/home"
-          mkdir -p "$HOME/.local/share" "$HOME/.local/bin"
-          tar -xzf "dist/agent-speech-check-linux-$MACHINE.tar.gz" -C "$HOME/.local/share"
-          ln -sf "$HOME/.local/share/agent-speech-check/current/asc" "$HOME/.local/bin/asc"
+
+          # A tampered checksum must fail before creating anything.
+          printf '%064d  %s\n' 0 "$asset" > "$release/SHA256SUMS"
+          if ASC_RELEASE_URL="file://$release" sh installer/install.sh; then
+            echo "install.sh accepted a bad SHA-256" >&2
+            exit 1
+          fi
+          test ! -e "$HOME/.local/share/agent-speech-check"
+          test ! -e "$HOME/.local/bin/asc"
+
+          (cd "$release" && sha256sum -- "$asset") > "$release/SHA256SUMS"
+          out=$(ASC_RELEASE_URL="file://$release" sh installer/install.sh)
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep -Fq "is not on PATH"
           test "$("$HOME/.local/bin/asc" --version)" = "asc $version"
           "$HOME/.local/bin/asc" config set settle_ms 500
+
+          # Reinstalling replaces cleanly and prunes older versions while keeping state.
+          mkdir -p "$HOME/.local/share/agent-speech-check/versions/0.0.1"
+          PATH="$HOME/.local/bin:$PATH" ASC_RELEASE_URL="file://$release" sh installer/install.sh
+          test ! -e "$HOME/.local/share/agent-speech-check/versions/0.0.1"
+          test "$(readlink "$HOME/.local/share/agent-speech-check/current")" = "versions/$version"
+          test -f "$HOME/.local/state/agent-speech-check/config.toml"
+
           "$HOME/.local/bin/asc" uninstall --keep-data --yes
           test ! -e "$HOME/.local/share/agent-speech-check"
           test ! -L "$HOME/.local/bin/asc"
           test -f "$HOME/.local/state/agent-speech-check/config.toml"
-          tar -xzf "dist/agent-speech-check-linux-$MACHINE.tar.gz" -C "$HOME/.local/share"
-          ln -sf "$HOME/.local/share/agent-speech-check/current/asc" "$HOME/.local/bin/asc"
+
+          ASC_RELEASE_URL="file://$release" sh installer/install.sh
           "$HOME/.local/bin/asc" uninstall --yes
           test ! -e "$HOME/.local/share/agent-speech-check"
           test ! -L "$HOME/.local/bin/asc"
