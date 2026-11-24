@@ -179,6 +179,10 @@ _ASKERS: dict[str, Callable[[Ask, str], Any]] = {
         "keys_layout": _asking("Which keyboard layout does your NVDA use?", setup.LAYOUTS),
         "os": _asking("What does the other machine run?", setup.OSES),
         "ssh": _ask_ssh,
+        "restart_orca": _asking(
+            "When your Orca lacks asc's recording secret, should asc restart it?",
+            setup.RESTART_ORCA,
+        ),
     }[field]
     for field in setup.LABELS
 }
@@ -215,9 +219,22 @@ def run_setup(ask: Ask, *, replace_without_asking: bool, platform: str = sys.pla
     if not _ask_yes(ask, "Save?", default=True):
         print("Nothing saved.")
         return 0
-    edit.save(path, setup.to_data(answers))
+    edit.save(path, setup.to_data(answers), platform=platform)
     print(f"Settings saved: {os.path.realpath(path)}")
     return 0
+
+
+def confirm_orca_restart(ask: Ask) -> bool:
+    """At a terminal, ask before replacing the user's running Orca."""
+    try:
+        return _ask_yes(
+            ask,
+            "Orca needs to restart to share speech with asc. Restart Orca now?",
+            default=True,
+        )
+    except EOFError:
+        print()
+        return False
 
 
 def confirm_uninstall(ask: Ask, planned: uninstall.Plan, *, keep_data: bool) -> bool | None:

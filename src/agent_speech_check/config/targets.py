@@ -56,6 +56,8 @@ class Target:
     # Where the screen reader runs: windows (NVDA) or linux (Orca). This machine, but
     # remote mode's other machine, None until the user names it.
     os: str | None = None
+    # Linux watch mode: ask, always or never restart Orca when it lacks asc's secret.
+    restart_orca: str | None = None
     settings: tuple[Setting, ...] = ()
     # Shared mode only: the user passed --i-understand at asc start. Never
     # read from config.toml, so consent can't be given once and forgotten.
@@ -85,6 +87,7 @@ class Target:
             nvda_dir=f.opt_text("nvda_dir", max_len=1000),
             ssh=f.opt_text("ssh", max_len=255),
             os=f.opt_text("os", max_len=20),
+            restart_orca=f.opt_text("restart_orca", max_len=20),
             settings=tuple(Setting.parse(s) for s in settings),
             consent=f.flag("consent"),
             panic_key=parse_hotkey(f.text("panic_key", max_len=40)),
@@ -139,6 +142,9 @@ class Target:
     def with_consent(self, consent: bool) -> Target:
         return replace(self, consent=consent)
 
+    def with_restart_orca(self, policy: str) -> Target:
+        return replace(self, restart_orca=policy)
+
 
 def _checked(target: Target, where: str) -> Target:
     if target.ssh is not None:
@@ -147,6 +153,15 @@ def _checked(target: Target, where: str) -> Target:
         prefs.BY_NAME["ssh"].check(target.ssh, where)
     if target.os is not None:
         prefs.BY_NAME["os"].check(target.os, where)
+    if target.restart_orca is not None:
+        if not (target.mode == "watch" and target.reader == "orca"):
+            raise bad_field(
+                UsageError,
+                f"{where} restart_orca",
+                "only in watch mode on Linux",
+                target.restart_orca,
+            )
+        prefs.BY_NAME["restart_orca"].check(target.restart_orca, where)
     if target.reader == "orca" and target.port != 0:
         raise bad_field(UsageError, f"{where} port", "only where NVDA connects", target.port)
     if target.nvda_dir is not None and not target.launches_nvda:
@@ -196,7 +211,8 @@ def defaults(mode: str, os: str | None = None, platform: str = sys.platform) -> 
     }
     # Nothing connects to Orca.
     port = 0 if os == "linux" else ports.get(mode, 0)
-    return Target(mode, port, os=os)
+    restart_orca = "ask" if mode == "watch" and os == "linux" else None
+    return Target(mode, port, os=os, restart_orca=restart_orca)
 
 
 def parse(text: str, where: str) -> dict[str, Any]:

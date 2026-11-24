@@ -99,17 +99,25 @@ Records speech from your own running screen reader without ever sending keys.
 
 #### Linux (Orca)
 
-Records your own running Orca (51 or later) without starting or stopping it.
-Orca only shares speech with programs that present a recording secret set in
-Orca's environment at startup:
+Records your own running Orca (51 or later). Orca only shares speech with
+programs that present a recording secret set in Orca's environment at startup:
 
 - `asc start` generates that secret once and saves it in
   `~/.local/state/agent-speech-check/orca-secret` (readable only by you).
-- If Orca is not running, or was started without that secret, `asc start` fails
-  and prints a command to restart your Orca with the secret. Run that command
-  in your desktop session, then run `asc start` again. Your Orca keeps the
-  secret until it exits, so you only need to do this once per login session.
-  `asc` never restarts or kills your Orca itself.
+- If no Orca is running, `asc start` fails and never starts one from scratch.
+- If your running Orca was started without `asc`'s secret, what `asc start`
+  does depends on `restart_orca` in `[watch]` (default `ask`):
+  - `ask`: in an interactive terminal inside your desktop session, asks before
+    restarting Orca with the secret; without a terminal (for example, when run
+    by an agent), fails with a hint to run `asc start --mode watch` in a
+    terminal once or enable `restart_orca` `always`.
+  - `always`: restarts your running Orca automatically when needed (even when
+    run by an agent), as long as a desktop display (`DISPLAY` or
+    `WAYLAND_DISPLAY`) is present.
+  - `never`: never restarts Orca and prints the restart command for you to run.
+- Your Orca keeps the secret until it exits, so a restart is needed at most
+  once per login session. If `asc` cannot see a desktop display, it never
+  restarts Orca and prints the restart command instead.
 - Run `asc` from inside your desktop session so it can reach Orca over D-Bus.
 - `asc launch CMD` starts `CMD` on your desktop, and the app keeps running
   after `asc stop`.
@@ -360,6 +368,7 @@ context.
 | `ssh` | none | remote only: that machine, as `ssh` takes it (`me@vm`, `ssh://me@vm:2222`, or a `Host` from your ssh config) |
 | `nvda_dir` | `asc get-nvda`'s | desktop (Windows): your portable NVDA, a full path |
 | `nvda_settings` | none | Windows NVDA-launched modes: `section.key=value` settings, as `--nvda-setting` takes |
+| `restart_orca` | ask | watch (Linux): whether `asc start` may restart your running Orca when it lacks the recording secret (`ask`, `always`, or `never`) |
 
 Settings used in the wrong mode or platform are refused with exit 2:
 
@@ -369,6 +378,7 @@ Settings used in the wrong mode or platform are refused with exit 2:
   (refused on Linux and in watch, shared, and remote modes). `nvda_settings`
   also refuses keys that `asc` manages itself (`[remote]`, speech synth,
   sound volume, keyboard layout, and browse/focus mode sounds).
+- `restart_orca`: watch mode on Linux only.
 
 ## Command reference
 
@@ -726,8 +736,10 @@ Asks a few questions and saves the answers in `config.toml`:
 1. The mode: on Windows, watch, desktop, shared, or remote; on Linux, watch,
    desktop, or remote.
 2. Desktop mode: which NVDA (Windows only; not asked for Orca).
-3. Remote mode: what the other machine runs, and its ssh destination.
-4. Watch, shared, and remote mode with `os = "windows"`: your NVDA's keyboard
+3. Watch mode on Linux: whether `asc` may restart your running Orca when it
+   lacks the recording secret (`ask`, `always`, or `never`).
+4. Remote mode: what the other machine runs, and its ssh destination.
+5. Watch, shared, and remote mode with `os = "windows"`: your NVDA's keyboard
    layout (not asked for Orca).
 
 When it is missing on Windows, it offers to download NVDA for desktop mode.

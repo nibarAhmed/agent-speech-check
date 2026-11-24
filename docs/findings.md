@@ -95,8 +95,9 @@ is said about watch mode was seen with Orca 51.0 on Ubuntu 26.10, in the same ki
 - **One Orca per user.** Orca refuses to start if another `orca` process exists
   for the same UID (`pgrep -u <uid> -x orca`), including zombie processes (so
   containers need an init process like `docker run --init` to reap exited Orca
-  processes). Because `orca --replace` kills the existing Orca, `asc` never runs
-  it and leaves that to the user.
+  processes). Because `orca --replace` kills the existing Orca, desktop mode
+  never runs it, and watch mode only runs it in a desktop session when the user
+  agrees (or sets `restart_orca = "always"`).
 - **The recording secret comes only from Orca's startup environment**
   (`ORCA_TEST_RPC_SECRET`). Orca zeroes its own `/proc/PID/environ`, so no one can read the
   secret off a running Orca. A wrong secret gets

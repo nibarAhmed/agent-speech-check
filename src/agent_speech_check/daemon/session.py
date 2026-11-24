@@ -21,6 +21,7 @@ from agent_speech_check.errors import (
     FileUnusable,
     NotRunning,
     OperationalError,
+    OrcaNeedsRestart,
     SharedNeedsConsent,
     UsageError,
 )
@@ -180,6 +181,8 @@ def _wait_ready(target: Target, folder: Path) -> dict[str, Any]:
         if failed or time.monotonic() > deadline:
             stop(folder)
             if failed:
+                if current.get("restart_needed"):
+                    raise OrcaNeedsRestart(failed.message, failed.hint)
                 raise failed
             if target.tunnel:
                 raise OperationalError(f"ssh {target.ssh} failed: no tunnel within {timeout_s:g} s")

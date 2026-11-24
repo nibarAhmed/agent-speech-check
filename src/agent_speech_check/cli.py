@@ -29,6 +29,7 @@ from agent_speech_check.errors import (
     InternalError,
     NotRunning,
     OperationalError,
+    OrcaNeedsRestart,
     UsageError,
     bad_field,
     numbered_lines,
@@ -37,6 +38,7 @@ from agent_speech_check.inputs.keyref import search as search_commands
 from agent_speech_check.nvda import invite, keyref, launcher, nvda_config
 from agent_speech_check.nvda.nvda_config import Setting
 from agent_speech_check.orca import keyref as orca_keyref
+from agent_speech_check.orca import link as orca_link
 from agent_speech_check.system import paths
 from agent_speech_check.system.paths import config_file, mode_dir, state_root
 from agent_speech_check.system.wait import poll_until
@@ -447,7 +449,20 @@ def cmd_start(args: argparse.Namespace) -> int:
     if target.launches_nvda and not launcher.running():
         _offer_update(target.nvda_dir)
     folder = mode_dir(target.mode)
-    status = session.start(target, folder)
+    try:
+        status = session.start(target, folder)
+    except OrcaNeedsRestart:
+        if not sys.stdin.isatty():
+            raise
+        if not prompts.confirm_orca_restart(input):
+            cmd = orca_link.restart_command(orca_link.watch_secret_file())
+            raise OperationalError(
+                "asc can't hear your Orca: it wasn't started with asc's secret",
+                hint=f"restart Orca for asc: {cmd}",
+            ) from None
+        status = session.start(target.with_restart_orca("always"), folder)
+    if status.get("restarted"):
+        print("restarted Orca with asc's recording secret", flush=True)
     print(f"started: {target.mode}", flush=True)
     if target.own_reader and target.reader == "nvda" and config.value("connect")[0]:
         status = _connect_own_reader(folder, status)
@@ -742,8 +757,8 @@ One daemon runs per instance and serves all other commands.
 modes:
   watch    record your own running screen reader without sending keys
            (Windows: invites NVDA and waits up to 1 min for approval; disable
-           with asc config set connect false. Linux: Orca must start with
-           asc's secret, or asc start prints the restart command.)
+           with asc config set connect false. Linux: asks in a terminal before
+           restarting Orca with asc's secret; configure with restart_orca.)
   desktop  start asc's own screen reader (portable NVDA on Windows, hidden
            Orca on Linux)
   shared   send keys through your own running NVDA on Windows (requires

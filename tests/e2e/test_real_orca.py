@@ -7,15 +7,17 @@ from __future__ import annotations
 
 import contextlib
 import os
-import re
+import select
 import subprocess
+import sys
 import tempfile
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import psutil
 import pytest
-from tests.integration.conftest import run_asc, wait_until
+from tests.integration.conftest import asc_command, run_asc, wait_until
 
 pytestmark = [
     pytest.mark.e2e,
@@ -217,32 +219,106 @@ def desktop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[list[ps
         assert dbus.stdout is not None
         monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", dbus.stdout.readline().decode().strip())
         started.append(psutil.Popen(["openbox"], stderr=subprocess.DEVNULL))
-        started.append(psutil.Popen(["orca"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        # Reparent Orca to PID 1 (docker --init), as a desktop session does, so
+        # killing it via `orca --replace` is reaped immediately instead of hanging
+        # as a zombie while pytest waits on `asc start`.
+        launched = subprocess.run(
+            ["/bin/bash", "-c", "setsid orca >/dev/null 2>&1 & echo $!"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        started.append(psutil.Process(int(launched.stdout)))
         assert wait_until(answers, 30)
         yield started
     finally:
+        for pid in _orca_pids():
+            with contextlib.suppress(psutil.NoSuchProcess):
+                started.append(psutil.Process(pid))
         for process in reversed(started):
             with contextlib.suppress(psutil.NoSuchProcess):
                 process.kill()
         assert wait_until(lambda: all(map(ended, started)))
 
 
+def run_asc_tty(reply: str, *args: str, timeout: float = 60) -> tuple[int, str]:
+    """Run `asc` connected to a real PTY and send `reply` once prompted."""
+    if sys.platform == "win32":
+        raise RuntimeError("Linux only")
+    import pty  # noqa: PLC0415 - Linux only
+
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(  # noqa: S603 - asc itself
+        asc_command(*args),
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        close_fds=True,
+    )
+    os.close(slave)
+    output = bytearray()
+    sent = False
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                proc.kill()
+                raise TimeoutError(f"asc {args} timed out: {output.decode(errors='replace')}")
+            ready, _, _ = select.select([master], [], [], min(0.2, left))
+            if ready:
+                try:
+                    chunk = os.read(master, 4096)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if not sent and b"Restart Orca now?" in output:
+                    os.write(master, reply.encode())
+                    sent = True
+            elif proc.poll() is not None:
+                break
+        return proc.wait(timeout=max(1.0, deadline - time.monotonic())), output.decode(
+            errors="replace"
+        )
+    finally:
+        os.close(master)
+
+
+def _orca_pids() -> set[int]:
+    return {
+        p.pid
+        for p in psutil.process_iter(["name", "status"])
+        if p.info["name"] == "orca" and p.info["status"] != psutil.STATUS_ZOMBIE
+    }
+
+
 def test_watch_hears_your_own_orca(tmp_path: Path, desktop: list[psutil.Process]) -> None:
     app = tmp_path / "form.py"
     app.write_text(WATCH_FORM, encoding="utf-8")
+    old = desktop[-1]
+
+    # Non-interactive default (ask): refuses to restart and leaves Orca running.
     refused = run_asc("start", "--mode", "watch")
     assert refused.returncode == 3, refused.stdout + refused.stderr
-    (line,) = re.findall(r"restart Orca for asc: (.+)", refused.stderr)
-    assert "orca --replace" in line
-    # As the user runs it, at their desktop.
-    shell = ["bash", "-c", f"{line} echo $!"]
-    restart = subprocess.run(shell, capture_output=True, text=True, check=True)  # noqa: S603 - asc's line
-    old, own = desktop[-1], psutil.Process(int(restart.stdout))
+    assert "asc start --mode watch in a terminal" in refused.stderr
+    assert not ended(old)
+
+    # Interactive terminal: answering no prints the manual command and leaves Orca alone.
+    code, out = run_asc_tty("n\n", "start", "--mode", "watch")
+    assert code == 3, out
+    assert "orca --replace" in out
+    assert not ended(old)
+
+    # Interactive terminal: accepting (Enter) restarts Orca and attaches.
+    code, out = run_asc_tty("\n", "start", "--mode", "watch")
+    assert code == 0, out
+    assert "restarted Orca with asc's recording secret" in out
+    assert wait_until(lambda: ended(old) and answers(), 30)
+    (own_pid,) = _orca_pids()
+    own = psutil.Process(own_pid)
     desktop.append(own)
-    assert isinstance(old, psutil.Popen)
-    assert wait_until(lambda: old.poll() is not None and answers(), 30)
-    started = run_asc("start", "--mode", "watch")
-    assert started.returncode == 0, started.stdout + started.stderr
     try:
         mark = run_asc("mark").stdout.split()[-1]
         assert gdbus("org.gnome.Orca1.Service.SpeakMessage", "asc e2e watch")
@@ -260,8 +336,57 @@ def test_watch_hears_your_own_orca(tmp_path: Path, desktop: list[psutil.Process]
     assert stopped.returncode == 0, stopped.stderr
     assert wait_until(lambda: not left_folders()), left_folders()
     # The user's Orca, and the app on their desktop, outlive asc.
-    assert own.status() != psutil.STATUS_ZOMBIE
+    assert not ended(own)
     assert apps
+
+    # Subsequent start in the same session attaches without restarting Orca again.
+    again = run_asc("start", "--mode", "watch")
+    assert again.returncode == 0, again.stdout + again.stderr
+    try:
+        assert "restarted Orca" not in again.stdout
+        assert _orca_pids() == {own_pid}
+    finally:
+        assert run_asc("stop").returncode == 0
+
+
+def test_watch_restart_orca_policies(
+    tmp_path: Path, desktop: list[psutil.Process], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = desktop[-1]
+    config = tmp_path / "state" / "agent-speech-check" / "config.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+
+    # Policy never: prints the manual restart command and never restarts.
+    config.write_text('[watch]\nrestart_orca = "never"\n', encoding="utf-8")
+    never = run_asc("start", "--mode", "watch")
+    assert never.returncode == 3, never.stdout + never.stderr
+    assert "orca --replace" in never.stderr
+    assert not ended(old)
+
+    # Policy always without a desktop display: refuses so a headless shell cannot strand Orca.
+    config.write_text('[watch]\nrestart_orca = "always"\n', encoding="utf-8")
+    display = os.environ["DISPLAY"]
+    monkeypatch.delenv("DISPLAY")
+    headless = run_asc("start", "--mode", "watch")
+    assert headless.returncode == 3, headless.stdout + headless.stderr
+    assert "orca --replace" in headless.stderr
+    assert not ended(old)
+    monkeypatch.setenv("DISPLAY", display)
+
+    # Policy always in a desktop session: restarts non-interactively and records speech.
+    started = run_asc("start", "--mode", "watch")
+    assert started.returncode == 0, started.stdout + started.stderr
+    assert "restarted Orca with asc's recording secret" in started.stdout
+    assert wait_until(lambda: ended(old) and answers(), 30)
+    (own_pid,) = _orca_pids()
+    desktop.append(psutil.Process(own_pid))
+    try:
+        mark = run_asc("mark").stdout.split()[-1]
+        assert gdbus("org.gnome.Orca1.Service.SpeakMessage", "asc e2e always")
+        heard = run_asc("wait", "--since", mark, "asc e2e always")
+        assert heard.returncode == 0, heard.stdout + heard.stderr
+    finally:
+        assert run_asc("stop").returncode == 0
 
 
 @pytest.mark.parametrize("over_ssh", [False, True], ids=["here", "over ssh"])

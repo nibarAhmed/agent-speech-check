@@ -23,6 +23,7 @@ from agent_speech_check.orca.link import (
     Record,
     parse_message,
 )
+from agent_speech_check.system import spawn
 
 
 @pytest.mark.parametrize(
@@ -73,9 +74,9 @@ def test_helper_command_local_and_over_ssh() -> None:
 
 
 def test_payload_is_what_the_bootstrap_reads() -> None:
-    length, rest = link.payload({"watch": "s3cret"}).split(b"\n", 1)
+    length, rest = link.payload({"watch": "s3cret", "restart": "always"}).split(b"\n", 1)
     assert rest[: int(length)] == Path(helper.__file__).read_bytes()
-    assert rest[int(length) :] == b'{"watch": "s3cret"}\n'
+    assert rest[int(length) :] == b'{"watch": "s3cret", "restart": "always"}\n'
     assert link.payload({}).endswith(b"\n{}\n")
 
 
@@ -83,6 +84,7 @@ def test_payload_is_what_the_bootstrap_reads() -> None:
     ("line", "message"),
     [
         (b'{"ready": "51.1"}', Ready("51.1")),
+        (b'{"ready": "51.1", "restarted": true}', Ready("51.1", restarted=True)),
         (b'{"record": {"kind": "speech", "text": "OK button"}}', Record("speech", "OK button")),
         (b'{"record": {"kind": "interrupt"}}', Record("interrupt", None)),
         (b'{"done": 3}', Done(3, None)),
@@ -92,6 +94,11 @@ def test_payload_is_what_the_bootstrap_reads() -> None:
         (b'{"failed": "setup", "reason": "missing xdotool"}', ("missing xdotool", "install Orca")),
         (b'{"failed": "busy", "reason": "Orca runs"}', ("Orca runs", "close that Orca")),
         (b'{"failed": "watch", "reason": "no secret"}', ("no secret", "restart Orca")),
+        (b'{"failed": "no_orca", "reason": "no Orca"}', ("no Orca", "start Orca first")),
+        (
+            b'{"failed": "restart", "reason": "no secret"}',
+            ("no secret", "asc start --mode watch in a terminal"),
+        ),
         (b'{"failed": "help", "reason": "not found"}', ("not found", "help readable")),
         (b'{"help": {"/a/commands_a.page": ""}}', Help({"/a/commands_a.page": ""})),
     ],
@@ -106,6 +113,31 @@ def test_helper_messages(line: bytes, message: object) -> None:
         assert hint in (got.error.hint or "")
     else:
         assert got == message
+
+
+def test_clean_env_restores_pyinstaller_library_path() -> None:
+    base = {"PATH": "/usr/bin", "LD_LIBRARY_PATH": "/asc/_internal"}
+    assert spawn.clean_env(base, platform="linux", frozen=False) is None
+    assert spawn.clean_env(base, platform="win32", frozen=True) is None
+    # No original LD_LIBRARY_PATH: PyInstaller's path is removed so system Orca loads its own libs.
+    assert spawn.clean_env(base, platform="linux", frozen=True) == {"PATH": "/usr/bin"}
+    with_orig = {**base, "LD_LIBRARY_PATH_ORIG": "/custom/lib"}
+    assert spawn.clean_env(with_orig, platform="linux", frozen=True) == {
+        "PATH": "/usr/bin",
+        "LD_LIBRARY_PATH": "/custom/lib",
+    }
+
+
+def test_can_restart_needs_display_and_orca(tmp_path: Path) -> None:
+    name = "orca.exe" if sys.platform == "win32" else "orca"
+    exe = tmp_path / name
+    exe.write_text("", encoding="utf-8")
+    exe.chmod(0o755)
+    path = str(tmp_path)
+    assert helper.can_restart({"DISPLAY": ":0", "PATH": path})
+    assert helper.can_restart({"WAYLAND_DISPLAY": "wayland-0", "PATH": path})
+    assert not helper.can_restart({"PATH": path})
+    assert not helper.can_restart({"DISPLAY": ":0", "PATH": str(tmp_path / "empty")})
 
 
 @pytest.mark.parametrize(

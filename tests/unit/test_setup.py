@@ -9,7 +9,7 @@ import pytest
 
 from agent_speech_check.cli import main
 from agent_speech_check.config import prefs, setup
-from agent_speech_check.config.prompts import run_setup, say_update
+from agent_speech_check.config.prompts import confirm_orca_restart, run_setup, say_update
 from agent_speech_check.config.targets import load
 from agent_speech_check.nvda.launcher import Release
 
@@ -187,6 +187,36 @@ def test_setup_on_linux_offers_what_orca_runs(
     assert ask.prompts[0] == "Choose 1 to 2: "
     target = load(root / "instances" / "vm3" / "config.toml", platform="linux").resolve(None)
     assert (target.mode, target.os, target.ssh) == ("remote", "linux", "me@vm")
+
+
+def test_setup_watch_on_linux_asks_about_restarting_orca(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Default choice (ask) is omitted from config.toml; summary still shows it.
+    run_setup(Asker("watch", "", "y"), replace_without_asking=False, platform="linux")
+    out = capsys.readouterr().out
+    assert "should asc restart it?" in out
+    assert "keyboard layout" not in out
+    assert "Your settings:\n  Mode:          watch\n  Restart Orca:  ask\n" in out
+    assert "[watch]" not in (root / "config.toml").read_text(encoding="utf-8")
+    assert load(root / "config.toml", platform="linux").resolve(None).restart_orca == "ask"
+    # Picking always saves [watch] restart_orca = "always".
+    run_setup(Asker("watch", "always", "y"), replace_without_asking=True, platform="linux")
+    assert load(root / "config.toml", platform="linux").resolve(None).restart_orca == "always"
+    # Windows watch mode never asks about Orca.
+    capsys.readouterr()
+    run_setup(Asker("watch", "", "y"), replace_without_asking=True, platform="win32")
+    assert "Restart Orca" not in capsys.readouterr().out
+
+
+def test_confirm_orca_restart() -> None:
+    assert confirm_orca_restart(Asker("")) is True
+    assert confirm_orca_restart(Asker("n")) is False
+
+    def eof(_: str) -> str:
+        raise EOFError
+
+    assert confirm_orca_restart(eof) is False
 
 
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:

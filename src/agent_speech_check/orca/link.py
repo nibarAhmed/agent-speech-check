@@ -35,7 +35,7 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.inputs.keys import Gesture, Key, typed_gestures
 from agent_speech_check.orca import helper
-from agent_speech_check.system import paths, ssh
+from agent_speech_check.system import paths, spawn, ssh
 from agent_speech_check.validate import Fields
 
 log = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ def helper_command(destination: str | None) -> list[str]:
     return [*ssh.command(destination, "-T"), shlex.join(command)]
 
 
-def payload(start: dict[str, str]) -> bytes:
+def payload(start: dict[str, Any]) -> bytes:
     """The helper, then its first line."""
     return b"%d\n" % len(_HELPER) + _HELPER + json.dumps(start).encode() + b"\n"
 
@@ -121,6 +121,7 @@ def restart_command(path: Path) -> str:
 @dataclass(frozen=True)
 class Ready:
     version: str
+    restarted: bool = False
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,7 @@ class Done:
 @dataclass(frozen=True)
 class Failed:
     error: AscError
+    restart_needed: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,37 +160,60 @@ def parse_message(line: bytes) -> Message | None:
         raise bad_field(ProtocolError, where, "a JSON line", shown) from None
     f = Fields(raw, where, ProtocolError)
     if f.has("ready"):
-        return Ready(f.text("ready", max_len=100))
+        restarted = f.flag("restarted") if f.has("restarted") else False
+        return Ready(f.text("ready", max_len=100), restarted)
     if f.has("record"):
         return _record(raw["record"])
     if f.has("done"):
         error = f.opt_text("error", max_len=MAX_LINE)
         return Done(f.number("done", low=1, high=2**53), None if error is None else error[:2000])
     if f.has("failed"):
-        kind = f.choice("failed", ("setup", "busy", "watch", "help"))
-        reason = f.text("reason", max_len=2000)
-        failure: AscError
-        if kind == "help":
-            failure = OperationalError(reason, hint="install Orca, or make its help readable")
-        elif kind == "watch":
-            failure = OperationalError(
-                f"asc can't hear your Orca: {reason}",
-                hint=f"restart Orca for asc: {restart_command(watch_secret_file())}",
-            )
-        elif kind == "setup":
-            failure = OperationalError(f"Orca can't start: {reason}", hint=_ORCA_SETUP_HINT)
-        else:
-            failure = OperationalError(
-                f"Orca can't start: {reason}",
-                hint="close that Orca, or run asc as another user",
-            )
-        return Failed(failure)
+        kind = f.choice("failed", ("setup", "busy", "watch", "restart", "no_orca", "help"))
+        return _failed(kind, f.text("reason", max_len=2000))
     if f.has("help"):
         pages = Fields(raw["help"], f"{where} help", ProtocolError)
         return Help(
             {path: pages.text(path, max_len=MAX_LINE, allow_empty=True) for path in pages.raw}
         )
     return None
+
+
+def _failed(kind: str, reason: str) -> Failed:
+    if kind == "help":
+        return Failed(OperationalError(reason, hint="install Orca, or make its help readable"))
+    if kind == "no_orca":
+        return Failed(
+            OperationalError(
+                f"asc can't hear your Orca: {reason}",
+                hint="start Orca first, or use asc start --mode desktop",
+            )
+        )
+    if kind == "watch":
+        return Failed(
+            OperationalError(
+                f"asc can't hear your Orca: {reason}",
+                hint=f"restart Orca for asc: {restart_command(watch_secret_file())}",
+            )
+        )
+    if kind == "restart":
+        return Failed(
+            OperationalError(
+                f"asc can't hear your Orca: {reason}",
+                hint=(
+                    "run asc start --mode watch in a terminal to restart Orca "
+                    "(or set restart_orca to always if you want asc to restart it without asking)"
+                ),
+            ),
+            restart_needed=True,
+        )
+    if kind == "setup":
+        return Failed(OperationalError(f"Orca can't start: {reason}", hint=_ORCA_SETUP_HINT))
+    return Failed(
+        OperationalError(
+            f"Orca can't start: {reason}",
+            hint="close that Orca, or run asc as another user",
+        )
+    )
 
 
 def _record(raw: object) -> Record | None:
@@ -208,12 +233,19 @@ class OrcaLink:
     not_connected = OrcaNotConnected
 
     def __init__(
-        self, destination: str | None, speech: SpeechLog, watch: str | None = None
+        self,
+        destination: str | None,
+        speech: SpeechLog,
+        watch: str | None = None,
+        restart_orca: str | None = None,
     ) -> None:
         self.destination = destination
         self.speech = speech
         # Watch mode's secret: then the helper records the user's own Orca.
         self.watch = watch
+        self.restart_orca = restart_orca
+        self.restart_needed = False
+        self.restarted = False
         self.on_join: Callable[[], None] = lambda: None
         self.last_error: str | None = None
         # Why Orca never got ready, for `asc start` to raise.
@@ -258,6 +290,7 @@ class OrcaLink:
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                env=spawn.clean_env(),
                 limit=MAX_LINE,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
@@ -274,7 +307,10 @@ class OrcaLink:
         stdin, stdout, stderr = _pipes(process)
         self._process, self._stdin = process, stdin
         self._drain = asyncio.create_task(self._keep_stderr(stderr))
-        stdin.write(payload({} if self.watch is None else {"watch": self.watch}))
+        start: dict[str, Any] = {}
+        if self.watch is not None:
+            start = {"watch": self.watch, "restart": self.restart_orca or "ask"}
+        stdin.write(payload(start))
         reason = await self._follow(stdout)
         if reason is not None:
             await self.stop()
@@ -298,8 +334,9 @@ class OrcaLink:
 
     def _dispatch(self, message: Message | None) -> None:
         match message:
-            case Ready(version=version):
+            case Ready(version=version, restarted=restarted):
                 self._ready = True
+                self.restarted = restarted
                 self.last_error = None
                 log.info("Orca %s ready", version)
                 self.on_join()
@@ -312,7 +349,8 @@ class OrcaLink:
                 future = self._acks.pop(ident, None)
                 if future is not None and not future.done():
                     future.set_result(error)
-            case Failed(error=error):
+            case Failed(error=error, restart_needed=restart_needed):
+                self.restart_needed = restart_needed
                 self._fail(error)
             case Help() | None:
                 pass
