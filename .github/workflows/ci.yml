@@ -102,11 +102,10 @@ jobs:
           function Msiexec($arguments, $expected = 0) { Run msiexec "$arguments /qn /norestart" $expected }
           # A watch-mode daemon from the installed asc, and its pid.
           function StartDaemon {
-            $out = "$logs\start-$script:run.out"
             $err = "$logs\start-$script:run.err"
             Write-Host "[$script:run] asc start"
             $p = Start-Process "$dir\asc.exe" 'start' -NoNewWindow -PassThru `
-              -RedirectStandardOutput $out -RedirectStandardError $err
+              -RedirectStandardOutput NUL -RedirectStandardError $err
             $null = $p.Handle
             if (-not $p.WaitForExit(60000)) {
               try { $p.Kill($true) } catch {}
