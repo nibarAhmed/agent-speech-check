@@ -2,7 +2,7 @@
 
 **Let AI agents test your app with a real screen reader (NVDA on Windows, Orca on Linux).**
 
-`asc` connects to NVDA on Windows or Orca on Linux, presses keys, and gives you what the screen reader said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or use it in CI on Windows or Linux.
+`asc` connects to NVDA on Windows or Orca on Linux, presses keys, and gives you what the screen reader said as text, so you can check it says what you expect. Run it yourself from a terminal, let an AI coding agent drive it, or [use it in CI](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/ci.md) on Windows or Linux.
 
 ## Example
 
@@ -97,6 +97,7 @@ Speech can include passwords and private messages, and `asc` can press keys. [SE
 ## Documentation
 
 - [CLI reference](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/cli.md): commands, modes, configuration, exit codes, and failure behavior.
+- [Using `asc` in CI](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/ci.md): GitHub Actions setup, Windows and Linux examples, test structure, and runners.
 - [NVDA Remote Access protocol](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/protocol.md): observed wire behavior, errors, security, and version compatibility.
 - [Findings](https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/findings.md): how Windows' focus rules, NVDA versions, Orca and ssh behaved in experiments.
 

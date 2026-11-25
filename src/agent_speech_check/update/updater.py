@@ -4,8 +4,8 @@ After `asc stop`, at most once a day, `asc _update` runs in the background: it
 asks GitHub for the latest release, downloads its MSI or Linux tarball, checks it
 against the SHA-256 GitHub lists, and installs it once no `asc` runs: the MSI runs
 quietly, and the tarball's version takes over the install's `current` link.
-`auto_update = false` in any instance's config turns it off. Any other `asc` (uv,
-a clone, a test) never updates itself.
+`CI` being set, or `auto_update = false` in any instance's config, turns it off.
+Any other `asc` (uv, a clone, a test) never updates itself.
 """
 
 from __future__ import annotations
@@ -152,8 +152,11 @@ def defer(stamp: Path, now: float) -> None:
 
 
 def enabled() -> bool:
-    """On unless any instance's config says `auto_update = false`. A config that
-    can't be read may say so too."""
+    """On unless `CI` is set (a CI runner is thrown away after its job) or any
+    instance's config says `auto_update = false`. A config that can't be read may
+    say so too."""
+    if os.environ.get("CI", "").lower() not in ("", "0", "false"):
+        return False
     for root in every_root():
         try:
             if load(root / "config.toml").value("auto_update")[0] is False:

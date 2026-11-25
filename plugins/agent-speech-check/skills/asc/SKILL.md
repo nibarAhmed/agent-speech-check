@@ -150,6 +150,10 @@ mode it reads the other machine's: pass the same `--instance`.
   `restart_orca` to `always` unless the user explicitly asks: it restarts the
   screen reader they rely on.
 
+## CI
+
+When setting up `asc` in CI for a user, use the setup action (`nibarAhmed/agent-speech-check@vX.Y.Z`) and follow https://github.com/nibarAhmed/agent-speech-check/blob/main/docs/ci.md.
+
 ## Exit codes
 
 | Code | Meaning | Next step |

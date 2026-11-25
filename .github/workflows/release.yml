@@ -100,3 +100,13 @@ jobs:
           else
             echo "$TAG is already released"
           fi
+
+  # The release as a user's workflow gets it: this tag's action installs this tag's asc and
+  # drives a real screen reader. A failure here means users can't set it up: fix it and release.
+  try:
+    needs: github-release
+    permissions:
+      contents: read
+    uses: $/.github/workflows/try-action.yml
+    with:
+      version: ${{ github.ref_name }}
