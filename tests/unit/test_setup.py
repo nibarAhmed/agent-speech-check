@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import sys
 import tomllib
 from pathlib import Path
 
@@ -265,11 +266,11 @@ def run(capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, str, str]:
     return code, captured.out, captured.err
 
 
-# Desktop mode's port and nvda_dir are NVDA's, so Windows only.
-@pytest.mark.windows
 def test_config_set_get_list_unset(
     root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Desktop mode's port and nvda_dir are NVDA's.
+    monkeypatch.setattr(sys, "platform", "win32")
     assert run(capsys, "config", "set", "settle_ms", "700") == (
         0,
         "settle_ms = 700 (global)\n",
@@ -290,7 +291,7 @@ def test_config_set_get_list_unset(
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
-    assert load(root / "config.toml", platform="win32").resolve("shared").port == 7000
+    assert load(root / "config.toml").resolve("shared").port == 7000
     # As the hints write it: --instance after the action, too.
     monkeypatch.delenv("ASC_INSTANCE", raising=False)
     assert (
@@ -320,11 +321,11 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert not (root / "config.toml").exists()
 
 
-@pytest.mark.windows
 @pytest.mark.usefixtures("root")
 def test_settings_fill_in_left_out_flags(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
     folder = tmp_path / "nvda" / "documentation" / "en"
     folder.mkdir(parents=True)
     shutil.copy(FIXTURE, folder / "keyCommands.html")

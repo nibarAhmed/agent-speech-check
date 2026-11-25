@@ -72,9 +72,8 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
             vm1_daemon.wait(timeout=5)
 
 
-@pytest.mark.windows
 def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
-    result = run_asc("start", "--mode", "shared", "--i-understand", "--instance", "vm1")
+    result = run_asc("start", "--mode", "watch", "--instance", "vm1")
     assert result.returncode == 2
     assert "only the default instance may join" in result.stderr
     env.config(UNREACHABLE)

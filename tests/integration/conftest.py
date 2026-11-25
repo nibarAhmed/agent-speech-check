@@ -9,6 +9,7 @@ import os
 import socket
 import ssl
 import subprocess
+import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -156,9 +157,11 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     config = tmp_path / "agent-speech-check"
     config.mkdir()
     made = Env(tmp_path, port)
+    # Ports are where NVDA connects. Linux's watch mode joins Orca, which takes none.
+    ports = f"[watch]\nport = {port}\n[shared]\nport = {port}\n"
     made.config(
         f"[defaults]\npanic_key = '{worker_panic_key()}'\n"
-        f"[watch]\nport = {port}\n[shared]\nport = {port}\n"
+        + (ports if sys.platform == "win32" else "")
     )
     yield made
     # Never leave a daemon behind, in any instance, even when a test failed half way.

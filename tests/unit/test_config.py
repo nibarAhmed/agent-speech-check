@@ -152,14 +152,14 @@ def test_unset() -> None:
     assert edit.unset_value(_config(data), prefs.find("mode"), None) == {}
 
 
-# EXAMPLE's C:\nvda is a full path only on Windows.
-@pytest.mark.windows
 def test_entries_say_where_each_value_comes_from() -> None:
-    settings = _config(EXAMPLE)
+    # A full path on any OS, as C:\nvda is not on Linux.
+    nvda_dir = str(Path(__file__).parent)
+    settings = _config({**EXAMPLE, "desktop": {**EXAMPLE["desktop"], "nvda_dir": nvda_dir}})
     rows = {name: (value, source) for name, value, source in edit.entries(settings, None)}
     assert rows["mode"] == ("desktop", "global")
     assert rows["port"] == (0, "default")
-    assert rows["nvda_dir"] == ("C:\\nvda", "desktop")
+    assert rows["nvda_dir"] == (nvda_dir, "desktop")
     assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "desktop")
     assert rows["settle_ms"] == (800, "global")
     assert rows["timeout_ms"] == (8000, "global")

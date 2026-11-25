@@ -179,7 +179,7 @@ def test_remote_from_file_and_json(tmp_path: Path) -> None:
 
 
 def test_modes_this_platform_runs() -> None:
-    check_runnable(defaults("watch"))
+    check_runnable(defaults("watch", platform="win32"))
     check_runnable(defaults("desktop", platform="linux"))
     check_runnable(defaults("watch", platform="linux"))
     # From either platform, since the relay and ssh work from Linux too.

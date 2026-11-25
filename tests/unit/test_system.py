@@ -104,7 +104,6 @@ def test_mutex_is_exclusive(tmp_path: Path) -> None:
 @pytest.mark.windows
 def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     assert launcher.folder_for(None) == launcher.managed_dir()
     assert launcher.folder_for("C:/x") == Path("C:/x")
     with pytest.raises(OperationalError, match="NVDA not found") as exc:
@@ -277,7 +276,6 @@ def test_a_held_damaged_installer_is_not_a_failed_download(
     # Held open, so it can't be deleted. Not a DownloadFailed, which the offline
     # fallback catches and would return it.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     held = launcher.installer_path("2026.2")
     held.parent.mkdir(parents=True)
     with held.open("wb") as file:
@@ -395,7 +393,6 @@ def test_offline_the_cached_installer_is_used(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
     with pytest.raises(DownloadFailed):
         launcher.latest_installer()  # nothing cached to fall back on
@@ -415,7 +412,6 @@ def test_offline_a_cached_installer_too_old_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
     cached = launcher.installer_path("2025.1")
     cached.parent.mkdir(parents=True)

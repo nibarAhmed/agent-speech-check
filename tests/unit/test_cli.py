@@ -276,7 +276,6 @@ def test_status_lines(capsys: pytest.CaptureFixture[str]) -> None:
     assert "browse/focus: browse\n" in capsys.readouterr().out
 
 
-@pytest.mark.windows
 @pytest.mark.parametrize("version", ["2026.2&calc", "latest", "2026,2", ""])
 def test_get_nvda_refuses_a_bad_version_before_anything(
     version: str,
@@ -285,8 +284,8 @@ def test_get_nvda_refuses_a_bad_version_before_anything(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # The version goes into the download URL and a file name.
+    monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     assert main(["get-nvda", "--version", version]) == 2
     assert "--version" in capsys.readouterr().err
     assert not any(tmp_path.iterdir())

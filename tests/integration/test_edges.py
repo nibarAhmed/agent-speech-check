@@ -120,7 +120,6 @@ def test_daemon_hangs_up() -> None:
     assert "closed the connection without a reply" in result.stderr
 
 
-@pytest.mark.windows
 @pytest.mark.parametrize("daemon_reply", [b"not json\n"], indirect=True)
 @pytest.mark.usefixtures("daemon_reply")
 def test_config_set_looks_for_the_daemon_before_saving(env: Env) -> None:
@@ -312,7 +311,6 @@ def test_daemon_that_never_answers(env: Env) -> None:
         ipc.call(env.folder("watch"), request, 0.3)
 
 
-@pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_too_many_gestures_send_nothing() -> None:
     result = run_asc("press", *(["Tab"] * 101))
