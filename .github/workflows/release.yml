@@ -100,3 +100,69 @@ jobs:
           else
             echo "$TAG is already released"
           fi
+
+  # The release as a user's workflow gets it: this tag's action installs this tag's asc and
+  # drives a real screen reader. A failure here means users can't set it up: fix it and release.
+  try-windows:
+    needs: github-release
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tag
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: '"version=$($env:TAG.TrimStart(''v''))" >> $env:GITHUB_OUTPUT'
+      - uses: $/
+        with:
+          version: ${{ steps.tag.outputs.version }}
+      # Without this, pwsh carries on past a failed asc command.
+      - name: Use it
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          asc start --mode desktop
+          asc launch notepad.exe --title Notepad
+          asc press NVDA+T --expect "[0-9]"
+      - if: always()
+        run: asc stop
+
+  try-linux:
+    needs: github-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    # As in e2e.yml: Orca 51 or later.
+    container:
+      image: ubuntu:26.10@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2
+      options: --init
+    steps:
+      - name: Install Orca and what asc runs with it
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            orca xvfb xdotool dbus-daemon libglib2.0-bin at-spi2-core openbox python3 \
+            curl ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      - uses: $/
+        with:
+          version: ${{ steps.tag.outputs.version }}
+      - name: Use it
+        run: |
+          asc start --mode desktop
+          asc press NVDA+T --expect "[0-9]"
+      - if: always()
+        run: asc stop

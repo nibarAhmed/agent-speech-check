@@ -102,11 +102,17 @@ def state_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.usefixtures("state_home")
-def test_enabled_unless_any_instance_turns_it_off(tmp_path: Path) -> None:
+def test_enabled_unless_ci_or_any_instance_turns_it_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     home = tmp_path / "agent-speech-check"
     vm1 = home / "instances" / "vm1"
     vm1.mkdir(parents=True)
+    monkeypatch.setenv("CI", "false")
     assert updater.enabled()
+    monkeypatch.setenv("CI", "true")
+    assert not updater.enabled()
+    monkeypatch.delenv("CI")
     (home / "config.toml").write_text("[defaults]\nauto_update = true\n", encoding="utf-8")
     assert updater.enabled()
     (vm1 / "config.toml").write_text("[defaults]\nauto_update = false\n", encoding="utf-8")

@@ -1,0 +1,66 @@
+name: Set up Agent Speech Check
+description: Install asc from a GitHub release, and on Windows a portable NVDA for desktop mode.
+branding:
+  icon: volume-2
+  color: blue
+
+inputs:
+  version:
+    description: The asc release to install, like 1.2.3, or latest.
+    default: latest
+  nvda:
+    description: Windows only. The NVDA version asc get-nvda installs, like 2026.2, or latest.
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    # The same checks as install.sh: HTTPS from this repo's release, and the SHA-256 SHA256SUMS lists.
+    - if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        ASC_VERSION: ${{ inputs.version }}
+        NVDA_VERSION: ${{ inputs.nvda }}
+      # It adds asc's own install folder to PATH, not anything an input names.
+      run: | # zizmor: ignore[github-env]
+        $ErrorActionPreference = 'Stop'
+        $releases = 'https://github.com/nibarAhmed/agent-speech-check/releases'
+        $version = $env:ASC_VERSION
+        if ($version -eq 'latest') {
+          $reply = Invoke-WebRequest "$releases/latest"
+          $version = "$($reply.BaseResponse.RequestMessage.RequestUri)" -replace '^.*/v', ''
+        }
+        if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "not an asc version: $version" }
+        $dir = New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\asc-setup"
+        $msi = "agent-speech-check-$version.msi"
+        Invoke-WebRequest "$releases/download/v$version/SHA256SUMS" -OutFile "$dir\SHA256SUMS"
+        Invoke-WebRequest "$releases/download/v$version/$msi" -OutFile "$dir\$msi"
+        $listed = Get-Content "$dir\SHA256SUMS" | ForEach-Object { , ($_ -split '\s+\*?') } |
+          Where-Object { $_[1] -eq $msi } | ForEach-Object { $_[0] }
+        $actual = (Get-FileHash "$dir\$msi" -Algorithm SHA256).Hash
+        if ($listed -notmatch '^[0-9a-fA-F]{64}$' -or $actual -ne $listed) { throw "SHA-256 mismatch for $msi" }
+        $log = "$dir\msiexec.log"
+        $process = Start-Process msiexec -Wait -PassThru -ArgumentList '/i', "`"$dir\$msi`"", '/qn', '/norestart', '/l*', "`"$log`""
+        # 3010: installed, and a reboot would finish replacing a file in use.
+        if ($process.ExitCode -notin 0, 3010) {
+          Get-Content $log -Tail 40
+          throw "msiexec exit $($process.ExitCode)"
+        }
+        $bin = "$env:LOCALAPPDATA\Programs\agent-speech-check"
+        $bin >> $env:GITHUB_PATH
+        if ($env:NVDA_VERSION -eq 'latest') { & "$bin\asc.exe" get-nvda } else { & "$bin\asc.exe" get-nvda --version $env:NVDA_VERSION }
+        if ($LASTEXITCODE -ne 0) { throw "asc get-nvda exit $LASTEXITCODE" }
+    - if: runner.os == 'Linux'
+      shell: sh
+      env:
+        ASC_VERSION: ${{ inputs.version }}
+      run: | # zizmor: ignore[github-env]
+        set -eu
+        [ "$ASC_VERSION" != latest ] || unset ASC_VERSION
+        sh "$GITHUB_ACTION_PATH/installer/install.sh"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+    - if: runner.os != 'Windows' && runner.os != 'Linux'
+      shell: sh
+      run: |
+        echo "asc runs on Windows and Linux runners, not $RUNNER_OS" >&2
+        exit 1

@@ -1,5 +1,6 @@
 #!/bin/sh
 # Install or update asc on Linux from a GitHub Release tarball.
+# ASC_VERSION=1.2.3 installs that release instead of the latest.
 set -eu
 
 REPO="nibarAhmed/agent-speech-check"
@@ -65,6 +66,10 @@ main() {
     expected_version=""
     if [ -n "${ASC_RELEASE_URL:-}" ]; then
         release_url=${ASC_RELEASE_URL%/}
+    elif [ -n "${ASC_VERSION:-}" ]; then
+        check_semver "$ASC_VERSION" || die "ASC_VERSION is not a version like 1.2.3: $ASC_VERSION"
+        expected_version=$ASC_VERSION
+        release_url="https://github.com/$REPO/releases/download/v$ASC_VERSION"
     else
         redirect=$(curl -fsS --proto '=https' --proto-redir '=https' --tlsv1.2 \
             -o /dev/null -w '%{redirect_url}' \
