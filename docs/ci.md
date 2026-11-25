@@ -135,7 +135,7 @@ def test_save_dialog():
 
 ## Auto-update
 
-Releases after 0.8.1 skip [auto-update](cli.md#updates) whenever the `CI` environment variable is set (`CI=false`, `0`, or empty count as unset). GitHub Actions and GitLab set `CI`. With 0.8.1, or on systems that do not set `CI`, run `asc config set auto_update false` after setup, or a newer release can replace the one you pinned.
+An installed `asc` skips [auto-update](cli.md#updates) whenever the `CI` environment variable is set (`CI=false`, `0`, or empty count as unset). GitHub Actions and GitLab set `CI`; on systems that do not, run `asc config set auto_update false`.
 
 ## Speech in logs
 
