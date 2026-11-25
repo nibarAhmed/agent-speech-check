@@ -16,21 +16,18 @@ concurrency:
 
 # uv reads the Python version from .python-version, here as in development.
 jobs:
-  lint:
-    runs-on: windows-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: Install
-        run: uv sync --locked
-      - name: Spelling, format, lint, types, dead code, deps
-        run: uv run poe static
-
-  test:
-    runs-on: windows-latest
+  # What a contributor runs, on each OS they develop on.
+  check:
+    name: check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            runner: windows-latest
+          - os: linux
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,21 +36,7 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Install
         run: uv sync --locked
-      - name: Tests
-        run: uv run poe test
-
-  # As a Linux contributor runs it. Its own job, so the required test check keeps its name.
-  check-linux:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: Install
-        run: uv sync --locked
-      - name: Everything poe check runs
+      - name: Spelling, format, lint, types, dead code, deps, tests
         run: uv run poe check
 
   installer:
@@ -248,3 +231,18 @@ jobs:
         with:
           name: msi-logs
           path: ${{ runner.temp }}/msi-logs
+
+  # The one check branch protection requires from this workflow, as e2e.yml's e2e job.
+  # Add every new job to needs.
+  ci:
+    if: ${{ always() }}
+    needs: [check, installer]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null

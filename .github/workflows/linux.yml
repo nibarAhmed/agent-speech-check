@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   build:
+    name: build (${{ matrix.machine }})
     strategy:
       matrix:
         include:
