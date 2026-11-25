@@ -1,6 +1,6 @@
 # `asc` command reference
 
-`asc` (Agent Speech Check) lets an agent, a person, or CI use NVDA to inspect an application's accessibility through the speech NVDA actually produces. Use it to press keys, read speech as text, and assert expected output. On Linux it does the same with Orca (see [Desktop mode](#desktop-mode)), and [remote mode](#remote-mode) reaches NVDA or Orca on another machine over ssh.
+`asc` (Agent Speech Check) lets an agent, a person, or [CI](ci.md) use NVDA to inspect an application's accessibility through the speech NVDA actually produces. Use it to press keys, read speech as text, and assert expected output. On Linux it does the same with Orca (see [Desktop mode](#desktop-mode)), and [remote mode](#remote-mode) reaches NVDA or Orca on another machine over ssh.
 
 This is the complete command and configuration reference. If you're new to `asc`, start with the [README](../README.md) first.
 
@@ -885,6 +885,8 @@ An `asc` installed by the MSI, or unpacked from the Linux tarball as the
 - `asc config set auto_update false` turns auto-updates off. Setting
   `auto_update = false` in any instance's `config.toml` disables updates for all
   instances, since they share the same `asc` installation.
+- Auto-updates are skipped while the `CI` environment variable is set (`false`,
+  `0`, or empty count as unset).
 - Non-release installs (such as running from a git clone) never update
   themselves.
 
