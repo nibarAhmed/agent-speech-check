@@ -233,7 +233,7 @@ def stop_check(timeout_s: float = processes.KILL_WAIT_S) -> None:
     try:
         processes.terminate(pid, timeout_s)
     except OSError:
-        how = "in Task Manager" if sys.platform == "win32" else "with kill"
+        how = "in Task Manager" if sys.platform == "win32" else f"with kill -9 {pid}"
         raise OperationalError(
             f"cannot end the update check (pid {pid})", hint=f"end it {how}, then try again"
         ) from None
