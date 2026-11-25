@@ -9,8 +9,7 @@ Contributions come in under the project's MIT license. There's no CLA.
 3. `uv run poe check` must pass before you open a pull request (while you work, `uv run poe fast`
    is quicker). CI checks both Windows and Linux, so running the other OS's tests locally is
    optional (see [Development](README.md#development)).
-4. CI runs the real-NVDA and real-Orca end-to-end tests on every pull request (see
-   [Development](README.md#development) to run `e2e.yml` on your fork beforehand). If your change
+4. CI runs the real-NVDA and real-Orca end-to-end tests on every pull request. If your change
    affects Orca or ssh, also run the matching local tests in [AGENTS.md](AGENTS.md#testing-policy),
    or say in the pull request if you cannot.
 5. Build the Windows installer only when you change `installer/` or debug CI's `installer` check,
