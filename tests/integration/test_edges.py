@@ -346,6 +346,8 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
         assert gone, "the daemon waited on the silent peer"
 
 
+# Linux keeps the stand-ins, this process's children, as zombies until reaped, so asc
+# waits on them.
 @pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_commands_refuse_while_an_update_installs() -> None:

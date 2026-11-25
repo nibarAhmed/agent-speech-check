@@ -45,7 +45,6 @@ def test_kill_on_close_job_kills_the_child() -> None:
         child.kill()
 
 
-@pytest.mark.windows
 def test_kill_tree_ends_the_processes_it_started_too() -> None:
     sleeper = "import time; time.sleep(60)"
     start_child = f"subprocess.Popen([sys.executable, '-c', {sleeper!r}])"

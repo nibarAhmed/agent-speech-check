@@ -54,16 +54,17 @@ def test_path_with_a_quote_and_a_long_list_read_back() -> None:
     assert parse(text, "x") == data
 
 
-# EXAMPLE's C:\nvda is a full path only on Windows.
-@pytest.mark.windows
 def test_save_checks_before_writing(tmp_path: Path) -> None:
     path = tmp_path / "sub" / "config.toml"
     with pytest.raises(UsageError, match="settle_ms: expected a whole number from 50"):
         edit.save(path, {"defaults": {"settle_ms": 5}})
     assert not path.exists()
-    edit.save(path, EXAMPLE)
-    assert path.read_bytes() == EXAMPLE_TEXT.encode()
-    assert load(path).modes["desktop"].nvda_dir == "C:\\nvda"
+    # A full path on any OS, as C:\nvda is not on Linux.
+    nvda_dir = str(Path(__file__).parent)
+    data = {**EXAMPLE, "desktop": {**EXAMPLE["desktop"], "nvda_dir": nvda_dir}}
+    edit.save(path, data, "win32")
+    assert path.read_bytes() == edit.render(data).encode()
+    assert load(path, "win32").modes["desktop"].nvda_dir == nvda_dir
     assert not list(path.parent.glob("*.tmp"))
 
 

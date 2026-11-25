@@ -98,14 +98,19 @@ def test_stop_all_with_nothing_running_does_nothing() -> None:
 
 def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[bytes]]:
     """A process running its own copy of an exe, like another asc.exe still running."""
-    image = tmp_path / "stand-in.exe"
-    shutil.copy(Path(shutil.which("ping") or "ping.exe"), image)
-    process = subprocess.Popen(  # noqa: S603 - our copy of ping, fixed arguments
-        [str(image), "-n", str(seconds + 1), "127.0.0.1"], stdout=subprocess.DEVNULL
-    )
+    if sys.platform == "win32":
+        image = tmp_path / "stand-in.exe"
+        shutil.copy(Path(shutil.which("ping") or "ping.exe"), image)
+        command = [str(image), "-n", str(seconds + 1), "127.0.0.1"]
+    else:
+        image = tmp_path / "stand-in"
+        shutil.copy(Path(shutil.which("sleep") or "/bin/sleep"), image)
+        command = [str(image), str(seconds)]
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL)  # noqa: S603 - our copy
     return image, process
 
 
+# Linux keeps the ended stand-in, this process's child, as a zombie until reaped.
 @pytest.mark.windows
 def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 2)
@@ -116,7 +121,6 @@ def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: 
         process.kill()
 
 
-@pytest.mark.windows
 def test_stop_all_names_processes_that_stay(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 60)
     try:
