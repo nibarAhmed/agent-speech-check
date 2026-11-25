@@ -8,10 +8,10 @@ Add `nibarAhmed/agent-speech-check@vX.Y.Z` to install `asc` (and a portable NVDA
 
 | Input | Default | Meaning |
 |---|---|---|
-| `version` | `latest` | `asc` release to install, like `1.2.3`, or `latest` |
+| `version` | `latest` | `asc` release to install, like `1.2.3` or `v1.2.3`, or `latest` |
 | `nvda` | `latest` | Windows only: NVDA version `asc get-nvda` installs, like `2026.2`, or `latest` |
 
-- **Minimum release:** the action needs an `asc` release newer than `0.8.0` (`0.8.0` and older releases have no `SHA256SUMS`).
+- **Minimum release:** the action needs `asc` 0.8.1 or later (older releases have no `SHA256SUMS`).
 - **Pin both versions:** replace `vX.Y.Z` and `X.Y.Z` in the examples below with the same release tag and version number so the action and the installed `asc` stay in sync.
 - **What it does:** it installs that release from GitHub over HTTPS, checks its SHA-256 against the release's `SHA256SUMS`, puts `asc` on `PATH`, and on Windows runs `asc get-nvda`. Other runner OSes fail.
 

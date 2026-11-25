@@ -1,0 +1,70 @@
+name: Try the setup action
+
+# action.yml as a user's workflow runs it: install asc, then drive a real screen reader.
+# A PR that changes the action tries it with the latest release; release.yml, with the new one.
+on:
+  pull_request:
+    paths: [action.yml, installer/install.sh, .github/workflows/try-action.yml]
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: try-action-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/
+        with:
+          version: ${{ inputs.version || 'latest' }}
+      # Without this, pwsh carries on past a failed asc command.
+      - name: Use it
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          asc start --mode desktop
+          asc launch notepad.exe --title Notepad
+          asc press NVDA+T --expect Notepad
+      - if: always()
+        run: asc stop
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # As in e2e.yml: Orca 51 or later.
+    container:
+      image: ubuntu:26.10@sha256:c4ca31b6e93261c5dd773826f789738a49e414ca04fc094b1ccd0f91e07329a2
+      options: --init
+    steps:
+      - name: Install Orca and what asc runs with it
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            orca xvfb xdotool dbus-daemon libglib2.0-bin at-spi2-core openbox python3 \
+            curl ca-certificates
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/
+        with:
+          version: ${{ inputs.version || 'latest' }}
+      # Insert+T on Orca speaks the time.
+      - name: Use it
+        run: |
+          asc start --mode desktop
+          asc press NVDA+T --expect "[0-9]"
+      - if: always()
+        run: asc stop

@@ -45,7 +45,7 @@ The rules for code, tests and docs are in [AGENTS.md](AGENTS.md). They apply to 
 
 Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI and the
 Linux tarballs for x86 and Arm (on glibc 2.28, so they run on that and newer) and attaches them
-along with `installer/install.sh` and `SHA256SUMS` to a GitHub Release. The winget manifests it writes stay on the workflow run. After publishing, the `try-windows` and `try-linux` jobs install the new release through `action.yml`; a failure there means users cannot set it up. An installed `asc` updates itself from that release and the README links to the Linux installer directly,
+along with `installer/install.sh` and `SHA256SUMS` to a GitHub Release. The winget manifests it writes stay on the workflow run. After publishing, the `try` job installs the new release through `action.yml` on Windows and Linux (`try-action.yml`, which also runs on PRs that change the action); a failure there means users cannot set it up. An installed `asc` updates itself from that release and the README links to the Linux installer directly,
 so its assets keep their names: `agent-speech-check-VERSION.msi`,
 `agent-speech-check-linux-MACHINE.tar.gz` (where MACHINE is `x86_64` or `aarch64`),
 `install.sh`, and `SHA256SUMS`.
