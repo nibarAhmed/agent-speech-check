@@ -103,7 +103,8 @@ def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[byte
         shutil.copy(Path(shutil.which("ping") or "ping.exe"), image)
         command = [str(image), "-n", str(seconds + 1), "127.0.0.1"]
     else:
-        image = tmp_path / "stand-in"
+        # Keeps its name: coreutils may be one binary that picks its tool by name.
+        image = tmp_path / "sleep"
         shutil.copy(Path(shutil.which("sleep") or "/bin/sleep"), image)
         command = [str(image), str(seconds)]
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL)  # noqa: S603 - our copy
