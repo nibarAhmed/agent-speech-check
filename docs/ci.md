@@ -114,11 +114,12 @@ def screen_reader():
 
 
 def test_save_dialog():
-    asc("launch", "./myapp", "--title", "My App")
     try:
+        asc("launch", "./myapp", "--title", "My App")
         asc("press", "Tab", "--expect", "Save button")
         asc("press", "Enter", "--expect", "Saved")
     finally:
+        # Closes whatever has focus: the app, if it opened.
         subprocess.run(["asc", "press", "Alt+F4"], check=False)
 ```
 
@@ -134,7 +135,7 @@ def test_save_dialog():
 
 ## Auto-update
 
-An installed `asc` skips [auto-update](cli.md#updates) whenever the `CI` environment variable is set (`CI=false`, `0`, or empty count as unset). GitHub Actions and GitLab set `CI`; on systems that do not, run `asc config set auto_update false`.
+Releases after 0.8.1 skip [auto-update](cli.md#updates) whenever the `CI` environment variable is set (`CI=false`, `0`, or empty count as unset). GitHub Actions and GitLab set `CI`. With 0.8.1, or on systems that do not set `CI`, run `asc config set auto_update false` after setup, or a newer release can replace the one you pinned.
 
 ## Speech in logs
 
