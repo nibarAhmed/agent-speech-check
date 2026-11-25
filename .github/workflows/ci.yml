@@ -63,6 +63,7 @@ jobs:
           Copy-Item (Get-Item dist\agent-speech-check-*.msi).FullName "$env:RUNNER_TEMP\first.msi"
           uv run python scripts/build_installer.py
       - name: Install, upgrade, run and uninstall the MSI
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $first = "$env:RUNNER_TEMP\first.msi"
@@ -77,17 +78,51 @@ jobs:
           # Its folders: Windows Installer drops an empty entry (a trailing ';') on uninstall.
           function PathFolders($path) { ($path -split ';' | Where-Object { $_ }) -join ';' }
           function Products { @($installer.RelatedProducts($upgradeCode)).Count }
+          # pwsh's Start-Process -Wait waits on the whole process tree, not just msiexec.
           # Exit code 3010 (reboot needed) fails too: it means files were still in use.
           function Run($exe, $arguments, $expected = 0) {
             $script:run++
-            $p = Start-Process $exe "$arguments /l*v `"$logs\$script:run.log`"" -Wait -PassThru
-            if ($p.ExitCode -ne $expected) { throw "$exe $arguments exit $($p.ExitCode), expected $expected" }
+            $log = "$logs\$script:run.log"
+            Write-Host "[$script:run] $exe $arguments"
+            $p = Start-Process $exe "$arguments /l*v `"$log`"" -PassThru
+            # Read the handle before exit, or .NET leaves ExitCode null.
+            $null = $p.Handle
+            if (-not $p.WaitForExit(120000)) {
+              Write-Host "[$script:run] timed out (pid $($p.Id)); killing process"
+              try { $p.Kill($true) } catch {}
+              $null = $p.WaitForExit(5000)
+              if (Test-Path $log) {
+                Write-Host "--- tail of $log ---"
+                Get-Content $log -Tail 60 | Write-Host
+              }
+              throw "$exe $arguments timed out after 120 s"
+            }
+            if ($p.ExitCode -ne $expected) {
+              if (Test-Path $log) {
+                Write-Host "--- tail of $log ---"
+                Get-Content $log -Tail 60 | Write-Host
+              }
+              throw "$exe $arguments exit $($p.ExitCode), expected $expected"
+            }
           }
-          function Msiexec($arguments, $expected = 0) { Run msiexec "$arguments /qn" $expected }
+          function Msiexec($arguments, $expected = 0) { Run msiexec "$arguments /qn /norestart" $expected }
           # A watch-mode daemon from the installed asc, and its pid.
           function StartDaemon {
-            & "$dir\asc.exe" start | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw "asc start exit $LASTEXITCODE" }
+            $err = "$logs\start-$script:run.err"
+            Write-Host "[$script:run] asc start"
+            $p = Start-Process "$dir\asc.exe" 'start' -NoNewWindow -PassThru `
+              -RedirectStandardOutput NUL -RedirectStandardError $err
+            $null = $p.Handle
+            if (-not $p.WaitForExit(60000)) {
+              try { $p.Kill($true) } catch {}
+              $null = $p.WaitForExit(5000)
+              if (Test-Path $err) { Get-Content $err | Write-Host }
+              throw 'asc start timed out after 60 s'
+            }
+            if ($p.ExitCode -ne 0) {
+              if (Test-Path $err) { Get-Content $err | Write-Host }
+              throw "asc start exit $($p.ExitCode)"
+            }
             (Get-Content "$data\watch\state.json" | ConvertFrom-Json).pid
           }
           function AssertGone($daemon, $when) {
@@ -117,7 +152,7 @@ jobs:
           if ($own.SystemComponent -ne 1) { throw "the MSI's own entry is not hidden" }
           $entry = Get-ItemProperty "$arp\agent-speech-check"
           if ($entry.UninstallString -ne "MsiExec.exe /I$productCode") { throw "UninstallString is $($entry.UninstallString)" }
-          if ($entry.QuietUninstallString -ne "MsiExec.exe /X$productCode /qn") { throw "QuietUninstallString is $($entry.QuietUninstallString)" }
+          if ($entry.QuietUninstallString -ne "MsiExec.exe /X$productCode /qn /norestart") { throw "QuietUninstallString is $($entry.QuietUninstallString)" }
           foreach ($flag in '--help', '--version') {
             & "$dir\asc.exe" $flag
             if ($LASTEXITCODE -ne 0) { throw "asc $flag exit $LASTEXITCODE" }
@@ -148,6 +183,7 @@ jobs:
       # The release's winget manifests, with the MSI served from here: its release URL
       # doesn't exist yet. Shows winget installs per user and finds our uninstall entry.
       - name: Install, list and uninstall with winget
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $flags = '--accept-source-agreements', '--disable-interactivity'
