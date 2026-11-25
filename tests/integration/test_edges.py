@@ -13,7 +13,15 @@ from collections.abc import Iterator
 
 import pytest
 from tests import fake_nvda as f
-from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client, wait_until
+from tests.integration.conftest import (
+    Env,
+    free_port,
+    reap,
+    run_asc,
+    start_asc,
+    tls_client,
+    wait_until,
+)
 
 from agent_speech_check.config.prompts import run_setup
 from agent_speech_check.config.targets import Target
@@ -346,13 +354,11 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
         assert gone, "the daemon waited on the silent peer"
 
 
-# Linux keeps the stand-ins, this process's children, as zombies until reaped, so asc
-# waits on them.
-@pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_commands_refuse_while_an_update_installs() -> None:
     installer = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
     check = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+    reap(check)
     try:
         updater.mark(updater.marker(), installer.pid)
         updater.mark(updater.checking(), check.pid)
@@ -362,7 +368,7 @@ def test_commands_refuse_while_an_update_installs() -> None:
         # The installer's own step to stop every daemon still runs, and ends
         # an update check that would otherwise outlive the install.
         assert run_asc("_stop_all").returncode == 0
-        assert check.poll() is not None
+        assert processes.image_path(check.pid) is None
         assert installer.poll() is None
     finally:
         for process in (installer, check):
