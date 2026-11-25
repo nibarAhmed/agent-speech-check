@@ -43,7 +43,7 @@ runs:
         $process = Start-Process msiexec -Wait -PassThru -ArgumentList '/i', "`"$dir\$msi`"", '/qn', '/norestart', '/l*', "`"$log`""
         # 3010: installed, and a reboot would finish replacing a file in use.
         if ($process.ExitCode -notin 0, 3010) {
-          Get-Content $log -Tail 40
+          if (Test-Path $log) { Get-Content $log -Tail 40 }
           throw "msiexec exit $($process.ExitCode)"
         }
         $bin = "$env:LOCALAPPDATA\Programs\agent-speech-check"

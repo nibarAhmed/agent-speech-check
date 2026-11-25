@@ -127,7 +127,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           asc start --mode desktop
           asc launch notepad.exe --title Notepad
-          asc press NVDA+T --expect "[0-9]"
+          asc press NVDA+T --expect Notepad
       - if: always()
         run: asc stop
 
