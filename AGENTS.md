@@ -3,8 +3,8 @@
 A Python CLI that lets agents use NVDA as a blind user does, by acting as an NVDA
 Remote Access client. Commands are in `docs/cli.md`; how it talks to NVDA, with the
 evidence, is in `docs/protocol.md`; how Windows, NVDA, Orca and ssh behaved around it is in
-`docs/findings.md`. Windows first: the code and its tests drive Windows APIs. On Linux, desktop
-and watch mode use Orca (`orca/`) instead of NVDA.
+`docs/findings.md`. Windows first for NVDA; on Linux, desktop and watch mode use Orca
+(`orca/`) instead. Development (`uv run poe check`) works on both Windows and Linux.
 
 ## Never
 
@@ -29,8 +29,8 @@ human's sign-off before breaking it.
 - `uv run poe fast` (the quick loop: everything but deps and the slow tests, all failures at once)
 - `uv run python scripts/e2e_linux.py` (e2e against a real Orca in a Linux container, with Docker)
 - `uv run pytest tests/unit/test_relay.py -k NAME` (one test). `tests/unit` is in-process,
-  `tests/integration` runs real `asc` and daemon processes against `tests/fake_nvda.py`, and
-  `tests/e2e` (marker `e2e`) needs a real NVDA or Orca.
+  `tests/integration` runs real `asc` and daemon processes (mostly against `tests/fake_nvda.py` on
+  Windows), and `tests/e2e` (marker `e2e`) needs a real NVDA or Orca.
 
 ## How it fits together
 
@@ -65,6 +65,9 @@ human's sign-off before breaking it.
   Sleeping is fine only when the sleep is the behavior under test, like a peer that hangs.
 - Never weaken, skip, delete, `xfail` or retry a test to get green, or raise its timeout. Fix a
   flaky test. If a test seems wrong, say why and ask.
+- A test that cannot run without one OS's APIs carries that OS's marker (`windows` or `linux`),
+  so it skips on the other OS; every other test runs on both. Mark a test only when the other OS
+  cannot run it, never to hide a failure.
 - No mocks of our own code. The one fake sits at the system boundary: `tests/fake_nvda.py`, which
   speaks the real protocol over real TLS. Change it only together with `docs/protocol.md`, citing
   evidence from real NVDA.

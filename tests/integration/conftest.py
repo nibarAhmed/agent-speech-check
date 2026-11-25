@@ -9,6 +9,8 @@ import os
 import socket
 import ssl
 import subprocess
+import sys
+import threading
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,6 +49,12 @@ def start_asc(*args: str) -> subprocess.Popen[str]:
         stderr=subprocess.PIPE,
         encoding="utf-8",
     )
+
+
+def reap(process: subprocess.Popen[bytes]) -> None:
+    """Collect `process` as soon as it ends: until then Linux keeps it as a zombie, which
+    asc sees as still running. Check it with `processes.image_path`, as `poll` now says None."""
+    threading.Thread(target=process.wait, daemon=True).start()
 
 
 def tls_client(port: int) -> ssl.SSLSocket:
@@ -151,13 +159,16 @@ class Env:
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     port = free_port()
     config = tmp_path / "agent-speech-check"
     config.mkdir()
     made = Env(tmp_path, port)
+    # Ports are where NVDA connects. Linux's watch mode joins Orca, which takes none.
+    ports = f"[watch]\nport = {port}\n[shared]\nport = {port}\n"
     made.config(
         f"[defaults]\npanic_key = '{worker_panic_key()}'\n"
-        f"[watch]\nport = {port}\n[shared]\nport = {port}\n"
+        + (ports if sys.platform == "win32" else "")
     )
     yield made
     # Never leave a daemon behind, in any instance, even when a test failed half way.

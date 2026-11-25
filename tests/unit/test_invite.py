@@ -3,10 +3,15 @@ against a real NVDA (tests/e2e), never here: it would reach the NVDA that runs."
 
 from __future__ import annotations
 
+import sys
 import uuid
-import winreg
+
+import pytest
 
 from agent_speech_check.nvda import invite
+
+if sys.platform == "win32":
+    import winreg
 
 
 def test_link_names_the_relay_the_key_and_the_controlled_side() -> None:
@@ -20,6 +25,7 @@ def test_link_escapes_a_key_that_would_break_the_query() -> None:
     )
 
 
+@pytest.mark.windows
 def test_registered_only_when_the_link_scheme_has_a_command() -> None:
     # Its own key, so the scheme NVDA registered on this machine is left alone.
     scheme = rf"Software\Classes\asc-test-{uuid.uuid4().hex}"

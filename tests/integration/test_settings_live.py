@@ -8,6 +8,9 @@ from tests.integration.conftest import Env, run_asc
 from agent_speech_check.config.prompts import run_setup
 from agent_speech_check.errors import AlreadyRunning
 
+# They drive asc's NVDA modes against fake NVDA.
+pytestmark = pytest.mark.windows
+
 
 def test_changes_while_running(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0

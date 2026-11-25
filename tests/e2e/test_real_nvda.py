@@ -13,7 +13,7 @@ import os
 import re
 import shutil
 import subprocess
-import winreg
+import sys
 from collections.abc import Iterator
 from ctypes import wintypes
 from pathlib import Path
@@ -28,8 +28,12 @@ from agent_speech_check.nvda.relay import fingerprint
 from agent_speech_check.system import paths, processes, winapi
 from agent_speech_check.system.wait import poll_until
 
+if sys.platform == "win32":
+    import winreg
+
 pytestmark = [
     pytest.mark.e2e,
+    pytest.mark.windows,
     pytest.mark.skipif("ASC_E2E_NVDA" not in os.environ, reason="needs ASC_E2E_NVDA"),
 ]
 

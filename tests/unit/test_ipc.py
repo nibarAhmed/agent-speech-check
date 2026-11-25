@@ -11,6 +11,7 @@ def test_the_daemon_handles_every_command_the_client_parses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     daemon = server.Daemon(defaults("watch"), tmp_path)
     assert daemon.handlers.keys() == ipc.COMMANDS.keys()
 

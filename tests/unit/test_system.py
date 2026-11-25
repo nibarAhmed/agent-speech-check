@@ -33,6 +33,7 @@ from agent_speech_check.nvda.nvda_config import RelayAddress
 from agent_speech_check.system import powershell, processes, wait, winapi
 
 
+@pytest.mark.windows
 def test_kill_on_close_job_kills_the_child() -> None:
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
@@ -73,6 +74,7 @@ def test_terminate_a_process_that_ended_but_is_still_held() -> None:
     processes.terminate(child.pid, 1)
 
 
+@pytest.mark.windows
 def test_process_lookups() -> None:
     me = processes.image_path(os.getpid())
     assert me is not None
@@ -89,6 +91,7 @@ def test_powershell_quote_and_encoded() -> None:
     assert base64.b64decode(powershell.encoded("hi")).decode("utf-16-le") == "hi"
 
 
+@pytest.mark.windows
 def test_mutex_is_exclusive(tmp_path: Path) -> None:
     name = winapi.mutex_name(tmp_path)
     first = winapi.take_mutex(name)
@@ -97,6 +100,7 @@ def test_mutex_is_exclusive(tmp_path: Path) -> None:
     winapi.close_handle(first)
 
 
+@pytest.mark.windows
 def test_nvda_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     assert launcher.folder_for(None) == launcher.managed_dir()
@@ -123,6 +127,7 @@ def test_starting_nvda_is_refused_while_one_runs(tmp_path: Path) -> None:
         launcher.launch(tmp_path, tmp_path / "cfg", RelayAddress("127.0.0.1", 1, "k", "f"), ())
 
 
+@pytest.mark.windows
 def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
     installer = tmp_path / "hangs.cmd"
     # Waits about 3 s, long past the timeout, and makes no portable copy.
@@ -136,6 +141,7 @@ def test_an_installer_that_hangs_is_ended_and_reported(tmp_path: Path) -> None:
     assert old.read_bytes() == b"the copy that works"
 
 
+@pytest.mark.windows
 def test_an_installer_that_is_not_a_program_fails(tmp_path: Path) -> None:
     installer = tmp_path / "nvda_2026.2.exe"
     installer.write_text("not a program", encoding="utf-8")
@@ -158,6 +164,7 @@ def test_an_installer_windows_refuses_to_open_is_not_called_damaged(tmp_path: Pa
 FAKE_INSTALLER = '@mkdir "%3" && type nul > "%3\\nvda.exe"\r\n'
 
 
+@pytest.mark.windows
 def test_a_new_portable_copy_replaces_the_old_one(tmp_path: Path) -> None:
     installer = tmp_path / "installer.cmd"
     installer.write_text(FAKE_INSTALLER, encoding="utf-8")
@@ -170,6 +177,7 @@ def test_a_new_portable_copy_replaces_the_old_one(tmp_path: Path) -> None:
     assert sorted(p.name for p in tmp_path.iterdir()) == ["installer.cmd", "portable"]
 
 
+@pytest.mark.windows
 def test_a_copy_left_mid_swap_is_put_back(tmp_path: Path) -> None:
     # A crash between the two renames leaves only portable.old.
     installer = tmp_path / "hangs.cmd"
@@ -182,6 +190,7 @@ def test_a_copy_left_mid_swap_is_put_back(tmp_path: Path) -> None:
     assert (tmp_path / "portable" / "nvda.exe").read_bytes() == b"the copy that works"
 
 
+@pytest.mark.windows
 def test_a_copy_in_use_is_not_replaced(tmp_path: Path) -> None:
     installer = tmp_path / "installer.cmd"
     installer.write_text(FAKE_INSTALLER, encoding="utf-8")
@@ -196,6 +205,7 @@ def test_a_copy_in_use_is_not_replaced(tmp_path: Path) -> None:
     assert (dest / "nvda.exe").read_bytes() == b"old"
 
 
+@pytest.mark.windows
 def test_a_leftover_copy_in_use_is_reported(tmp_path: Path) -> None:
     installer = tmp_path / "installer.cmd"
     installer.write_text(FAKE_INSTALLER, encoding="utf-8")
@@ -231,6 +241,7 @@ def test_start_failure_keeps_its_message_and_category() -> None:
 
 def test_download_reuses_an_installer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     installer = launcher.installer_path("2026.2")
     installer.parent.mkdir(parents=True)
     installer.write_bytes(b"already here")
@@ -247,6 +258,7 @@ def test_a_damaged_cached_installer_is_downloaded_again(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     damaged = launcher.installer_path("0.0-asc-no-such-version")
     damaged.parent.mkdir(parents=True)
     damaged.write_bytes(b"half a file")
@@ -256,6 +268,7 @@ def test_a_damaged_cached_installer_is_downloaded_again(
     assert not damaged.exists()
 
 
+@pytest.mark.windows
 def test_a_held_damaged_installer_is_not_a_failed_download(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -276,6 +289,7 @@ def test_a_new_installer_replaces_the_old_ones(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     new = launcher.installer_path("2026.2")
     new.parent.mkdir(parents=True)
     for path in (new, launcher.installer_path("2025.1"), new.parent / "notes.txt"):
@@ -285,6 +299,7 @@ def test_a_new_installer_replaces_the_old_ones(
     assert sorted(p.name for p in new.parent.iterdir()) == ["notes.txt", new.name, "portable"]
 
 
+@pytest.mark.windows
 def test_global_hotkey_fires_and_is_exclusive() -> None:
     pressed = threading.Event()
     f23 = 0x86  # a key no keyboard has, so the test never steals a real shortcut
@@ -307,6 +322,7 @@ def test_global_hotkey_fires_and_is_exclusive() -> None:
 def test_failed_download_is_a_clear_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # No such release: NV Access answers 404, or there is no network at all.
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     old = launcher.installer_path("2026.2")
     old.parent.mkdir(parents=True)
     old.write_bytes(b"")
@@ -354,6 +370,7 @@ def test_newer() -> None:
     assert not launcher.newer(release, None)
 
 
+@pytest.mark.windows
 def test_a_failed_lookup_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(launcher, "UPDATE_URL", NOWHERE)
     with pytest.raises(DownloadFailed, match="cannot download NVDA"):
@@ -363,12 +380,14 @@ def test_a_failed_lookup_is_a_clear_error(monkeypatch: pytest.MonkeyPatch) -> No
     assert launcher.update_for(kernel32) is None
 
 
+@pytest.mark.windows
 def test_no_update_for_a_file_without_a_version(tmp_path: Path) -> None:
     empty = tmp_path / "nvda.exe"
     empty.write_bytes(b"")
     assert launcher.update_for(empty) is None
 
 
+@pytest.mark.windows
 def test_offline_the_cached_installer_is_used(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -387,6 +406,7 @@ def test_offline_the_cached_installer_is_used(
     assert notes == [f"cannot get the latest NVDA, so using {cached.name}"]
 
 
+@pytest.mark.windows
 def test_offline_a_cached_installer_too_old_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -405,6 +425,7 @@ def test_cached_installer_is_the_highest_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     old, new = launcher.installer_path("2026.2"), launcher.installer_path("2026.10")
     old.parent.mkdir(parents=True)
     for path in (new, old, old.with_suffix(".part"), old.with_name("nvda_x.exe")):
@@ -470,6 +491,7 @@ def test_sha1_matches(tmp_path: Path) -> None:
     assert not launcher.sha1_matches(file, SHA1)
 
 
+@pytest.mark.windows
 def test_file_version(tmp_path: Path) -> None:
     kernel32 = Path(os.environ["SYSTEMROOT"]) / "System32" / "kernel32.dll"
     version = winapi.file_version(kernel32)

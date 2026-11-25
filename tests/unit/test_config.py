@@ -59,14 +59,17 @@ def test_save_checks_before_writing(tmp_path: Path) -> None:
     with pytest.raises(UsageError, match="settle_ms: expected a whole number from 50"):
         edit.save(path, {"defaults": {"settle_ms": 5}})
     assert not path.exists()
-    edit.save(path, EXAMPLE)
-    assert path.read_bytes() == EXAMPLE_TEXT.encode()
-    assert load(path).modes["desktop"].nvda_dir == "C:\\nvda"
+    # A full path on any OS, as C:\nvda is not on Linux.
+    nvda_dir = str(Path(__file__).parent)
+    data = {**EXAMPLE, "desktop": {**EXAMPLE["desktop"], "nvda_dir": nvda_dir}}
+    edit.save(path, data, "win32")
+    assert path.read_bytes() == edit.render(data).encode()
+    assert load(path, "win32").modes["desktop"].nvda_dir == nvda_dir
     assert not list(path.parent.glob("*.tmp"))
 
 
 def _config(data: dict[str, Any]) -> Config:
-    return Config.from_data(data, "config.toml")
+    return Config.from_data(data, "config.toml", "win32")
 
 
 def test_mode_setting_goes_to_the_mode_settings_table() -> None:
@@ -151,11 +154,13 @@ def test_unset() -> None:
 
 
 def test_entries_say_where_each_value_comes_from() -> None:
-    settings = _config(EXAMPLE)
+    # A full path on any OS, as C:\nvda is not on Linux.
+    nvda_dir = str(Path(__file__).parent)
+    settings = _config({**EXAMPLE, "desktop": {**EXAMPLE["desktop"], "nvda_dir": nvda_dir}})
     rows = {name: (value, source) for name, value, source in edit.entries(settings, None)}
     assert rows["mode"] == ("desktop", "global")
     assert rows["port"] == (0, "default")
-    assert rows["nvda_dir"] == ("C:\\nvda", "desktop")
+    assert rows["nvda_dir"] == (nvda_dir, "desktop")
     assert rows["nvda_settings"] == (["speech.symbolLevel=300"], "desktop")
     assert rows["settle_ms"] == (800, "global")
     assert rows["timeout_ms"] == (8000, "global")
@@ -205,7 +210,7 @@ def test_save_into_a_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
     (tmp_path / "asc").write_text("", encoding="utf-8")
     path = tmp_path / "asc" / "config.toml"
     with pytest.raises(FileUnusable) as exc:
-        edit.save(path, EXAMPLE)
+        edit.save(path, {"defaults": {"timeout_ms": 8000}})
     assert str(tmp_path / "asc") in exc.value.message
 
 

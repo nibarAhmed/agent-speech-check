@@ -284,12 +284,14 @@ def test_get_nvda_refuses_a_bad_version_before_anything(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # The version goes into the download URL and a file name.
+    monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     assert main(["get-nvda", "--version", version]) == 2
     assert "--version" in capsys.readouterr().err
     assert not any(tmp_path.iterdir())
 
 
+@pytest.mark.windows
 def test_printed_paths_are_real(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -335,6 +337,7 @@ def test_keys_in_remote_mode_reads_the_other_machine(
     match: str,
 ) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     monkeypatch.setenv("PATH", str(tmp_path / "empty"))
     config = tmp_path / "agent-speech-check" / "config.toml"
     config.parent.mkdir()

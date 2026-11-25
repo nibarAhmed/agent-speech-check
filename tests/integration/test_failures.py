@@ -14,6 +14,9 @@ import pytest
 from tests.fake_nvda import FakeNvda
 from tests.integration.conftest import Env, run_asc, start_asc, tls_client, wait_until
 
+# They drive asc's NVDA modes against fake NVDA.
+pytestmark = pytest.mark.windows
+
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:

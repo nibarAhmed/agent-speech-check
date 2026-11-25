@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
-from tests.integration.conftest import Env, free_port, run_asc, start_asc, wait_until
+from tests.integration.conftest import Env, free_port, reap, run_asc, start_asc, wait_until
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon import session
@@ -52,6 +52,7 @@ def _listening(port: int) -> bool:
     return True
 
 
+@pytest.mark.windows
 @pytest.mark.parametrize("command", [["_stop_all"], ["stop", "--all"]])
 def test_stop_all_stops_every_daemon(
     env: Env, monkeypatch: pytest.MonkeyPatch, command: list[str]
@@ -97,11 +98,17 @@ def test_stop_all_with_nothing_running_does_nothing() -> None:
 
 def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[bytes]]:
     """A process running its own copy of an exe, like another asc.exe still running."""
-    image = tmp_path / "stand-in.exe"
-    shutil.copy(Path(shutil.which("ping") or "ping.exe"), image)
-    process = subprocess.Popen(  # noqa: S603 - our copy of ping, fixed arguments
-        [str(image), "-n", str(seconds + 1), "127.0.0.1"], stdout=subprocess.DEVNULL
-    )
+    if sys.platform == "win32":
+        image = tmp_path / "stand-in.exe"
+        shutil.copy(Path(shutil.which("ping") or "ping.exe"), image)
+        command = [str(image), "-n", str(seconds + 1), "127.0.0.1"]
+    else:
+        # Keeps its name: coreutils may be one binary that picks its tool by name.
+        image = tmp_path / "sleep"
+        shutil.copy(Path(shutil.which("sleep") or "/bin/sleep"), image)
+        command = [str(image), str(seconds)]
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL)  # noqa: S603 - our copy
+    reap(process)
     return image, process
 
 
@@ -109,7 +116,7 @@ def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: 
     image, process = _stand_in(tmp_path, 2)
     try:
         assert list(session.stop_all([env.root / "agent-speech-check"], [image])) == []
-        assert process.poll() is not None
+        assert processes.image_path(process.pid) is None
     finally:
         process.kill()
 
@@ -120,6 +127,6 @@ def test_stop_all_names_processes_that_stay(env: Env, tmp_path: Path) -> None:
         with pytest.raises(OperationalError, match=rf"asc is still running \(pid {process.pid}\)"):
             list(session.stop_all([env.root / "agent-speech-check"], [image], timeout_s=0.5))
         # Only waited on: never ended.
-        assert process.poll() is None
+        assert processes.image_path(process.pid) is not None
     finally:
         process.kill()

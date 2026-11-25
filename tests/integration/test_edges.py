@@ -13,7 +13,15 @@ from collections.abc import Iterator
 
 import pytest
 from tests import fake_nvda as f
-from tests.integration.conftest import Env, free_port, run_asc, start_asc, tls_client, wait_until
+from tests.integration.conftest import (
+    Env,
+    free_port,
+    reap,
+    run_asc,
+    start_asc,
+    tls_client,
+    wait_until,
+)
 
 from agent_speech_check.config.prompts import run_setup
 from agent_speech_check.config.targets import Target
@@ -29,6 +37,7 @@ from agent_speech_check.system import processes
 from agent_speech_check.update import updater
 
 
+@pytest.mark.windows
 def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     with tls_client(env.port) as sock:
@@ -42,6 +51,7 @@ def test_wrong_channel_key_gets_error_and_close(env: Env) -> None:
     assert "last error: refused a join with the wrong channel key or role" in status
 
 
+@pytest.mark.windows
 def test_second_press_waits_then_gives_up(env: Env) -> None:
     assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     fake = env.fake("watch", {"Space": f.SILENCE})
@@ -134,6 +144,7 @@ def _ipc_port(env: Env) -> int:
     return port
 
 
+@pytest.mark.windows
 @pytest.mark.parametrize(
     "request_line",
     [
@@ -160,6 +171,7 @@ def test_corrupt_state_file_means_not_running(env: Env) -> None:
     assert not (folder / "state.json").exists()
 
 
+@pytest.mark.windows
 def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     """A live daemon that can't be talked to (here: a token it doesn't know, which it
     drops without a reply) is still running: nothing may forget it, and stop ends it."""
@@ -182,6 +194,7 @@ def test_daemon_that_does_not_answer_counts_as_running(env: Env) -> None:
     assert processes.image_path(current["pid"]) is None
 
 
+@pytest.mark.windows
 def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
     """A pid in a dead daemon's file may since belong to another program."""
     assert run_asc("start", "--mode", "watch").returncode == 0
@@ -196,6 +209,7 @@ def test_stop_leaves_a_process_newer_than_the_state_file(env: Env) -> None:
         processes.terminate(current["pid"], 10)
 
 
+@pytest.mark.windows
 def test_stop_clears_a_state_file_without_a_pid(env: Env) -> None:
     """A state file this asc can't read names no process to end: stop drops it."""
     folder = env.folder("watch")
@@ -216,6 +230,7 @@ def test_stop_ends_a_daemon_that_agrees_but_stays(env: Env) -> None:
     assert not (env.folder("watch") / "state.json").exists()
 
 
+@pytest.mark.windows
 @pytest.mark.parametrize("daemon_reply", [b""], indirect=True)
 @pytest.mark.usefixtures("daemon_reply")
 def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
@@ -229,6 +244,7 @@ def test_stop_says_when_it_cannot_end_a_daemon(env: Env) -> None:
     assert path.exists()
 
 
+@pytest.mark.windows
 def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> None:
     assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     # Then one only an older asc could have left next to it, in its own folder.
@@ -245,6 +261,7 @@ def test_stop_all_stops_the_rest_and_names_a_daemon_it_cannot_end(env: Env) -> N
     assert path.exists()
 
 
+@pytest.mark.windows
 def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     folder = env.folder("watch")
     folder.mkdir(parents=True)
@@ -255,6 +272,7 @@ def test_corrupt_relay_file_is_a_clear_error(env: Env) -> None:
     assert not (folder / "start_error.json").exists()
 
 
+@pytest.mark.windows
 def test_start_replaces_a_stale_state_file(env: Env) -> None:
     folder = env.folder("watch")
     folder.mkdir(parents=True)
@@ -266,6 +284,7 @@ def test_start_replaces_a_stale_state_file(env: Env) -> None:
     assert fresh["token"] != stale["token"]
 
 
+@pytest.mark.windows
 def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
     assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     fake = env.fake("watch", {"Tab": [f.speak("x")]})
@@ -278,6 +297,7 @@ def test_stop_with_nvda_connected_closes_its_connection(env: Env) -> None:
         fake.close()
 
 
+@pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_the_named_mutex_refuses_a_second_daemon() -> None:
     """One mutex for every mode: a daemon started some other way still can't run
@@ -306,6 +326,7 @@ def test_too_many_gestures_send_nothing() -> None:
     assert "gestures: expected 1 to 100 key names" in result.stderr
 
 
+@pytest.mark.windows
 def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
     """A peer that vanishes without closing must not hold up daemon shutdown
     while waiting for the TLS close to time out."""
@@ -337,6 +358,7 @@ def test_stop_does_not_wait_on_a_peer_that_went_silent(env: Env) -> None:
 def test_commands_refuse_while_an_update_installs() -> None:
     installer = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
     check = subprocess.Popen([sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+    reap(check)
     try:
         updater.mark(updater.marker(), installer.pid)
         updater.mark(updater.checking(), check.pid)
@@ -346,7 +368,7 @@ def test_commands_refuse_while_an_update_installs() -> None:
         # The installer's own step to stop every daemon still runs, and ends
         # an update check that would otherwise outlive the install.
         assert run_asc("_stop_all").returncode == 0
-        assert check.poll() is not None
+        assert processes.image_path(check.pid) is None
         assert installer.poll() is None
     finally:
         for process in (installer, check):

@@ -274,7 +274,8 @@ def test_no_ssh_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         orca.write_key(KEYS["tab"], pressed=True)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="select takes no pipes on Windows")
+# select takes no pipes on Windows.
+@pytest.mark.linux
 @pytest.mark.parametrize(("printed", "line"), [(b"12\nmore\n", "12"), (b"12", "12"), (b"", "")])
 def test_the_first_line_of_a_child_that_printed_or_exited(printed: bytes, line: str) -> None:
     read, write = os.pipe()
@@ -286,7 +287,8 @@ def test_the_first_line_of_a_child_that_printed_or_exited(printed: bytes, line: 
         os.close(read)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="select takes no pipes on Windows")
+# select takes no pipes on Windows.
+@pytest.mark.linux
 def test_a_child_that_never_prints_its_first_line_fails_setup() -> None:
     read, write = os.pipe()
     try:

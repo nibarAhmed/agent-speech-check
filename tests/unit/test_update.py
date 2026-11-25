@@ -11,6 +11,7 @@ import psutil
 import pytest
 from scripts.build_linux import write_tarball
 
+from agent_speech_check.errors import OperationalError
 from agent_speech_check.update import updater
 from agent_speech_check.update.updater import Release
 
@@ -143,6 +144,29 @@ def test_installing_only_while_that_process_lives() -> None:
     assert not updater.installing()
 
 
+# Windows' TerminateProcess can't be ignored, so only Linux has a check that won't end.
+@pytest.mark.linux
+@pytest.mark.usefixtures("state_home")
+def test_stop_check_names_a_check_that_will_not_end() -> None:
+    ignore = (
+        "import signal; signal.signal(signal.SIGTERM, signal.SIG_IGN); print(flush=True); input()"
+    )
+    child = subprocess.Popen(  # noqa: S603 - our own interpreter
+        [sys.executable, "-c", ignore], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+    )
+    try:
+        assert child.stdout is not None
+        child.stdout.readline()
+        updater.mark(updater.checking(), child.pid)
+        with pytest.raises(
+            OperationalError, match=rf"cannot end the update check \(pid {child.pid}\)"
+        ):
+            updater.stop_check(timeout_s=0.5)
+    finally:
+        child.kill()
+        child.wait()
+
+
 @pytest.mark.usefixtures("state_home")
 def test_download_keeps_only_an_msi_with_the_listed_sha256(tmp_path: Path) -> None:
     source = tmp_path / "served.msi"
@@ -167,7 +191,7 @@ def installed(root: Path, *versions: str) -> Path:
     return root / "versions" / versions[-1] / "asc"
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_install_root_is_where_the_tarball_was_unpacked(tmp_path: Path) -> None:
     exe = installed(tmp_path / "agent-speech-check", "0.4.0")
     assert updater.install_root(exe) == tmp_path / "agent-speech-check"
@@ -177,7 +201,7 @@ def test_install_root_is_where_the_tarball_was_unpacked(tmp_path: Path) -> None:
     assert updater.install_root(tmp_path / "other" / "versions" / "0.4.0" / "asc") is None
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_unpack_switches_current_and_keeps_only_what_may_run(tmp_path: Path) -> None:
     root = tmp_path / "agent-speech-check"
     exe = installed(root, "0.3.0", "0.4.0")

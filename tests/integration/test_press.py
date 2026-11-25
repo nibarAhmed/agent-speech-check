@@ -16,6 +16,9 @@ from tests.integration.conftest import Env, run_asc, start_asc, wait_until
 
 from agent_speech_check.daemon.speech_log import CAP
 
+# They drive asc's NVDA modes against fake NVDA.
+pytestmark = pytest.mark.windows
+
 
 @pytest.fixture
 def nvda(env: Env) -> Iterator[FakeNvda]:

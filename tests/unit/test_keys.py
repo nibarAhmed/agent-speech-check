@@ -113,16 +113,20 @@ def test_all_parsed_before_any_used() -> None:
     assert len(args.parsed) == 2
 
 
+# Text becomes keys through the Windows keyboard layout.
+@pytest.mark.windows
 def test_text_gestures_use_the_keyboard_layout() -> None:
     gestures = text_gestures("aB1")
     assert [str(g) for g in gestures] == ["a", "Shift+B", "1"]
     assert [g.key.vk for g in gestures] == [ord("A"), ord("B"), ord("1")]
 
 
+@pytest.mark.windows
 def test_text_gestures_newline_and_tab() -> None:
     assert [str(g) for g in text_gestures("a\tb\r\nc")] == ["a", "Tab", "b", "Enter", "c"]
 
 
+@pytest.mark.windows
 def test_untypable_characters_listed_once() -> None:
     emoji = chr(0x1F600)
     with pytest.raises(UsageError, match="cannot type these characters") as exc:

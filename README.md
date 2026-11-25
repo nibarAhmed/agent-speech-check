@@ -73,7 +73,7 @@ To update, run `claude plugin update agent-speech-check@agent-speech-check`, or 
 
 ## Development
 
-On Windows, with [`uv`](https://docs.astral.sh/uv/), in a clone:
+On Windows or Linux, with [`uv`](https://docs.astral.sh/uv/), in a clone:
 
 ```shell
 uv sync
@@ -81,8 +81,10 @@ uv run poe check     # everything: spelling, format, lint, types, dead code, dep
 uv run poe fast      # the quick loop: everything but deps and the slow tests
 ```
 
-- **End-to-end tests** run real NVDA on CI (`.github/workflows/e2e.yml`, on every PR or on demand via `workflow_dispatch`) and Orca in a Linux container locally (`uv run python scripts/e2e_linux.py`, with Docker). Never set `ASC_E2E_NVDA` on your own machine: those tests replace your running NVDA, and nothing starts it again.
-- **The installer:** `uv run python scripts/build_installer.py` builds the MSI into `dist/`. It needs the [.NET SDK](https://dotnet.microsoft.com/download). On Linux, `uv run python -m scripts.build_linux` builds the tarball.
+The commands are the same on Windows and Linux. Static checks cover both OSes on either one; tests that need the other OS's APIs skip, and CI runs them on every PR. To run those yourself first, run `uv run poe check` on the other OS: WSL or a Linux container from Windows, a Windows VM from Linux.
+
+- **End-to-end tests:** real-NVDA tests run in CI (`.github/workflows/e2e.yml`) on every PR. Never set `ASC_E2E_NVDA` on your own machine: those tests replace your running NVDA, and nothing starts it again. Real-Orca and ssh tests run locally in a Linux container on Windows or Linux (`uv run python scripts/e2e_linux.py`, needs Docker).
+- **The installer:** on Windows, `uv run python scripts/build_installer.py` builds the MSI into `dist/` (needs the [.NET SDK](https://dotnet.microsoft.com/download)). On Linux, `uv run python -m scripts.build_linux` builds the tarball.
 
 See [CONTRIBUTING.md](https://github.com/nibarAhmed/agent-speech-check/blob/main/CONTRIBUTING.md) for pull requests and the rules.
 
