@@ -21,6 +21,7 @@ from agent_speech_check.inputs.keys import parse_hotkey
 UNREACHABLE = "[remote]\nos = 'windows'\nssh = 'ssh://me@127.0.0.1:1'\n"
 
 
+@pytest.mark.windows
 def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
     assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
     # After that start, so its port is taken and free_port can't hand it out again.
@@ -71,6 +72,7 @@ def test_instances_run_side_by_side(env: Env, monkeypatch: pytest.MonkeyPatch) -
             vm1_daemon.wait(timeout=5)
 
 
+@pytest.mark.windows
 def test_each_mode_runs_in_its_kind_of_instance(env: Env) -> None:
     result = run_asc("start", "--mode", "shared", "--i-understand", "--instance", "vm1")
     assert result.returncode == 2

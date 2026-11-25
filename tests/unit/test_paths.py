@@ -59,6 +59,7 @@ def test_shared_mode_uses_watch_modes_relay_files() -> None:
 @pytest.mark.parametrize("name", ["vm1", "a", "agent-2", "x" * 32])
 def test_instance_names(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     monkeypatch.setenv(paths.INSTANCE_VAR, name)
     assert paths.state_root() == tmp_path / "agent-speech-check" / "instances" / name
     # The NVDA asc downloads is shared by every instance.

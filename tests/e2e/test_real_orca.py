@@ -21,6 +21,7 @@ from tests.integration.conftest import asc_command, run_asc, wait_until
 
 pytestmark = [
     pytest.mark.e2e,
+    pytest.mark.linux,
     pytest.mark.skipif("ASC_E2E_ORCA" not in os.environ, reason="needs ASC_E2E_ORCA"),
 ]
 

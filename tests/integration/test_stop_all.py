@@ -52,6 +52,7 @@ def _listening(port: int) -> bool:
     return True
 
 
+@pytest.mark.windows
 @pytest.mark.parametrize("command", [["_stop_all"], ["stop", "--all"]])
 def test_stop_all_stops_every_daemon(
     env: Env, monkeypatch: pytest.MonkeyPatch, command: list[str]
@@ -105,6 +106,7 @@ def _stand_in(tmp_path: Path, seconds: int) -> tuple[Path, subprocess.Popen[byte
     return image, process
 
 
+@pytest.mark.windows
 def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 2)
     try:
@@ -114,6 +116,7 @@ def test_stop_all_waits_for_other_processes_of_the_same_exe(env: Env, tmp_path: 
         process.kill()
 
 
+@pytest.mark.windows
 def test_stop_all_names_processes_that_stay(env: Env, tmp_path: Path) -> None:
     image, process = _stand_in(tmp_path, 60)
     try:

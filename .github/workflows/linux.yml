@@ -32,7 +32,8 @@ jobs:
           enable-cache: false
       - name: Install
         run: uv sync --locked
-      # By path: the rest drive Windows. The Orca tests run in e2e.yml.
+      # By path: the install's own, on the glibc the tarball is built for. ci.yml runs the
+      # rest on Linux, and e2e.yml the Orca tests.
       - name: The updater's Linux tests
         run: uv run pytest tests/unit/test_update.py tests/unit/test_uninstall.py tests/unit/test_build_installer.py -v -p no:cacheprovider
       - name: Build the tarball

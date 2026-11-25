@@ -19,6 +19,7 @@ FIXTURE = Path(__file__).parents[1] / "fixtures" / "keyCommands.html"
 @pytest.fixture
 def root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     return tmp_path / "agent-speech-check"
 
 
@@ -89,8 +90,8 @@ def test_to_data_keeps_only_choices() -> None:
 
 def test_setup_watch(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     ask = Asker("", "laptop", "")
-    assert run_setup(ask, replace_without_asking=False) == 0
-    settings = load(root / "config.toml")
+    assert run_setup(ask, replace_without_asking=False, platform="win32") == 0
+    settings = load(root / "config.toml", platform="win32")
     assert settings.resolve(None).mode == "watch"
     assert settings.value("keys_layout")[0] == "laptop"
     out = capsys.readouterr().out
@@ -106,8 +107,8 @@ def test_setup_desktop_with_own_nvda(root: Path, tmp_path: Path) -> None:
     own.mkdir()
     (own / "nvda.exe").write_bytes(b"")
     ask = Asker("desktop", "2", str(tmp_path / "nope"), str(tmp_path), str(own), "y")
-    run_setup(ask, replace_without_asking=False)
-    target = load(root / "config.toml").resolve(None)
+    run_setup(ask, replace_without_asking=False, platform="win32")
+    target = load(root / "config.toml", platform="win32").resolve(None)
     assert target.nvda_dir == str(own)
     assert target.settings == ()
 
@@ -115,21 +116,21 @@ def test_setup_desktop_with_own_nvda(root: Path, tmp_path: Path) -> None:
 def test_setup_desktop_declines_the_download(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
+    run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False, platform="win32")
     out = capsys.readouterr().out
     assert "Run asc get-nvda later." in out
     assert "  NVDA:  asc\n" in out
     assert "While it runs, Control+Shift+Alt+F12 stops asc and releases keys." in out
-    assert load(root / "config.toml").resolve(None).launches_nvda
+    assert load(root / "config.toml", platform="win32").resolve(None).launches_nvda
 
 
 def test_setup_shared_explains_consent(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    run_setup(Asker("shared", "huh", "", "y"), replace_without_asking=False)
+    run_setup(Asker("shared", "huh", "", "y"), replace_without_asking=False, platform="win32")
     out = capsys.readouterr().out
     assert "Answer 1 to 2, or a name." in out
     # The warning comes with the choice of mode, before the next question.
     assert out.index("--i-understand at every asc start") < out.index("keyboard layout")
-    assert load(root / "config.toml").resolve(None).mode == "shared"
+    assert load(root / "config.toml", platform="win32").resolve(None).mode == "shared"
 
 
 def test_setup_remote_asks_where_ssh_goes(
@@ -139,23 +140,26 @@ def test_setup_remote_asks_where_ssh_goes(
     # Mode (an instance can't join your own NVDA, so remote is the default), Windows,
     # an ssh option refused, the destination, keyboard layout, save.
     ask = Asker("watch", "", "", "-oProxyCommand=x", "me@vm", "", "y")
-    run_setup(ask, replace_without_asking=False)
+    run_setup(ask, replace_without_asking=False, platform="win32")
     out = capsys.readouterr().out
     assert "Answer 1 to 2, or a name." in out
     assert "an ssh destination, like me@vm" in out
     assert "  Other machine runs:  windows\n  Reached with ssh:    me@vm\n" in out
-    target = load(root / "instances" / "vm2" / "config.toml").resolve(None)
+    target = load(root / "instances" / "vm2" / "config.toml", platform="win32").resolve(None)
     assert (target.os, target.ssh, target.tunnel) == ("windows", "me@vm", True)
     # Orca reads there, so no NVDA keyboard layout is asked.
-    run_setup(Asker("", "linux", "me@vm", "y"), replace_without_asking=True)
+    run_setup(Asker("", "linux", "me@vm", "y"), replace_without_asking=True, platform="win32")
     assert "keyboard layout" not in capsys.readouterr().out
-    assert load(root / "instances" / "vm2" / "config.toml").resolve(None).os == "linux"
+    assert (
+        load(root / "instances" / "vm2" / "config.toml", platform="win32").resolve(None).os
+        == "linux"
+    )
 
 
 def test_setup_remote_in_the_default_instance_keeps_only_the_mode(
     root: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run_setup(Asker("remote", "y"), replace_without_asking=False)
+    run_setup(Asker("remote", "y"), replace_without_asking=False, platform="win32")
     out = capsys.readouterr().out
     assert "Remote mode runs only in a named instance, one per VM:" in out
     assert "asc setup --instance VMNAME" in out
@@ -220,28 +224,28 @@ def test_confirm_orca_restart() -> None:
 
 
 def test_setup_again_asks_before_replacing(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False)
+    run_setup(Asker("2", "", "n", "", "y"), replace_without_asking=False, platform="win32")
     before = (root / "config.toml").read_text(encoding="utf-8")
     capsys.readouterr()
     ask = Asker("")
-    assert run_setup(ask, replace_without_asking=False) == 0
+    assert run_setup(ask, replace_without_asking=False, platform="win32") == 0
     assert ask.prompts[0].endswith("Continue? y or n, default n: ")
     assert capsys.readouterr().out == "asc setup\nNothing changed.\n"
     assert (root / "config.toml").read_text(encoding="utf-8") == before
-    run_setup(Asker("y", "", "", "y"), replace_without_asking=False)
-    assert load(root / "config.toml").resolve(None).mode == "watch"
+    run_setup(Asker("y", "", "", "y"), replace_without_asking=False, platform="win32")
+    assert load(root / "config.toml", platform="win32").resolve(None).mode == "watch"
 
 
 def test_setup_replaces_a_broken_file(root: Path) -> None:
     """The way out of a file asc can't load: setup never reads it."""
     root.mkdir()
     (root / "config.toml").write_text("[watch\n", encoding="utf-8")
-    assert run_setup(Asker("y", "", "", "y"), replace_without_asking=False) == 0
-    assert load(root / "config.toml").resolve(None).mode == "watch"
+    assert run_setup(Asker("y", "", "", "y"), replace_without_asking=False, platform="win32") == 0
+    assert load(root / "config.toml", platform="win32").resolve(None).mode == "watch"
 
 
 def test_setup_not_saved(root: Path) -> None:
-    run_setup(Asker("", "", "n"), replace_without_asking=True)
+    run_setup(Asker("", "", "n"), replace_without_asking=True, platform="win32")
     assert not (root / "config.toml").exists()
 
 
@@ -261,6 +265,8 @@ def run(capsys: pytest.CaptureFixture[str], *args: str) -> tuple[int, str, str]:
     return code, captured.out, captured.err
 
 
+# Desktop mode's port and nvda_dir are NVDA's, so Windows only.
+@pytest.mark.windows
 def test_config_set_get_list_unset(
     root: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -284,7 +290,7 @@ def test_config_set_get_list_unset(
     assert run(capsys, "config", "unset", "settle_ms")[1] == "settle_ms unset (global)\n"
     assert run(capsys, "config", "get", "settle_ms")[1] == "400\n"
     assert run(capsys, "config", "path")[1] == f"{root / 'config.toml'}\n"
-    assert load(root / "config.toml").resolve("shared").port == 7000
+    assert load(root / "config.toml", platform="win32").resolve("shared").port == 7000
     # As the hints write it: --instance after the action, too.
     monkeypatch.delenv("ASC_INSTANCE", raising=False)
     assert (
@@ -314,6 +320,7 @@ def test_config_errors(root: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert not (root / "config.toml").exists()
 
 
+@pytest.mark.windows
 @pytest.mark.usefixtures("root")
 def test_settings_fill_in_left_out_flags(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]

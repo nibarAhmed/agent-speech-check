@@ -151,6 +151,7 @@ class Env:
 @pytest.fixture
 def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Env]:
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     port = free_port()
     config = tmp_path / "agent-speech-check"
     config.mkdir()

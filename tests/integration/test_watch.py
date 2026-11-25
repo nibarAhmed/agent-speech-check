@@ -13,6 +13,7 @@ from agent_speech_check.inputs.keys import parse_hotkey
 from agent_speech_check.system import winapi
 
 
+@pytest.mark.windows
 def test_watch_session(env: Env) -> None:
     started = run_asc("start", "--mode", "watch")
     assert started.returncode == 0, started.stderr
@@ -78,6 +79,7 @@ def test_watch_session(env: Env) -> None:
     assert "not recording" in gone.stderr
 
 
+@pytest.mark.windows
 def test_speech_too_big_for_one_reply_keeps_the_newest(env: Env) -> None:
     # 70 lines of about 1 MB (NVDA's message limit) are more than one 64 MB reply.
     assert run_asc("start", "--mode", "watch").returncode == 0
@@ -105,6 +107,7 @@ def test_speech_too_big_for_one_reply_keeps_the_newest(env: Env) -> None:
 SAMPLE = f"Caf{chr(0xE9)} {chr(0x2019)}q{chr(0x2019)} {chr(0x2026)} {chr(0x4E2D)} {chr(0x1F600)}"
 
 
+@pytest.mark.windows
 def test_any_unicode_speech_prints_as_utf8(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     fake = env.fake("watch")
@@ -117,6 +120,7 @@ def test_any_unicode_speech_prints_as_utf8(env: Env) -> None:
         fake.close()
 
 
+@pytest.mark.windows
 def test_cert_and_key_stay_the_same(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     folder = env.folder("watch")
@@ -126,6 +130,7 @@ def test_cert_and_key_stay_the_same(env: Env) -> None:
     assert ((folder / "relay_cert.pem").read_bytes(), (folder / "relay.json").read_text()) == first
 
 
+@pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_second_start_is_refused() -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
@@ -147,6 +152,7 @@ def test_stale_state_file_is_removed(env: Env) -> None:
     assert not (folder / "state.json").exists()
 
 
+@pytest.mark.windows
 def test_start_refuses_a_relay_port_in_use(env: Env) -> None:
     with socket.create_server(("127.0.0.1", env.port)):
         failed = run_asc("start", "--mode", "watch")
@@ -156,6 +162,7 @@ def test_start_refuses_a_relay_port_in_use(env: Env) -> None:
     assert not (env.folder("watch") / "start_error.json").exists()
 
 
+@pytest.mark.windows
 def test_one_daemon_at_a_time(env: Env) -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
     second = run_asc("start", "--mode", "shared", "--i-understand")
@@ -180,6 +187,7 @@ def test_commands_find_the_daemon_without_a_mode() -> None:
     assert "unrecognized arguments: --mode" in named.stderr
 
 
+@pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_shared_mode_needs_consent() -> None:
     result = run_asc("start", "--mode", "shared")
@@ -188,6 +196,7 @@ def test_shared_mode_needs_consent() -> None:
     assert "--i-understand" in result.stderr
 
 
+@pytest.mark.windows
 @pytest.mark.xdist_group("desktop")
 @pytest.mark.usefixtures("env")
 def test_shared_mode_with_the_panic_key_taken_fails(env: Env) -> None:

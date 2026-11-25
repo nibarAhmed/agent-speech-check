@@ -8,6 +8,9 @@ from agent_speech_check.errors import FileUnusable, UsageError
 from agent_speech_check.inputs.keys import PANIC_KEY, parse_hotkey
 from agent_speech_check.nvda.nvda_config import Setting
 
+# A full path on any OS, as C:/nvda is not on Linux.
+FULL_PATH = str(Path(__file__).parent)
+
 
 def resolve(path: Path, mode: str | None, platform: str = "win32") -> Target:
     return load(path, platform).resolve(mode)
@@ -33,13 +36,13 @@ def test_desktop_mode_on_linux_starts_orca() -> None:
     watch = defaults("watch", platform="linux")
     assert watch == Target("watch", 0, os="linux", restart_orca="ask")
     assert Target.from_json(watch.with_restart_orca("always").to_json()).restart_orca == "always"
-    assert defaults("desktop").reader == "nvda"
+    assert defaults("desktop", platform="win32").reader == "nvda"
     assert Target.from_json(desktop.to_json()) == desktop
 
 
 def test_panic_key_wherever_keys_reach_this_desktop() -> None:
-    assert defaults("shared").takes_panic_key
-    assert defaults("desktop").takes_panic_key
+    assert defaults("shared", platform="win32").takes_panic_key
+    assert defaults("desktop", platform="win32").takes_panic_key
     # Remote keys go to the other machine and watch sends none.
     assert not defaults("remote").takes_panic_key
     # Orca's keys go to a private X display, never this desktop.
@@ -53,7 +56,7 @@ def test_mode_setting_and_its_table(tmp_path: Path) -> None:
     assert target == Target("desktop", 16837, os="windows")
     assert resolve(path, "desktop") == target
     # Another mode, from --mode: its own table, or its defaults.
-    assert resolve(path, "shared") == defaults("shared")
+    assert resolve(path, "shared") == defaults("shared", platform="win32")
 
 
 @pytest.mark.parametrize(
@@ -95,7 +98,7 @@ def test_bad_files(tmp_path: Path, text: str, message: str) -> None:
     ("text", "message"),
     [
         ("port = 7000\n", r"\[desktop\] port: expected only where NVDA connects"),
-        ("nvda_dir = 'C:/nvda'\n", "nvda_dir: expected only for an NVDA that asc launches"),
+        (f"nvda_dir = '{FULL_PATH}'\n", "nvda_dir: expected only for an NVDA that asc launches"),
         ("nvda_settings = ['speech.symbolLevel=1']\n", "nvda_settings: expected only for an NVDA"),
     ],
 )
@@ -139,7 +142,9 @@ def test_toml_syntax_error(tmp_path: Path) -> None:
 
 def test_json_round_trip() -> None:
     settings = (Setting.parse("speech.symbolLevel=300"), Setting.parse("presentation.x=a, b"))
-    target = replace(defaults("desktop"), nvda_dir="C:/nvda").with_settings(settings)
+    target = replace(defaults("desktop", platform="win32"), nvda_dir="C:/nvda").with_settings(
+        settings
+    )
     assert Target.from_json(target.to_json()) == target
     with pytest.raises(UsageError, match="daemon target: expected JSON"):
         Target.from_json("{")
@@ -197,7 +202,7 @@ def test_remote_mode_needs_its_machine(ssh: str | None, os: str | None, missing:
     ["[watch]", "[shared]", "[remote]"],
 )
 def test_nvda_dir_only_for_a_launched_nvda(tmp_path: Path, table: str) -> None:
-    path = write(tmp_path, f"{table}\nnvda_dir = 'C:/nvda'\n")
+    path = write(tmp_path, f"{table}\nnvda_dir = '{FULL_PATH}'\n")
     with pytest.raises(UsageError, match="only for an NVDA that asc launches"):
         resolve(path, None)
 

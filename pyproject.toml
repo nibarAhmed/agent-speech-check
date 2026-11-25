@@ -77,7 +77,8 @@ dev = [
 spell = "codespell"
 fmt-check = "ruff format --check ."
 lint = "ruff check ."
-types = "mypy"
+# As Windows sees it, from any OS.
+types = "mypy --platform win32"
 # What `types` checks, as Linux sees it (mypy skips the other platform's sys.platform branches),
 # but the tests that drive Windows APIs: they run only there.
 types-linux = "mypy --platform linux --exclude 'tests/(unit/test_(invite|system)|e2e/test_real_nvda)[.]py$'"
@@ -168,7 +169,11 @@ known_first_party = ["agent_speech_check"]
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
 pythonpath = ["."]
-markers = ["e2e: needs a real NVDA or Orca (Linux container or the e2e CI workflow)"]
+markers = [
+    "e2e: needs a real NVDA or Orca (Linux container or the e2e CI workflow)",
+    "windows: needs Windows, so it is skipped elsewhere",
+    "linux: needs Linux, so it is skipped elsewhere",
+]
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 

@@ -89,7 +89,7 @@ def test_confirm_uninstall_prompts_and_handles_answers(tmp_path: Path) -> None:
     assert len(asked) == 1
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_find_links_finds_install_symlinks_and_ignores_unrelated(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -116,7 +116,7 @@ def test_find_links_finds_install_symlinks_and_ignores_unrelated(
     assert uninstall.find_links(root, str(root / "current"), default_link) == (default_link,)
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_plan_resolves_links_and_orca_secret(tmp_path: Path) -> None:
     root, exe, default_link = _make_install(tmp_path)
     state = tmp_path / "state" / "agent-speech-check"
@@ -144,7 +144,7 @@ def test_plan_resolves_links_and_orca_secret(tmp_path: Path) -> None:
         uninstall.plan(other, argv0="asc", state=state, default_link=default_link)
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_remove_files_when_the_state_is_the_install_folder(tmp_path: Path) -> None:
     root, exe, link = _make_install(tmp_path)
     same_state = uninstall.plan(exe, argv0=str(link), state=root, default_link=link)
@@ -152,7 +152,7 @@ def test_remove_files_when_the_state_is_the_install_folder(tmp_path: Path) -> No
     assert not root.exists()
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_cmd_uninstall_requires_terminal_without_yes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -171,7 +171,7 @@ def test_cmd_uninstall_requires_terminal_without_yes(
     assert link.is_symlink()
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_cmd_uninstall_stops_daemons_removes_files_and_warns_about_orca_secret(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -225,7 +225,7 @@ def test_cmd_uninstall_stops_daemons_removes_files_and_warns_about_orca_secret(
     assert not state.exists()
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_cmd_uninstall_keep_data_preserves_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

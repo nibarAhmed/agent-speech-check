@@ -32,6 +32,7 @@ def nvda(env: Env) -> Iterator[FakeNvda]:
     fake.close()
 
 
+@pytest.mark.windows
 def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
     nvda.replies["Shift+H"] = f.SILENCE
     nvda.replies["I"] = [f.speak("i")]
@@ -48,6 +49,7 @@ def test_type_checks_every_character_then_types(nvda: FakeNvda) -> None:
     assert nvda.gestures == ["Shift+H", "I"]
 
 
+@pytest.mark.windows
 @pytest.mark.usefixtures("env")
 def test_type_refused_in_watch_mode() -> None:
     assert run_asc("start", "--mode", "watch").returncode == 0
@@ -55,6 +57,7 @@ def test_type_refused_in_watch_mode() -> None:
     assert refused.returncode == 3
 
 
+@pytest.mark.windows
 @pytest.mark.xdist_group("desktop")
 def test_launch_waits_for_the_title(
     env: Env, nvda: FakeNvda, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -76,6 +79,7 @@ def test_launch_waits_for_the_title(
     assert (work / "ran.txt").read_text(encoding="utf-8") == "ok"
 
 
+@pytest.mark.windows
 @pytest.mark.xdist_group("desktop")
 def test_launch_errors(nvda: FakeNvda) -> None:
     missing = run_asc("launch", "no-such-program-asc.exe")
@@ -101,6 +105,7 @@ def test_launch_errors(nvda: FakeNvda) -> None:
     assert nvda.held == set()
 
 
+@pytest.mark.windows
 def test_keys_in_desktop_mode_reads_the_portable_copy(env: Env, tmp_path: Path) -> None:
     portable = tmp_path / "portable"
     docs = portable / "documentation" / "en"
@@ -139,6 +144,7 @@ def test_desktop_and_get_nvda_refuse_while_nvda_runs(env: Env, tmp_path: Path) -
     assert fetched.returncode == 3
 
 
+@pytest.mark.windows
 def test_desktop_without_portable_nvda(env: Env, tmp_path: Path) -> None:
     env.config("")
     result = run_asc("start", "--mode", "desktop")
@@ -148,6 +154,7 @@ def test_desktop_without_portable_nvda(env: Env, tmp_path: Path) -> None:
     assert str(tmp_path) in result.stderr
 
 
+@pytest.mark.windows
 def test_settings_are_checked_together_before_anything_starts(env: Env) -> None:
     env.config("")
     result = run_asc("start", "--mode", "desktop", "--nvda-setting", "speech.synth.rate=1")
@@ -155,6 +162,7 @@ def test_settings_are_checked_together_before_anything_starts(env: Env) -> None:
     assert "synth is a key, not a section" in result.stderr
 
 
+@pytest.mark.windows
 def test_start_nvda_dir(env: Env, tmp_path: Path) -> None:
     missing = tmp_path / "none"
     broken = tmp_path / "broken"

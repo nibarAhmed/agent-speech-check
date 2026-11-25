@@ -169,7 +169,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/tarball/agent-speech-check-linux-$MACHINE.tar.gz" -C "$RUNNER_TEMP"
           rm "$RUNNER_TEMP/agent-speech-check/current"
           echo "ASC_E2E_EXE=$(echo "$RUNNER_TEMP"/agent-speech-check/versions/*/asc)" >> "$GITHUB_ENV"
-      # By path: the other e2e and unit tests drive Windows.
+      # By path: the ones that need Orca or ssh. ci.yml runs the rest on Linux.
       - name: Orca and ssh tests
         timeout-minutes: 10
         env:

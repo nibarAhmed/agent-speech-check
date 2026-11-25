@@ -54,6 +54,8 @@ def test_path_with_a_quote_and_a_long_list_read_back() -> None:
     assert parse(text, "x") == data
 
 
+# EXAMPLE's C:\nvda is a full path only on Windows.
+@pytest.mark.windows
 def test_save_checks_before_writing(tmp_path: Path) -> None:
     path = tmp_path / "sub" / "config.toml"
     with pytest.raises(UsageError, match="settle_ms: expected a whole number from 50"):
@@ -66,7 +68,7 @@ def test_save_checks_before_writing(tmp_path: Path) -> None:
 
 
 def _config(data: dict[str, Any]) -> Config:
-    return Config.from_data(data, "config.toml")
+    return Config.from_data(data, "config.toml", "win32")
 
 
 def test_mode_setting_goes_to_the_mode_settings_table() -> None:
@@ -150,6 +152,8 @@ def test_unset() -> None:
     assert edit.unset_value(_config(data), prefs.find("mode"), None) == {}
 
 
+# EXAMPLE's C:\nvda is a full path only on Windows.
+@pytest.mark.windows
 def test_entries_say_where_each_value_comes_from() -> None:
     settings = _config(EXAMPLE)
     rows = {name: (value, source) for name, value, source in edit.entries(settings, None)}
@@ -205,7 +209,7 @@ def test_save_into_a_folder_that_cannot_be_made_fails(tmp_path: Path) -> None:
     (tmp_path / "asc").write_text("", encoding="utf-8")
     path = tmp_path / "asc" / "config.toml"
     with pytest.raises(FileUnusable) as exc:
-        edit.save(path, EXAMPLE)
+        edit.save(path, {"defaults": {"timeout_ms": 8000}})
     assert str(tmp_path / "asc") in exc.value.message
 
 

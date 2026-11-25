@@ -167,7 +167,7 @@ def installed(root: Path, *versions: str) -> Path:
     return root / "versions" / versions[-1] / "asc"
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_install_root_is_where_the_tarball_was_unpacked(tmp_path: Path) -> None:
     exe = installed(tmp_path / "agent-speech-check", "0.4.0")
     assert updater.install_root(exe) == tmp_path / "agent-speech-check"
@@ -177,7 +177,7 @@ def test_install_root_is_where_the_tarball_was_unpacked(tmp_path: Path) -> None:
     assert updater.install_root(tmp_path / "other" / "versions" / "0.4.0" / "asc") is None
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="the Linux install's layout")
+@pytest.mark.linux
 def test_unpack_switches_current_and_keeps_only_what_may_run(tmp_path: Path) -> None:
     root = tmp_path / "agent-speech-check"
     exe = installed(root, "0.3.0", "0.4.0")
