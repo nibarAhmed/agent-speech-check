@@ -11,6 +11,7 @@ import psutil
 import pytest
 from scripts.build_linux import write_tarball
 
+from agent_speech_check.errors import OperationalError
 from agent_speech_check.update import updater
 from agent_speech_check.update.updater import Release
 
@@ -141,6 +142,29 @@ def test_installing_only_while_that_process_lives() -> None:
     assert not updater.installing()
     updater.marker().write_text("not json", encoding="utf-8")
     assert not updater.installing()
+
+
+# Windows' TerminateProcess can't be ignored, so only Linux has a check that won't end.
+@pytest.mark.linux
+@pytest.mark.usefixtures("state_home")
+def test_stop_check_names_a_check_that_will_not_end() -> None:
+    ignore = (
+        "import signal; signal.signal(signal.SIGTERM, signal.SIG_IGN); print(flush=True); input()"
+    )
+    child = subprocess.Popen(  # noqa: S603 - our own interpreter
+        [sys.executable, "-c", ignore], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+    )
+    try:
+        assert child.stdout is not None
+        child.stdout.readline()
+        updater.mark(updater.checking(), child.pid)
+        with pytest.raises(
+            OperationalError, match=rf"cannot end the update check \(pid {child.pid}\)"
+        ):
+            updater.stop_check(timeout_s=0.5)
+    finally:
+        child.kill()
+        child.wait()
 
 
 @pytest.mark.usefixtures("state_home")

@@ -31,7 +31,7 @@ from pathlib import Path
 from agent_speech_check import __version__
 from agent_speech_check.config.targets import load
 from agent_speech_check.daemon import state
-from agent_speech_check.errors import AscError
+from agent_speech_check.errors import AscError, OperationalError
 from agent_speech_check.system import processes, spawn, tls
 from agent_speech_check.system.paths import base_root, every_root, write_atomic
 from agent_speech_check.system.wait import poll_until
@@ -225,11 +225,18 @@ def installing() -> bool:
     return _marked(marker()) is not None
 
 
-def stop_check() -> None:
+def stop_check(timeout_s: float = processes.KILL_WAIT_S) -> None:
     """For the installer: end an update check, which may otherwise run for minutes."""
     pid = _marked(checking())
-    if pid is not None:
-        processes.terminate(pid, processes.KILL_WAIT_S)
+    if pid is None:
+        return
+    try:
+        processes.terminate(pid, timeout_s)
+    except OSError:
+        how = "in Task Manager" if sys.platform == "win32" else "with kill"
+        raise OperationalError(
+            f"cannot end the update check (pid {pid})", hint=f"end it {how}, then try again"
+        ) from None
 
 
 def _running() -> bool:
