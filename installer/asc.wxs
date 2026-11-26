@@ -37,9 +37,7 @@
     <Property Id="ARPNOMODIFY" Value="1" />
     <!-- Control Panel and Settings uninstall an MSI's own entry with basic UI, which shows
          none of the wizard, so the keep-data choice would never appear. Hide that entry and
-         register our own (UninstallEntry) that opens the wizard. winget skips hidden entries
-         too, so a winget manifest must name ours in AppsAndFeaturesEntries, with
-         ProductCode: agent-speech-check. -->
+         register our own (UninstallEntry) that opens the wizard. -->
     <Property Id="ARPSYSTEMCOMPONENT" Value="1" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT"
               Value="Open a new terminal, then run asc setup. Terminals that were already open don't see the new PATH." />
@@ -146,7 +144,7 @@
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
       <!-- The Control Panel and Settings entry, in place of the hidden one. Uninstall runs
-           the wizard in maintenance mode; winget and other silent tools run
+           the wizard in maintenance mode; silent tools run
            QuietUninstallString, which removes the state unless they add KEEPDATA=1. -->
       <Component Id="UninstallEntry" Directory="INSTALLFOLDER">
         <RegistryKey Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\agent-speech-check">

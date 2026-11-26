@@ -43,7 +43,7 @@ The rules for code, tests and docs are in [AGENTS.md](AGENTS.md). They apply to 
 
 Maintainers release by pushing a tag. `.github/workflows/release.yml` then builds the MSI and the
 Linux tarballs for x86 and Arm (on glibc 2.28, so they run on that and newer) and attaches them
-along with `installer/install.sh` and `SHA256SUMS` to a GitHub Release. The winget manifests it writes stay on the workflow run. After publishing, the `try` job installs the new release through `action.yml` on Windows and Linux (`try-action.yml`, which also runs on PRs that change the action); a failure there means users cannot set it up. An installed `asc` updates itself from that release and the README links to the Linux installer directly,
+along with `installer/install.sh` and `SHA256SUMS` to a GitHub Release. After publishing, the `try` job installs the new release through `action.yml` on Windows and Linux (`try-action.yml`, which also runs on PRs that change the action); a failure there means users cannot set it up. An installed `asc` updates itself from that release and the README links to the Linux installer directly,
 so its assets keep their names: `agent-speech-check-VERSION.msi`,
 `agent-speech-check-linux-MACHINE.tar.gz` (where MACHINE is `x86_64` or `aarch64`),
 `install.sh`, and `SHA256SUMS`.
@@ -55,17 +55,6 @@ so its assets keep their names: `agent-speech-check-VERSION.msi`,
 2. Once it's merged, tag that commit on `main` and push the tag:
    `git tag -a v1.2.3 -m "v1.2.3"`, then `git push origin v1.2.3`. The workflow refuses a tag
    that isn't `v` plus the version in `pyproject.toml`, or that isn't on `main`.
-3. Once the release is published, submit it to winget (CI's `installer` check already tests
-   installing, listing, and uninstalling the MSI from these manifests):
-   - **With `wingetcreate`:** First store a GitHub token with `wingetcreate token --store` (it
-     signs in through your browser, keeping the token out of shell history). Then download the
-     three manifests from the release's workflow run into an empty folder,
-     `gh run download RUN_ID -n winget -D FOLDER`, and run `wingetcreate submit FOLDER` to open a
-     pull request on `microsoft/winget-pkgs`.
-   - **Without `wingetcreate`:** Open a pull request from your fork of `microsoft/winget-pkgs`
-     adding those three files under `manifests/n/nibarAhmed/AgentSpeechCheck/1.2.3/`.
-   - On your first pull request, sign Microsoft's CLA by commenting
-     `@microsoft-github-policy-service agree`.
 
 ## Issues
 

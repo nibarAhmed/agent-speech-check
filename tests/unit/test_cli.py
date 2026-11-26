@@ -230,10 +230,30 @@ class _FailsInATaskGroup:
 def test_internal_error_in_a_group_names_the_inner_error(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The daemon's err file is all a user sees, so the real cause must be in it.
     monkeypatch.delenv("ASC_DEBUG", raising=False)
     assert main([_FailsInATaskGroup()]) == 4  # type: ignore[list-item]
     assert "internal error: ValueError: tray icon\n" in capsys.readouterr().err
+
+
+class _CrashingTarget(str):
+    """A daemon target that raises a bug whose message holds text, as speech could."""
+
+    __slots__ = ()
+
+    def startswith(self, *_: object) -> bool:
+        raise RuntimeError(str(self))
+
+
+def test_daemon_crash_keeps_messages_out_of_its_err_file(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The daemon's stderr is daemon.err, a file: like daemon.log, it gets types and frames only.
+    monkeypatch.setenv("ASC_DEBUG", "1")
+    assert main(["_daemon", _CrashingTarget("secret speech")]) == 4
+    err = capsys.readouterr().err
+    assert "internal error: RuntimeError\n" in err
+    assert "Traceback" in err
+    assert "secret speech" not in err
 
 
 def test_nvda_ini_connects_the_remote_nvda_unattended() -> None:
