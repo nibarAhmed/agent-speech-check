@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import socket
 import ssl
+import threading
 import time
 from pathlib import Path
 from types import TracebackType
@@ -13,6 +15,7 @@ from cryptography.hazmat.primitives import serialization
 
 from agent_speech_check.daemon.speech_log import SpeechLog
 from agent_speech_check.errors import FileUnusable, OperationalError, ProtocolError
+from agent_speech_check.inputs.keys import Key
 from agent_speech_check.nvda import relay
 
 
@@ -38,6 +41,50 @@ async def test_connection_that_never_joins_is_dropped(tmp_path: Path) -> None:
     assert r.last_error == "the connection sent no join within 0.5 s"
     assert not r.connected
     assert r.losses == []
+
+
+def _follower(port: int, channel: str, lines: list[bytes], closed: threading.Event) -> None:
+    """NVDA in a thread, so it still reads while the relay's event loop is blocked."""
+    join = {"type": "join", "channel": channel, "connection_type": "slave"}
+    with (
+        socket.create_connection((relay.HOST, port), timeout=5) as raw,
+        _client_context().wrap_socket(raw) as sock,
+    ):
+        sock.sendall(json.dumps(join).encode() + b"\n")
+        data = b""
+        while chunk := sock.recv(4096):
+            data += chunk
+    lines.extend(data.splitlines())
+    closed.set()
+
+
+@pytest.mark.asyncio
+async def test_stop_delivers_queued_key_releases_before_it_returns(tmp_path: Path) -> None:
+    # The daemon stops NVDA or the ssh tunnel right after: a release still queued is lost.
+    credentials = relay.load_or_create(tmp_path)
+    r = relay.Relay(credentials, SpeechLog())
+    joined = asyncio.Event()
+    r.on_join = joined.set
+    server = await r.start(0)
+    lines: list[bytes] = []
+    closed = threading.Event()
+    follower = threading.Thread(
+        target=_follower, args=(r.port, credentials.channel, lines, closed), daemon=True
+    )
+    follower.start()
+    async with server:
+        await asyncio.wait_for(joined.wait(), 5)
+        r.write_key(Key("shift", 0x10, extended=False, keysym="Shift_L"), pressed=False)
+        await r.stop()
+        # Blocks the loop, as the daemon's synchronous NVDA stop does.
+        assert closed.wait(5)
+    follower.join(5)
+    assert json.loads(lines[-1]) == {
+        "type": "key",
+        "vk_code": 0x10,
+        "extended": False,
+        "pressed": False,
+    }
 
 
 def _depth(tb: TracebackType | None) -> int:

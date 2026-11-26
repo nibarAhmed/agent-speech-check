@@ -1029,8 +1029,9 @@ def _causes(error: BaseException) -> list[BaseException]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     _utf8_streams()
+    args = list(sys.argv[1:] if argv is None else argv)
     try:
-        return run(argv)
+        return run(args)
     except AscError as error:
         print(f"error: {error.message}", file=sys.stderr)
         if error.hint:
@@ -1039,10 +1040,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         return EXIT_INTERRUPTED
     except Exception as error:  # noqa: BLE001 - last resort: turn any bug into exit 4
+        # The daemon's stderr is daemon.err, a file: like daemon.log, never a message.
+        daemon = bool(args) and isinstance(args[0], str) and args[0] == "_daemon"
         for cause in _causes(error):
-            print(f"internal error: {type(cause).__name__}: {cause}", file=sys.stderr)
+            detail = "" if daemon else f": {cause}"
+            print(f"internal error: {type(cause).__name__}{detail}", file=sys.stderr)
         # Real, not Store Python's redirected view, so other programs find it.
         print(f"logs: {os.path.realpath(state_root())}", file=sys.stderr)
-        if os.environ.get("ASC_DEBUG") == "1":
+        if daemon:
+            print(server.LogFormatter().formatException(sys.exc_info()), file=sys.stderr)
+        elif os.environ.get("ASC_DEBUG") == "1":
             traceback.print_exc()
         return InternalError.exit_code

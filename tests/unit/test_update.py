@@ -24,8 +24,8 @@ def github(tag: str = "v0.5.0", **asset: Any) -> dict[str, Any]:
     msi = {"name": "agent-speech-check-0.5.0.msi", "browser_download_url": URL}
     msi["digest"] = f"sha256:{SHA}"
     msi.update(asset)
-    manifest = {"name": "nibarAhmed.AgentSpeechCheck.yaml", "browser_download_url": URL}
-    return {"tag_name": tag, "draft": False, "assets": [manifest, msi]}
+    sums = {"name": "SHA256SUMS", "browser_download_url": URL}
+    return {"tag_name": tag, "draft": False, "assets": [sums, msi]}
 
 
 def test_parse_release() -> None:

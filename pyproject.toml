@@ -1,6 +1,6 @@
 [project]
 name = "agent-speech-check"
-version = "0.8.1"
+version = "0.8.2"
 description = "Let AI agents test your app with a real screen reader (NVDA or Orca): press keys, read speech, check it."
 readme = "README.md"
 license = "MIT"
@@ -132,7 +132,7 @@ ignore = ["TRY003"]
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "scripts/build_installer.py", "scripts/build_linux.py", "scripts/winget_manifest.py", "scripts/windows_sshd.py", "scripts/e2e_linux.py"]
+files = ["src", "tests", "scripts/build_installer.py", "scripts/build_linux.py", "scripts/windows_sshd.py", "scripts/e2e_linux.py"]
 mypy_path = ["src", ".", "stubs"]
 explicit_package_bases = true
 

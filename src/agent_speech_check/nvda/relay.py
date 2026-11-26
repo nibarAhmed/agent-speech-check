@@ -221,14 +221,7 @@ class Relay:
         finally:
             if self._writer is writer:
                 self._lost(reason)
-            writer.close()
-            try:
-                async with asyncio.timeout(CLOSE_TIMEOUT_S):
-                    await writer.wait_closed()
-            except TimeoutError:
-                writer.transport.abort()
-            except OSError:  # ConnectionError or ssl.SSLError
-                pass
+            await _close(writer)
 
     def _failed(self, error: AscError) -> None:
         self.last_error = error.message
@@ -368,4 +361,20 @@ class Relay:
             writer.close()
 
     async def stop(self) -> None:
-        self.disconnect()
+        """Close NVDA's connection once the key releases queued for it are sent."""
+        writer = self._writer
+        if writer is not None:
+            self._lost()
+            await _close(writer)
+
+
+async def _close(writer: asyncio.StreamWriter) -> None:
+    """Close after the queued writes, or drop them once CLOSE_TIMEOUT_S passes."""
+    writer.close()
+    try:
+        async with asyncio.timeout(CLOSE_TIMEOUT_S):
+            await writer.wait_closed()
+    except TimeoutError:
+        writer.transport.abort()
+    except OSError:  # ConnectionError or ssl.SSLError
+        pass
