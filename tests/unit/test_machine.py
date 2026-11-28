@@ -13,6 +13,15 @@ def test_the_machine_is_its_last_host_key() -> None:
     # With ProxyJump the jump host's key comes first.
     lines = [f"{_KEY}jump", "debug1: Authenticated to jump", f"{_KEY}vm", "debug1: Exit status 0"]
     assert machine.host_key("asc@vm", lines) == "ssh-ed25519 SHA256:vm"
+    # A host certificate's line goes on with its serial, ID and CA, which change on renewal.
+    cert = (
+        "debug1: Server host certificate: ssh-ed25519-cert-v01@openssh.com SHA256:vm,"
+        ' serial 7 ID "vm" CA ssh-ed25519 SHA256:ca valid forever'
+    )
+    assert (
+        machine.host_key("asc@vm", [f"{_KEY}jump", cert])
+        == "ssh-ed25519-cert-v01@openssh.com SHA256:vm"
+    )
     with pytest.raises(OperationalError, match="host key"):
         machine.host_key("asc@vm", ["debug1: Exit status 0"])
 

@@ -212,7 +212,8 @@ asc start --mode remote --instance vm1
   preferred mode, but running `asc start` without `--instance` exits 2.
 - One instance at a time uses a machine: while another running instance uses
   it, `asc start` exits 3 and names that instance. `asc` knows the machine by
-  its SSH host key, so an alias and an address for it match.
+  its SSH host key, so an alias and an address for it match when ssh picks
+  the same key type for both.
 - `asc start` exits 2 until both `ssh` and `os` are configured for remote mode.
 - `asc` runs your local `ssh` with `BatchMode=yes`, using your SSH keys, agent,
   config, and known hosts without ever prompting for a password. If SSH

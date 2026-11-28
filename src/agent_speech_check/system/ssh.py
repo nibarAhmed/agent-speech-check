@@ -43,6 +43,8 @@ _CHATTER = (
 _FORWARDED = "remote forward success for: listen"
 _FORWARD_FAILED = "remote port forwarding failed"
 RUN_TIMEOUT_S = 60.0
+# Its own connection, and the fingerprint asc knows the machine by, whatever ssh_config says.
+_FRESH = ("-o", "ControlMaster=no", "-o", "ControlPath=none", "-o", "FingerprintHash=sha256")
 RETRY_FIRST_S = 1.0
 RETRY_MAX_S = 30.0
 
@@ -109,10 +111,9 @@ async def run_fresh(destination: str, remote: str) -> tuple[int, bytes, list[str
     """Like `run`, but on a connection of its own, which shows the other machine's host key
     even when ssh shares connections, with every line of stderr (`-v` debug lines too), and
     ssh killed if this is cancelled."""
-    options = ("-T", "-v", "-o", "ControlMaster=no", "-o", "ControlPath=none")
     try:
         process = await asyncio.create_subprocess_exec(
-            *command(destination, *options),
+            *command(destination, "-T", "-v", *_FRESH),
             remote,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,

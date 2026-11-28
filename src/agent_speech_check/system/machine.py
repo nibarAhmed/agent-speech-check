@@ -17,7 +17,8 @@ from agent_speech_check.inputs.keys import Layout
 from agent_speech_check.system import locks, paths, powershell, ssh
 from agent_speech_check.validate import Fields
 
-_HOST_KEY = "debug1: Server host key: "
+# A certificate's line goes on with its serial, ID and CA: only its type and fingerprint stay.
+_HOST_KEY = re.compile(r"debug1: Server host (?:key|certificate): (\S+ [^\s,]+)")
 # What `asc type` can type there: printable ASCII and Latin-1.
 CHARS = "".join(map(chr, (*range(0x20, 0x7F), *range(0xA1, 0x100))))
 _STANDARD = re.compile(r"0000([0-9a-fA-F]{4})")
@@ -31,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 trap { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
 Add-Type -Namespace Asc -Name Keys -MemberDefinition @'
-[DllImport("user32.dll")] public static extern short VkKeyScanW(char c);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern short VkKeyScanW(char c);
 [DllImport("user32.dll")] public static extern System.IntPtr GetKeyboardLayout(uint thread);
 '@
 $layouts = 'HKCU:\Keyboard Layout'
@@ -72,12 +73,12 @@ async def claim(destination: str, owner: str, *, windows: bool) -> Machine:
 def host_key(destination: str, lines: Sequence[str]) -> str:
     """The other machine's host key, from ssh -v. The last one: with ProxyJump the jump
     host's comes first."""
-    keys = [line.removeprefix(_HOST_KEY) for line in lines if line.startswith(_HOST_KEY)]
+    keys = [found.group(1) for line in lines if (found := _HOST_KEY.match(line))]
     if not keys:
         raise OperationalError(
             f"ssh {destination} showed no host key, so asc can't tell the machine"
         )
-    return keys[-1].strip()
+    return keys[-1]
 
 
 def hold(key: str, owner: str, destination: str) -> locks.Lock:

@@ -817,7 +817,7 @@ examples:
 Wait until an utterance after line N matches REGEX (Python regex, searched
 anywhere in the line; use (?i) to ignore case), then print it with its line
 number (use that number as the next --since). Exits 1 with what was said if
-nothing matches before the timeout.""",
+nothing matches before the timeout, or 3 if NVDA is still not connected then.""",
         cmd_wait,
         _wait_args,
         examples="""\
