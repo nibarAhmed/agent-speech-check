@@ -52,8 +52,9 @@ On Linux only desktop, watch and remote mode exist.
      `asc config set os windows --mode remote --instance NAME` (`linux` for Orca).
   2. `asc start --instance NAME`. Because `ssh` runs non-interactively (no
      password prompts), if it fails with an SSH setup error, ask the user to run
-     `ssh USER@HOST` once to confirm host trust and key login. For other errors,
-     follow the printed hint and retry.
+     `ssh USER@HOST` once to confirm host trust and key login. If the machine is
+     in use by another instance, another agent is on it: wait, or ask the user.
+     For other errors, follow the printed hint and retry.
   3. With NVDA, tell the user what `asc status --instance NAME` prints so the
      remote NVDA can connect through the tunnel.
 
@@ -134,7 +135,8 @@ mode it reads the other machine's: pass the same `--instance`.
   VM you manage yourself, save `asc status --nvda-ini` as UTF-8 `nvda.ini` in
   NVDA's config folder while NVDA is closed so it connects automatically at
   startup (avoid `>` in Windows PowerShell 5.1, which writes UTF-16). Start the
-  app on the VM or ask the user to, then run `asc wait`.
+  app on the VM or ask the user to, then run `asc wait`, which also waits for
+  NVDA to connect.
 
 ## Orca
 

@@ -30,7 +30,7 @@ def test_watch_session(env: Env) -> None:
         assert ahead.returncode == 2
         assert "--since 5 is after the latest line, 0" in ahead.stderr
         assert "hint: asc mark" in ahead.stderr
-    not_connected = run_asc("wait", "x", "--since", "0")
+    not_connected = run_asc("wait", "x", "--since", "0", "--timeout", "200")
     assert not_connected.returncode == 3
     assert "NVDA is not connected" in not_connected.stderr
 

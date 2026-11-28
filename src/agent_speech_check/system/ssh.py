@@ -105,6 +105,46 @@ def run(destination: str, remote: str, data: bytes = b"") -> tuple[int, bytes, s
     return done.returncode, done.stdout, last_said(lines, done.returncode)
 
 
+async def run_fresh(destination: str, remote: str) -> tuple[int, bytes, list[str]]:
+    """Like `run`, but on a connection of its own, which shows the other machine's host key
+    even when ssh shares connections, with every line of stderr (`-v` debug lines too), and
+    ssh killed if this is cancelled."""
+    options = ("-T", "-v", "-o", "ControlMaster=no", "-o", "ControlPath=none")
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command(destination, *options),
+            remote,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **_dies_with_asc(),
+        )
+    except OSError as error:
+        raise SshMissing(error.strerror or str(error)) from None
+    try:
+        async with asyncio.timeout(RUN_TIMEOUT_S):
+            stdout, stderr = await process.communicate()
+    except TimeoutError:
+        raise OperationalError(
+            f"ssh {destination} failed: no answer in {RUN_TIMEOUT_S:.0f} s"
+        ) from None
+    finally:
+        if process.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            await process.wait()
+    code = await process.wait()
+    lines = [_clip(line) for line in stderr.decode(errors="replace").splitlines()]
+    if code == FAILED:
+        raise failed(destination, said(lines), FAILED)
+    return code, stdout, lines
+
+
+def said(lines: Sequence[str]) -> list[str]:
+    """What ssh said, without `-v`'s debug lines."""
+    return [line for line in lines if not line.startswith("debug")][-STDERR_LINES:]
+
+
 async def stderr_lines(stderr: asyncio.StreamReader) -> AsyncIterator[str]:
     """ssh's stderr, line by line, each cut to 500 characters."""
     while True:

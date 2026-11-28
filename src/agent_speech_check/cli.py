@@ -839,6 +839,9 @@ as numbered lines, or (nothing said after N). Pass the last printed line number
 (or N) as the next --since for wait or speech.
 With --expect, asc waits up to --timeout for a match before exiting 1.
 Keys are names joined by +, as NVDA writes them. Look commands up with asc keys.
+Punctuation keys are Comma, Period, Slash, Backslash, Semicolon, Apostrophe,
+LeftBracket, RightBracket, Minus, Equals and Grave; numpad keys are Numpad0 to
+Numpad9, NumpadPlus, NumpadMinus and so on.
 Watch mode refuses keys.""",
         cmd_press,
         _press_args,
@@ -852,10 +855,11 @@ examples:
     "type": Command(
         "type text and print what was said",
         """\
-Type TEXT one character at a time using this computer's keyboard layout
-(with Orca, each character is sent directly). Every character is checked first;
-if any cannot be typed, nothing is sent (exit 2). Waits for one --settle quiet
-period after typing, then prints new speech like press.
+Type TEXT one character at a time using this computer's keyboard layout (in
+remote mode, the other machine's; with Orca, each character is sent directly).
+Every character is checked first; if any cannot be typed, nothing is sent
+(exit 2). Waits for one --settle quiet period after typing, then prints new
+speech like press.
 Watch mode refuses input.""",
         cmd_type,
         _type_args,

@@ -120,8 +120,10 @@ class NoMatch(ExpectationFailed):
 
 class UnknownKey(UsageError):
     def __init__(self, name: str, suggestions: Sequence[str]) -> None:
-        hint = f"did you mean {', '.join(suggestions)}?" if suggestions else "see asc keys"
-        super().__init__(f"unknown key {show(name)}", hint=hint)
+        guess = f"did you mean {', '.join(suggestions)}? " if suggestions else ""
+        super().__init__(
+            f"unknown key {show(name)}", hint=f"{guess}key names are in asc press --help"
+        )
 
 
 class BadGesture(UsageError):

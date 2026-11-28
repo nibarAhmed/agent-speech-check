@@ -139,3 +139,23 @@ Git's OpenSSH 10.3 on Windows 11, to sshd on Ubuntu in a container.
   arrived. The default 400 ms covers it. TCP_NODELAY on the relay's socket, or on the fake's,
   changed nothing; a tty session (`-tt` for `-N`) moved every press to about 105 ms. Windows'
   OpenSSH server wasn't measured.
+
+## The other machine in remote mode
+
+A Windows 11 computer with a Norwegian layout, to an en-US Windows 11 VM over Windows' OpenSSH.
+
+- **Typing with this computer's layout.** `asc type` once mapped characters with this computer's
+  `VkKeyScanW` and sent those keys to the VM, so `C:\Users\` was heard as "C greater Users" and
+  `Ctrl+Alt+Shift` as "Ctrl equals Alt equals Shift".
+- **Reading the VM's layout.** In an ssh session there, `LoadKeyboardLayoutW` returned 0 for every
+  layout tried (00000409, 00000414, 0000041d, flags 0, 1 and 0x80), so no other layout can be
+  loaded to map with. `GetKeyboardLayout(0)` gave 04090409, the same as the user's
+  `HKCU\Keyboard Layout\Preload\1` (00000409), and `VkKeyScanW` mapped with it. Whether ssh
+  sessions follow `Preload\1` for a user with another layout wasn't tested, so `asc type` maps
+  only when the two agree. The PowerShell call, `Add-Type` included, took 1.2 s.
+- **Knowing the machine.** `ssh -v` prints `debug1: Server host key: TYPE SHA256:...` on each new
+  connection (0.3 s), the jump host's first with ProxyJump, and none over a shared
+  (ControlMaster) connection. The Windows MachineGuid would need PowerShell, which the Linux sshd
+  that stands in for Windows in the e2e tunnel tests doesn't have.
+- **Two instances on one VM.** Both used port 26837 there and both said `tunnel up`, but NVDA
+  reached only the first. The cause wasn't reproduced.

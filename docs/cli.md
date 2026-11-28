@@ -210,6 +210,9 @@ asc start --mode remote --instance vm1
   forgetting `--instance` can never accidentally drive another agent's VM. You
   can still set `mode = "remote"` in the default instance as a reminder of your
   preferred mode, but running `asc start` without `--instance` exits 2.
+- One instance at a time uses a machine: while another running instance uses
+  it, `asc start` exits 3 and names that instance. `asc` knows the machine by
+  its SSH host key, so an alias and an address for it match.
 - `asc start` exits 2 until both `ssh` and `os` are configured for remote mode.
 - `asc` runs your local `ssh` with `BatchMode=yes`, using your SSH keys, agent,
   config, and known hosts without ever prompting for a password. If SSH
@@ -233,9 +236,12 @@ Connect the remote NVDA using the details from `asc status` (host
   after 1 s and backing off up to 30 s); `asc status` reports
   `tunnel down (WHY)` in the meantime. If the tunnel never came up or failed
   with an SSH setup error, `asc` does not retry.
-- If the configured `port` is already in use on the remote machine (for example,
-  by another instance's tunnel), `asc start` fails; pick a different `port`
-  for this instance.
+- If the configured `port` is already in use on the remote machine,
+  `asc start` fails; pick a different `port` for this instance.
+- `asc type` maps characters to keys with the remote machine's keyboard layout,
+  which `asc start` reads over SSH. If SSH sessions there use another layout
+  than the user's default one, `asc type` exits 3 and sends nothing; `asc press`
+  still works.
 - A fresh NVDA has Remote Access disabled by default: enable "Enable Remote
   Access" in NVDA Settings > Remote Access first, otherwise the Tools > Remote
   Access menu does not appear.
@@ -301,8 +307,7 @@ separate VM in remote mode (which only runs in a named instance).
   `asc setup` in a named instance does not offer them (remote is its default).
 - Running instances cannot share a relay port (`asc start` fails if the port
   is in use). Desktop mode automatically picks a free port. In remote mode,
-  `port` binds on the remote machine, so it only needs to differ among
-  instances targeting the same remote host.
+  `port` binds on the remote machine, which one instance uses at a time.
 - `asc stop` stops only its own instance; `asc stop --all` stops every
   instance.
 
@@ -516,9 +521,9 @@ can't match the same line.
 - On timeout it exits 1 and prints what the screen reader did say, numbered like
   `speech`, so its last number is still the next `--since`.
 - An `N` after the latest line exits 2, as in `speech`.
-- If the screen reader disconnects during `wait`, `wait` keeps waiting because
-  NVDA reconnects on its own. If it is still disconnected when the timeout
-  expires, `wait` exits 3 instead of 1 (including the last connection error, if
+- If NVDA has not joined yet, or disconnects during `wait`, `wait` keeps
+  waiting, because NVDA joins and reconnects on its own. If it is still not
+  connected when the timeout expires, `wait` exits 3 instead of 1 (including the last connection error, if
   any). Unauthenticated connections that close before joining the channel do not
   interrupt `wait`.
 
@@ -576,7 +581,10 @@ could not hold them all.
 - Gestures are written as NVDA writes them: `Tab`, `H`, `NVDA+Tab`,
   `Control+Home`, `NVDA+Shift+Up` (`Orca+` is an alias for `NVDA+`). Case
   doesn't matter. Aliases such as `Ctrl`, `Esc`, `Del`, `PgDn`,
-  `Win` and `Super` work. Numpad keys are sent as NVDA's desktop layout expects
+  `Win` and `Super` work. Punctuation keys are `Comma`, `Period`, `Slash`,
+  `Backslash`, `Semicolon`, `Apostrophe`, `LeftBracket`, `RightBracket`,
+  `Minus`, `Equals` and `Grave`. Numpad keys (`Numpad0` to `Numpad9`,
+  `NumpadPlus`, `NumpadMinus` and so on) are sent as NVDA's desktop layout expects
   them, with Num Lock off. Look commands up with [`asc keys`](#asc-keys).
 - Every gesture is checked before the first is sent. An unknown key exits 2
   with suggestions.
@@ -597,7 +605,8 @@ asc type [--settle MS] [--timeout MS] TEXT
 ```
 
 Types `TEXT` one character at a time, mapped to keys with this computer's
-keyboard layout (with Orca, each character is sent as itself), then
+keyboard layout (in remote mode, the other machine's; with Orca, each character
+is sent as itself), then
 waits for one quiet period at the end. Prints the new
 speech like `press`. If any character can't be typed (for example emoji on
 Windows, or control characters with Orca), it exits 2, lists them and sends
