@@ -25,7 +25,7 @@ import traceback
 from collections.abc import Awaitable, Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import IO, Any
+from typing import Any
 
 from agent_speech_check.config.targets import Target
 from agent_speech_check.daemon import ipc, state
@@ -44,16 +44,13 @@ from agent_speech_check.errors import (
 )
 from agent_speech_check.inputs import mouse
 from agent_speech_check.inputs.keyboard import Keyboard, Link
-from agent_speech_check.inputs.keys import Hotkey
+from agent_speech_check.inputs.keys import Gesture, Hotkey, text_gestures
 from agent_speech_check.nvda import launcher, nvda_config, relay
 from agent_speech_check.nvda.relay import Relay
 from agent_speech_check.orca.link import OrcaLink, watch_secret
-from agent_speech_check.system import paths, winapi
+from agent_speech_check.system import locks, machine, paths, winapi
 from agent_speech_check.system.paths import mode_dir, relay_dir, state_root, write_atomic
 from agent_speech_check.system.ssh import Tunnel
-
-if sys.platform != "win32":
-    import fcntl
 
 log = logging.getLogger(__name__)
 
@@ -191,6 +188,9 @@ class Daemon:
         # The relay NVDA joins, which `run` listens on. Nothing listens for Orca.
         self.relay: Relay | None = None
         self.tunnel: Tunnel | None = None
+        # Remote mode: the other machine, once this instance holds it.
+        self.machine: machine.Machine | None = None
+        self.claim_failure: AscError | None = None
         self.link: Link
         if target.reader == "orca":
             watch = watch_secret() if target.mode == "watch" else None
@@ -281,14 +281,12 @@ class Daemon:
     def _failure(self) -> dict[str, Any] | None:
         """Why Orca or the tunnel never got going, for `asc start` to raise."""
         owners = (self.link, self.tunnel)
-        failures = (owner.failure for owner in owners if owner is not None)
+        failures = (self.claim_failure, *(owner.failure for owner in owners if owner is not None))
         failure = next((f for f in failures if f is not None), None)
         return None if failure is None else ipc.error_detail(failure)
 
     async def _wait(self, args: ipc.WaitArgs) -> dict[str, Any]:
         self._check_since(args.since)
-        if not self.link.connected:
-            raise self.link.not_connected
         losses_before = len(self.link.losses)
         entry = await self._wait_match(args.regex, args.since, args.timeout_ms, losses_before)
         if entry is None:
@@ -328,12 +326,25 @@ class Daemon:
 
     async def _type(self, args: ipc.TypeArgs) -> dict[str, Any]:
         typed = await self.keyboard.press(
-            self.link.gestures(args.text),
+            self._typed(args.text),
             args.settle_ms / 1000,
             args.timeout_ms / 1000,
             settle_each=False,
         )
         return _new_speech(typed.since, typed.after)
+
+    def _typed(self, text: str) -> tuple[Gesture, ...]:
+        """Through a tunnel, NVDA types with the other machine's layout."""
+        if not self.target.tunnel:
+            return self.link.gestures(text)
+        layout = None if self.machine is None else self.machine.layout
+        if layout is None:
+            why = "" if self.machine is None else f": {self.machine.unknown}"
+            raise OperationalError(
+                f"can't tell which keyboard layout {self.target.ssh} types with{why}",
+                hint="nothing was sent; use asc press for each key",
+            )
+        return text_gestures(text, layout)
 
     async def _launch(self, args: ipc.LaunchArgs) -> dict[str, Any]:
         if self.target.tunnel:
@@ -448,14 +459,14 @@ class Daemon:
             log.info("IPC on %d", port)
             # Outside the group: it ends after the relay, so key releases still reach NVDA.
             if self.tunnel is not None:
-                tunnel = asyncio.create_task(self.tunnel.run())
+                tunnel = asyncio.create_task(self._tunnel(self.tunnel))
                 tunnel.add_done_callback(self._stop_if_crashed)
             # Off the loop: copying the user's config (add-ons too) can take a while.
             await asyncio.to_thread(self._start_nvda)
             state.State(os.getpid(), port, token, time.time()).write(self.folder)
             self.started = True
             async with asyncio.TaskGroup() as group:
-                follow = group.create_task(self.link.run())
+                follow = group.create_task(self._follow())
                 await self.stopping.wait()
                 follow.cancel()
         finally:
@@ -488,6 +499,31 @@ class Daemon:
                 tunnel.result()
         log.info("stopped")
 
+    async def _claim(self) -> bool:
+        """Remote mode: hold the other machine for this instance, before anything reaches
+        it. False, with the reason for `asc start`, if that failed."""
+        if self.target.ssh is None:
+            raise RuntimeError
+        try:
+            self.machine = await machine.claim(
+                self.target.ssh, paths.instance() or "", windows=self.target.tunnel
+            )
+        except AscError as error:
+            self.claim_failure = error
+            log.warning("other machine not held: %s", type(error).__name__)
+            return False
+        return True
+
+    async def _tunnel(self, tunnel: Tunnel) -> None:
+        if await self._claim():
+            await tunnel.run()
+
+    async def _follow(self) -> None:
+        # Orca over ssh claims its machine here; NVDA's tunnel claims it in `_tunnel`.
+        if self.target.ssh is not None and self.tunnel is None and not await self._claim():
+            return
+        await self.link.run()
+
     def _stop_if_crashed(self, task: asyncio.Task[None]) -> None:
         """A crash ends the daemon, as one in the task group does."""
         if not task.cancelled() and task.exception() is not None:
@@ -507,21 +543,6 @@ async def _main(daemon: Daemon) -> None:
     await daemon.run()
 
 
-def _only_daemon(root: Path) -> int | IO[bytes] | None:
-    """Take the lock that lets one daemon run per state folder, held until this
-    process exits. None if another daemon holds it."""
-    if sys.platform == "win32":
-        return winapi.take_mutex(winapi.mutex_name(root))
-    else:  # not after the return: mypy on Windows would check fcntl
-        lock = (root / "daemon.lock").open("ab")
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            lock.close()
-            return None
-        return lock
-
-
 def run(target_json: str) -> int:
     """Entry point for `asc _daemon`. Returns the process exit code."""
     target = Target.from_json(target_json)
@@ -530,7 +551,7 @@ def run(target_json: str) -> int:
     _setup_logging(folder)
     daemon: Daemon | None = None
     try:
-        lock = _only_daemon(state_root())
+        lock = locks.take(state_root() / "daemon.lock")
         if lock is None:
             raise AlreadyRunning
         log.info("starting %s mode", target.mode)

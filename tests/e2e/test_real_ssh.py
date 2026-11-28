@@ -104,3 +104,25 @@ def test_a_taken_port_on_the_other_machine(tmp_path: Path, monkeypatch: pytest.M
     assert f"port {port}" in started.stderr
     assert f"asc config set port PORT --mode remote --instance {INSTANCE}" in started.stderr
     assert run_asc("status", "--instance", INSTANCE).returncode == 3
+
+
+def test_a_second_tunnel_to_the_same_machine_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for home in ("LOCALAPPDATA", "XDG_STATE_HOME"):
+        monkeypatch.setenv(home, str(tmp_path))
+    env = Env(tmp_path, free_port())
+    other = f"{INSTANCE}-2"
+    for instance in (INSTANCE, other):
+        remote = f"[remote]\nos = 'windows'\nssh = '{DESTINATION}'\nport = {free_port()}\n"
+        env.config(remote, instance=instance)
+    started = run_asc("start", "--mode", "remote", "--instance", INSTANCE)
+    assert started.returncode == 0, started.stderr
+    try:
+        second = run_asc("start", "--mode", "remote", "--instance", other)
+        assert second.returncode == 3, second.stdout + second.stderr
+        assert f"{DESTINATION} is in use by instance {INSTANCE}" in second.stderr
+        assert run_asc("status", "--instance", other).returncode == 3
+    finally:
+        stopped = run_asc("stop", "--instance", INSTANCE)
+    assert stopped.returncode == 0, stopped.stderr

@@ -121,6 +121,17 @@ def test_text_gestures_use_the_keyboard_layout() -> None:
     assert [g.key.vk for g in gestures] == [ord("A"), ord("B"), ord("1")]
 
 
+# A Nordic layout, as the other machine in remote mode may have: ':' is Shift+Period,
+# and '\' is AltGr (Control+Alt) on the key right of 0.
+def test_text_gestures_use_the_layout_they_are_given() -> None:
+    nordic = {"C": (0x43, 1), ":": (0xBE, 1), "\\": (0xBB, 6)}
+    gestures = text_gestures("C:\\", nordic)
+    assert [str(g) for g in gestures] == ["Shift+C", "Shift+:", "Control+Alt+\\"]
+    assert [g.key.vk for g in gestures] == [0x43, 0xBE, 0xBB]
+    with pytest.raises(UsageError, match="cannot type these characters"):
+        text_gestures("C/", nordic)
+
+
 @pytest.mark.windows
 def test_text_gestures_newline_and_tab() -> None:
     assert [str(g) for g in text_gestures("a\tb\r\nc")] == ["a", "Tab", "b", "Enter", "c"]

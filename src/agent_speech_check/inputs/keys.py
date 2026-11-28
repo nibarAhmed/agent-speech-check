@@ -9,8 +9,9 @@ Num Lock off: `Numpad5` is VK_CLEAR and KP_Begin, not VK_NUMPAD5 and KP_5.
 from __future__ import annotations
 
 import difflib
+import functools
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from agent_speech_check.errors import BadGesture, UnknownKey, UsageError, show
@@ -201,6 +202,8 @@ def parse_hotkey(text: str) -> Hotkey:
     return Hotkey(str(gesture), modifiers, gesture.key.vk)
 
 
+# A character's (virtual key, shift state), as VkKeyScanW gives them.
+type Layout = Mapping[str, tuple[int, int]]
 _SHIFT_BITS = ((1, "shift"), (2, "control"), (4, "alt"))
 _MAX_UTF16_UNIT = 0xFFFF
 _TYPED_SPECIALS = {"\n": "enter", "\t": "tab"}
@@ -226,16 +229,19 @@ def _gestures(text: str, one: Callable[[str], Gesture | None], why: str) -> tupl
     return tuple(gestures)
 
 
-def text_gestures(text: str) -> tuple[Gesture, ...]:
-    """One gesture per character, from the current keyboard layout."""
-    return _gestures(text, _from_layout, "with the current keyboard layout")
+def text_gestures(text: str, layout: Layout | None = None) -> tuple[Gesture, ...]:
+    """One gesture per character, from `layout`, or this computer's keyboard layout."""
+    scan = _scan if layout is None else layout.get
+    return _gestures(
+        text, functools.partial(_from_layout, scan), "with the current keyboard layout"
+    )
 
 
-def _from_layout(char: str) -> Gesture | None:
-    scan = _scan(char)
-    if scan is None:
+def _from_layout(scan: Callable[[str], tuple[int, int] | None], char: str) -> Gesture | None:
+    found = scan(char)
+    if found is None:
         return None
-    vk, state = scan
+    vk, state = found
     modifiers = tuple(MODIFIERS[name] for bit, name in _SHIFT_BITS if state & bit)
     return Gesture(modifiers, Key(char, vk, False, _unicode_keysym(char)))
 

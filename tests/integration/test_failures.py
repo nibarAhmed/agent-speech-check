@@ -74,6 +74,20 @@ def test_nvda_that_goes_and_stays_away_fails_a_wait_with_3(env: Env, nvda: FakeN
     assert "NVDA is not connected after waiting 3000 ms" in err
 
 
+def test_a_wait_started_before_nvda_joins_hears_it(env: Env) -> None:
+    assert run_asc("start", "--mode", "shared", "--i-understand").returncode == 0
+    waiting = start_asc("wait", "hello", "--since", "0", "--timeout", "8000")
+    env.wait_running("shared", "wait")
+    nvda = env.fake("watch")
+    try:
+        nvda.say("hello")
+        out, err = waiting.communicate(timeout=30)
+    finally:
+        nvda.close()
+    assert waiting.returncode == 0, err
+    assert 'said: "hello"' in out
+
+
 def test_a_rejected_message_from_nvda_keeps_its_values_out_of_the_log(
     env: Env, nvda: FakeNvda
 ) -> None:
